@@ -1,3 +1,4 @@
+using MediPOS.Application.Errors;
 using MediPOS.Application.Modules.IdentityAccess.Authentication;
 using MediPOS.Application.Modules.IdentityAccess.OperationalAccess;
 using MediPOS.Application.Tenancy;
@@ -23,7 +24,7 @@ public sealed class AccessDataScopeTests
         Assert.Equal(tenant.Id, context.TenantId);
 
         var otherTenant = Guid.NewGuid();
-        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+        await Assert.ThrowsAsync<ApplicationErrorException>(() =>
             handler.HandleAsync(otherTenant, null, Now, TestContext.Current.CancellationToken));
         Assert.Equal(1, reader.ReadCount);
         Assert.Equal(tenant.Id, context.TenantId);

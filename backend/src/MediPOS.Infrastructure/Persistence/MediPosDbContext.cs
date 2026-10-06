@@ -1,7 +1,9 @@
 using MediPOS.Application.Tenancy;
+using MediPOS.Domain.Modules.AuditSupport;
 using MediPOS.Domain.Modules.Branches;
 using MediPOS.Domain.Modules.IdentityAccess;
 using MediPOS.Domain.Modules.TenancyLicensing;
+using MediPOS.Infrastructure.Modules.AuditSupport.Persistence;
 using MediPOS.Infrastructure.Modules.Branches.Persistence.Configurations;
 using MediPOS.Infrastructure.Modules.IdentityAccess.Persistence.Configurations;
 using MediPOS.Infrastructure.Modules.TenancyLicensing.Persistence.Configurations;
@@ -29,6 +31,7 @@ public sealed class MediPosDbContext(DbContextOptions<MediPosDbContext> options,
     public DbSet<Membership> Memberships => Set<Membership>();
     public DbSet<MembershipBranch> MembershipBranches => Set<MembershipBranch>();
     public DbSet<WorkSchedule> WorkSchedules => Set<WorkSchedule>();
+    public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -42,6 +45,7 @@ public sealed class MediPosDbContext(DbContextOptions<MediPosDbContext> options,
         modelBuilder.ApplyConfiguration(new MembershipConfiguration());
         modelBuilder.ApplyConfiguration(new MembershipBranchConfiguration());
         modelBuilder.ApplyConfiguration(new WorkScheduleConfiguration());
+        modelBuilder.ApplyConfiguration(new AuditLogConfiguration());
 
         // Context properties are evaluated per query, rather than captured into the cached EF model.
         // User is global. Tenant is a platform root; its administration requires a separate authorized boundary.
@@ -52,11 +56,13 @@ public sealed class MediPosDbContext(DbContextOptions<MediPosDbContext> options,
         modelBuilder.Entity<Membership>().HasQueryFilter(value => SelectedTenantId.HasValue && value.TenantId == SelectedTenantId);
         modelBuilder.Entity<MembershipBranch>().HasQueryFilter(value => SelectedTenantId.HasValue && value.TenantId == SelectedTenantId);
         modelBuilder.Entity<WorkSchedule>().HasQueryFilter(value => SelectedTenantId.HasValue && value.TenantId == SelectedTenantId);
+        modelBuilder.Entity<AuditLog>().HasQueryFilter(value => SelectedTenantId.HasValue && value.TenantId == SelectedTenantId);
     }
 
     public override int SaveChanges(bool acceptAllChangesOnSuccess)
     {
         ValidateLicenseHistory();
+        ValidateAuditHistory();
         ValidateTenantWrites();
         return base.SaveChanges(acceptAllChangesOnSuccess);
     }
@@ -64,6 +70,7 @@ public sealed class MediPosDbContext(DbContextOptions<MediPosDbContext> options,
     public override Task<int> SaveChangesAsync(bool acceptAllChangesOnSuccess, CancellationToken cancellationToken = default)
     {
         ValidateLicenseHistory();
+        ValidateAuditHistory();
         ValidateTenantWrites();
         return base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken);
     }
@@ -73,6 +80,40 @@ public sealed class MediPosDbContext(DbContextOptions<MediPosDbContext> options,
         if (ChangeTracker.Entries<LicenseChange>().Any(entry => entry.State is EntityState.Modified or EntityState.Deleted))
         {
             throw new InvalidOperationException("License change history is append-only.");
+        }
+    }
+
+    private void ValidateAuditHistory()
+    {
+        if (ChangeTracker.Entries<AuditLog>().Any(entry => entry.State is EntityState.Modified or EntityState.Deleted))
+            throw new InvalidOperationException("Audit history is append-only.");
+    }
+
+    internal void AddAudit(AuditLog audit, Guid tenantId, AuditAction action, Guid entityId)
+    {
+        ValidateAudit(audit, tenantId, action, entityId);
+        AuditLogs.Add(audit);
+    }
+
+    internal void ValidateAudit(AuditLog audit, Guid tenantId, AuditAction action, Guid entityId)
+    {
+        SelectTenant(tenantId);
+        if (audit.TenantId != tenantId || audit.Action != action || audit.EntityId != entityId)
+            throw new InvalidOperationException("Audit metadata must match the business mutation.");
+    }
+
+    internal async Task SaveAuditedChangesAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            await SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        }
+        catch
+        {
+            // A failed operation must not leave staged audit/business entries for a later SaveChanges.
+            // Provisioning callers also dispose their outer transaction, rolling back bulk statements.
+            ChangeTracker.Clear();
+            throw;
         }
     }
 
@@ -89,6 +130,7 @@ public sealed class MediPosDbContext(DbContextOptions<MediPosDbContext> options,
                 Membership value => value.TenantId,
                 MembershipBranch value => value.TenantId,
                 WorkSchedule value => value.TenantId,
+                AuditLog value => value.TenantId,
                 _ => null,
             };
             if (!tenantId.HasValue)

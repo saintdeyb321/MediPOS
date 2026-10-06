@@ -1,3 +1,4 @@
+using MediPOS.Application.Errors;
 using MediPOS.Application.Modules.IdentityAccess;
 using MediPOS.Application.Modules.IdentityAccess.CreateMembership;
 using MediPOS.Application.Modules.IdentityAccess.DeactivateMembership;
@@ -35,12 +36,12 @@ public sealed class OwnerConcurrencyTests(PostgreSqlFixture fixture)
         var secondLock = new ObservedProvisioning(secondScope.ServiceProvider.GetRequiredService<ITenantLicenseProvisioning>(), false);
         var firstHandler = new CreateMembershipHandler(firstScope.ServiceProvider.GetRequiredService<IIdentityAccessStore>(), firstLock, new IdentityAccessTestSetup.Clock());
         var secondHandler = new CreateMembershipHandler(secondScope.ServiceProvider.GetRequiredService<IIdentityAccessStore>(), secondLock, new IdentityAccessTestSetup.Clock());
-        var firstTask = firstHandler.HandleAsync(new(setup.TenantId, firstUserId, TenantRole.Owner), timeout.Token);
+        var firstTask = firstHandler.HandleAsync(new(setup.TenantId, firstUserId, TenantRole.Owner, Guid.NewGuid()), timeout.Token);
         Task<MembershipDetails>? secondTask = null;
         try
         {
             await firstLock.Acquired.Task.WaitAsync(timeout.Token);
-            secondTask = secondHandler.HandleAsync(new(setup.TenantId, secondUserId, TenantRole.Owner), timeout.Token);
+            secondTask = secondHandler.HandleAsync(new(setup.TenantId, secondUserId, TenantRole.Owner, Guid.NewGuid()), timeout.Token);
             await secondLock.Started.Task.WaitAsync(timeout.Token);
             await Task.Delay(TimeSpan.FromMilliseconds(100), timeout.Token);
             Assert.False(secondLock.Acquired.Task.IsCompleted);
@@ -51,7 +52,7 @@ public sealed class OwnerConcurrencyTests(PostgreSqlFixture fixture)
             await firstTask;
         }
         Assert.NotNull(secondTask);
-        await Assert.ThrowsAsync<InvalidOperationException>(() => secondTask);
+        await Assert.ThrowsAsync<ApplicationErrorException>(() => secondTask);
         await using var context = fixture.CreateContext(setup.TenantId);
         Assert.Equal(2, await context.Memberships.CountAsync(value =>
             value.TenantId == setup.TenantId && value.Role == TenantRole.Owner && value.IsActive, timeout.Token));
@@ -66,12 +67,12 @@ public sealed class OwnerConcurrencyTests(PostgreSqlFixture fixture)
         var second = await IdentityAccessTestSetup.CreateUserAsync(scope.ServiceProvider);
         var third = await IdentityAccessTestSetup.CreateUserAsync(scope.ServiceProvider);
         var creator = scope.ServiceProvider.GetRequiredService<CreateMembershipHandler>();
-        await creator.HandleAsync(new(setup.TenantId, second.Id, TenantRole.Owner), TestContext.Current.CancellationToken);
-        await Assert.ThrowsAsync<InvalidOperationException>(() =>
-            creator.HandleAsync(new(setup.TenantId, third.Id, TenantRole.Owner), TestContext.Current.CancellationToken));
+        await creator.HandleAsync(new(setup.TenantId, second.Id, TenantRole.Owner, Guid.NewGuid()), TestContext.Current.CancellationToken);
+        await Assert.ThrowsAsync<ApplicationErrorException>(() =>
+            creator.HandleAsync(new(setup.TenantId, third.Id, TenantRole.Owner, Guid.NewGuid()), TestContext.Current.CancellationToken));
         await scope.ServiceProvider.GetRequiredService<DeactivateMembershipHandler>().HandleAsync(
-            new(setup.TenantId, setup.MembershipId), TestContext.Current.CancellationToken);
-        await creator.HandleAsync(new(setup.TenantId, third.Id, TenantRole.Owner), TestContext.Current.CancellationToken);
+            new(setup.TenantId, setup.MembershipId, Guid.NewGuid()), TestContext.Current.CancellationToken);
+        await creator.HandleAsync(new(setup.TenantId, third.Id, TenantRole.Owner, Guid.NewGuid()), TestContext.Current.CancellationToken);
         await using var context = fixture.CreateContext(setup.TenantId);
         Assert.Equal(3, await context.Memberships.CountAsync(value =>
             value.TenantId == setup.TenantId && value.Role == TenantRole.Owner, TestContext.Current.CancellationToken));

@@ -18,5 +18,6 @@
   <ItemGroup>
     <ProjectReference Include="../../src/MediPOS.Application/MediPOS.Application.csproj" />
     <ProjectReference Include="../../src/MediPOS.Domain/MediPOS.Domain.csproj" />
+    <ProjectReference Include="../../src/MediPOS.Api/MediPOS.Api.csproj" />
   </ItemGroup>
 </Project>

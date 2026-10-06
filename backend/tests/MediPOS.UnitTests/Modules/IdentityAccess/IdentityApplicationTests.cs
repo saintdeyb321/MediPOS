@@ -1,3 +1,4 @@
+using MediPOS.Application.Errors;
 using MediPOS.Application.Modules.Branches;
 using MediPOS.Application.Modules.IdentityAccess;
 using MediPOS.Application.Modules.IdentityAccess.Authentication;
@@ -7,6 +8,7 @@ using MediPOS.Application.Modules.IdentityAccess.ReplaceWorkSchedule;
 using MediPOS.Application.Modules.IdentityAccess.SetMembershipBranches;
 using MediPOS.Application.Modules.IdentityAccess.UpsertGoogleUser;
 using MediPOS.Application.Modules.TenancyLicensing;
+using MediPOS.Domain.Modules.AuditSupport;
 using MediPOS.Domain.Modules.Branches;
 using MediPOS.Domain.Modules.IdentityAccess;
 
@@ -48,7 +50,7 @@ public sealed class IdentityApplicationTests
         var store = new RecordingStore();
         var provisioning = new RecordingProvisioning(store);
         var result = await new CreateMembershipHandler(store, provisioning, new Clock()).HandleAsync(
-            new(store.TenantId, store.UserId, TenantRole.Owner), TestContext.Current.CancellationToken);
+            new(store.TenantId, store.UserId, TenantRole.Owner, Guid.NewGuid()), TestContext.Current.CancellationToken);
         Assert.Equal(CreationSteps, store.Steps);
         Assert.Equal(Now, result.CreatedAt);
         Assert.True(result.IsActive);
@@ -59,10 +61,11 @@ public sealed class IdentityApplicationTests
     {
         var store = new RecordingStore();
         store.Memberships.Add(Membership.Create(store.TenantId, store.UserId, TenantRole.Cashier, Now));
-        await Assert.ThrowsAsync<InvalidOperationException>(() => CreateHandler(store).HandleAsync(
-            new(store.TenantId, store.UserId, TenantRole.Owner), TestContext.Current.CancellationToken));
+        await Assert.ThrowsAsync<ApplicationErrorException>(() => CreateHandler(store).HandleAsync(
+            new(store.TenantId, store.UserId, TenantRole.Owner, Guid.NewGuid()), TestContext.Current.CancellationToken));
         Assert.Single(store.Memberships);
         Assert.DoesNotContain("commit", store.Steps);
+        Assert.Empty(store.Audits);
         Assert.Equal("dispose", store.Steps[^1]);
     }
 
@@ -71,12 +74,13 @@ public sealed class IdentityApplicationTests
     {
         var store = new RecordingStore();
         var handler = CreateHandler(store);
-        await handler.HandleAsync(new(store.TenantId, Guid.NewGuid(), TenantRole.Owner), TestContext.Current.CancellationToken);
-        await handler.HandleAsync(new(store.TenantId, Guid.NewGuid(), TenantRole.Owner), TestContext.Current.CancellationToken);
-        await Assert.ThrowsAsync<InvalidOperationException>(() => handler.HandleAsync(
-            new(store.TenantId, Guid.NewGuid(), TenantRole.Owner), TestContext.Current.CancellationToken));
+        await handler.HandleAsync(new(store.TenantId, Guid.NewGuid(), TenantRole.Owner, Guid.NewGuid()), TestContext.Current.CancellationToken);
+        await handler.HandleAsync(new(store.TenantId, Guid.NewGuid(), TenantRole.Owner, Guid.NewGuid()), TestContext.Current.CancellationToken);
+        await Assert.ThrowsAsync<ApplicationErrorException>(() => handler.HandleAsync(
+            new(store.TenantId, Guid.NewGuid(), TenantRole.Owner, Guid.NewGuid()), TestContext.Current.CancellationToken));
         Assert.Equal(2, store.Memberships.Count);
-        await handler.HandleAsync(new(store.TenantId, Guid.NewGuid(), TenantRole.Pharmacist), TestContext.Current.CancellationToken);
+        Assert.Equal(2, store.Audits.Count);
+        await handler.HandleAsync(new(store.TenantId, Guid.NewGuid(), TenantRole.Pharmacist, Guid.NewGuid()), TestContext.Current.CancellationToken);
         Assert.Equal(3, store.Memberships.Count);
     }
 
@@ -88,7 +92,7 @@ public sealed class IdentityApplicationTests
         inactive.Deactivate(Now);
         store.Memberships.Add(inactive);
         store.Memberships.Add(Membership.Create(store.TenantId, Guid.NewGuid(), TenantRole.Owner, Now));
-        var result = await CreateHandler(store).HandleAsync(new(store.TenantId, store.UserId, TenantRole.Owner), TestContext.Current.CancellationToken);
+        var result = await CreateHandler(store).HandleAsync(new(store.TenantId, store.UserId, TenantRole.Owner, Guid.NewGuid()), TestContext.Current.CancellationToken);
         Assert.NotEqual(inactive.Id, result.Id);
         Assert.False(inactive.IsActive);
         Assert.Equal(2, store.Memberships.Count(value => value.Role == TenantRole.Owner && value.IsActive));
@@ -101,8 +105,8 @@ public sealed class IdentityApplicationTests
     {
         var store = new RecordingStore { UserExists = missingTenant };
         var provisioning = new RecordingProvisioning(store) { Missing = missingTenant };
-        await Assert.ThrowsAsync<KeyNotFoundException>(() => new CreateMembershipHandler(store, provisioning, new Clock()).HandleAsync(
-            new(store.TenantId, store.UserId, TenantRole.Owner), TestContext.Current.CancellationToken));
+        await Assert.ThrowsAsync<ApplicationErrorException>(() => new CreateMembershipHandler(store, provisioning, new Clock()).HandleAsync(
+            new(store.TenantId, store.UserId, TenantRole.Owner, Guid.NewGuid()), TestContext.Current.CancellationToken));
         Assert.Empty(store.Memberships);
         Assert.DoesNotContain("commit", store.Steps);
     }
@@ -115,9 +119,9 @@ public sealed class IdentityApplicationTests
         var branch = Branch.Create(store.TenantId, Guid.NewGuid(), store.TenantId, "Centro", Now);
         branches.Values.Add(branch);
         store.Assignments.Add(MembershipBranch.Create(store.TenantId, store.Memberships[0].Id, store.TenantId, branch.Id, store.TenantId));
-        var handler = new SetMembershipBranchesHandler(store, branches, new RecordingProvisioning(store));
-        await Assert.ThrowsAsync<KeyNotFoundException>(() => handler.HandleAsync(
-            new(store.TenantId, store.Memberships[0].Id, [branch.Id, Guid.NewGuid()]), TestContext.Current.CancellationToken));
+        var handler = new SetMembershipBranchesHandler(store, branches, new RecordingProvisioning(store), new Clock());
+        await Assert.ThrowsAsync<ApplicationErrorException>(() => handler.HandleAsync(
+            new(store.TenantId, store.Memberships[0].Id, [branch.Id, Guid.NewGuid()], Guid.NewGuid()), TestContext.Current.CancellationToken));
         Assert.Single(store.Assignments);
         Assert.DoesNotContain("replace_branches", store.Steps);
         Assert.DoesNotContain("commit", store.Steps);
@@ -130,12 +134,12 @@ public sealed class IdentityApplicationTests
         var branches = new BranchLookup();
         branches.Values.Add(Branch.Create(store.TenantId, Guid.NewGuid(), store.TenantId, "Centro", Now));
         branches.Values.Add(Branch.Create(store.TenantId, Guid.NewGuid(), store.TenantId, "Norte", Now));
-        var handler = new SetMembershipBranchesHandler(store, branches, new RecordingProvisioning(store));
-        await handler.HandleAsync(new(store.TenantId, store.Memberships[0].Id, branches.Values.Select(value => value.Id).ToArray()),
+        var handler = new SetMembershipBranchesHandler(store, branches, new RecordingProvisioning(store), new Clock());
+        await handler.HandleAsync(new(store.TenantId, store.Memberships[0].Id, branches.Values.Select(value => value.Id).ToArray(), Guid.NewGuid()),
             TestContext.Current.CancellationToken);
         Assert.Equal(2, store.Assignments.Count);
         Assert.Contains("commit", store.Steps);
-        await handler.HandleAsync(new(store.TenantId, store.Memberships[0].Id, []), TestContext.Current.CancellationToken);
+        await handler.HandleAsync(new(store.TenantId, store.Memberships[0].Id, [], Guid.NewGuid()), TestContext.Current.CancellationToken);
         Assert.Empty(store.Assignments);
     }
 
@@ -145,13 +149,13 @@ public sealed class IdentityApplicationTests
         var store = WithMembership();
         var membershipId = store.Memberships[0].Id;
         var branchId = Guid.NewGuid();
-        await Assert.ThrowsAsync<ArgumentException>(() =>
-            new SetMembershipBranchesHandler(store, new BranchLookup(), new RecordingProvisioning(store)).HandleAsync(
-                new(store.TenantId, membershipId, [branchId, branchId]), TestContext.Current.CancellationToken));
+        await Assert.ThrowsAsync<ApplicationErrorException>(() =>
+            new SetMembershipBranchesHandler(store, new BranchLookup(), new RecordingProvisioning(store), new Clock()).HandleAsync(
+                new(store.TenantId, membershipId, [branchId, branchId], Guid.NewGuid()), TestContext.Current.CancellationToken));
         var window = new WorkWindow(DayOfWeek.Tuesday, new(9, 0), new(18, 0));
-        await Assert.ThrowsAsync<ArgumentException>(() =>
-            new ReplaceWorkScheduleHandler(store, new RecordingProvisioning(store)).HandleAsync(
-                new(store.TenantId, membershipId, [window, window]), TestContext.Current.CancellationToken));
+        await Assert.ThrowsAsync<ApplicationErrorException>(() =>
+            new ReplaceWorkScheduleHandler(store, new RecordingProvisioning(store), new Clock()).HandleAsync(
+                new(store.TenantId, membershipId, [window, window], Guid.NewGuid()), TestContext.Current.CancellationToken));
         Assert.Empty(store.Steps);
     }
 
@@ -161,9 +165,9 @@ public sealed class IdentityApplicationTests
         var store = WithMembership();
         var membership = store.Memberships[0];
         store.Schedule.Add(WorkSchedule.Create(store.TenantId, membership.Id, store.TenantId, DayOfWeek.Tuesday, new(9, 0), new(18, 0)));
-        await Assert.ThrowsAsync<ArgumentException>(() => new ReplaceWorkScheduleHandler(store, new RecordingProvisioning(store))
+        await Assert.ThrowsAsync<ApplicationErrorException>(() => new ReplaceWorkScheduleHandler(store, new RecordingProvisioning(store), new Clock())
             .HandleAsync(new(store.TenantId, membership.Id,
-                [new(DayOfWeek.Monday, new(9, 0), new(18, 0)), new(DayOfWeek.Tuesday, new(18, 0), new(9, 0))]), TestContext.Current.CancellationToken));
+                [new(DayOfWeek.Monday, new(9, 0), new(18, 0)), new(DayOfWeek.Tuesday, new(18, 0), new(9, 0))], Guid.NewGuid()), TestContext.Current.CancellationToken));
         Assert.Single(store.Schedule);
         Assert.DoesNotContain("replace_schedule", store.Steps);
     }
@@ -172,13 +176,13 @@ public sealed class IdentityApplicationTests
     public async Task ScheduleReplacementAllowsMultipleDailyWindowsAndClearing()
     {
         var store = WithMembership();
-        var handler = new ReplaceWorkScheduleHandler(store, new RecordingProvisioning(store));
+        var handler = new ReplaceWorkScheduleHandler(store, new RecordingProvisioning(store), new Clock());
         await handler.HandleAsync(new(store.TenantId, store.Memberships[0].Id,
             [new(DayOfWeek.Tuesday, new(9, 0), new(12, 0)), new(DayOfWeek.Tuesday, new(14, 0), new(18, 0)),
-             new(DayOfWeek.Wednesday, new(9, 0), new(18, 0))]), TestContext.Current.CancellationToken);
+             new(DayOfWeek.Wednesday, new(9, 0), new(18, 0))], Guid.NewGuid()), TestContext.Current.CancellationToken);
         Assert.Equal(3, store.Schedule.Count);
         Assert.Contains("commit", store.Steps);
-        await handler.HandleAsync(new(store.TenantId, store.Memberships[0].Id, []), TestContext.Current.CancellationToken);
+        await handler.HandleAsync(new(store.TenantId, store.Memberships[0].Id, [], Guid.NewGuid()), TestContext.Current.CancellationToken);
         Assert.Empty(store.Schedule);
     }
 
@@ -191,30 +195,78 @@ public sealed class IdentityApplicationTests
         store.Schedule.Add(WorkSchedule.Create(store.TenantId, membership.Id, store.TenantId, DayOfWeek.Tuesday, new(9, 0), new(18, 0)));
         var provisioning = new RecordingProvisioning(store);
         var handler = new DeactivateMembershipHandler(store, provisioning, new Clock());
-        var result = await handler.HandleAsync(new(store.TenantId, membership.Id), TestContext.Current.CancellationToken);
+        var result = await handler.HandleAsync(new(store.TenantId, membership.Id, Guid.NewGuid()), TestContext.Current.CancellationToken);
         Assert.False(result.IsActive);
         Assert.Equal(Now, result.DeactivatedAt);
-        await handler.HandleAsync(new(store.TenantId, membership.Id), TestContext.Current.CancellationToken);
+        await handler.HandleAsync(new(store.TenantId, membership.Id, Guid.NewGuid()), TestContext.Current.CancellationToken);
         Assert.Single(store.Memberships);
         Assert.Single(store.Assignments);
         Assert.Single(store.Schedule);
-        await Assert.ThrowsAsync<InvalidOperationException>(() =>
-            new SetMembershipBranchesHandler(store, new BranchLookup(), provisioning).HandleAsync(
-                new(store.TenantId, membership.Id, []), TestContext.Current.CancellationToken));
-        await Assert.ThrowsAsync<InvalidOperationException>(() =>
-            new ReplaceWorkScheduleHandler(store, provisioning).HandleAsync(
-                new(store.TenantId, membership.Id, []), TestContext.Current.CancellationToken));
+        await Assert.ThrowsAsync<ApplicationErrorException>(() =>
+            new SetMembershipBranchesHandler(store, new BranchLookup(), provisioning, new Clock()).HandleAsync(
+                new(store.TenantId, membership.Id, [], Guid.NewGuid()), TestContext.Current.CancellationToken));
+        await Assert.ThrowsAsync<ApplicationErrorException>(() =>
+            new ReplaceWorkScheduleHandler(store, provisioning, new Clock()).HandleAsync(
+                new(store.TenantId, membership.Id, [], Guid.NewGuid()), TestContext.Current.CancellationToken));
     }
 
     [Fact]
     public async Task ForeignTenantMembershipCannotBeDeactivated()
     {
         var store = WithMembership();
-        await Assert.ThrowsAsync<KeyNotFoundException>(() =>
+        await Assert.ThrowsAsync<ApplicationErrorException>(() =>
             new DeactivateMembershipHandler(store, new RecordingProvisioning(store), new Clock()).HandleAsync(
-                new(Guid.NewGuid(), store.Memberships[0].Id), TestContext.Current.CancellationToken));
+                new(Guid.NewGuid(), store.Memberships[0].Id, Guid.NewGuid()), TestContext.Current.CancellationToken));
         Assert.True(store.Memberships[0].IsActive);
         Assert.DoesNotContain("commit", store.Steps);
+    }
+
+    [Fact]
+    public async Task SensitiveMembershipChangesCarryMinimalAuditsAndRepeatedDeactivationDoesNotDuplicate()
+    {
+        var store = new RecordingStore();
+        var actor = Guid.NewGuid();
+        var provisioning = new RecordingProvisioning(store);
+        var membership = await new CreateMembershipHandler(store, provisioning, new Clock()).HandleAsync(
+            new(store.TenantId, store.UserId, TenantRole.Pharmacist, actor), TestContext.Current.CancellationToken);
+        var branches = new BranchLookup();
+        var branch = Branch.Create(store.TenantId, Guid.NewGuid(), store.TenantId, "Centro", Now);
+        branches.Values.Add(branch);
+        await new SetMembershipBranchesHandler(store, branches, provisioning, new Clock()).HandleAsync(
+            new(store.TenantId, membership.Id, [branch.Id], actor), TestContext.Current.CancellationToken);
+        await new ReplaceWorkScheduleHandler(store, provisioning, new Clock()).HandleAsync(
+            new(store.TenantId, membership.Id, [new(DayOfWeek.Tuesday, new(9, 0), new(18, 0))], actor), TestContext.Current.CancellationToken);
+        var deactivate = new DeactivateMembershipHandler(store, provisioning, new Clock());
+        await deactivate.HandleAsync(new(store.TenantId, membership.Id, actor), TestContext.Current.CancellationToken);
+        await deactivate.HandleAsync(new(store.TenantId, membership.Id, actor), TestContext.Current.CancellationToken);
+        Assert.Equal(4, store.Audits.Count);
+        Assert.Equal(AuditAction.MembershipCreated, store.Audits[0].Action);
+        Assert.Equal(AuditAction.MembershipBranchesReplaced, store.Audits[1].Action);
+        Assert.Equal(AuditAction.MembershipScheduleReplaced, store.Audits[2].Action);
+        Assert.Equal(AuditAction.MembershipDeactivated, store.Audits[3].Action);
+        Assert.All(store.Audits, audit =>
+        {
+            Assert.Equal(actor, audit.ActorId);
+            Assert.Equal(membership.Id, audit.EntityId);
+            Assert.Equal(Now, audit.OccurredAt);
+        });
+        Assert.Contains(branch.Id.ToString("D"), store.Audits[1].AfterJson, StringComparison.Ordinal);
+        Assert.Contains("tue", store.Audits[2].AfterJson, StringComparison.Ordinal);
+        Assert.Contains("false", store.Audits[3].AfterJson, StringComparison.Ordinal);
+        Assert.Single(store.Assignments);
+        Assert.Single(store.Schedule);
+    }
+
+    [Fact]
+    public async Task MissingActorFailsBeforeProvisioningOrRecordingAudit()
+    {
+        var store = new RecordingStore();
+        var error = await Assert.ThrowsAsync<ApplicationErrorException>(() => CreateHandler(store).HandleAsync(
+            new(store.TenantId, store.UserId, TenantRole.Owner, Guid.Empty), TestContext.Current.CancellationToken));
+        Assert.Equal("audit.actor_required", error.Error.Code);
+        Assert.Empty(store.Steps);
+        Assert.Empty(store.Audits);
+        Assert.Empty(store.Memberships);
     }
 
     private static CreateMembershipHandler CreateHandler(RecordingStore store) => new(store, new RecordingProvisioning(store), new Clock());
@@ -245,6 +297,7 @@ public sealed class IdentityApplicationTests
         public bool InScope { get; set; }
         public List<string> Steps { get; } = [];
         public List<User> Users { get; } = [];
+        public List<AuditLog> Audits { get; } = [];
         public List<Membership> Memberships { get; } = [];
         public List<MembershipBranch> Assignments { get; } = [];
         public List<WorkSchedule> Schedule { get; } = [];
@@ -279,33 +332,41 @@ public sealed class IdentityApplicationTests
         }
         public Task<Membership?> FindMembershipAsync(Guid tenantId, Guid membershipId, CancellationToken cancellationToken) =>
             Task.FromResult(Memberships.SingleOrDefault(value => value.TenantId == tenantId && value.Id == membershipId));
-        public Task AddMembershipAsync(Membership membership, CancellationToken cancellationToken)
+        public Task<IReadOnlyList<Guid>> FindBranchAssignmentsAsync(Guid tenantId, Guid membershipId, CancellationToken cancellationToken) =>
+            Task.FromResult<IReadOnlyList<Guid>>(Assignments.Where(value => value.TenantId == tenantId && value.MembershipId == membershipId).Select(value => value.BranchId).ToArray());
+        public Task<IReadOnlyList<WorkSchedule>> FindWorkScheduleAsync(Guid tenantId, Guid membershipId, CancellationToken cancellationToken) =>
+            Task.FromResult<IReadOnlyList<WorkSchedule>>(Schedule.Where(value => value.TenantId == tenantId && value.MembershipId == membershipId).ToArray());
+        public Task AddMembershipAsync(Membership membership, AuditLog audit, CancellationToken cancellationToken)
         {
             Assert.True(InScope);
             Steps.Add("insert");
             Memberships.Add(membership);
+            Audits.Add(audit);
             return Task.CompletedTask;
         }
-        public Task SaveDeactivationAsync(Membership membership, CancellationToken cancellationToken)
+        public Task SaveDeactivationAsync(Membership membership, AuditLog audit, CancellationToken cancellationToken)
         {
             Assert.True(InScope);
             Steps.Add("deactivate");
+            Audits.Add(audit);
             return Task.CompletedTask;
         }
-        public Task ReplaceBranchesAsync(Guid tenantId, Guid membershipId, IReadOnlyList<MembershipBranch> branches, CancellationToken cancellationToken)
+        public Task ReplaceBranchesAsync(Guid tenantId, Guid membershipId, IReadOnlyList<MembershipBranch> branches, AuditLog audit, CancellationToken cancellationToken)
         {
             Assert.True(InScope);
             Steps.Add("replace_branches");
             Assignments.Clear();
             Assignments.AddRange(branches);
+            Audits.Add(audit);
             return Task.CompletedTask;
         }
-        public Task ReplaceScheduleAsync(Guid tenantId, Guid membershipId, IReadOnlyList<WorkSchedule> schedule, CancellationToken cancellationToken)
+        public Task ReplaceScheduleAsync(Guid tenantId, Guid membershipId, IReadOnlyList<WorkSchedule> schedule, AuditLog audit, CancellationToken cancellationToken)
         {
             Assert.True(InScope);
             Steps.Add("replace_schedule");
             Schedule.Clear();
             Schedule.AddRange(schedule);
+            Audits.Add(audit);
             return Task.CompletedTask;
         }
     }
@@ -348,8 +409,8 @@ public sealed class IdentityApplicationTests
         public Task<LegalEntity?> FindLegalEntityAsync(Guid tenantId, Guid legalEntityId, CancellationToken cancellationToken) => throw new NotSupportedException();
         public Task<Branch?> FindMainHubBranchAsync(Guid tenantId, CancellationToken cancellationToken) => throw new NotSupportedException();
         public Task<int> CountBranchesAsync(Guid tenantId, CancellationToken cancellationToken) => throw new NotSupportedException();
-        public Task AddLegalEntityAsync(LegalEntity legalEntity, CancellationToken cancellationToken) => throw new NotSupportedException();
-        public Task AddBranchAsync(Branch branch, CancellationToken cancellationToken) => throw new NotSupportedException();
-        public Task ReplaceMainHubAsync(Branch branch, CancellationToken cancellationToken) => throw new NotSupportedException();
+        public Task AddLegalEntityAsync(LegalEntity legalEntity, AuditLog audit, CancellationToken cancellationToken) => throw new NotSupportedException();
+        public Task AddBranchAsync(Branch branch, AuditLog audit, CancellationToken cancellationToken) => throw new NotSupportedException();
+        public Task ReplaceMainHubAsync(Branch branch, AuditLog audit, CancellationToken cancellationToken) => throw new NotSupportedException();
     }
 }

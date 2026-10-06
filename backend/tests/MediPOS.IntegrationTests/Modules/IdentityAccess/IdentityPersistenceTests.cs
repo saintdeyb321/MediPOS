@@ -1,3 +1,5 @@
+using MediPOS.Application.Errors;
+using MediPOS.Application.Modules.AuditSupport;
 using MediPOS.Application.Modules.IdentityAccess;
 using MediPOS.Application.Modules.IdentityAccess.CreateMembership;
 using MediPOS.Application.Modules.IdentityAccess.DeactivateMembership;
@@ -5,6 +7,7 @@ using MediPOS.Application.Modules.IdentityAccess.OperationalAccess;
 using MediPOS.Application.Modules.IdentityAccess.ReplaceWorkSchedule;
 using MediPOS.Application.Modules.IdentityAccess.SetMembershipBranches;
 using MediPOS.Application.Modules.TenancyLicensing;
+using MediPOS.Domain.Modules.AuditSupport;
 using MediPOS.Domain.Modules.IdentityAccess;
 using MediPOS.IntegrationTests.Modules.TenancyLicensing;
 using Microsoft.EntityFrameworkCore;
@@ -75,13 +78,13 @@ public sealed class IdentityPersistenceTests(PostgreSqlFixture fixture)
             """, TestContext.Current.CancellationToken));
         Assert.Equal(PostgresErrorCodes.UniqueViolation, duplicate.SqlState);
         Assert.Equal("ux_memberships_tenant_user_active", duplicate.ConstraintName);
-        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+        await Assert.ThrowsAsync<ApplicationErrorException>(() =>
             scope.ServiceProvider.GetRequiredService<CreateMembershipHandler>().HandleAsync(
-                new(setup.TenantId, setup.UserId, TenantRole.Owner), TestContext.Current.CancellationToken));
+                new(setup.TenantId, setup.UserId, TenantRole.Owner, Guid.NewGuid()), TestContext.Current.CancellationToken));
         await scope.ServiceProvider.GetRequiredService<DeactivateMembershipHandler>().HandleAsync(
-            new(setup.TenantId, setup.MembershipId), TestContext.Current.CancellationToken);
+            new(setup.TenantId, setup.MembershipId, Guid.NewGuid()), TestContext.Current.CancellationToken);
         var replacement = await scope.ServiceProvider.GetRequiredService<CreateMembershipHandler>().HandleAsync(
-            new(setup.TenantId, setup.UserId, TenantRole.Cashier), TestContext.Current.CancellationToken);
+            new(setup.TenantId, setup.UserId, TenantRole.Cashier, Guid.NewGuid()), TestContext.Current.CancellationToken);
         Assert.NotEqual(setup.MembershipId, replacement.Id);
         Assert.Equal(2, await context.Memberships.CountAsync(value =>
             value.TenantId == setup.TenantId && value.UserId == setup.UserId, TestContext.Current.CancellationToken));
@@ -167,7 +170,7 @@ public sealed class IdentityPersistenceTests(PostgreSqlFixture fixture)
         await using var scope = services.CreateAsyncScope();
         var setup = await IdentityAccessTestSetup.CreateAsync(scope.ServiceProvider, TenantRole.Pharmacist);
         await scope.ServiceProvider.GetRequiredService<ReplaceWorkScheduleHandler>().HandleAsync(
-            new(setup.TenantId, setup.MembershipId, [new(DayOfWeek.Tuesday, new(9, 0), new(18, 0))]), TestContext.Current.CancellationToken);
+            new(setup.TenantId, setup.MembershipId, [new(DayOfWeek.Tuesday, new(9, 0), new(18, 0))], Guid.NewGuid()), TestContext.Current.CancellationToken);
         await using var context = fixture.CreateContext(setup.TenantId);
         var role = await context.Database.SqlQuery<string>($"""SELECT role AS "Value" FROM memberships WHERE tenant_id = {setup.TenantId} AND id = {setup.MembershipId}""")
             .SingleAsync(TestContext.Current.CancellationToken);
@@ -190,13 +193,13 @@ public sealed class IdentityPersistenceTests(PostgreSqlFixture fixture)
         await using var scope = services.CreateAsyncScope();
         var setup = await IdentityAccessTestSetup.CreateAsync(scope.ServiceProvider);
         var branchHandler = scope.ServiceProvider.GetRequiredService<SetMembershipBranchesHandler>();
-        await branchHandler.HandleAsync(new(setup.TenantId, setup.MembershipId, [setup.BranchId]), TestContext.Current.CancellationToken);
-        await branchHandler.HandleAsync(new(setup.TenantId, setup.MembershipId, [setup.BranchId]), TestContext.Current.CancellationToken);
+        await branchHandler.HandleAsync(new(setup.TenantId, setup.MembershipId, [setup.BranchId], Guid.NewGuid()), TestContext.Current.CancellationToken);
+        await branchHandler.HandleAsync(new(setup.TenantId, setup.MembershipId, [setup.BranchId], Guid.NewGuid()), TestContext.Current.CancellationToken);
         var scheduleHandler = scope.ServiceProvider.GetRequiredService<ReplaceWorkScheduleHandler>();
-        await scheduleHandler.HandleAsync(new(setup.TenantId, setup.MembershipId, [new(DayOfWeek.Tuesday, new(9, 0), new(18, 0))]), TestContext.Current.CancellationToken);
-        await scheduleHandler.HandleAsync(new(setup.TenantId, setup.MembershipId, [new(DayOfWeek.Tuesday, new(9, 0), new(18, 0))]), TestContext.Current.CancellationToken);
+        await scheduleHandler.HandleAsync(new(setup.TenantId, setup.MembershipId, [new(DayOfWeek.Tuesday, new(9, 0), new(18, 0))], Guid.NewGuid()), TestContext.Current.CancellationToken);
+        await scheduleHandler.HandleAsync(new(setup.TenantId, setup.MembershipId, [new(DayOfWeek.Tuesday, new(9, 0), new(18, 0))], Guid.NewGuid()), TestContext.Current.CancellationToken);
         await scope.ServiceProvider.GetRequiredService<DeactivateMembershipHandler>().HandleAsync(
-            new(setup.TenantId, setup.MembershipId), TestContext.Current.CancellationToken);
+            new(setup.TenantId, setup.MembershipId, Guid.NewGuid()), TestContext.Current.CancellationToken);
         await using var verification = fixture.CreateContext(setup.TenantId);
         var membership = await verification.Memberships.SingleAsync(value => value.Id == setup.MembershipId, TestContext.Current.CancellationToken);
         Assert.False(membership.IsActive);
@@ -221,7 +224,7 @@ public sealed class IdentityPersistenceTests(PostgreSqlFixture fixture)
         {
             setup = await IdentityAccessTestSetup.CreateAsync(setupScope.ServiceProvider);
             await setupScope.ServiceProvider.GetRequiredService<SetMembershipBranchesHandler>().HandleAsync(
-                new(setup.TenantId, setup.MembershipId, [setup.BranchId]), TestContext.Current.CancellationToken);
+                new(setup.TenantId, setup.MembershipId, [setup.BranchId], Guid.NewGuid()), TestContext.Current.CancellationToken);
         }
         await using (var scope = services.CreateAsyncScope())
         {
@@ -231,7 +234,9 @@ public sealed class IdentityPersistenceTests(PostgreSqlFixture fixture)
             var invalid = MembershipBranch.Create(setup.TenantId, setup.MembershipId, setup.TenantId, Guid.NewGuid(), setup.TenantId);
             var error = await Assert.ThrowsAsync<DbUpdateException>(() =>
                 scope.ServiceProvider.GetRequiredService<IIdentityAccessStore>().ReplaceBranchesAsync(
-                    setup.TenantId, setup.MembershipId, [invalid], TestContext.Current.CancellationToken));
+                    setup.TenantId, setup.MembershipId, [invalid],
+                    AuditTrail.Record(setup.TenantId, Guid.NewGuid(), AuditAction.MembershipBranchesReplaced, setup.MembershipId, Now,
+                        AuditTrail.BranchAssignments([setup.BranchId]), AuditTrail.BranchAssignments([invalid.BranchId])), TestContext.Current.CancellationToken));
             Assert.Equal(PostgresErrorCodes.ForeignKeyViolation, Assert.IsType<PostgresException>(error.InnerException).SqlState);
             // No CompleteAsync: the entire transaction, including deletion, must roll back.
         }

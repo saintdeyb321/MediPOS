@@ -18,7 +18,7 @@ internal sealed class WorkScheduleConfiguration : IEntityTypeConfiguration<WorkS
         builder.Property(value => value.TenantId).HasColumnName("tenant_id");
         builder.Property(value => value.MembershipId).HasColumnName("membership_id");
         builder.Property(value => value.DayOfWeek).HasColumnName("day_of_week").HasConversion(
-            day => DayCodes.ToCode(day), code => DayCodes.FromCode(code)).IsRequired();
+            day => WorkDayCodes.ToCode(day), code => WorkDayCodes.FromCode(code)).IsRequired();
         builder.Property(value => value.StartTime).HasColumnName("start_time").HasColumnType("time without time zone");
         builder.Property(value => value.EndTime).HasColumnName("end_time").HasColumnType("time without time zone");
         builder.HasOne<Membership>().WithMany()
@@ -27,31 +27,4 @@ internal sealed class WorkScheduleConfiguration : IEntityTypeConfiguration<WorkS
         builder.HasIndex(value => new { value.TenantId, value.MembershipId, value.DayOfWeek, value.StartTime, value.EndTime })
             .IsUnique().HasDatabaseName("ux_work_schedules_exact_window");
     }
-}
-
-internal static class DayCodes
-{
-    internal static string ToCode(DayOfWeek day) => day switch
-    {
-        DayOfWeek.Monday => "mon",
-        DayOfWeek.Tuesday => "tue",
-        DayOfWeek.Wednesday => "wed",
-        DayOfWeek.Thursday => "thu",
-        DayOfWeek.Friday => "fri",
-        DayOfWeek.Saturday => "sat",
-        DayOfWeek.Sunday => "sun",
-        _ => throw new ArgumentOutOfRangeException(nameof(day)),
-    };
-
-    internal static DayOfWeek FromCode(string code) => code switch
-    {
-        "mon" => DayOfWeek.Monday,
-        "tue" => DayOfWeek.Tuesday,
-        "wed" => DayOfWeek.Wednesday,
-        "thu" => DayOfWeek.Thursday,
-        "fri" => DayOfWeek.Friday,
-        "sat" => DayOfWeek.Saturday,
-        "sun" => DayOfWeek.Sunday,
-        _ => throw new InvalidOperationException("Unknown persisted work schedule day."),
-    };
 }

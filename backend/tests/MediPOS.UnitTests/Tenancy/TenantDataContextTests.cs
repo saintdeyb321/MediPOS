@@ -1,3 +1,4 @@
+using MediPOS.Application.Errors;
 using MediPOS.Application.Tenancy;
 
 namespace MediPOS.UnitTests.Tenancy;
@@ -30,7 +31,8 @@ public sealed class TenantDataContextTests
     public void EmptyIdentifierIsRejectedWithoutSelectingTenant()
     {
         var context = new TenantDataContext();
-        Assert.Throws<ArgumentException>(() => context.SelectTenant(Guid.Empty));
+        var error = Assert.Throws<ApplicationErrorException>(() => context.SelectTenant(Guid.Empty));
+        Assert.Equal("request.invalid", error.Error.Code);
         Assert.Null(context.TenantId);
     }
 
@@ -40,7 +42,8 @@ public sealed class TenantDataContextTests
         var context = new TenantDataContext();
         var first = Guid.NewGuid();
         context.SelectTenant(first);
-        Assert.Throws<InvalidOperationException>(() => context.SelectTenant(Guid.NewGuid()));
+        var error = Assert.Throws<ApplicationErrorException>(() => context.SelectTenant(Guid.NewGuid()));
+        Assert.Equal("tenant.scope_conflict", error.Error.Code);
         Assert.Equal(first, context.TenantId);
     }
 }

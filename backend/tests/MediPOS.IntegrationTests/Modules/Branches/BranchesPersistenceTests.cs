@@ -1,9 +1,12 @@
+using MediPOS.Application.Errors;
+using MediPOS.Application.Modules.AuditSupport;
 using MediPOS.Application.Modules.Branches;
 using MediPOS.Application.Modules.Branches.CreateBranch;
 using MediPOS.Application.Modules.Branches.CreateLegalEntity;
 using MediPOS.Application.Modules.Branches.SetMainHubBranch;
 using MediPOS.Application.Modules.TenancyLicensing;
 using MediPOS.Application.Modules.TenancyLicensing.CreateTenant;
+using MediPOS.Domain.Modules.AuditSupport;
 using MediPOS.Domain.Modules.Branches;
 using MediPOS.Domain.Modules.TenancyLicensing;
 using MediPOS.Infrastructure;
@@ -39,7 +42,7 @@ public sealed class BranchesPersistenceTests(PostgreSqlFixture fixture)
         await using var scope = services.CreateAsyncScope();
         var setup = await CreateTenantAndLegalEntityAsync(scope.ServiceProvider);
         var created = await scope.ServiceProvider.GetRequiredService<CreateBranchHandler>().HandleAsync(
-            new(setup.TenantId, setup.LegalEntityId, " Centro "), TestContext.Current.CancellationToken);
+            new(setup.TenantId, setup.LegalEntityId, " Centro ", Guid.NewGuid()), TestContext.Current.CancellationToken);
 
         await using var context = fixture.CreateContext(setup.TenantId);
         var legalEntity = await context.LegalEntities.SingleAsync(value => value.Id == setup.LegalEntityId, TestContext.Current.CancellationToken);
@@ -69,8 +72,8 @@ public sealed class BranchesPersistenceTests(PostgreSqlFixture fixture)
             TestContext.Current.CancellationToken));
         Assert.Equal(PostgresErrorCodes.ForeignKeyViolation, error.SqlState);
 
-        await Assert.ThrowsAsync<KeyNotFoundException>(() => scope.ServiceProvider.GetRequiredService<CreateBranchHandler>().HandleAsync(
-            new(first.TenantId, second.LegalEntityId, "Foreign"), TestContext.Current.CancellationToken));
+        await Assert.ThrowsAsync<ApplicationErrorException>(() => scope.ServiceProvider.GetRequiredService<CreateBranchHandler>().HandleAsync(
+            new(first.TenantId, second.LegalEntityId, "Foreign", Guid.NewGuid()), TestContext.Current.CancellationToken));
         Assert.Empty(await context.Branches.Where(value => value.TenantId == first.TenantId).ToListAsync(TestContext.Current.CancellationToken));
     }
 
@@ -100,8 +103,8 @@ public sealed class BranchesPersistenceTests(PostgreSqlFixture fixture)
         await using var scope = services.CreateAsyncScope();
         var setup = await CreateTenantAndLegalEntityAsync(scope.ServiceProvider);
         var handler = scope.ServiceProvider.GetRequiredService<CreateBranchHandler>();
-        await handler.HandleAsync(new(setup.TenantId, setup.LegalEntityId, "Centro"), TestContext.Current.CancellationToken);
-        await handler.HandleAsync(new(setup.TenantId, setup.LegalEntityId, "Norte"), TestContext.Current.CancellationToken);
+        await handler.HandleAsync(new(setup.TenantId, setup.LegalEntityId, "Centro", Guid.NewGuid()), TestContext.Current.CancellationToken);
+        await handler.HandleAsync(new(setup.TenantId, setup.LegalEntityId, "Norte", Guid.NewGuid()), TestContext.Current.CancellationToken);
         await using var context = fixture.CreateContext(setup.TenantId);
 
         var error = await Assert.ThrowsAsync<PostgresException>(() => context.Database.ExecuteSqlInterpolatedAsync(
@@ -120,17 +123,17 @@ public sealed class BranchesPersistenceTests(PostgreSqlFixture fixture)
         await using var foreignScope = services.CreateAsyncScope();
         var foreign = await CreateTenantAndLegalEntityAsync(foreignScope.ServiceProvider);
         var creator = scope.ServiceProvider.GetRequiredService<CreateBranchHandler>();
-        var first = await creator.HandleAsync(new(setup.TenantId, setup.LegalEntityId, "Centro"), TestContext.Current.CancellationToken);
-        var second = await creator.HandleAsync(new(setup.TenantId, setup.LegalEntityId, "Norte"), TestContext.Current.CancellationToken);
+        var first = await creator.HandleAsync(new(setup.TenantId, setup.LegalEntityId, "Centro", Guid.NewGuid()), TestContext.Current.CancellationToken);
+        var second = await creator.HandleAsync(new(setup.TenantId, setup.LegalEntityId, "Norte", Guid.NewGuid()), TestContext.Current.CancellationToken);
         var foreignBranch = await foreignScope.ServiceProvider.GetRequiredService<CreateBranchHandler>().HandleAsync(
-            new(foreign.TenantId, foreign.LegalEntityId, "Otra"), TestContext.Current.CancellationToken);
+            new(foreign.TenantId, foreign.LegalEntityId, "Otra", Guid.NewGuid()), TestContext.Current.CancellationToken);
         var hubHandler = scope.ServiceProvider.GetRequiredService<SetMainHubBranchHandler>();
         await foreignScope.ServiceProvider.GetRequiredService<SetMainHubBranchHandler>().HandleAsync(
-            new(foreign.TenantId, foreignBranch.Id), TestContext.Current.CancellationToken);
-        await hubHandler.HandleAsync(new(setup.TenantId, first.Id), TestContext.Current.CancellationToken);
-        await hubHandler.HandleAsync(new(setup.TenantId, second.Id), TestContext.Current.CancellationToken);
+            new(foreign.TenantId, foreignBranch.Id, Guid.NewGuid()), TestContext.Current.CancellationToken);
+        await hubHandler.HandleAsync(new(setup.TenantId, first.Id, Guid.NewGuid()), TestContext.Current.CancellationToken);
+        await hubHandler.HandleAsync(new(setup.TenantId, second.Id, Guid.NewGuid()), TestContext.Current.CancellationToken);
 
-        await Assert.ThrowsAsync<KeyNotFoundException>(() => hubHandler.HandleAsync(new(setup.TenantId, foreignBranch.Id), TestContext.Current.CancellationToken));
+        await Assert.ThrowsAsync<ApplicationErrorException>(() => hubHandler.HandleAsync(new(setup.TenantId, foreignBranch.Id, Guid.NewGuid()), TestContext.Current.CancellationToken));
         await using var context = fixture.CreateContext(setup.TenantId);
         var hubs = await context.Branches.Where(value => value.TenantId == setup.TenantId && value.IsMainHub).ToListAsync(TestContext.Current.CancellationToken);
         Assert.Equal(second.Id, Assert.Single(hubs).Id);
@@ -145,9 +148,9 @@ public sealed class BranchesPersistenceTests(PostgreSqlFixture fixture)
         await using var scope = services.CreateAsyncScope();
         var setup = await CreateTenantAndLegalEntityAsync(scope.ServiceProvider, maxBranches: 1);
         var creator = scope.ServiceProvider.GetRequiredService<CreateBranchHandler>();
-        await creator.HandleAsync(new(setup.TenantId, setup.LegalEntityId, "Centro"), TestContext.Current.CancellationToken);
-        var error = await Assert.ThrowsAsync<InvalidOperationException>(() => creator.HandleAsync(
-            new(setup.TenantId, setup.LegalEntityId, "Norte"), TestContext.Current.CancellationToken));
+        await creator.HandleAsync(new(setup.TenantId, setup.LegalEntityId, "Centro", Guid.NewGuid()), TestContext.Current.CancellationToken);
+        var error = await Assert.ThrowsAsync<ApplicationErrorException>(() => creator.HandleAsync(
+            new(setup.TenantId, setup.LegalEntityId, "Norte", Guid.NewGuid()), TestContext.Current.CancellationToken));
         Assert.Equal("The licensed branch limit has been reached.", error.Message);
         await using var context = fixture.CreateContext(setup.TenantId);
         Assert.Single(await context.Branches.Where(value => value.TenantId == setup.TenantId).ToListAsync(TestContext.Current.CancellationToken));
@@ -161,8 +164,8 @@ public sealed class BranchesPersistenceTests(PostgreSqlFixture fixture)
         await using var services = CreateServices();
         await using var scope = services.CreateAsyncScope();
         var setup = await CreateTenantAndLegalEntityAsync(scope.ServiceProvider, status: status, expired: expired);
-        await Assert.ThrowsAsync<InvalidOperationException>(() => scope.ServiceProvider.GetRequiredService<CreateBranchHandler>().HandleAsync(
-            new(setup.TenantId, setup.LegalEntityId, "Centro"), TestContext.Current.CancellationToken));
+        await Assert.ThrowsAsync<ApplicationErrorException>(() => scope.ServiceProvider.GetRequiredService<CreateBranchHandler>().HandleAsync(
+            new(setup.TenantId, setup.LegalEntityId, "Centro", Guid.NewGuid()), TestContext.Current.CancellationToken));
         await using var context = fixture.CreateContext(setup.TenantId);
         Assert.Empty(await context.Branches.Where(value => value.TenantId == setup.TenantId).ToListAsync(TestContext.Current.CancellationToken));
     }
@@ -177,7 +180,7 @@ public sealed class BranchesPersistenceTests(PostgreSqlFixture fixture)
         await using (var setupScope = services.CreateAsyncScope())
         {
             setup = await CreateTenantAndLegalEntityAsync(setupScope.ServiceProvider, maxBranches: 2);
-            await setupScope.ServiceProvider.GetRequiredService<CreateBranchHandler>().HandleAsync(new(setup.TenantId, setup.LegalEntityId, "Inicial"), timeout.Token);
+            await setupScope.ServiceProvider.GetRequiredService<CreateBranchHandler>().HandleAsync(new(setup.TenantId, setup.LegalEntityId, "Inicial", Guid.NewGuid()), timeout.Token);
         }
 
         await using var firstScope = services.CreateAsyncScope();
@@ -186,13 +189,13 @@ public sealed class BranchesPersistenceTests(PostgreSqlFixture fixture)
         var secondProvisioning = new ObservedProvisioning(secondScope.ServiceProvider.GetRequiredService<ITenantLicenseProvisioning>(), pauseAfterAcquire: false);
         var firstHandler = new CreateBranchHandler(firstScope.ServiceProvider.GetRequiredService<IBranchesStore>(), firstProvisioning, new FixedTimeProvider());
         var secondHandler = new CreateBranchHandler(secondScope.ServiceProvider.GetRequiredService<IBranchesStore>(), secondProvisioning, new FixedTimeProvider());
-        var firstTask = firstHandler.HandleAsync(new(setup.TenantId, setup.LegalEntityId, "Primera"), timeout.Token);
+        var firstTask = firstHandler.HandleAsync(new(setup.TenantId, setup.LegalEntityId, "Primera", Guid.NewGuid()), timeout.Token);
         Task<BranchDetails>? secondTask = null;
 
         try
         {
             await firstProvisioning.Acquired.Task.WaitAsync(timeout.Token);
-            secondTask = secondHandler.HandleAsync(new(setup.TenantId, setup.LegalEntityId, "Segunda"), timeout.Token);
+            secondTask = secondHandler.HandleAsync(new(setup.TenantId, setup.LegalEntityId, "Segunda", Guid.NewGuid()), timeout.Token);
             await secondProvisioning.Started.Task.WaitAsync(timeout.Token);
             await Task.Delay(TimeSpan.FromMilliseconds(100), timeout.Token);
             Assert.False(secondProvisioning.Acquired.Task.IsCompleted);
@@ -204,7 +207,7 @@ public sealed class BranchesPersistenceTests(PostgreSqlFixture fixture)
         }
 
         Assert.NotNull(secondTask);
-        var error = await Assert.ThrowsAsync<InvalidOperationException>(() => secondTask);
+        var error = await Assert.ThrowsAsync<ApplicationErrorException>(() => secondTask);
         Assert.Equal("The licensed branch limit has been reached.", error.Message);
         await using var context = fixture.CreateContext(setup.TenantId);
         Assert.Equal(2, await context.Branches.CountAsync(value => value.TenantId == setup.TenantId, timeout.Token));
@@ -226,13 +229,15 @@ public sealed class BranchesPersistenceTests(PostgreSqlFixture fixture)
             await using var transaction = await provisioning.BeginAsync(setup.TenantId, TestContext.Current.CancellationToken);
             Assert.NotNull(transaction);
             var branch = Branch.Create(setup.TenantId, setup.LegalEntityId, setup.TenantId, "Sin commit", Now);
-            await scope.ServiceProvider.GetRequiredService<IBranchesStore>().AddBranchAsync(branch, TestContext.Current.CancellationToken);
+            await scope.ServiceProvider.GetRequiredService<IBranchesStore>().AddBranchAsync(branch,
+                AuditTrail.Record(setup.TenantId, Guid.NewGuid(), AuditAction.BranchCreated, branch.Id,
+                    Now, null, AuditTrail.BranchCreated(branch)), TestContext.Current.CancellationToken);
         }
 
         await using var verification = fixture.CreateContext(setup.TenantId);
         Assert.Empty(await verification.Branches.Where(value => value.TenantId == setup.TenantId).ToListAsync(TestContext.Current.CancellationToken));
         await using var nextScope = services.CreateAsyncScope();
-        await nextScope.ServiceProvider.GetRequiredService<CreateBranchHandler>().HandleAsync(new(setup.TenantId, setup.LegalEntityId, "Con commit"), TestContext.Current.CancellationToken);
+        await nextScope.ServiceProvider.GetRequiredService<CreateBranchHandler>().HandleAsync(new(setup.TenantId, setup.LegalEntityId, "Con commit", Guid.NewGuid()), TestContext.Current.CancellationToken);
     }
 
     private ServiceProvider CreateServices()
@@ -256,7 +261,7 @@ public sealed class BranchesPersistenceTests(PostgreSqlFixture fixture)
         var tenant = await services.GetRequiredService<CreateTenantHandler>().HandleAsync(
             new("Botica", Now.AddDays(-1), expired ? Now : Now.AddMonths(1), maxBranches, status, Guid.NewGuid()), TestContext.Current.CancellationToken);
         var legalEntity = await services.GetRequiredService<CreateLegalEntityHandler>().HandleAsync(
-            new(tenant.TenantId, "Botica SAC", "123"), TestContext.Current.CancellationToken);
+            new(tenant.TenantId, "Botica SAC", "123", Guid.NewGuid()), TestContext.Current.CancellationToken);
         return (tenant.TenantId, legalEntity.Id);
     }
 

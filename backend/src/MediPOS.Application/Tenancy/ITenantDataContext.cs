@@ -1,3 +1,5 @@
+using MediPOS.Application.Errors;
+
 namespace MediPOS.Application.Tenancy;
 
 // Data selection only: selecting a tenant does not authenticate a user or authorize an operation.
@@ -20,11 +22,11 @@ public sealed class TenantDataContext : ITenantDataContext
     public void SelectTenant(Guid tenantId)
     {
         if (tenantId == Guid.Empty)
-            throw new ArgumentException("A tenant identifier is required.", nameof(tenantId));
+            throw new ApplicationErrorException(ApplicationErrors.InvalidRequest);
         lock (_gate)
         {
             if (_tenantId.HasValue && _tenantId != tenantId)
-                throw new InvalidOperationException("The tenant cannot change within a data scope.");
+                throw new ApplicationErrorException(ApplicationErrors.TenantScopeConflict);
             _tenantId = tenantId;
         }
     }

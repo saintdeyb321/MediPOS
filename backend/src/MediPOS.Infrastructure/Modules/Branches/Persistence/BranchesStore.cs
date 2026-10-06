@@ -1,4 +1,6 @@
+using MediPOS.Application.Errors;
 using MediPOS.Application.Modules.Branches;
+using MediPOS.Domain.Modules.AuditSupport;
 using MediPOS.Domain.Modules.Branches;
 using MediPOS.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
@@ -38,25 +40,28 @@ internal sealed class BranchesStore(MediPosDbContext context) : IBranchesStore
         return context.Branches.AsNoTracking().SingleOrDefaultAsync(branch => branch.TenantId == tenantId && branch.IsMainHub, cancellationToken);
     }
 
-    public async Task AddLegalEntityAsync(LegalEntity legalEntity, CancellationToken cancellationToken)
+    public async Task AddLegalEntityAsync(LegalEntity legalEntity, AuditLog audit, CancellationToken cancellationToken)
     {
         context.SelectTenant(legalEntity.TenantId);
+        context.AddAudit(audit, legalEntity.TenantId, AuditAction.LegalEntityCreated, legalEntity.Id);
         context.LegalEntities.Add(legalEntity);
-        await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        await context.SaveAuditedChangesAsync(cancellationToken).ConfigureAwait(false);
     }
 
-    public async Task AddBranchAsync(Branch branch, CancellationToken cancellationToken)
+    public async Task AddBranchAsync(Branch branch, AuditLog audit, CancellationToken cancellationToken)
     {
         context.SelectTenant(branch.TenantId);
         RequireProvisioningTransaction();
+        context.AddAudit(audit, branch.TenantId, AuditAction.BranchCreated, branch.Id);
         context.Branches.Add(branch);
-        await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        await context.SaveAuditedChangesAsync(cancellationToken).ConfigureAwait(false);
     }
 
-    public async Task ReplaceMainHubAsync(Branch branch, CancellationToken cancellationToken)
+    public async Task ReplaceMainHubAsync(Branch branch, AuditLog audit, CancellationToken cancellationToken)
     {
         context.SelectTenant(branch.TenantId);
         RequireProvisioningTransaction();
+        context.ValidateAudit(audit, branch.TenantId, AuditAction.BranchMainHubChanged, branch.Id);
         // Two ordered statements avoid a transient unique-index violation when moving the role.
         await context.Branches.Where(value => value.TenantId == branch.TenantId && value.IsMainHub)
             .ExecuteUpdateAsync(setters => setters.SetProperty(value => value.IsMainHub, false), cancellationToken).ConfigureAwait(false);
@@ -65,8 +70,10 @@ internal sealed class BranchesStore(MediPosDbContext context) : IBranchesStore
 
         if (updated != 1)
         {
-            throw new KeyNotFoundException("Branch was not found for the tenant.");
+            throw new ApplicationErrorException(ApplicationErrors.BranchNotFound);
         }
+        context.AddAudit(audit, branch.TenantId, AuditAction.BranchMainHubChanged, branch.Id);
+        await context.SaveAuditedChangesAsync(cancellationToken).ConfigureAwait(false);
     }
 
     private void RequireProvisioningTransaction()

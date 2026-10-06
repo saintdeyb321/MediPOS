@@ -1,8 +1,10 @@
+using MediPOS.Application.Errors;
 using MediPOS.Application.Modules.Branches;
 using MediPOS.Application.Modules.Branches.CreateBranch;
 using MediPOS.Application.Modules.Branches.CreateLegalEntity;
 using MediPOS.Application.Modules.Branches.SetMainHubBranch;
 using MediPOS.Application.Modules.TenancyLicensing;
+using MediPOS.Domain.Modules.AuditSupport;
 using MediPOS.Domain.Modules.Branches;
 using MediPOS.Domain.Modules.TenancyLicensing;
 
@@ -19,15 +21,20 @@ public sealed class BranchApplicationTests
         var tenantId = Guid.NewGuid();
         var store = new RecordingStore(tenantId);
         var result = await new CreateLegalEntityHandler(store, new TestTimeProvider(Now)).HandleAsync(
-            new(tenantId, " Botica ", " 123 "), TestContext.Current.CancellationToken);
+            new(tenantId, " Botica ", " 123 ", Guid.NewGuid()), TestContext.Current.CancellationToken);
 
         var persisted = Assert.Single(store.LegalEntities);
         Assert.Equal(persisted.Id, result.Id);
         Assert.Equal(Now, persisted.CreatedAt);
         Assert.Equal("123", result.Ruc);
+        var audit = Assert.Single(store.Audits);
+        Assert.Equal(AuditAction.LegalEntityCreated, audit.Action);
+        Assert.Equal(persisted.Id, audit.EntityId);
+        Assert.Null(audit.BeforeJson);
+        Assert.Contains("legalName", audit.AfterJson, StringComparison.Ordinal);
 
-        await Assert.ThrowsAsync<KeyNotFoundException>(() => new CreateLegalEntityHandler(store, new TestTimeProvider(Now)).HandleAsync(
-            new(Guid.NewGuid(), "Botica", "123"), TestContext.Current.CancellationToken));
+        await Assert.ThrowsAsync<ApplicationErrorException>(() => new CreateLegalEntityHandler(store, new TestTimeProvider(Now)).HandleAsync(
+            new(Guid.NewGuid(), "Botica", "123", Guid.NewGuid()), TestContext.Current.CancellationToken));
         Assert.Single(store.LegalEntities);
     }
 
@@ -43,12 +50,18 @@ public sealed class BranchApplicationTests
         using var cancellation = new CancellationTokenSource();
 
         var result = await new CreateBranchHandler(store, provisioning, new TestTimeProvider(Now)).HandleAsync(
-            new(tenantId, legalEntity.Id, " Centro "), cancellation.Token);
+            new(tenantId, legalEntity.Id, " Centro ", Guid.NewGuid()), cancellation.Token);
 
         Assert.Equal(ProvisioningSteps, events);
         Assert.Equal(result.Id, Assert.Single(store.Branches).Id);
         Assert.False(result.IsMainHub);
         Assert.Equal(Now, result.CreatedAt);
+        var audit = Assert.Single(store.Audits);
+        Assert.Equal(AuditAction.BranchCreated, audit.Action);
+        Assert.Equal(result.Id, audit.EntityId);
+        Assert.Equal(tenantId, audit.TenantId);
+        Assert.Null(audit.BeforeJson);
+        Assert.Contains("isMainHub", audit.AfterJson, StringComparison.Ordinal);
         Assert.Equal(cancellation.Token, store.LastCancellationToken);
         Assert.Equal(cancellation.Token, provisioning.LastCancellationToken);
         Assert.True(provisioning.Scope.Completed);
@@ -66,10 +79,11 @@ public sealed class BranchApplicationTests
         var store = StoreWithLegalEntity(tenantId);
         var provisioning = new RecordingProvisioning(CreateLicense(tenantId, status));
 
-        await Assert.ThrowsAsync<InvalidOperationException>(() => new CreateBranchHandler(store, provisioning, new TestTimeProvider(Now)).HandleAsync(
-            new(tenantId, store.LegalEntities[0].Id, "Centro"), TestContext.Current.CancellationToken));
+        await Assert.ThrowsAsync<ApplicationErrorException>(() => new CreateBranchHandler(store, provisioning, new TestTimeProvider(Now)).HandleAsync(
+            new(tenantId, store.LegalEntities[0].Id, "Centro", Guid.NewGuid()), TestContext.Current.CancellationToken));
 
         Assert.Empty(store.Branches);
+        Assert.Empty(store.Audits);
         Assert.False(provisioning.Scope.Completed);
         Assert.True(provisioning.Scope.Disposed);
     }
@@ -85,8 +99,8 @@ public sealed class BranchApplicationTests
             AfterAcquire = () => clock.Now = Now.AddMonths(1),
         };
 
-        await Assert.ThrowsAsync<InvalidOperationException>(() => new CreateBranchHandler(store, provisioning, clock).HandleAsync(
-            new(tenantId, store.LegalEntities[0].Id, "Centro"), TestContext.Current.CancellationToken));
+        await Assert.ThrowsAsync<ApplicationErrorException>(() => new CreateBranchHandler(store, provisioning, clock).HandleAsync(
+            new(tenantId, store.LegalEntities[0].Id, "Centro", Guid.NewGuid()), TestContext.Current.CancellationToken));
 
         Assert.Empty(store.Branches);
         Assert.True(provisioning.Scope.Disposed);
@@ -107,8 +121,8 @@ public sealed class BranchApplicationTests
         }
         var provisioning = new RecordingProvisioning(CreateLicense(tenantId, maxBranches: maxBranches));
 
-        await Assert.ThrowsAsync<InvalidOperationException>(() => new CreateBranchHandler(store, provisioning, new TestTimeProvider(Now)).HandleAsync(
-            new(tenantId, store.LegalEntities[0].Id, "Otra"), TestContext.Current.CancellationToken));
+        await Assert.ThrowsAsync<ApplicationErrorException>(() => new CreateBranchHandler(store, provisioning, new TestTimeProvider(Now)).HandleAsync(
+            new(tenantId, store.LegalEntities[0].Id, "Otra", Guid.NewGuid()), TestContext.Current.CancellationToken));
 
         Assert.Equal(maxBranches, store.Branches.Count);
         Assert.False(provisioning.Scope.Completed);
@@ -126,7 +140,7 @@ public sealed class BranchApplicationTests
         var provisioning = new RecordingProvisioning(CreateLicense(tenantId, maxBranches: 2));
 
         await new CreateBranchHandler(store, provisioning, new TestTimeProvider(Now)).HandleAsync(
-            new(tenantId, store.LegalEntities[0].Id, "Norte"), TestContext.Current.CancellationToken);
+            new(tenantId, store.LegalEntities[0].Id, "Norte", Guid.NewGuid()), TestContext.Current.CancellationToken);
 
         Assert.Equal(2, store.Branches.Count(branch => branch.TenantId == tenantId));
         Assert.True(provisioning.Scope.Completed);
@@ -142,10 +156,10 @@ public sealed class BranchApplicationTests
         var provisioning = new RecordingProvisioning(CreateLicense(tenantId));
         var handler = new CreateBranchHandler(store, provisioning, new TestTimeProvider(Now));
 
-        await Assert.ThrowsAsync<KeyNotFoundException>(() => handler.HandleAsync(new(tenantId, foreignLegal.Id, "Centro"), TestContext.Current.CancellationToken));
-        await Assert.ThrowsAsync<KeyNotFoundException>(() => handler.HandleAsync(new(Guid.NewGuid(), store.LegalEntities[0].Id, "Centro"), TestContext.Current.CancellationToken));
+        await Assert.ThrowsAsync<ApplicationErrorException>(() => handler.HandleAsync(new(tenantId, foreignLegal.Id, "Centro", Guid.NewGuid()), TestContext.Current.CancellationToken));
+        await Assert.ThrowsAsync<ApplicationErrorException>(() => handler.HandleAsync(new(Guid.NewGuid(), store.LegalEntities[0].Id, "Centro", Guid.NewGuid()), TestContext.Current.CancellationToken));
         provisioning.HasLicense = false;
-        await Assert.ThrowsAsync<KeyNotFoundException>(() => handler.HandleAsync(new(tenantId, store.LegalEntities[0].Id, "Centro"), TestContext.Current.CancellationToken));
+        await Assert.ThrowsAsync<ApplicationErrorException>(() => handler.HandleAsync(new(tenantId, store.LegalEntities[0].Id, "Centro", Guid.NewGuid()), TestContext.Current.CancellationToken));
         Assert.Empty(store.Branches);
         Assert.False(provisioning.Scope.Completed);
     }
@@ -164,9 +178,13 @@ public sealed class BranchApplicationTests
         MainHubSelection.Move(null, foreign);
         var provisioning = new RecordingProvisioning(CreateLicense(tenantId));
 
-        var result = await new SetMainHubBranchHandler(store, provisioning).HandleAsync(new(tenantId, second.Id), TestContext.Current.CancellationToken);
+        var result = await new SetMainHubBranchHandler(store, provisioning, new TestTimeProvider(Now)).HandleAsync(new(tenantId, second.Id, Guid.NewGuid()), TestContext.Current.CancellationToken);
 
         Assert.True(result.IsMainHub);
+        var hubAudit = Assert.Single(store.Audits);
+        Assert.Equal(AuditAction.BranchMainHubChanged, hubAudit.Action);
+        Assert.Contains(first.Id.ToString("D"), hubAudit.BeforeJson, StringComparison.Ordinal);
+        Assert.Contains(second.Id.ToString("D"), hubAudit.AfterJson, StringComparison.Ordinal);
         Assert.False(first.IsMainHub);
         Assert.Single(store.Branches, branch => branch.TenantId == tenantId && branch.IsMainHub);
         Assert.True(foreign.IsMainHub);
@@ -186,8 +204,8 @@ public sealed class BranchApplicationTests
         MainHubSelection.Move(null, current);
         var provisioning = new RecordingProvisioning(CreateLicense(tenantId));
 
-        await Assert.ThrowsAsync<KeyNotFoundException>(() => new SetMainHubBranchHandler(store, provisioning).HandleAsync(
-            new(tenantId, foreign.Id), TestContext.Current.CancellationToken));
+        await Assert.ThrowsAsync<ApplicationErrorException>(() => new SetMainHubBranchHandler(store, provisioning, new TestTimeProvider(Now)).HandleAsync(
+            new(tenantId, foreign.Id, Guid.NewGuid()), TestContext.Current.CancellationToken));
 
         Assert.True(current.IsMainHub);
         Assert.Equal(Guid.Empty, store.LastHubBranchId);
@@ -205,7 +223,7 @@ public sealed class BranchApplicationTests
         var provisioning = new RecordingProvisioning(CreateLicense(tenantId));
 
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => new CreateBranchHandler(store, provisioning, new TestTimeProvider(Now)).HandleAsync(
-            new(tenantId, store.LegalEntities[0].Id, "Centro"), cancellation.Token));
+            new(tenantId, store.LegalEntities[0].Id, "Centro", Guid.NewGuid()), cancellation.Token));
 
         Assert.Empty(store.Branches);
         Assert.False(provisioning.Scope.Completed);
@@ -221,10 +239,10 @@ public sealed class BranchApplicationTests
         cancellation.Cancel();
 
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => new CreateLegalEntityHandler(store, new TestTimeProvider(Now)).HandleAsync(
-            new(tenantId, "Botica", "123"), cancellation.Token));
+            new(tenantId, "Botica", "123", Guid.NewGuid()), cancellation.Token));
         var provisioning = new RecordingProvisioning(CreateLicense(tenantId));
-        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => new SetMainHubBranchHandler(store, provisioning).HandleAsync(
-            new(tenantId, Guid.NewGuid()), cancellation.Token));
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => new SetMainHubBranchHandler(store, provisioning, new TestTimeProvider(Now)).HandleAsync(
+            new(tenantId, Guid.NewGuid(), Guid.NewGuid()), cancellation.Token));
         Assert.Empty(store.LegalEntities);
         Assert.Equal(Guid.Empty, store.LastHubBranchId);
     }
@@ -304,6 +322,7 @@ public sealed class BranchApplicationTests
     {
         public List<LegalEntity> LegalEntities { get; } = [];
         public List<Branch> Branches { get; } = [];
+        public List<AuditLog> Audits { get; } = [];
         public Action? BeforeInsert { get; set; }
         public Guid LastHubBranchId { get; private set; }
         public CancellationToken LastCancellationToken { get; private set; }
@@ -338,25 +357,28 @@ public sealed class BranchApplicationTests
             return Task.FromResult(Branches.Count(value => value.TenantId == requestedTenantId));
         }
 
-        public Task AddLegalEntityAsync(LegalEntity legalEntity, CancellationToken cancellationToken)
+        public Task AddLegalEntityAsync(LegalEntity legalEntity, AuditLog audit, CancellationToken cancellationToken)
         {
             Record("legal-insert", cancellationToken);
             LegalEntities.Add(legalEntity);
+            Audits.Add(audit);
             return Task.CompletedTask;
         }
 
-        public Task AddBranchAsync(Branch branch, CancellationToken cancellationToken)
+        public Task AddBranchAsync(Branch branch, AuditLog audit, CancellationToken cancellationToken)
         {
             BeforeInsert?.Invoke();
             Record("insert", cancellationToken);
             Branches.Add(branch);
+            Audits.Add(audit);
             return Task.CompletedTask;
         }
 
-        public Task ReplaceMainHubAsync(Branch branch, CancellationToken cancellationToken)
+        public Task ReplaceMainHubAsync(Branch branch, AuditLog audit, CancellationToken cancellationToken)
         {
             Record("replace-hub", cancellationToken);
             LastHubBranchId = branch.Id;
+            Audits.Add(audit);
             return Task.CompletedTask;
         }
 

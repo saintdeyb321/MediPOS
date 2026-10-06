@@ -1,3 +1,4 @@
+using MediPOS.Domain.Modules.AuditSupport;
 using MediPOS.Domain.Modules.Branches;
 
 namespace MediPOS.Application.Modules.Branches;
@@ -9,7 +10,7 @@ public interface IBranchesStore
     Task<Branch?> FindBranchAsync(Guid tenantId, Guid branchId, CancellationToken cancellationToken);
     Task<Branch?> FindMainHubBranchAsync(Guid tenantId, CancellationToken cancellationToken);
     Task<int> CountBranchesAsync(Guid tenantId, CancellationToken cancellationToken);
-    Task AddLegalEntityAsync(LegalEntity legalEntity, CancellationToken cancellationToken);
-    Task AddBranchAsync(Branch branch, CancellationToken cancellationToken);
-    Task ReplaceMainHubAsync(Branch branch, CancellationToken cancellationToken);
+    Task AddLegalEntityAsync(LegalEntity legalEntity, AuditLog audit, CancellationToken cancellationToken);
+    Task AddBranchAsync(Branch branch, AuditLog audit, CancellationToken cancellationToken);
+    Task ReplaceMainHubAsync(Branch branch, AuditLog audit, CancellationToken cancellationToken);
 }

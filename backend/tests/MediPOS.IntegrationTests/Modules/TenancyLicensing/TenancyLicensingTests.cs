@@ -1,9 +1,12 @@
+using MediPOS.Application.Errors;
+using MediPOS.Application.Modules.AuditSupport;
 using MediPOS.Application.Modules.TenancyLicensing;
 using MediPOS.Application.Modules.TenancyLicensing.CreateTenant;
 using MediPOS.Application.Modules.TenancyLicensing.ReactivateLicense;
 using MediPOS.Application.Modules.TenancyLicensing.RenewLicense;
 using MediPOS.Application.Modules.TenancyLicensing.RequestTenantPurge;
 using MediPOS.Application.Modules.TenancyLicensing.SuspendLicense;
+using MediPOS.Domain.Modules.AuditSupport;
 using MediPOS.Domain.Modules.TenancyLicensing;
 using MediPOS.Infrastructure;
 using MediPOS.Infrastructure.Persistence;
@@ -122,7 +125,7 @@ public sealed class TenancyLicensingTests(PostgreSqlFixture fixture)
 
         var store = scope.ServiceProvider.GetRequiredService<ITenancyLicensingStore>();
         Assert.Null(await store.FindLicenseAsync(first.TenantId, second.LicenseId, TestContext.Current.CancellationToken));
-        await Assert.ThrowsAsync<KeyNotFoundException>(() => scope.ServiceProvider.GetRequiredService<SuspendLicenseHandler>().HandleAsync(
+        await Assert.ThrowsAsync<ApplicationErrorException>(() => scope.ServiceProvider.GetRequiredService<SuspendLicenseHandler>().HandleAsync(
             new(first.TenantId, second.LicenseId, actor), TestContext.Current.CancellationToken));
         await AssertStoredStatusAsync(second, LicenseStatus.Active, 1);
     }
@@ -241,11 +244,17 @@ public sealed class TenancyLicensingTests(PostgreSqlFixture fixture)
         var second = await secondStore.FindLicenseAsync(created.TenantId, created.LicenseId, TestContext.Current.CancellationToken);
         Assert.NotNull(first);
         Assert.NotNull(second);
+        var firstBefore = AuditTrail.LicenseState(first);
+        var secondBefore = AuditTrail.LicenseState(second);
         first.Renew(Now.AddMonths(3), actor, Now);
         second.Renew(Now.AddMonths(2), actor, Now);
 
-        await firstStore.SaveLicenseAsync(first, TestContext.Current.CancellationToken);
-        var error = await Assert.ThrowsAsync<InvalidOperationException>(() => secondStore.SaveLicenseAsync(second, TestContext.Current.CancellationToken));
+        await firstStore.SaveLicenseAsync(first, AuditTrail.Record(created.TenantId, actor, AuditAction.LicenseRenewed, first.Id,
+            Now, firstBefore, AuditTrail.LicenseState(first)), TestContext.Current.CancellationToken);
+        var error = await Assert.ThrowsAsync<ApplicationErrorException>(() => secondStore.SaveLicenseAsync(second,
+            AuditTrail.Record(created.TenantId, actor, AuditAction.LicenseRenewed, second.Id,
+                Now, secondBefore, AuditTrail.LicenseState(second)), TestContext.Current.CancellationToken));
+        Assert.Equal("license.concurrent_change", error.Error.Code);
         Assert.IsType<DbUpdateConcurrencyException>(error.InnerException);
 
         await using var context = fixture.CreateContext(created.TenantId);

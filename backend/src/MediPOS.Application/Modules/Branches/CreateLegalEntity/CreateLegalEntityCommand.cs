@@ -1,3 +1,4 @@
 namespace MediPOS.Application.Modules.Branches.CreateLegalEntity;
 
-public sealed record CreateLegalEntityCommand(Guid TenantId, string LegalName, string Ruc);
+// ActorId is supplied by an authenticated server caller, never a freely bound HTTP field.
+public sealed record CreateLegalEntityCommand(Guid TenantId, string LegalName, string Ruc, Guid ActorId);

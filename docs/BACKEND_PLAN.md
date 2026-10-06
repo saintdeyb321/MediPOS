@@ -4,9 +4,9 @@ This is the single execution roadmap for the backend. Prompts are given in chat 
 
 ## Working state
 - **Current milestone:** M0 — Foundations
-- **Current sprint:** B0.5 — Multi-tenant enforcement & RLS
+- **Current sprint:** B0.6 — Audit foundation & platform hardening
 - **Status:** IN_PROGRESS
-- **Next gate:** B0.5 local restore/build/unit tests/architecture tests/format and review; PostgreSQL integration validation in another environment
+- **Next gate:** B0.6 local restore/build/unit tests/architecture tests/format and review; PostgreSQL integration validation in another environment
 
 Local policy: this machine has no Docker and will not install it. Do not check/start Docker or run PostgreSQL/Testcontainers here. B0.1 is complete locally. Keep real PostgreSQL integration tests for another environment; they are not part of the local gate and must not be reported as passed without execution.
 
@@ -51,6 +51,7 @@ Goal: safe base for all business modules.
 **Exit:** authorization context can resolve user/tenant/branch/role/license/schedule; max two Owners enforced; deactivation preserves history.
 
 ### B0.5 — Multi-tenant enforcement & RLS
+**Status:** DONE — audited/completed locally; PostgreSQL tests remain prepared for another environment.
 **Requirements:** BR-001, FR-AUT-002, A15.
 **Scope:** tenant context, query protection, RLS for selected high-risk private tables, integration-test isolation harness.
 **Exit:** automated tests prove Tenant A cannot read/write Tenant B by application path and RLS-covered direct DB path.

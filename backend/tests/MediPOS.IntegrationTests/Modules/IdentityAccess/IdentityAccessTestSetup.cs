@@ -32,16 +32,17 @@ internal static class IdentityAccessTestSetup
 
     internal static async Task<Setup> CreateAsync(IServiceProvider services, TenantRole role = TenantRole.Cashier)
     {
+        var actor = await CreateUserAsync(services);
         var tenant = await services.GetRequiredService<CreateTenantHandler>().HandleAsync(
-            new("Botica", Now.AddDays(-1), Now.AddMonths(1), 3, LicenseStatus.Active, Guid.NewGuid()), TestContext.Current.CancellationToken);
+            new("Botica", Now.AddDays(-1), Now.AddMonths(1), 3, LicenseStatus.Active, actor.Id), TestContext.Current.CancellationToken);
         var legal = await services.GetRequiredService<CreateLegalEntityHandler>().HandleAsync(
-            new(tenant.TenantId, "Botica SAC", "123"), TestContext.Current.CancellationToken);
+            new(tenant.TenantId, "Botica SAC", "123", actor.Id), TestContext.Current.CancellationToken);
         var branch = await services.GetRequiredService<CreateBranchHandler>().HandleAsync(
-            new(tenant.TenantId, legal.Id, "Centro"), TestContext.Current.CancellationToken);
+            new(tenant.TenantId, legal.Id, "Centro", actor.Id), TestContext.Current.CancellationToken);
         var user = await CreateUserAsync(services);
         var membership = await services.GetRequiredService<CreateMembershipHandler>().HandleAsync(
-            new(tenant.TenantId, user.Id, role), TestContext.Current.CancellationToken);
-        return new Setup(tenant.TenantId, branch.Id, user.Id, membership.Id, tenant.LicenseId);
+            new(tenant.TenantId, user.Id, role, actor.Id), TestContext.Current.CancellationToken);
+        return new Setup(tenant.TenantId, branch.Id, user.Id, membership.Id, tenant.LicenseId, actor.Id);
     }
 
     internal static Task<GoogleUserDetails> CreateUserAsync(IServiceProvider services, string? subject = null, string email = "staff@example.test")
@@ -51,7 +52,7 @@ internal static class IdentityAccessTestSetup
         return services.GetRequiredService<UpsertGoogleUserHandler>().HandleAsync(TestContext.Current.CancellationToken);
     }
 
-    internal sealed record Setup(Guid TenantId, Guid BranchId, Guid UserId, Guid MembershipId, Guid LicenseId);
+    internal sealed record Setup(Guid TenantId, Guid BranchId, Guid UserId, Guid MembershipId, Guid LicenseId, Guid ActorId);
 
     public sealed class Clock : TimeProvider
     {

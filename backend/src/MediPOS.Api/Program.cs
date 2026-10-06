@@ -1,8 +1,9 @@
+using MediPOS.Api.Errors;
 using MediPOS.Infrastructure;
 
 var builder = WebApplication.CreateBuilder(args);
 
-builder.Services.AddProblemDetails();
+builder.Services.AddApplicationProblemDetails();
 builder.Services.AddHealthChecks();
 builder.Services.AddInfrastructure(builder.Configuration);
 
@@ -13,7 +14,7 @@ if (builder.Environment.IsDevelopment())
 
 var app = builder.Build();
 
-app.UseExceptionHandler();
+app.UseExceptionHandler(new ExceptionHandlerOptions { SuppressDiagnosticsCallback = _ => true });
 app.UseStatusCodePages();
 
 if (app.Environment.IsDevelopment())

@@ -1,4 +1,5 @@
 using System.Data;
+using MediPOS.Application.Errors;
 using MediPOS.Application.Modules.Branches;
 using MediPOS.Application.Modules.IdentityAccess;
 using MediPOS.Application.Modules.IdentityAccess.OperationalAccess;
@@ -28,6 +29,7 @@ public sealed class TenantQueryProtectionTests(PostgreSqlFixture fixture)
         AssertOnlyTenant(await context.Memberships.Select(value => value.TenantId).ToListAsync(TestContext.Current.CancellationToken), first.TenantId);
         AssertOnlyTenant(await context.MembershipBranches.Select(value => value.TenantId).ToListAsync(TestContext.Current.CancellationToken), first.TenantId);
         AssertOnlyTenant(await context.WorkSchedules.Select(value => value.TenantId).ToListAsync(TestContext.Current.CancellationToken), first.TenantId);
+        AssertOnlyTenant(await context.AuditLogs.Select(value => value.TenantId).ToListAsync(TestContext.Current.CancellationToken), first.TenantId);
         Assert.Null(await context.Branches.FindAsync([second.Identity.BranchId], TestContext.Current.CancellationToken));
         Assert.Null(await context.Memberships.FindAsync([second.Identity.MembershipId], TestContext.Current.CancellationToken));
         Assert.Null(await context.WorkSchedules.FindAsync([second.ScheduleId], TestContext.Current.CancellationToken));
@@ -51,6 +53,7 @@ public sealed class TenantQueryProtectionTests(PostgreSqlFixture fixture)
         Assert.Empty(await context.Memberships.ToListAsync(TestContext.Current.CancellationToken));
         Assert.Empty(await context.MembershipBranches.ToListAsync(TestContext.Current.CancellationToken));
         Assert.Empty(await context.WorkSchedules.ToListAsync(TestContext.Current.CancellationToken));
+        Assert.Empty(await context.AuditLogs.ToListAsync(TestContext.Current.CancellationToken));
         Assert.True(await context.Users.AnyAsync(value => value.Id == first.Identity.UserId, TestContext.Current.CancellationToken));
         Assert.True(await context.Users.AnyAsync(value => value.Id == second.Identity.UserId, TestContext.Current.CancellationToken));
         Assert.True(await context.Tenants.AnyAsync(value => value.Id == first.TenantId, TestContext.Current.CancellationToken));
@@ -102,15 +105,15 @@ public sealed class TenantQueryProtectionTests(PostgreSqlFixture fixture)
         await using var scope = services.CreateAsyncScope();
         var provider = scope.ServiceProvider;
         provider.GetRequiredService<ITenantDataContext>().SelectTenant(first.TenantId);
-        await Assert.ThrowsAsync<InvalidOperationException>(() => provider.GetRequiredService<IBranchesStore>().FindBranchAsync(
+        await Assert.ThrowsAsync<ApplicationErrorException>(() => provider.GetRequiredService<IBranchesStore>().FindBranchAsync(
             second.TenantId, second.Identity.BranchId, TestContext.Current.CancellationToken));
-        await Assert.ThrowsAsync<InvalidOperationException>(() => provider.GetRequiredService<ITenancyLicensingStore>().FindLicenseAsync(
+        await Assert.ThrowsAsync<ApplicationErrorException>(() => provider.GetRequiredService<ITenancyLicensingStore>().FindLicenseAsync(
             second.TenantId, second.Identity.LicenseId, TestContext.Current.CancellationToken));
-        await Assert.ThrowsAsync<InvalidOperationException>(() => provider.GetRequiredService<IIdentityAccessStore>().FindMembershipAsync(
+        await Assert.ThrowsAsync<ApplicationErrorException>(() => provider.GetRequiredService<IIdentityAccessStore>().FindMembershipAsync(
             second.TenantId, second.Identity.MembershipId, TestContext.Current.CancellationToken));
-        await Assert.ThrowsAsync<InvalidOperationException>(() => provider.GetRequiredService<IOperationalAccessReader>().ReadAsync(
+        await Assert.ThrowsAsync<ApplicationErrorException>(() => provider.GetRequiredService<IOperationalAccessReader>().ReadAsync(
             first.Identity.UserId, second.TenantId, second.Identity.BranchId, TestContext.Current.CancellationToken));
-        await Assert.ThrowsAsync<InvalidOperationException>(() => provider.GetRequiredService<ITenantLicenseProvisioning>().BeginAsync(
+        await Assert.ThrowsAsync<ApplicationErrorException>(() => provider.GetRequiredService<ITenantLicenseProvisioning>().BeginAsync(
             second.TenantId, TestContext.Current.CancellationToken));
         Assert.Equal(first.TenantId, provider.GetRequiredService<ITenantDataContext>().TenantId);
         Assert.Equal(ConnectionState.Closed, provider.GetRequiredService<MediPOS.Infrastructure.Persistence.MediPosDbContext>().Database.GetDbConnection().State);

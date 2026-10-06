@@ -58,6 +58,7 @@ public sealed class PostgreSqlFixture : IAsyncLifetime
             GRANT SELECT, INSERT, UPDATE, DELETE ON tenants, users, licenses, license_changes,
                 legal_entities, branches, memberships, membership_branches, work_schedules TO medipos_test_runtime;
             GRANT SELECT ON "__EFMigrationsHistory" TO medipos_test_runtime;
+            GRANT SELECT, INSERT ON audit_logs TO medipos_test_runtime;
             """;
         await command.ExecuteNonQueryAsync(timeout.Token);
         _runtimeConnectionString = new NpgsqlConnectionStringBuilder(_container.GetConnectionString())
