@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+  <PropertyGroup>
+    <UserSecretsId>MediPOS.Api-9201279d-d03b-4880-b593-a653527b4533</UserSecretsId>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.12" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../MediPOS.Application/MediPOS.Application.csproj" />
+    <ProjectReference Include="../MediPOS.Infrastructure/MediPOS.Infrastructure.csproj" />
+  </ItemGroup>
+</Project>

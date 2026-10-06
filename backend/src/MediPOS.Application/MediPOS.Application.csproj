@@ -1,0 +1,6 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <ProjectReference Include="../MediPOS.Domain/MediPOS.Domain.csproj" />
+    <ProjectReference Include="../MediPOS.SharedKernel/MediPOS.SharedKernel.csproj" />
+  </ItemGroup>
+</Project>
