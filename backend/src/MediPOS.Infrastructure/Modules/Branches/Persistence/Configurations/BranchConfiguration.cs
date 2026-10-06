@@ -11,6 +11,7 @@ internal sealed class BranchConfiguration : IEntityTypeConfiguration<Branch>
     {
         builder.ToTable("branches", table => table.HasCheckConstraint("ck_branches_name", "name ~ '[^[:space:]]'"));
         builder.HasKey(branch => branch.Id);
+        builder.HasAlternateKey(branch => new { branch.TenantId, branch.Id });
         builder.Property(branch => branch.Id).HasColumnName("id").ValueGeneratedNever();
         builder.Property(branch => branch.TenantId).HasColumnName("tenant_id");
         builder.Property(branch => branch.LegalEntityId).HasColumnName("legal_entity_id");

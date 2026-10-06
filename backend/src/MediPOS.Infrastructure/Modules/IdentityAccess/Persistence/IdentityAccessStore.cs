@@ -1,0 +1,84 @@
+using MediPOS.Application.Modules.IdentityAccess;
+using MediPOS.Domain.Modules.IdentityAccess;
+using MediPOS.Infrastructure.Persistence;
+using Microsoft.EntityFrameworkCore;
+
+namespace MediPOS.Infrastructure.Modules.IdentityAccess.Persistence;
+
+internal sealed class IdentityAccessStore(MediPosDbContext context) : IIdentityAccessStore
+{
+    public async Task<User> UpsertGoogleUserAsync(User user, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(user);
+        // PostgreSQL arbitrates concurrent first sign-ins; the existing ID and creation time survive.
+        await context.Database.ExecuteSqlInterpolatedAsync($"""
+            INSERT INTO users (id, google_subject, email, display_name, created_at)
+            VALUES ({user.Id}, {user.GoogleSubject}, {user.Email}, {user.DisplayName}, {user.CreatedAt})
+            ON CONFLICT (google_subject) DO UPDATE
+            SET email = EXCLUDED.email, display_name = EXCLUDED.display_name
+            """, cancellationToken).ConfigureAwait(false);
+        return await context.Users.AsNoTracking().SingleAsync(
+            value => value.GoogleSubject == user.GoogleSubject, cancellationToken).ConfigureAwait(false);
+    }
+
+    public Task<bool> UserExistsAsync(Guid userId, CancellationToken cancellationToken) =>
+        context.Users.AnyAsync(value => value.Id == userId, cancellationToken);
+
+    public Task<bool> HasActiveMembershipAsync(Guid tenantId, Guid userId, CancellationToken cancellationToken) =>
+        context.Memberships.AnyAsync(value => value.TenantId == tenantId && value.UserId == userId && value.IsActive, cancellationToken);
+
+    public Task<int> CountActiveOwnersAsync(Guid tenantId, CancellationToken cancellationToken) =>
+        context.Memberships.CountAsync(value => value.TenantId == tenantId && value.IsActive && value.Role == TenantRole.Owner, cancellationToken);
+
+    public Task<Membership?> FindMembershipAsync(Guid tenantId, Guid membershipId, CancellationToken cancellationToken) =>
+        context.Memberships.AsNoTracking().SingleOrDefaultAsync(
+            value => value.TenantId == tenantId && value.Id == membershipId, cancellationToken);
+
+    public async Task AddMembershipAsync(Membership membership, CancellationToken cancellationToken)
+    {
+        RequireProvisioningTransaction();
+        context.Memberships.Add(membership);
+        await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task SaveDeactivationAsync(Membership membership, CancellationToken cancellationToken)
+    {
+        RequireProvisioningTransaction();
+        var updated = await context.Memberships.Where(value => value.TenantId == membership.TenantId && value.Id == membership.Id)
+            .ExecuteUpdateAsync(setters => setters
+                .SetProperty(value => value.IsActive, membership.IsActive)
+                .SetProperty(value => value.DeactivatedAt, membership.DeactivatedAt), cancellationToken).ConfigureAwait(false);
+        if (updated != 1)
+            throw new KeyNotFoundException("Membership was not found for the tenant.");
+    }
+
+    public async Task ReplaceBranchesAsync(
+        Guid tenantId, Guid membershipId, IReadOnlyList<MembershipBranch> branches, CancellationToken cancellationToken)
+    {
+        RequireProvisioningTransaction();
+        await context.MembershipBranches.Where(value => value.TenantId == tenantId && value.MembershipId == membershipId)
+            .ExecuteDeleteAsync(cancellationToken).ConfigureAwait(false);
+        context.MembershipBranches.AddRange(branches);
+        await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        foreach (var assignment in branches)
+            context.Entry(assignment).State = EntityState.Detached;
+    }
+
+    public async Task ReplaceScheduleAsync(
+        Guid tenantId, Guid membershipId, IReadOnlyList<WorkSchedule> schedule, CancellationToken cancellationToken)
+    {
+        RequireProvisioningTransaction();
+        await context.WorkSchedules.Where(value => value.TenantId == tenantId && value.MembershipId == membershipId)
+            .ExecuteDeleteAsync(cancellationToken).ConfigureAwait(false);
+        context.WorkSchedules.AddRange(schedule);
+        await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        foreach (var window in schedule)
+            context.Entry(window).State = EntityState.Detached;
+    }
+
+    private void RequireProvisioningTransaction()
+    {
+        if (context.Database.CurrentTransaction is null)
+            throw new InvalidOperationException("Membership changes require a tenant license provisioning scope.");
+    }
+}

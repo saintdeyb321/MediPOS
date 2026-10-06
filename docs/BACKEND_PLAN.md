@@ -4,9 +4,9 @@ This is the single execution roadmap for the backend. Prompts are given in chat 
 
 ## Working state
 - **Current milestone:** M0 — Foundations
-- **Current sprint:** B0.3 — Legal entities & branches
+- **Current sprint:** B0.4 — Identity, membership, roles & schedules
 - **Status:** IN_PROGRESS
-- **Next gate:** B0.3 local restore/build/unit tests/architecture tests/format and review; PostgreSQL integration validation in another environment
+- **Next gate:** B0.4 local restore/build/unit tests/architecture tests/format and review; PostgreSQL integration validation in another environment
 
 Local policy: this machine has no Docker and will not install it. Do not check/start Docker or run PostgreSQL/Testcontainers here. B0.1 is complete locally. Keep real PostgreSQL integration tests for another environment; they are not part of the local gate and must not be reported as passed without execution.
 
@@ -39,6 +39,7 @@ Goal: safe base for all business modules.
 **Exit:** tenant/license creation and state enforcement core works; domain invariants unit-tested; local gates pass and real PostgreSQL integration tests are prepared for another environment. FR-LIC-005 covers only the persistent purge request here; physical purge and A18 remain pending.
 
 ### B0.3 — Legal entities & branches
+**Status:** DONE — audited/completed locally; PostgreSQL tests remain prepared for another environment.
 **Requirements:** FR-TEN-001..003, FR-TEN-005.
 **Scope:** LegalEntity, Branch, licensed branch count, tenant ownership, main/hub marker.
 **Exit:** branch creation cannot cross tenant/license boundaries or exceed licensed limit.

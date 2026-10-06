@@ -1,6 +1,8 @@
 using MediPOS.Domain.Modules.Branches;
+using MediPOS.Domain.Modules.IdentityAccess;
 using MediPOS.Domain.Modules.TenancyLicensing;
 using MediPOS.Infrastructure.Modules.Branches.Persistence.Configurations;
+using MediPOS.Infrastructure.Modules.IdentityAccess.Persistence.Configurations;
 using MediPOS.Infrastructure.Modules.TenancyLicensing.Persistence.Configurations;
 using Microsoft.EntityFrameworkCore;
 
@@ -13,6 +15,10 @@ public sealed class MediPosDbContext(DbContextOptions<MediPosDbContext> options)
     public DbSet<LicenseChange> LicenseChanges => Set<LicenseChange>();
     public DbSet<LegalEntity> LegalEntities => Set<LegalEntity>();
     public DbSet<Branch> Branches => Set<Branch>();
+    public DbSet<User> Users => Set<User>();
+    public DbSet<Membership> Memberships => Set<Membership>();
+    public DbSet<MembershipBranch> MembershipBranches => Set<MembershipBranch>();
+    public DbSet<WorkSchedule> WorkSchedules => Set<WorkSchedule>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -22,6 +28,10 @@ public sealed class MediPosDbContext(DbContextOptions<MediPosDbContext> options)
         modelBuilder.ApplyConfiguration(new LicenseChangeConfiguration());
         modelBuilder.ApplyConfiguration(new LegalEntityConfiguration());
         modelBuilder.ApplyConfiguration(new BranchConfiguration());
+        modelBuilder.ApplyConfiguration(new UserConfiguration());
+        modelBuilder.ApplyConfiguration(new MembershipConfiguration());
+        modelBuilder.ApplyConfiguration(new MembershipBranchConfiguration());
+        modelBuilder.ApplyConfiguration(new WorkScheduleConfiguration());
     }
 
     public override int SaveChanges(bool acceptAllChangesOnSuccess)
