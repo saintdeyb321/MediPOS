@@ -107,6 +107,7 @@ public sealed class MediPosDbContext(DbContextOptions<MediPosDbContext> options,
         ValidateLicenseHistory();
         ValidateAuditHistory();
         ValidateStockHistory();
+        ValidateStockBalances();
         ValidateTenantWrites();
         return base.SaveChanges(acceptAllChangesOnSuccess);
     }
@@ -116,6 +117,7 @@ public sealed class MediPosDbContext(DbContextOptions<MediPosDbContext> options,
         ValidateLicenseHistory();
         ValidateAuditHistory();
         ValidateStockHistory();
+        ValidateStockBalances();
         ValidateTenantWrites();
         return base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken);
     }
@@ -138,6 +140,35 @@ public sealed class MediPosDbContext(DbContextOptions<MediPosDbContext> options,
     {
         if (ChangeTracker.Entries<StockMovement>().Any(entry => entry.State is EntityState.Modified or EntityState.Deleted))
             throw new InvalidOperationException("Stock movement history is append-only.");
+    }
+
+    private void ValidateStockBalances()
+    {
+        var movements = ChangeTracker.Entries<StockMovement>().Where(value => value.State == EntityState.Added).Select(value => value.Entity).ToArray();
+        var lots = ChangeTracker.Entries<InventoryLot>().Where(value => value.State != EntityState.Detached).ToArray();
+        var changed = lots.Where(value => value.State == EntityState.Added || value.Property(lot => lot.QuantityAvailableBase).IsModified).ToArray();
+        if (movements.Length == 0 && changed.Length == 0) return;
+        if (Database.CurrentTransaction is null) throw new InvalidOperationException("Balance and movement writes require one explicit transaction.");
+        foreach (var movement in movements)
+        {
+            if (!lots.Any(value => value.Entity.Id == movement.InventoryLotId))
+                throw new InvalidOperationException("A movement requires its tracked lot balance.");
+        }
+        foreach (var entry in lots.Where(value => changed.Contains(value) || movements.Any(movement => movement.InventoryLotId == value.Entity.Id)))
+        {
+            var lot = entry.Entity;
+            var expected = entry.State == EntityState.Added ? 0m : entry.Property(value => value.QuantityAvailableBase).OriginalValue;
+            var receipts = movements.Where(value => value.InventoryLotId == lot.Id).ToArray();
+            foreach (var movement in receipts)
+            {
+                if (movement.TenantId != lot.TenantId || movement.BranchId != lot.BranchId || movement.BusinessProductId != lot.BusinessProductId ||
+                    (movement.MovementType == StockMovementType.PurchaseReceipt && movement.SourcePurchaseLineId != lot.SourcePurchaseLineId))
+                    throw new InvalidOperationException("Movement ownership must match the lot.");
+                expected = checked(expected + movement.QuantityDeltaBase);
+            }
+            if (receipts.Length == 0 || lot.QuantityAvailableBase != expected || expected < 0)
+                throw new InvalidOperationException("Every balance change requires its matching movement delta.");
+        }
     }
 
     internal void AddAudit(AuditLog audit, Guid tenantId, AuditAction action, Guid entityId)

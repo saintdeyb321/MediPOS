@@ -119,7 +119,7 @@ public sealed class PurchasingDomainTests
     [InlineData(-1)]
     public void ReceiptCannotChangeStockByNonpositiveQuantity(decimal quantity)
     {
-        var lot = InventoryLot.Receive(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), null, null, Now);
+        var lot = InventoryLot.Receive(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), 1m, null, null, Now);
         Assert.Throws<ArgumentOutOfRangeException>(() => StockMovement.Receive(lot, quantity, Guid.NewGuid(), Now));
     }
 

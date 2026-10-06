@@ -108,10 +108,15 @@ public sealed class PurchasingIsolationIntegrationTests(PostgreSqlFixture fixtur
         await using var context = fixture.CreateContext(a.TenantId);
         Guid newLotId;
         // A free, valid source line avoids testing a duplicate receipt instead of the requested FK.
-        var lot = InventoryLot.Receive(a.TenantId, a.Identity.BranchId, a.BusinessProductId, unused.LineIds[0], null, null,
+        var lot = InventoryLot.Receive(a.TenantId, a.Identity.BranchId, a.BusinessProductId, unused.LineIds[0], 25m, null, null,
             MediPOS.IntegrationTests.Modules.IdentityAccess.IdentityAccessTestSetup.Now);
-        context.InventoryLots.Add(lot);
-        await context.SaveChangesAsync(TestContext.Current.CancellationToken);
+        await using (var transaction = await context.Database.BeginTransactionAsync(TestContext.Current.CancellationToken))
+        {
+            context.InventoryLots.Add(lot);
+            context.StockMovements.Add(StockMovement.Receive(lot, 25m, first.ActorId, MediPOS.IntegrationTests.Modules.IdentityAccess.IdentityAccessTestSetup.Now));
+            await context.SaveChangesAsync(TestContext.Current.CancellationToken);
+            await transaction.CommitAsync(TestContext.Current.CancellationToken);
+        }
         newLotId = lot.Id;
         await using var connection = new NpgsqlConnection(fixture.ConnectionString);
         await connection.OpenAsync(TestContext.Current.CancellationToken);
@@ -125,7 +130,9 @@ public sealed class PurchasingIsolationIntegrationTests(PostgreSqlFixture fixtur
         if (table == "stock_movements")
         {
             overrides["inventory_lot_id"] = newLotId;
-            overrides["source_purchase_line_id"] = unused.LineIds[0];
+            overrides["source_purchase_line_id"] = null;
+            overrides["movement_type"] = "adjustment";
+            overrides["reason"] = "FK constraint test";
         }
         var foreignId = column switch
         {
@@ -138,6 +145,11 @@ public sealed class PurchasingIsolationIntegrationTests(PostgreSqlFixture fixtur
             _ => throw new InvalidOperationException(),
         };
         overrides[column] = foreignId;
+        if (table == "stock_movements" && column == "source_purchase_line_id")
+        {
+            overrides["movement_type"] = "purchase_receipt";
+            overrides["reason"] = null;
+        }
         var error = await Assert.ThrowsAsync<PostgresException>(() => CloneAsync(connection, table, source, overrides));
         Assert.Equal(PostgresErrorCodes.ForeignKeyViolation, error.SqlState);
         Assert.NotNull(error.ConstraintName);
@@ -155,9 +167,9 @@ public sealed class PurchasingIsolationIntegrationTests(PostgreSqlFixture fixtur
         command.CommandText = "SELECT id FROM stock_movements LIMIT 1";
         var movement = Assert.IsType<Guid>(await command.ExecuteScalarAsync(TestContext.Current.CancellationToken));
         var invalid = await Assert.ThrowsAsync<PostgresException>(() => CloneAsync(connection, "stock_movements", movement,
-            new Dictionary<string, object?> { ["quantity_base"] = 0m }));
+            new Dictionary<string, object?> { ["quantity_delta_base"] = 0m }));
         Assert.Equal(PostgresErrorCodes.CheckViolation, invalid.SqlState);
-        Assert.Equal("ck_stock_movements_receipt", invalid.ConstraintName);
+        Assert.Equal("ck_stock_movements_delta", invalid.ConstraintName);
         var duplicateMovement = await Assert.ThrowsAsync<PostgresException>(() => CloneAsync(connection, "stock_movements", movement, []));
         Assert.Equal(PostgresErrorCodes.UniqueViolation, duplicateMovement.SqlState);
         command.CommandText = "SELECT id FROM inventory_lots LIMIT 1";
@@ -187,7 +199,7 @@ public sealed class PurchasingIsolationIntegrationTests(PostgreSqlFixture fixtur
         Assert.Equal(true, await command.ExecuteScalarAsync(TestContext.Current.CancellationToken));
         command.CommandText = "SELECT has_table_privilege(current_user, 'stock_movements', 'UPDATE, DELETE, TRUNCATE')";
         Assert.Equal(false, await command.ExecuteScalarAsync(TestContext.Current.CancellationToken));
-        command.CommandText = "UPDATE stock_movements SET quantity_base = quantity_base";
+        command.CommandText = "UPDATE stock_movements SET quantity_delta_base = quantity_delta_base";
         var error = await Assert.ThrowsAsync<PostgresException>(() => command.ExecuteNonQueryAsync(TestContext.Current.CancellationToken));
         Assert.Equal(PostgresErrorCodes.InsufficientPrivilege, error.SqlState);
     }
@@ -282,8 +294,8 @@ public sealed class PurchasingIsolationIntegrationTests(PostgreSqlFixture fixtur
             "suppliers" => "INSERT INTO suppliers (id, tenant_id, name, is_active, created_at) VALUES (@id, @tenant, 'S', true, now())",
             "purchases" => "INSERT INTO purchases (id, tenant_id, branch_id, status, created_at, created_by_actor_id) VALUES (@id, @tenant, @branch, 'draft', now(), @actor)",
             "purchase_lines" => "INSERT INTO purchase_lines (id, tenant_id, purchase_id, business_product_id, quantity, unit_name_snapshot, conversion_to_base_snapshot, base_quantity, unit_cost) VALUES (@id, @tenant, @purchase, @product, 1, 'Base', 1, 1, 0)",
-            "inventory_lots" => "INSERT INTO inventory_lots (id, tenant_id, branch_id, business_product_id, source_purchase_line_id, created_at) VALUES (@id, @tenant, @branch, @product, @line, now())",
-            "stock_movements" => "INSERT INTO stock_movements (id, tenant_id, branch_id, business_product_id, source_purchase_line_id, inventory_lot_id, movement_type, quantity_base, actor_id, occurred_at) VALUES (@id, @tenant, @branch, @product, @line, @lot, 'purchase_receipt', 1, @actor, now())",
+            "inventory_lots" => "INSERT INTO inventory_lots (id, tenant_id, branch_id, business_product_id, source_purchase_line_id, quantity_available_base, created_at) VALUES (@id, @tenant, @branch, @product, @line, 1, now())",
+            "stock_movements" => "INSERT INTO stock_movements (id, tenant_id, branch_id, business_product_id, source_purchase_line_id, inventory_lot_id, movement_type, quantity_delta_base, actor_id, occurred_at) VALUES (@id, @tenant, @branch, @product, @line, @lot, 'purchase_receipt', 1, @actor, now())",
             _ => throw new InvalidOperationException(),
         };
         command.Parameters.AddWithValue("id", Guid.NewGuid());

@@ -38,7 +38,7 @@ public sealed class ConfirmPurchaseHandler(IPurchasingStore store, IBranchesStor
         var now = clock.GetUtcNow();
         if (!scope.AllowsOperation(now)) throw new ApplicationErrorException(ApplicationErrors.LicenseDenied);
         var lots = lines.Select(line => InventoryLot.Receive(command.TenantId, purchase.BranchId, line.BusinessProductId,
-            line.Id, line.BatchNumber, line.ExpirationDate, now)).ToArray();
+            line.Id, line.BaseQuantity, line.BatchNumber, line.ExpirationDate, now)).ToArray();
         var movements = lots.Select((lot, index) => StockMovement.Receive(lot, lines[index].BaseQuantity, command.ActorId, now)).ToArray();
         var audit = AuditTrail.Record(command.TenantId, command.ActorId, AuditAction.PurchaseConfirmed, purchase.Id, now,
             """{"status":"draft"}""", JsonSerializer.Serialize(new { status = "confirmed", lineCount = lines.Count, confirmedAt = now }, JsonOptions));

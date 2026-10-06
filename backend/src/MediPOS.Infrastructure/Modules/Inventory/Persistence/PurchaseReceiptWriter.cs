@@ -16,7 +16,8 @@ internal sealed class PurchaseReceiptWriter(MediPosDbContext context) : IPurchas
             context.SelectTenant(lot.TenantId);
             var movement = movements.Single(value => value.InventoryLotId == lot.Id);
             if (movement.TenantId != lot.TenantId || movement.BranchId != lot.BranchId ||
-                movement.BusinessProductId != lot.BusinessProductId || movement.SourcePurchaseLineId != lot.SourcePurchaseLineId)
+                movement.BusinessProductId != lot.BusinessProductId || movement.SourcePurchaseLineId != lot.SourcePurchaseLineId || movement.QuantityDeltaBase != lot.QuantityAvailableBase ||
+                movement.MovementType != StockMovementType.PurchaseReceipt)
                 throw new InvalidOperationException("Receipt ownership must match its lot.");
         }
         context.InventoryLots.AddRange(lots);

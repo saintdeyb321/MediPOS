@@ -33,7 +33,7 @@ public sealed class PurchasingWorkflowTests
         var movement = Assert.Single(setup.Receipts.Movements, value => value.InventoryLotId == lot.Id);
         Assert.Equal(setup.Store.Lines[0].Id, lot.SourcePurchaseLineId);
         Assert.Equal(lot.Id, movement.InventoryLotId);
-        Assert.Equal(30m, movement.QuantityBase);
+        Assert.Equal(30m, movement.QuantityDeltaBase);
         Assert.Equal(setup.Command.ActorId, movement.ActorId);
         Assert.Equal(StockMovementType.PurchaseReceipt, movement.MovementType);
         var audit = Assert.IsType<AuditLog>(setup.Store.Audit);

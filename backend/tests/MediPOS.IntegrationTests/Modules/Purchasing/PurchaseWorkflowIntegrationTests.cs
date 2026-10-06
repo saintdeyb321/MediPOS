@@ -50,6 +50,7 @@ public sealed class PurchaseWorkflowIntegrationTests(PostgreSqlFixture fixture)
         Assert.Equal(2, lines.Count);
         Assert.Equal(2, lots.Count);
         Assert.Equal(2, movements.Count);
+        Assert.All(lots, lot => Assert.Equal(movements.Single(value => value.InventoryLotId == lot.Id).QuantityDeltaBase, lot.QuantityAvailableBase));
         Assert.Equal(25m, lines[0].BaseQuantity);
         Assert.Equal(0.1234567890123456789012345678m, lines[0].UnitCost);
         foreach (var line in lines)
@@ -60,7 +61,7 @@ public sealed class PurchaseWorkflowIntegrationTests(PostgreSqlFixture fixture)
             Assert.Equal(line.BatchNumber, lot.BatchNumber);
             Assert.Equal(line.ExpirationDate, lot.ExpirationDate);
             Assert.Equal(lot.Id, movement.InventoryLotId);
-            Assert.Equal(line.BaseQuantity, movement.QuantityBase);
+            Assert.Equal(line.BaseQuantity, movement.QuantityDeltaBase);
             Assert.Equal(StockMovementType.PurchaseReceipt, movement.MovementType);
             Assert.Equal(rows.ActorId, movement.ActorId);
         }
@@ -258,7 +259,7 @@ public sealed class PurchaseWorkflowIntegrationTests(PostgreSqlFixture fixture)
             var context = eventData.Context!;
             if (failure == "movement")
                 foreach (var entry in context.ChangeTracker.Entries<StockMovement>().Where(value => value.State == EntityState.Added))
-                    entry.Property(value => value.QuantityBase).CurrentValue = 0m;
+                    entry.Property(value => value.QuantityDeltaBase).CurrentValue = 0m;
             if (failure == "audit")
                 foreach (var entry in context.ChangeTracker.Entries<AuditLog>().Where(value => value.State == EntityState.Added && value.Entity.Action == AuditAction.PurchaseConfirmed))
                     entry.Property(value => value.AfterJson).CurrentValue = "[]";

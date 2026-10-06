@@ -10,13 +10,15 @@ public sealed class InventoryLot
     public Guid SourcePurchaseLineId { get; private set; }
     public string? BatchNumber { get; private set; }
     public DateOnly? ExpirationDate { get; private set; }
+    public decimal QuantityAvailableBase { get; private set; }
     public DateTimeOffset CreatedAt { get; private set; }
 
     public static InventoryLot Receive(Guid tenantId, Guid branchId, Guid productId, Guid sourceLineId,
-        string? batchNumber, DateOnly? expirationDate, DateTimeOffset now)
+        decimal quantityBase, string? batchNumber, DateOnly? expirationDate, DateTimeOffset now)
     {
         if (tenantId == Guid.Empty || branchId == Guid.Empty || productId == Guid.Empty || sourceLineId == Guid.Empty)
             throw new ArgumentException("Receipt identifiers are required.");
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(quantityBase);
         return new InventoryLot
         {
             Id = Guid.CreateVersion7(),
@@ -24,9 +26,27 @@ public sealed class InventoryLot
             BranchId = branchId,
             BusinessProductId = productId,
             SourcePurchaseLineId = sourceLineId,
+            QuantityAvailableBase = quantityBase,
             BatchNumber = batchNumber,
             ExpirationDate = expirationDate,
             CreatedAt = now.ToUniversalTime(),
         };
+    }
+    public decimal PreviewAdjustment(decimal delta)
+    {
+        if (delta == 0) throw new ArgumentException("Adjustment delta cannot be zero.", nameof(delta));
+        var after = StockQuantity.Add(QuantityAvailableBase, delta);
+        if (after < 0) throw new InsufficientStockException();
+        return after;
+    }
+
+    // Called by the persistence transaction boundary only, with its matching append-only movement.
+    public void ApplyAdjustment(StockMovement adjustment)
+    {
+        ArgumentNullException.ThrowIfNull(adjustment);
+        if (adjustment.MovementType != StockMovementType.Adjustment || adjustment.InventoryLotId != Id ||
+            adjustment.TenantId != TenantId || adjustment.BranchId != BranchId || adjustment.BusinessProductId != BusinessProductId)
+            throw new ArgumentException("Adjustment must belong to this lot.", nameof(adjustment));
+        QuantityAvailableBase = PreviewAdjustment(adjustment.QuantityDeltaBase);
     }
 }

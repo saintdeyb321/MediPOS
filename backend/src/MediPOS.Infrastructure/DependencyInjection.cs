@@ -19,6 +19,9 @@ using MediPOS.Application.Modules.IdentityAccess.ReplaceWorkSchedule;
 using MediPOS.Application.Modules.IdentityAccess.SetMembershipBranches;
 using MediPOS.Application.Modules.IdentityAccess.UpsertGoogleUser;
 using MediPOS.Application.Modules.Inventory;
+using MediPOS.Application.Modules.Inventory.AdjustStock;
+using MediPOS.Application.Modules.Inventory.GetExpiringLots;
+using MediPOS.Application.Modules.Inventory.PlanFefoAllocation;
 using MediPOS.Application.Modules.Purchasing;
 using MediPOS.Application.Modules.Purchasing.ConfirmPurchase;
 using MediPOS.Application.Modules.Purchasing.CreatePurchase;
@@ -93,6 +96,11 @@ public static class DependencyInjection
 
         services.AddScoped<IPurchasingStore, PurchasingStore>();
         services.AddScoped<IPurchaseReceiptWriter, PurchaseReceiptWriter>();
+        services.AddScoped<IStockAdjustmentTransaction, StockAdjustmentTransaction>();
+        services.AddScoped<IInventoryReadStore, InventoryReadStore>();
+        services.AddScoped<AdjustStockHandler>();
+        services.AddScoped<PlanFefoAllocationHandler>();
+        services.AddScoped<GetExpiringLotsHandler>();
         services.AddScoped<CreateSupplierHandler>();
         services.AddScoped<CreatePurchaseHandler>();
         services.AddScoped<ReplacePurchaseLinesHandler>();
