@@ -57,6 +57,8 @@ public sealed class MediPosDbContext(DbContextOptions<MediPosDbContext> options,
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
+        modelBuilder.HasPostgresExtension("public", "pg_trgm");
+        modelBuilder.HasPostgresExtension("public", "unaccent");
         modelBuilder.ApplyConfiguration(new TenantConfiguration());
         modelBuilder.ApplyConfiguration(new LicenseConfiguration());
         modelBuilder.ApplyConfiguration(new LicenseChangeConfiguration());

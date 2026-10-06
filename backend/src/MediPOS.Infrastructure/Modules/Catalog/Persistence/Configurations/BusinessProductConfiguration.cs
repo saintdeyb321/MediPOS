@@ -57,5 +57,6 @@ internal sealed class BusinessProductConfiguration : IEntityTypeConfiguration<Bu
         builder.HasIndex(value => new { value.TenantId, value.Name });
         builder.HasIndex(value => new { value.TenantId, value.Barcode }).HasFilter("barcode IS NOT NULL");
         builder.Property<uint>("Version").IsRowVersion().HasColumnName("xmin");
+        ProductSearchConfiguration.Configure(builder);
     }
 }

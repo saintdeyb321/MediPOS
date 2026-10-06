@@ -4,9 +4,9 @@ This is the single execution roadmap for the backend. Prompts are given in chat 
 
 ## Working state
 - **Current milestone:** M1 — Catalog, purchasing & inventory
-- **Current sprint:** B1.4 — Inventory ledger, lots, adjustments & FEFO
+- **Current sprint:** B1.5 — Search engine
 - **Status:** IN_PROGRESS
-- **Next gate:** B1.4 local restore/build/unit tests/architecture tests/format and review; PostgreSQL integration validation in another environment
+- **Next gate:** B1.5 local restore/build/unit tests/architecture tests/format and review; PostgreSQL integration validation in another environment
 
 Local policy: this machine has no Docker and will not install it. Do not check/start Docker or run PostgreSQL/Testcontainers here. B0.1 is complete locally. Keep real PostgreSQL integration tests for another environment; they are not part of the local gate and must not be reported as passed without execution.
 
@@ -86,12 +86,13 @@ Goal: trustworthy product and stock core.
 **Scope:** Supplier, Purchase/PurchaseLine and atomic confirmation; B1.3 introduces InventoryLot + StockMovement only for purchase receipt; B1.4 completes the ledger, balances, adjustments, FEFO and no-negative-stock.
 
 ### B1.4 — Inventory ledger, lots, adjustments & FEFO
-**Status:** IN_PROGRESS
+**Status:** DONE — audited locally; PostgreSQL tests remain prepared for external validation.
 **Requirements:** FR-INV-001..007, BR-002..005.
 **Scope:** InventoryLot, StockMovement, balance strategy, adjustment audit, FEFO, no-negative-stock/concurrency.
 **Exit:** last-stock race integration tests and FEFO pass.
 
 ### B1.5 — Search engine
+**Status:** IN_PROGRESS
 **Requirements:** FR-POS-002..003 plus catalog search rules.
 **Scope:** `unaccent`, `pg_trgm`, indexes/ranking, branch stock, equivalence fallback, other-branch availability.
 **Exit:** typo/accent and structured-equivalence tests pass within representative target dataset.
