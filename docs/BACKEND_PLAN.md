@@ -4,10 +4,12 @@ This is the single execution roadmap for the backend. Prompts are given in chat 
 
 ## Working state
 - **Current milestone:** M0 — Foundations
-- **Current sprint:** B0.1 — Backend scaffold
+- **Current sprint:** B0.2 — Tenancy & licensing core
 - **Status:** IN_PROGRESS
-- **Last audited commit:** —
-- **Next gate:** run the PostgreSQL integration smoke test with Docker available; scaffold restore/build/architecture tests/format validated
+- **Last audited commit:** dd212ca8621f9aa800d41d568772c67c103e3e91
+- **Next gate:** B0.2 local restore/build/unit tests/architecture tests/format, then commit audit; PostgreSQL integration validation in another environment
+
+Local policy: this machine has no Docker and will not install it. Do not check/start Docker or run PostgreSQL/Testcontainers here. B0.1 is complete locally. Keep real PostgreSQL integration tests for another environment; they are not part of the local gate and must not be reported as passed without execution.
 
 Allowed statuses: `NOT_STARTED`, `IN_PROGRESS`, `BLOCKED`, `DONE`.
 
@@ -31,12 +33,12 @@ Goal: safe base for all business modules.
 
 ### B0.1 — Backend scaffold
 **Scope:** solution/projects, dependency direction, formatting, Problem Details, dev OpenAPI, `/health`, PostgreSQL DbContext registration, test projects/Testcontainers foundation, architecture tests.
-**Exit:** `restore/build/test/format` pass; no domain entities/migrations yet.
+**Exit:** local `restore/build/unit tests/architecture tests/format` pass; no domain entities/migrations yet. PostgreSQL validation is separate under the local policy above.
 
 ### B0.2 — Tenancy & licensing core
 **Requirements:** FR-LIC-001..005, BR-001, BR-017, BR-020.
 **Scope:** Tenant, License, lifecycle/state model, license limits/history, application use cases, persistence/configuration, core tests.
-**Exit:** tenant/license creation and state enforcement core works; domain invariants unit-tested; DB integration tests pass.
+**Exit:** tenant/license creation and state enforcement core works; domain invariants unit-tested; local gates pass and real PostgreSQL integration tests are prepared for another environment. FR-LIC-005 covers only the persistent purge request here; physical purge and A18 remain pending.
 
 ### B0.3 — Legal entities & branches
 **Requirements:** FR-TEN-001..003, FR-TEN-005.

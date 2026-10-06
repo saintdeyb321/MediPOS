@@ -1,6 +1,6 @@
 # MediPOS backend
 
-Requires the .NET 10 SDK. PostgreSQL integration tests also require a running Docker-compatible engine with Linux containers.
+Requires the .NET 10 SDK. This local machine has no Docker and will not install it. Do not check/start Docker or execute PostgreSQL/Testcontainers locally. B0.1 is complete under the local gate below; PostgreSQL integration tests remain available for another environment.
 
 Configure `ConnectionStrings:MediPosDatabase` outside source control before starting the API. For local development, from `backend/`:
 
@@ -16,16 +16,22 @@ The local launch profile uses `http://localhost:5080`. `GET /health` reports pro
 ```sh
 dotnet restore
 dotnet build
-dotnet test
+dotnet test tests/MediPOS.UnitTests
+dotnet test tests/MediPOS.ArchitectureTests
 dotnet format --verify-no-changes
 ```
 
-The PostgreSQL smoke test starts an isolated `postgres:18-alpine` container with a randomly generated password, opens a connection through `MediPosDbContext`, executes `SELECT 1`, and disposes the container. These credentials belong only to the disposable test container. A missing Docker engine is a test failure, never a simulated success.
+The integration suite is prepared for an environment with a Docker-compatible engine and Linux containers. It shares one isolated `postgres:18-alpine` container with a random password, applies the migration to an empty database, and uses distinct tenant IDs to isolate test data. It covers the smoke connection, persistence/history, tenant-bound foreign keys, unique current licenses, constraints, state changes, append-only history and concurrent renewal. These tests are not part of the local gate and have not been validated here.
 
-To run the tests that do not require Docker:
+Migration tooling (no database connection is needed to scaffold migrations or check the model):
 
 ```sh
-dotnet test --filter "Category!=PostgreSql"
+dotnet tool restore
+dotnet ef migrations has-pending-model-changes --project src/MediPOS.Infrastructure --startup-project src/MediPOS.Infrastructure
 ```
 
-Tests use `xunit.v3.mtp-off` with VSTest, the default `dotnet test` runner, without additional runner configuration. Architecture tests inspect the source project references, including empty layers. UnitTests is configured for Domain/Application tests and intentionally has no placeholder tests or business rules in B0.1.
+The first migration is `InitialTenancyLicensing`, in Infrastructure. The design-time factory configures Npgsql without credentials for offline model work; it also accepts `ConnectionStrings__MediPosDatabase` when tooling is used in a database-enabled environment. The API never applies migrations at startup.
+
+TenancyLicensing has five internal application handlers and a tenant/license-scoped persistence port. They are not public HTTP endpoints or an authorization boundary; identity/administrative authorization remains for a later sprint. The operation gate uses the interval `[starts_at, expires_at)`. Reactivation requires Suspended and an explicit Trial/Active/Grace target; renewal preserves status. Identical renewals and repeated suspension/purge requests are no-ops. Cancelled/PurgePending/Purged cannot be renewed or reactivated. Purge requests persist PurgePending and history; physical deletion and FR-LIC-005/A18 completion remain pending.
+
+Tests use `xunit.v3.mtp-off` with VSTest. Unit tests cover domain rules and application behavior; architecture tests continue enforcing the existing project dependency rules.

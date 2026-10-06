@@ -1,10 +1,10 @@
-using MediPOS.Infrastructure.Persistence;
+using MediPOS.IntegrationTests.Modules.TenancyLicensing;
 using Microsoft.EntityFrameworkCore;
-using Testcontainers.PostgreSql;
 
 namespace MediPOS.IntegrationTests;
 
-public sealed class PostgreSqlSmokeTests
+[Collection("PostgreSQL")]
+public sealed class PostgreSqlSmokeTests(PostgreSqlFixture fixture)
 {
     [Fact]
     [Trait("Category", "PostgreSql")]
@@ -13,16 +13,7 @@ public sealed class PostgreSqlSmokeTests
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
         timeout.CancelAfter(TimeSpan.FromMinutes(2));
 
-        await using var container = new PostgreSqlBuilder("postgres:18-alpine")
-            .WithPassword(Guid.NewGuid().ToString("N"))
-            .Build();
-        await container.StartAsync(timeout.Token);
-
-        var options = new DbContextOptionsBuilder<MediPosDbContext>()
-            .UseNpgsql(container.GetConnectionString())
-            .Options;
-
-        await using var context = new MediPosDbContext(options);
+        await using var context = fixture.CreateContext();
         await context.Database.OpenConnectionAsync(timeout.Token);
 
         await using var command = context.Database.GetDbConnection().CreateCommand();
@@ -31,6 +22,6 @@ public sealed class PostgreSqlSmokeTests
         var result = await command.ExecuteScalarAsync(timeout.Token);
 
         Assert.Equal(1, Assert.IsType<int>(result));
-        Assert.Empty(context.Model.GetEntityTypes());
+        Assert.Equal("Npgsql.EntityFrameworkCore.PostgreSQL", context.Database.ProviderName);
     }
 }
