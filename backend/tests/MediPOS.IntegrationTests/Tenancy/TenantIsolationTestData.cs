@@ -1,6 +1,9 @@
 using MediPOS.Application.Modules.Branches.CreateBranch;
+using MediPOS.Application.Modules.Catalog.CreateCategory;
+using MediPOS.Application.Modules.Catalog.CreateLocalBusinessProduct;
 using MediPOS.Application.Modules.IdentityAccess.ReplaceWorkSchedule;
 using MediPOS.Application.Modules.IdentityAccess.SetMembershipBranches;
+using MediPOS.Domain.Modules.Catalog;
 using MediPOS.IntegrationTests.Modules.IdentityAccess;
 using MediPOS.IntegrationTests.Modules.TenancyLicensing;
 using Microsoft.EntityFrameworkCore;
@@ -31,10 +34,15 @@ internal static class TenantIsolationTestData
         var spare = await provider.GetRequiredService<CreateBranchHandler>().HandleAsync(
             new(setup.TenantId, legalId, "Spare", Guid.NewGuid()), TestContext.Current.CancellationToken);
         var windowId = await context.WorkSchedules.Select(value => value.Id).SingleAsync(TestContext.Current.CancellationToken);
-        return new TenantRows(setup, legalId, spare.Id, windowId);
+        var category = await provider.GetRequiredService<CreateCategoryHandler>().HandleAsync(
+            new("Retail"), TestContext.Current.CancellationToken);
+        var product = await provider.GetRequiredService<CreateLocalBusinessProductHandler>().HandleAsync(
+            new(setup.TenantId, "R1", ProductType.Retail, "Local retail", category.Id, "Brand", null, null, 0m, null, setup.ActorId),
+            TestContext.Current.CancellationToken);
+        return new TenantRows(setup, legalId, spare.Id, windowId, category.Id, product.Id);
     }
 
-    internal sealed record TenantRows(IdentityAccessTestSetup.Setup Identity, Guid LegalEntityId, Guid SpareBranchId, Guid ScheduleId)
+    internal sealed record TenantRows(IdentityAccessTestSetup.Setup Identity, Guid LegalEntityId, Guid SpareBranchId, Guid ScheduleId, Guid CategoryId, Guid BusinessProductId)
     {
         internal Guid TenantId => Identity.TenantId;
     }

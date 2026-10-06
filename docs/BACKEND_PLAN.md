@@ -3,10 +3,10 @@
 This is the single execution roadmap for the backend. Prompts are given in chat and are **not** stored in the repository.
 
 ## Working state
-- **Current milestone:** M0 — Foundations
-- **Current sprint:** B0.6 — Audit foundation & platform hardening
+- **Current milestone:** M1 — Catalog, purchasing & inventory
+- **Current sprint:** B1.1 — Global catalog & tenant products
 - **Status:** IN_PROGRESS
-- **Next gate:** B0.6 local restore/build/unit tests/architecture tests/format and review; PostgreSQL integration validation in another environment
+- **Next gate:** B1.1 local restore/build/unit tests/architecture tests/format and review; PostgreSQL integration validation in another environment
 
 Local policy: this machine has no Docker and will not install it. Do not check/start Docker or run PostgreSQL/Testcontainers here. B0.1 is complete locally. Keep real PostgreSQL integration tests for another environment; they are not part of the local gate and must not be reported as passed without execution.
 
@@ -57,11 +57,13 @@ Goal: safe base for all business modules.
 **Exit:** automated tests prove Tenant A cannot read/write Tenant B by application path and RLS-covered direct DB path.
 
 ### B0.6 — Audit foundation & platform hardening
+**Status:** DONE — audited/completed locally; PostgreSQL integration tests remain prepared for external validation.
 **Requirements:** FR-AUD-001..003, security NFRs.
 **Scope:** AuditLog append-only behavior, actor/correlation metadata, stable error codes, rate-limit/security baseline, secret/log review.
 **Exit:** critical foundation changes audited; no tenant UI deletion path; architecture/security tests green.
 
 **M0 gate:** create tenant/license/owner/branches/membership without manual DB edits; server-side access context and tenant isolation proven.
+**M0 status:** Local implementation completed; full release validation remains pending the external PostgreSQL suite.
 
 ---
 

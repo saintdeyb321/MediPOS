@@ -9,7 +9,7 @@ namespace MediPOS.IntegrationTests.Tenancy;
 public sealed class TenantRowLevelSecurityTests(PostgreSqlFixture fixture)
 {
     private static readonly string[] ProtectedTables =
-        ["licenses", "license_changes", "legal_entities", "branches", "memberships", "membership_branches", "work_schedules"];
+        ["licenses", "license_changes", "legal_entities", "branches", "memberships", "membership_branches", "work_schedules", "business_products"];
 
     [Fact]
     public async Task MigrationForcesPoliciesOnEveryPrivateTableAndRuntimeCannotBypassThem()
@@ -20,13 +20,13 @@ public sealed class TenantRowLevelSecurityTests(PostgreSqlFixture fixture)
         await using var command = connection.CreateCommand();
         command.CommandText = "SELECT count(*) FROM pg_class WHERE relname = ANY(@tables) AND relrowsecurity AND relforcerowsecurity";
         command.Parameters.AddWithValue("tables", ProtectedTables);
-        Assert.Equal(7L, await command.ExecuteScalarAsync(TestContext.Current.CancellationToken));
+        Assert.Equal((long)ProtectedTables.Length, await command.ExecuteScalarAsync(TestContext.Current.CancellationToken));
         command.CommandText = """
             SELECT count(*) FROM pg_policies WHERE tablename = ANY(@tables)
                 AND policyname = 'tenant_isolation' AND qual IS NOT NULL AND with_check IS NOT NULL
             """;
-        Assert.Equal(7L, await command.ExecuteScalarAsync(TestContext.Current.CancellationToken));
-        command.CommandText = "SELECT count(*) FROM pg_class WHERE relname IN ('users', 'tenants') AND relrowsecurity";
+        Assert.Equal((long)ProtectedTables.Length, await command.ExecuteScalarAsync(TestContext.Current.CancellationToken));
+        command.CommandText = "SELECT count(*) FROM pg_class WHERE relname IN ('users', 'tenants', 'categories', 'global_products', 'medicine_profiles') AND relrowsecurity";
         command.Parameters.Clear();
         Assert.Equal(0L, await command.ExecuteScalarAsync(TestContext.Current.CancellationToken));
         await using var context = fixture.CreateContext();
@@ -43,6 +43,7 @@ public sealed class TenantRowLevelSecurityTests(PostgreSqlFixture fixture)
     [InlineData("memberships")]
     [InlineData("membership_branches")]
     [InlineData("work_schedules")]
+    [InlineData("business_products")]
     public async Task DirectSqlCannotReadUpdateDeleteOrInsertAnotherTenant(string table)
     {
         Assert.Contains(table, ProtectedTables);
@@ -92,6 +93,7 @@ public sealed class TenantRowLevelSecurityTests(PostgreSqlFixture fixture)
     [InlineData("memberships")]
     [InlineData("membership_branches")]
     [InlineData("work_schedules")]
+    [InlineData("business_products")]
     public async Task MissingAndEmptySettingDenyPrivateReadsAndInserts(string table)
     {
         Assert.Contains(table, ProtectedTables);
@@ -176,6 +178,12 @@ public sealed class TenantRowLevelSecurityTests(PostgreSqlFixture fixture)
             "work_schedules" => $"""
                 INSERT INTO work_schedules (id, tenant_id, membership_id, day_of_week, start_time, end_time)
                 VALUES ({Guid.NewGuid()}, {target.TenantId}, {target.Identity.MembershipId}, 'wed', TIME '09:00', TIME '18:00')
+                """,
+            "business_products" => $"""
+                INSERT INTO business_products (id, tenant_id, internal_code, name, product_type, category_id,
+                    brand_or_laboratory, retail_price, is_active, created_at)
+                VALUES ({Guid.NewGuid()}, {target.TenantId}, {Guid.NewGuid().ToString("N")}, 'Runtime insert',
+                    'retail', {target.CategoryId}, 'Brand', 0, true, {now})
                 """,
             _ => throw new ArgumentOutOfRangeException(nameof(table)),
         };

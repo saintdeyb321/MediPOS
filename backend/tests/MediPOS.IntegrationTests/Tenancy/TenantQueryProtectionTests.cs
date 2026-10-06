@@ -30,6 +30,8 @@ public sealed class TenantQueryProtectionTests(PostgreSqlFixture fixture)
         AssertOnlyTenant(await context.MembershipBranches.Select(value => value.TenantId).ToListAsync(TestContext.Current.CancellationToken), first.TenantId);
         AssertOnlyTenant(await context.WorkSchedules.Select(value => value.TenantId).ToListAsync(TestContext.Current.CancellationToken), first.TenantId);
         AssertOnlyTenant(await context.AuditLogs.Select(value => value.TenantId).ToListAsync(TestContext.Current.CancellationToken), first.TenantId);
+        AssertOnlyTenant(await context.BusinessProducts.Select(value => value.TenantId).ToListAsync(TestContext.Current.CancellationToken), first.TenantId);
+        Assert.Null(await context.BusinessProducts.FindAsync([second.BusinessProductId], TestContext.Current.CancellationToken));
         Assert.Null(await context.Branches.FindAsync([second.Identity.BranchId], TestContext.Current.CancellationToken));
         Assert.Null(await context.Memberships.FindAsync([second.Identity.MembershipId], TestContext.Current.CancellationToken));
         Assert.Null(await context.WorkSchedules.FindAsync([second.ScheduleId], TestContext.Current.CancellationToken));
@@ -54,6 +56,8 @@ public sealed class TenantQueryProtectionTests(PostgreSqlFixture fixture)
         Assert.Empty(await context.MembershipBranches.ToListAsync(TestContext.Current.CancellationToken));
         Assert.Empty(await context.WorkSchedules.ToListAsync(TestContext.Current.CancellationToken));
         Assert.Empty(await context.AuditLogs.ToListAsync(TestContext.Current.CancellationToken));
+        Assert.Empty(await context.BusinessProducts.ToListAsync(TestContext.Current.CancellationToken));
+        Assert.True(await context.Categories.AnyAsync(value => value.Id == first.CategoryId, TestContext.Current.CancellationToken));
         Assert.True(await context.Users.AnyAsync(value => value.Id == first.Identity.UserId, TestContext.Current.CancellationToken));
         Assert.True(await context.Users.AnyAsync(value => value.Id == second.Identity.UserId, TestContext.Current.CancellationToken));
         Assert.True(await context.Tenants.AnyAsync(value => value.Id == first.TenantId, TestContext.Current.CancellationToken));

@@ -5,9 +5,10 @@ public enum AuditAction
     TenantCreated, LicenseRenewed, LicenseSuspended, LicenseReactivated, TenantPurgeRequested,
     LegalEntityCreated, BranchCreated, BranchMainHubChanged,
     MembershipCreated, MembershipBranchesReplaced, MembershipScheduleReplaced, MembershipDeactivated,
+    BusinessProductCreated, BusinessProductPriceChanged, BusinessProductStatusChanged,
 }
 
-public enum AuditEntityType { Tenant, License, LegalEntity, Branch, Membership }
+public enum AuditEntityType { Tenant, License, LegalEntity, Branch, Membership, BusinessProduct }
 
 public static class AuditCodes
 {
@@ -25,6 +26,9 @@ public static class AuditCodes
         AuditAction.MembershipBranchesReplaced => "membership.branches_replaced",
         AuditAction.MembershipScheduleReplaced => "membership.schedule_replaced",
         AuditAction.MembershipDeactivated => "membership.deactivated",
+        AuditAction.BusinessProductCreated => "business_product.created",
+        AuditAction.BusinessProductPriceChanged => "business_product.price_changed",
+        AuditAction.BusinessProductStatusChanged => "business_product.status_changed",
         _ => throw new ArgumentOutOfRangeException(nameof(action)),
     };
 
@@ -42,6 +46,9 @@ public static class AuditCodes
         "membership.branches_replaced" => AuditAction.MembershipBranchesReplaced,
         "membership.schedule_replaced" => AuditAction.MembershipScheduleReplaced,
         "membership.deactivated" => AuditAction.MembershipDeactivated,
+        "business_product.created" => AuditAction.BusinessProductCreated,
+        "business_product.price_changed" => AuditAction.BusinessProductPriceChanged,
+        "business_product.status_changed" => AuditAction.BusinessProductStatusChanged,
         _ => throw new InvalidOperationException("Unknown persisted audit action."),
     };
 
@@ -53,6 +60,8 @@ public static class AuditCodes
         AuditAction.BranchCreated or AuditAction.BranchMainHubChanged => AuditEntityType.Branch,
         AuditAction.MembershipCreated or AuditAction.MembershipBranchesReplaced or
             AuditAction.MembershipScheduleReplaced or AuditAction.MembershipDeactivated => AuditEntityType.Membership,
+        AuditAction.BusinessProductCreated or AuditAction.BusinessProductPriceChanged or
+            AuditAction.BusinessProductStatusChanged => AuditEntityType.BusinessProduct,
         _ => throw new ArgumentOutOfRangeException(nameof(action)),
     };
 
@@ -63,6 +72,7 @@ public static class AuditCodes
         AuditEntityType.LegalEntity => "legal_entity",
         AuditEntityType.Branch => "branch",
         AuditEntityType.Membership => "membership",
+        AuditEntityType.BusinessProduct => "business_product",
         _ => throw new ArgumentOutOfRangeException(nameof(entityType)),
     };
 
@@ -73,6 +83,7 @@ public static class AuditCodes
         "legal_entity" => AuditEntityType.LegalEntity,
         "branch" => AuditEntityType.Branch,
         "membership" => AuditEntityType.Membership,
+        "business_product" => AuditEntityType.BusinessProduct,
         _ => throw new InvalidOperationException("Unknown persisted audit entity type."),
     };
 }

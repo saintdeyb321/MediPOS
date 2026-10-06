@@ -1,10 +1,12 @@
 using MediPOS.Application.Tenancy;
 using MediPOS.Domain.Modules.AuditSupport;
 using MediPOS.Domain.Modules.Branches;
+using MediPOS.Domain.Modules.Catalog;
 using MediPOS.Domain.Modules.IdentityAccess;
 using MediPOS.Domain.Modules.TenancyLicensing;
 using MediPOS.Infrastructure.Modules.AuditSupport.Persistence;
 using MediPOS.Infrastructure.Modules.Branches.Persistence.Configurations;
+using MediPOS.Infrastructure.Modules.Catalog.Persistence.Configurations;
 using MediPOS.Infrastructure.Modules.IdentityAccess.Persistence.Configurations;
 using MediPOS.Infrastructure.Modules.TenancyLicensing.Persistence.Configurations;
 using Microsoft.EntityFrameworkCore;
@@ -32,6 +34,10 @@ public sealed class MediPosDbContext(DbContextOptions<MediPosDbContext> options,
     public DbSet<MembershipBranch> MembershipBranches => Set<MembershipBranch>();
     public DbSet<WorkSchedule> WorkSchedules => Set<WorkSchedule>();
     public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
+    public DbSet<Category> Categories => Set<Category>();
+    public DbSet<GlobalProduct> GlobalProducts => Set<GlobalProduct>();
+    public DbSet<MedicineProfile> MedicineProfiles => Set<MedicineProfile>();
+    public DbSet<BusinessProduct> BusinessProducts => Set<BusinessProduct>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -46,6 +52,10 @@ public sealed class MediPosDbContext(DbContextOptions<MediPosDbContext> options,
         modelBuilder.ApplyConfiguration(new MembershipBranchConfiguration());
         modelBuilder.ApplyConfiguration(new WorkScheduleConfiguration());
         modelBuilder.ApplyConfiguration(new AuditLogConfiguration());
+        modelBuilder.ApplyConfiguration(new CategoryConfiguration());
+        modelBuilder.ApplyConfiguration(new GlobalProductConfiguration());
+        modelBuilder.ApplyConfiguration(new MedicineProfileConfiguration());
+        modelBuilder.ApplyConfiguration(new BusinessProductConfiguration());
 
         // Context properties are evaluated per query, rather than captured into the cached EF model.
         // User is global. Tenant is a platform root; its administration requires a separate authorized boundary.
@@ -57,6 +67,7 @@ public sealed class MediPosDbContext(DbContextOptions<MediPosDbContext> options,
         modelBuilder.Entity<MembershipBranch>().HasQueryFilter(value => SelectedTenantId.HasValue && value.TenantId == SelectedTenantId);
         modelBuilder.Entity<WorkSchedule>().HasQueryFilter(value => SelectedTenantId.HasValue && value.TenantId == SelectedTenantId);
         modelBuilder.Entity<AuditLog>().HasQueryFilter(value => SelectedTenantId.HasValue && value.TenantId == SelectedTenantId);
+        modelBuilder.Entity<BusinessProduct>().HasQueryFilter(value => SelectedTenantId.HasValue && value.TenantId == SelectedTenantId);
     }
 
     public override int SaveChanges(bool acceptAllChangesOnSuccess)
@@ -131,6 +142,7 @@ public sealed class MediPosDbContext(DbContextOptions<MediPosDbContext> options,
                 MembershipBranch value => value.TenantId,
                 WorkSchedule value => value.TenantId,
                 AuditLog value => value.TenantId,
+                BusinessProduct value => value.TenantId,
                 _ => null,
             };
             if (!tenantId.HasValue)
@@ -138,6 +150,19 @@ public sealed class MediPosDbContext(DbContextOptions<MediPosDbContext> options,
             if (!SelectedTenantId.HasValue || tenantId != SelectedTenantId ||
                 (entry.State != EntityState.Added && entry.Property("TenantId").OriginalValue is Guid original && original != SelectedTenantId))
                 throw new InvalidOperationException("Private writes must belong to the selected tenant; tenant ownership is immutable.");
+        }
+        // Table-split medicine columns are private when their owner is a BusinessProduct.
+        // An owned-only mutation must still validate both original and current owner tenant.
+        foreach (var entry in ChangeTracker.Entries<MedicineData>().Where(value => value.State is EntityState.Added or EntityState.Modified or EntityState.Deleted))
+        {
+            var ownership = entry.Metadata.FindOwnership()!;
+            if (ownership.PrincipalEntityType.ClrType != typeof(BusinessProduct))
+                continue;
+            var ownerId = (Guid)entry.Property(ownership.Properties[0].Name).CurrentValue!;
+            var owner = ChangeTracker.Entries<BusinessProduct>().SingleOrDefault(value => value.Entity.Id == ownerId);
+            if (owner is null || !SelectedTenantId.HasValue || owner.Entity.TenantId != SelectedTenantId ||
+                owner.Property(value => value.TenantId).OriginalValue != SelectedTenantId)
+                throw new InvalidOperationException("Private medicine data must belong to the selected tenant.");
         }
     }
 }

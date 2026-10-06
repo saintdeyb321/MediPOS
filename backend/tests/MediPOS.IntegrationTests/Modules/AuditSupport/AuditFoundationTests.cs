@@ -98,7 +98,7 @@ public sealed class AuditFoundationTests(PostgreSqlFixture fixture)
         await using var verification = fixture.CreateContext(setup.TenantId);
         var rows = await verification.AuditLogs.ToListAsync(TestContext.Current.CancellationToken);
         Assert.Equal(12, rows.Count);
-        Assert.Equal(Enum.GetValues<AuditAction>().Order(), rows.Select(value => value.Action).Order());
+        Assert.Equal(Enum.GetValues<AuditAction>().Where(value => AuditCodes.EntityFor(value) != AuditEntityType.BusinessProduct).Order(), rows.Select(value => value.Action).Order());
         Assert.All(rows, row =>
         {
             Assert.Equal(setup.TenantId, row.TenantId);

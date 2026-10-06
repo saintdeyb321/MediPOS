@@ -2,6 +2,13 @@ using MediPOS.Application.Modules.Branches;
 using MediPOS.Application.Modules.Branches.CreateBranch;
 using MediPOS.Application.Modules.Branches.CreateLegalEntity;
 using MediPOS.Application.Modules.Branches.SetMainHubBranch;
+using MediPOS.Application.Modules.Catalog;
+using MediPOS.Application.Modules.Catalog.CreateBusinessProductFromGlobal;
+using MediPOS.Application.Modules.Catalog.CreateCategory;
+using MediPOS.Application.Modules.Catalog.CreateGlobalProduct;
+using MediPOS.Application.Modules.Catalog.CreateLocalBusinessProduct;
+using MediPOS.Application.Modules.Catalog.SetBusinessProductStatus;
+using MediPOS.Application.Modules.Catalog.UpdateBusinessProductPrices;
 using MediPOS.Application.Modules.IdentityAccess;
 using MediPOS.Application.Modules.IdentityAccess.Authentication;
 using MediPOS.Application.Modules.IdentityAccess.CreateMembership;
@@ -18,6 +25,7 @@ using MediPOS.Application.Modules.TenancyLicensing.RequestTenantPurge;
 using MediPOS.Application.Modules.TenancyLicensing.SuspendLicense;
 using MediPOS.Application.Tenancy;
 using MediPOS.Infrastructure.Modules.Branches.Persistence;
+using MediPOS.Infrastructure.Modules.Catalog.Persistence;
 using MediPOS.Infrastructure.Modules.IdentityAccess.Persistence;
 using MediPOS.Infrastructure.Modules.TenancyLicensing.Persistence;
 using MediPOS.Infrastructure.Persistence;
@@ -62,6 +70,14 @@ public static class DependencyInjection
         services.AddScoped<SetMembershipBranchesHandler>();
         services.AddScoped<ReplaceWorkScheduleHandler>();
         services.AddScoped<DeactivateMembershipHandler>();
+        services.AddScoped<IGlobalCatalogStore, GlobalCatalogStore>();
+        services.AddScoped<IBusinessProductStore, BusinessProductStore>();
+        services.AddScoped<CreateCategoryHandler>();
+        services.AddScoped<CreateGlobalProductHandler>();
+        services.AddScoped<CreateBusinessProductFromGlobalHandler>();
+        services.AddScoped<CreateLocalBusinessProductHandler>();
+        services.AddScoped<UpdateBusinessProductPricesHandler>();
+        services.AddScoped<SetBusinessProductStatusHandler>();
 
         return services;
     }
