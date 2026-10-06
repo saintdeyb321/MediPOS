@@ -1,9 +1,14 @@
+using MediPOS.Application.Modules.Branches;
+using MediPOS.Application.Modules.Branches.CreateBranch;
+using MediPOS.Application.Modules.Branches.CreateLegalEntity;
+using MediPOS.Application.Modules.Branches.SetMainHubBranch;
 using MediPOS.Application.Modules.TenancyLicensing;
 using MediPOS.Application.Modules.TenancyLicensing.CreateTenant;
 using MediPOS.Application.Modules.TenancyLicensing.ReactivateLicense;
 using MediPOS.Application.Modules.TenancyLicensing.RenewLicense;
 using MediPOS.Application.Modules.TenancyLicensing.RequestTenantPurge;
 using MediPOS.Application.Modules.TenancyLicensing.SuspendLicense;
+using MediPOS.Infrastructure.Modules.Branches.Persistence;
 using MediPOS.Infrastructure.Modules.TenancyLicensing.Persistence;
 using MediPOS.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
@@ -35,6 +40,11 @@ public static class DependencyInjection
         services.AddScoped<SuspendLicenseHandler>();
         services.AddScoped<ReactivateLicenseHandler>();
         services.AddScoped<RequestTenantPurgeHandler>();
+        services.AddScoped<ITenantLicenseProvisioning, TenantLicenseProvisioning>();
+        services.AddScoped<IBranchesStore, BranchesStore>();
+        services.AddScoped<CreateLegalEntityHandler>();
+        services.AddScoped<CreateBranchHandler>();
+        services.AddScoped<SetMainHubBranchHandler>();
 
         return services;
     }

@@ -1,4 +1,6 @@
+using MediPOS.Domain.Modules.Branches;
 using MediPOS.Domain.Modules.TenancyLicensing;
+using MediPOS.Infrastructure.Modules.Branches.Persistence.Configurations;
 using MediPOS.Infrastructure.Modules.TenancyLicensing.Persistence.Configurations;
 using Microsoft.EntityFrameworkCore;
 
@@ -9,6 +11,8 @@ public sealed class MediPosDbContext(DbContextOptions<MediPosDbContext> options)
     public DbSet<Tenant> Tenants => Set<Tenant>();
     public DbSet<License> Licenses => Set<License>();
     public DbSet<LicenseChange> LicenseChanges => Set<LicenseChange>();
+    public DbSet<LegalEntity> LegalEntities => Set<LegalEntity>();
+    public DbSet<Branch> Branches => Set<Branch>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -16,6 +20,8 @@ public sealed class MediPosDbContext(DbContextOptions<MediPosDbContext> options)
         modelBuilder.ApplyConfiguration(new TenantConfiguration());
         modelBuilder.ApplyConfiguration(new LicenseConfiguration());
         modelBuilder.ApplyConfiguration(new LicenseChangeConfiguration());
+        modelBuilder.ApplyConfiguration(new LegalEntityConfiguration());
+        modelBuilder.ApplyConfiguration(new BranchConfiguration());
     }
 
     public override int SaveChanges(bool acceptAllChangesOnSuccess)

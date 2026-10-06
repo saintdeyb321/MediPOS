@@ -4,25 +4,22 @@ This is the single execution roadmap for the backend. Prompts are given in chat 
 
 ## Working state
 - **Current milestone:** M0 — Foundations
-- **Current sprint:** B0.2 — Tenancy & licensing core
+- **Current sprint:** B0.3 — Legal entities & branches
 - **Status:** IN_PROGRESS
-- **Last audited commit:** dd212ca8621f9aa800d41d568772c67c103e3e91
-- **Next gate:** B0.2 local restore/build/unit tests/architecture tests/format, then commit audit; PostgreSQL integration validation in another environment
+- **Next gate:** B0.3 local restore/build/unit tests/architecture tests/format and review; PostgreSQL integration validation in another environment
 
 Local policy: this machine has no Docker and will not install it. Do not check/start Docker or run PostgreSQL/Testcontainers here. B0.1 is complete locally. Keep real PostgreSQL integration tests for another environment; they are not part of the local gate and must not be reported as passed without execution.
 
 Allowed statuses: `NOT_STARTED`, `IN_PROGRESS`, `BLOCKED`, `DONE`.
 
-Update the block above only when sprint state materially changes. Git history is the implementation log; do not duplicate commit-by-commit notes here.
+Update the block above only when sprint state materially changes. Do not duplicate implementation notes here.
 
 ## Delivery workflow
 1. ChatGPT/user define the next tightly scoped prompt from this plan.
 2. Codex reads `AGENTS.md` + only relevant doc sections and implements locally.
-3. Codex runs validations and reports concise results. It does **not** commit/push.
-4. User reviews locally and creates/pushes the commit manually.
-5. User sends the commit/hash/diff for audit.
-6. ChatGPT audits architecture, security, tests and requirements.
-7. Next prompt is either a corrective task or the next planned slice.
+3. Codex runs the local gate and reports concise results, distinguishing prepared integration tests from executed tests.
+4. User reviews the implementation; architecture, security, tests and requirements are audited.
+5. Next prompt is either a corrective task or the next planned slice.
 
 One prompt should normally produce one reviewable change-set. Do not combine unrelated sprints to “save time”.
 
@@ -36,6 +33,7 @@ Goal: safe base for all business modules.
 **Exit:** local `restore/build/unit tests/architecture tests/format` pass; no domain entities/migrations yet. PostgreSQL validation is separate under the local policy above.
 
 ### B0.2 — Tenancy & licensing core
+**Status:** DONE — audited/completed locally; PostgreSQL tests remain prepared for another environment.
 **Requirements:** FR-LIC-001..005, BR-001, BR-017, BR-020.
 **Scope:** Tenant, License, lifecycle/state model, license limits/history, application use cases, persistence/configuration, core tests.
 **Exit:** tenant/license creation and state enforcement core works; domain invariants unit-tested; local gates pass and real PostgreSQL integration tests are prepared for another environment. FR-LIC-005 covers only the persistent purge request here; physical purge and A18 remain pending.

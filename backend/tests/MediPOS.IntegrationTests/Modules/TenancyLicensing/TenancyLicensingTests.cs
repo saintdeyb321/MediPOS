@@ -26,7 +26,7 @@ public sealed class TenancyLicensingTests(PostgreSqlFixture fixture)
         await using var context = fixture.CreateContext();
         var applied = await context.Database.GetAppliedMigrationsAsync(TestContext.Current.CancellationToken);
 
-        Assert.EndsWith("_InitialTenancyLicensing", Assert.Single(applied), StringComparison.Ordinal);
+        Assert.Contains(applied, migration => migration.EndsWith("_InitialTenancyLicensing", StringComparison.Ordinal));
         Assert.False(context.Database.HasPendingModelChanges());
         Assert.Empty(await context.Database.GetPendingMigrationsAsync(TestContext.Current.CancellationToken));
     }

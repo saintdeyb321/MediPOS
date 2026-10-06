@@ -81,24 +81,26 @@ Tests must match risk:
 - Integration: real PostgreSQL/Testcontainers for persistence, transactions, constraints, RLS and concurrency.
 - Architecture tests: forbidden project/module dependencies.
 
-Before finishing a coding task, run the relevant subset of:
-- `dotnet format --verify-no-changes`
-- `dotnet build`
-- `dotnet test`
+The LOCAL backend gate, run from `backend/`, is:
+```sh
+dotnet restore
+dotnet build
+dotnet test tests/MediPOS.UnitTests
+dotnet test tests/MediPOS.ArchitectureTests
+dotnet format --verify-no-changes
+```
+
+This machine has no Docker. Do not check, start or install Docker, run PostgreSQL/Testcontainers, or run `dotnet test` over the whole solution locally. Prepare real PostgreSQL integration tests and validate them only in another available environment; do not substitute EF InMemory/SQLite or report unexecuted tests as passed.
 
 Never claim a command passed if it was not run successfully.
 
-## Git and delivery workflow
-The user owns commits and GitHub publication.
-
-Agent may inspect `git status` / `git diff`, but must **not** commit, push, tag, rebase, create PRs or modify remote history unless explicitly requested.
-
+## Task delivery
 Keep task output concise:
 1. what changed,
 2. validation commands/results,
 3. blockers or decisions needing review.
 
-Do not paste large diffs or repeat documentation.
+Do not repeat documentation.
 
 ## Planning discipline
 `docs/BACKEND_PLAN.md` is the execution roadmap. Do not advance to a later sprint unless the current prompt requests it and prerequisites are met.

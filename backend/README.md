@@ -32,6 +32,8 @@ dotnet ef migrations has-pending-model-changes --project src/MediPOS.Infrastruct
 
 The first migration is `InitialTenancyLicensing`, in Infrastructure. The design-time factory configures Npgsql without credentials for offline model work; it also accepts `ConnectionStrings__MediPosDatabase` when tooling is used in a database-enabled environment. The API never applies migrations at startup.
 
+The second migration, `AddLegalEntitiesAndBranches`, adds tenant-owned legal entities and branches. Branch creation locks the current license row in a Read Committed transaction before checking its validity and counting branches; the licensing and branch ports share one scoped DbContext. New branches have no hub role; `SetMainHubBranch` moves it atomically using the same lock and a partial unique index. Real PostgreSQL tests for these constraints and concurrent provisioning are prepared but not executed locally.
+
 TenancyLicensing has five internal application handlers and a tenant/license-scoped persistence port. They are not public HTTP endpoints or an authorization boundary; identity/administrative authorization remains for a later sprint. The operation gate uses the interval `[starts_at, expires_at)`. Reactivation requires Suspended and an explicit Trial/Active/Grace target; renewal preserves status. Identical renewals and repeated suspension/purge requests are no-ops. Cancelled/PurgePending/Purged cannot be renewed or reactivated. Purge requests persist PurgePending and history; physical deletion and FR-LIC-005/A18 completion remain pending.
 
 Tests use `xunit.v3.mtp-off` with VSTest. Unit tests cover domain rules and application behavior; architecture tests continue enforcing the existing project dependency rules.
