@@ -10,6 +10,7 @@ internal sealed class OperationalAccessReader(MediPosDbContext context) : IOpera
     public async Task<OperationalAccessSnapshot> ReadAsync(
         Guid userId, Guid tenantId, Guid? branchId, CancellationToken cancellationToken)
     {
+        context.SelectTenant(tenantId);
         // One SQL statement gives membership, license, assignment and schedule one PostgreSQL statement snapshot.
         // Active membership wins; otherwise return the latest inactive one for an explicit denial.
         var query =

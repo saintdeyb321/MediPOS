@@ -11,6 +11,7 @@ internal sealed class TenantLicenseProvisioning(MediPosDbContext context) : ITen
 {
     public async Task<ITenantLicenseProvisioningScope?> BeginAsync(Guid tenantId, CancellationToken cancellationToken)
     {
+        context.SelectTenant(tenantId);
         if (tenantId == Guid.Empty)
         {
             throw new ArgumentException("A tenant identifier is required.", nameof(tenantId));

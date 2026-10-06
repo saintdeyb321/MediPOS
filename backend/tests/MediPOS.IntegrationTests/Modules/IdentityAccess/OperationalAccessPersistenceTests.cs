@@ -23,7 +23,8 @@ public sealed class OperationalAccessPersistenceTests(PostgreSqlFixture fixture)
         await using var services = IdentityAccessTestSetup.CreateServices(fixture);
         await using var scope = services.CreateAsyncScope();
         var first = await IdentityAccessTestSetup.CreateAsync(scope.ServiceProvider);
-        var other = await IdentityAccessTestSetup.CreateAsync(scope.ServiceProvider);
+        await using var otherScope = services.CreateAsyncScope();
+        var other = await IdentityAccessTestSetup.CreateAsync(otherScope.ServiceProvider);
         await scope.ServiceProvider.GetRequiredService<SetMembershipBranchesHandler>().HandleAsync(
             new(first.TenantId, first.MembershipId, [first.BranchId]), TestContext.Current.CancellationToken);
         await scope.ServiceProvider.GetRequiredService<ReplaceWorkScheduleHandler>().HandleAsync(
@@ -34,19 +35,23 @@ public sealed class OperationalAccessPersistenceTests(PostgreSqlFixture fixture)
         Assert.True((await resolver.HandleAsync(first.TenantId, first.BranchId, IdentityAccessTestSetup.Now, TestContext.Current.CancellationToken)).IsAllowed);
         Assert.Equal("access.branch_denied",
             (await resolver.HandleAsync(first.TenantId, other.BranchId, IdentityAccessTestSetup.Now, TestContext.Current.CancellationToken)).Code);
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            resolver.HandleAsync(other.TenantId, other.BranchId, IdentityAccessTestSetup.Now, TestContext.Current.CancellationToken));
+        ((IdentityAccessTestSetup.TestServerSession)otherScope.ServiceProvider.GetRequiredService<IAuthenticatedMediPosUser>()).UserId = first.UserId;
+        var otherResolver = otherScope.ServiceProvider.GetRequiredService<ResolveAccessContextHandler>();
         Assert.Equal("access.membership_missing",
-            (await resolver.HandleAsync(other.TenantId, other.BranchId, IdentityAccessTestSetup.Now, TestContext.Current.CancellationToken)).Code);
+            (await otherResolver.HandleAsync(other.TenantId, other.BranchId, IdentityAccessTestSetup.Now, TestContext.Current.CancellationToken)).Code);
 
         // Same global user can belong to two tenants; the first tenant's schedule/assignment must not leak.
-        var secondMembership = await scope.ServiceProvider.GetRequiredService<CreateMembershipHandler>().HandleAsync(
+        var secondMembership = await otherScope.ServiceProvider.GetRequiredService<CreateMembershipHandler>().HandleAsync(
             new(other.TenantId, first.UserId, TenantRole.Pharmacist), TestContext.Current.CancellationToken);
         Assert.Equal("access.branch_unassigned",
-            (await resolver.HandleAsync(other.TenantId, other.BranchId, IdentityAccessTestSetup.Now, TestContext.Current.CancellationToken)).Code);
-        await scope.ServiceProvider.GetRequiredService<SetMembershipBranchesHandler>().HandleAsync(
+            (await otherResolver.HandleAsync(other.TenantId, other.BranchId, IdentityAccessTestSetup.Now, TestContext.Current.CancellationToken)).Code);
+        await otherScope.ServiceProvider.GetRequiredService<SetMembershipBranchesHandler>().HandleAsync(
             new(other.TenantId, secondMembership.Id, [other.BranchId]), TestContext.Current.CancellationToken);
         Assert.Equal("access.schedule_denied",
-            (await resolver.HandleAsync(other.TenantId, other.BranchId, IdentityAccessTestSetup.Now, TestContext.Current.CancellationToken)).Code);
-        var snapshot = await scope.ServiceProvider.GetRequiredService<IOperationalAccessReader>().ReadAsync(
+            (await otherResolver.HandleAsync(other.TenantId, other.BranchId, IdentityAccessTestSetup.Now, TestContext.Current.CancellationToken)).Code);
+        var snapshot = await otherScope.ServiceProvider.GetRequiredService<IOperationalAccessReader>().ReadAsync(
             first.UserId, other.TenantId, other.BranchId, TestContext.Current.CancellationToken);
         Assert.Empty(snapshot.Schedule);
         Assert.Equal(secondMembership.Id, snapshot.Membership!.Id);

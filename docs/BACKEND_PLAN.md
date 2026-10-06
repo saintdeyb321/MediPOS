@@ -4,9 +4,9 @@ This is the single execution roadmap for the backend. Prompts are given in chat 
 
 ## Working state
 - **Current milestone:** M0 — Foundations
-- **Current sprint:** B0.4 — Identity, membership, roles & schedules
+- **Current sprint:** B0.5 — Multi-tenant enforcement & RLS
 - **Status:** IN_PROGRESS
-- **Next gate:** B0.4 local restore/build/unit tests/architecture tests/format and review; PostgreSQL integration validation in another environment
+- **Next gate:** B0.5 local restore/build/unit tests/architecture tests/format and review; PostgreSQL integration validation in another environment
 
 Local policy: this machine has no Docker and will not install it. Do not check/start Docker or run PostgreSQL/Testcontainers here. B0.1 is complete locally. Keep real PostgreSQL integration tests for another environment; they are not part of the local gate and must not be reported as passed without execution.
 
@@ -45,6 +45,7 @@ Goal: safe base for all business modules.
 **Exit:** branch creation cannot cross tenant/license boundaries or exceed licensed limit.
 
 ### B0.4 — Identity, membership, roles & schedules
+**Status:** DONE — completed locally; PostgreSQL tests remain prepared for another environment.
 **Requirements:** FR-AUT-001..005, BR-011, BR-016.
 **Scope:** global User identity, Membership, roles, branch assignments, WorkSchedule, Google OIDC integration boundary/session model.
 **Exit:** authorization context can resolve user/tenant/branch/role/license/schedule; max two Owners enforced; deactivation preserves history.

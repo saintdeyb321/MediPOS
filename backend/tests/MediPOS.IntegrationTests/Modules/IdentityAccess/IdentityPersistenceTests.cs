@@ -68,7 +68,7 @@ public sealed class IdentityPersistenceTests(PostgreSqlFixture fixture)
         await using var services = IdentityAccessTestSetup.CreateServices(fixture);
         await using var scope = services.CreateAsyncScope();
         var setup = await IdentityAccessTestSetup.CreateAsync(scope.ServiceProvider);
-        await using var context = fixture.CreateContext();
+        await using var context = fixture.CreateContext(setup.TenantId);
         var duplicate = await Assert.ThrowsAsync<PostgresException>(() => context.Database.ExecuteSqlInterpolatedAsync($"""
             INSERT INTO memberships (id, tenant_id, user_id, role, is_active, created_at)
             VALUES ({Guid.NewGuid()}, {setup.TenantId}, {setup.UserId}, 'cashier', true, {Now})
@@ -97,7 +97,7 @@ public sealed class IdentityPersistenceTests(PostgreSqlFixture fixture)
         var setup = await IdentityAccessTestSetup.CreateAsync(scope.ServiceProvider);
         var tenantId = missingTenant ? Guid.NewGuid() : setup.TenantId;
         var userId = missingTenant ? setup.UserId : Guid.NewGuid();
-        await using var context = fixture.CreateContext();
+        await using var context = fixture.CreateContext(tenantId);
         var error = await Assert.ThrowsAsync<PostgresException>(() => context.Database.ExecuteSqlInterpolatedAsync($"""
             INSERT INTO memberships (id, tenant_id, user_id, role, is_active, created_at)
             VALUES ({Guid.NewGuid()}, {tenantId}, {userId}, 'cashier', true, {Now})
@@ -113,10 +113,11 @@ public sealed class IdentityPersistenceTests(PostgreSqlFixture fixture)
         await using var services = IdentityAccessTestSetup.CreateServices(fixture);
         await using var scope = services.CreateAsyncScope();
         var first = await IdentityAccessTestSetup.CreateAsync(scope.ServiceProvider);
-        var other = await IdentityAccessTestSetup.CreateAsync(scope.ServiceProvider);
+        await using var otherScope = services.CreateAsyncScope();
+        var other = await IdentityAccessTestSetup.CreateAsync(otherScope.ServiceProvider);
         var membershipId = foreignMembership ? other.MembershipId : first.MembershipId;
         var branchId = foreignMembership ? first.BranchId : other.BranchId;
-        await using var context = fixture.CreateContext();
+        await using var context = fixture.CreateContext(first.TenantId);
         var error = await Assert.ThrowsAsync<PostgresException>(() => context.Database.ExecuteSqlInterpolatedAsync($"""
             INSERT INTO membership_branches (tenant_id, membership_id, branch_id)
             VALUES ({first.TenantId}, {membershipId}, {branchId})
@@ -130,8 +131,9 @@ public sealed class IdentityPersistenceTests(PostgreSqlFixture fixture)
         await using var services = IdentityAccessTestSetup.CreateServices(fixture);
         await using var scope = services.CreateAsyncScope();
         var first = await IdentityAccessTestSetup.CreateAsync(scope.ServiceProvider);
-        var other = await IdentityAccessTestSetup.CreateAsync(scope.ServiceProvider);
-        await using var context = fixture.CreateContext();
+        await using var otherScope = services.CreateAsyncScope();
+        var other = await IdentityAccessTestSetup.CreateAsync(otherScope.ServiceProvider);
+        await using var context = fixture.CreateContext(first.TenantId);
         var error = await Assert.ThrowsAsync<PostgresException>(() => context.Database.ExecuteSqlInterpolatedAsync($"""
             INSERT INTO work_schedules (id, tenant_id, membership_id, day_of_week, start_time, end_time)
             VALUES ({Guid.NewGuid()}, {first.TenantId}, {other.MembershipId}, 'tue', TIME '09:00', TIME '18:00')
@@ -149,7 +151,7 @@ public sealed class IdentityPersistenceTests(PostgreSqlFixture fixture)
         await using var services = IdentityAccessTestSetup.CreateServices(fixture);
         await using var scope = services.CreateAsyncScope();
         var setup = await IdentityAccessTestSetup.CreateAsync(scope.ServiceProvider);
-        await using var context = fixture.CreateContext();
+        await using var context = fixture.CreateContext(setup.TenantId);
         var error = await Assert.ThrowsAsync<PostgresException>(() => context.Database.ExecuteSqlInterpolatedAsync($"""
             INSERT INTO work_schedules (id, tenant_id, membership_id, day_of_week, start_time, end_time)
             VALUES ({Guid.NewGuid()}, {setup.TenantId}, {setup.MembershipId}, {day}, CAST({start} AS time), CAST({end} AS time))
@@ -166,7 +168,7 @@ public sealed class IdentityPersistenceTests(PostgreSqlFixture fixture)
         var setup = await IdentityAccessTestSetup.CreateAsync(scope.ServiceProvider, TenantRole.Pharmacist);
         await scope.ServiceProvider.GetRequiredService<ReplaceWorkScheduleHandler>().HandleAsync(
             new(setup.TenantId, setup.MembershipId, [new(DayOfWeek.Tuesday, new(9, 0), new(18, 0))]), TestContext.Current.CancellationToken);
-        await using var context = fixture.CreateContext();
+        await using var context = fixture.CreateContext(setup.TenantId);
         var role = await context.Database.SqlQuery<string>($"""SELECT role AS "Value" FROM memberships WHERE tenant_id = {setup.TenantId} AND id = {setup.MembershipId}""")
             .SingleAsync(TestContext.Current.CancellationToken);
         var day = await context.Database.SqlQuery<string>($"""SELECT day_of_week AS "Value" FROM work_schedules WHERE tenant_id = {setup.TenantId} AND membership_id = {setup.MembershipId}""")
@@ -195,7 +197,7 @@ public sealed class IdentityPersistenceTests(PostgreSqlFixture fixture)
         await scheduleHandler.HandleAsync(new(setup.TenantId, setup.MembershipId, [new(DayOfWeek.Tuesday, new(9, 0), new(18, 0))]), TestContext.Current.CancellationToken);
         await scope.ServiceProvider.GetRequiredService<DeactivateMembershipHandler>().HandleAsync(
             new(setup.TenantId, setup.MembershipId), TestContext.Current.CancellationToken);
-        await using var verification = fixture.CreateContext();
+        await using var verification = fixture.CreateContext(setup.TenantId);
         var membership = await verification.Memberships.SingleAsync(value => value.Id == setup.MembershipId, TestContext.Current.CancellationToken);
         Assert.False(membership.IsActive);
         Assert.Equal(Now, membership.DeactivatedAt);
@@ -233,7 +235,7 @@ public sealed class IdentityPersistenceTests(PostgreSqlFixture fixture)
             Assert.Equal(PostgresErrorCodes.ForeignKeyViolation, Assert.IsType<PostgresException>(error.InnerException).SqlState);
             // No CompleteAsync: the entire transaction, including deletion, must roll back.
         }
-        await using var verification = fixture.CreateContext();
+        await using var verification = fixture.CreateContext(setup.TenantId);
         Assert.Equal(setup.BranchId, Assert.Single(await verification.MembershipBranches.Where(value =>
             value.TenantId == setup.TenantId && value.MembershipId == setup.MembershipId).ToListAsync(TestContext.Current.CancellationToken)).BranchId);
     }

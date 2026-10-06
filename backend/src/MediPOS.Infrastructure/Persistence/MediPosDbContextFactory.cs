@@ -1,3 +1,4 @@
+using MediPOS.Application.Tenancy;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Design;
 
@@ -16,6 +17,6 @@ public sealed class MediPosDbContextFactory : IDesignTimeDbContextFactory<MediPo
             options.UseNpgsql(connectionString);
         }
 
-        return new MediPosDbContext(options.Options);
+        return new MediPosDbContext(options.Options, new TenantDataContext());
     }
 }

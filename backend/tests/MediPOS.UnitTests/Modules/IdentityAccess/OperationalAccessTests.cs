@@ -1,5 +1,6 @@
 using MediPOS.Application.Modules.IdentityAccess.Authentication;
 using MediPOS.Application.Modules.IdentityAccess.OperationalAccess;
+using MediPOS.Application.Tenancy;
 using MediPOS.Domain.Modules.IdentityAccess;
 using MediPOS.Domain.Modules.TenancyLicensing;
 
@@ -140,7 +141,7 @@ public sealed class OperationalAccessTests
     {
         var setup = Create();
         var reader = new RecordingReader(setup.Snapshot);
-        var handler = new ResolveAccessContextHandler(new Session(setup.Membership.UserId), reader);
+        var handler = new ResolveAccessContextHandler(new Session(setup.Membership.UserId), reader, new TenantDataContext());
         Assert.True((await handler.HandleAsync(setup.Membership.TenantId, setup.BranchId, Now, TestContext.Current.CancellationToken)).IsAllowed);
         Assert.Equal((setup.Membership.UserId, setup.Membership.TenantId, (Guid?)setup.BranchId), reader.Selection);
     }
@@ -150,7 +151,7 @@ public sealed class OperationalAccessTests
     {
         var setup = Create();
         var reader = new RecordingReader(setup.Snapshot);
-        var handler = new ResolveAccessContextHandler(new Session(null), reader);
+        var handler = new ResolveAccessContextHandler(new Session(null), reader, new TenantDataContext());
         Assert.Equal("access.unauthenticated",
             (await handler.HandleAsync(setup.Membership.TenantId, setup.BranchId, Now, TestContext.Current.CancellationToken)).Code);
         Assert.Null(reader.Selection);

@@ -52,7 +52,7 @@ public sealed class OwnerConcurrencyTests(PostgreSqlFixture fixture)
         }
         Assert.NotNull(secondTask);
         await Assert.ThrowsAsync<InvalidOperationException>(() => secondTask);
-        await using var context = fixture.CreateContext();
+        await using var context = fixture.CreateContext(setup.TenantId);
         Assert.Equal(2, await context.Memberships.CountAsync(value =>
             value.TenantId == setup.TenantId && value.Role == TenantRole.Owner && value.IsActive, timeout.Token));
     }
@@ -72,7 +72,7 @@ public sealed class OwnerConcurrencyTests(PostgreSqlFixture fixture)
         await scope.ServiceProvider.GetRequiredService<DeactivateMembershipHandler>().HandleAsync(
             new(setup.TenantId, setup.MembershipId), TestContext.Current.CancellationToken);
         await creator.HandleAsync(new(setup.TenantId, third.Id, TenantRole.Owner), TestContext.Current.CancellationToken);
-        await using var context = fixture.CreateContext();
+        await using var context = fixture.CreateContext(setup.TenantId);
         Assert.Equal(3, await context.Memberships.CountAsync(value =>
             value.TenantId == setup.TenantId && value.Role == TenantRole.Owner, TestContext.Current.CancellationToken));
         Assert.Equal(2, await context.Memberships.CountAsync(value =>

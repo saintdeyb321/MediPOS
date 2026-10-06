@@ -39,7 +39,7 @@ public sealed class TenancyLicensingTests(PostgreSqlFixture fixture)
         await using var scope = services.CreateAsyncScope();
         var result = await CreateTenantAsync(scope.ServiceProvider, actor);
 
-        await using var context = fixture.CreateContext();
+        await using var context = fixture.CreateContext(result.TenantId);
         var tenant = await context.Tenants.Include(value => value.License).ThenInclude(value => value.Changes)
             .SingleAsync(value => value.Id == result.TenantId, TestContext.Current.CancellationToken);
         var change = Assert.Single(tenant.License.Changes);
@@ -100,7 +100,7 @@ public sealed class TenancyLicensingTests(PostgreSqlFixture fixture)
         }
         await AssertStoredStatusAsync(created, LicenseStatus.PurgePending, 5);
 
-        await using var context = fixture.CreateContext();
+        await using var context = fixture.CreateContext(created.TenantId);
         var tenant = await context.Tenants.Include(value => value.License).ThenInclude(value => value.Changes)
             .SingleAsync(value => value.Id == created.TenantId, TestContext.Current.CancellationToken);
         Assert.False(tenant.License.AllowsOperation(Now.AddDays(1)));
@@ -117,7 +117,8 @@ public sealed class TenancyLicensingTests(PostgreSqlFixture fixture)
         await using var services = CreateServices();
         await using var scope = services.CreateAsyncScope();
         var first = await CreateTenantAsync(scope.ServiceProvider, actor);
-        var second = await CreateTenantAsync(scope.ServiceProvider, actor);
+        await using var secondScope = services.CreateAsyncScope();
+        var second = await CreateTenantAsync(secondScope.ServiceProvider, actor);
 
         var store = scope.ServiceProvider.GetRequiredService<ITenancyLicensingStore>();
         Assert.Null(await store.FindLicenseAsync(first.TenantId, second.LicenseId, TestContext.Current.CancellationToken));
@@ -130,7 +131,7 @@ public sealed class TenancyLicensingTests(PostgreSqlFixture fixture)
     public async Task DatabaseRejectsSecondCurrentLicenseForSameTenant()
     {
         var tenant = NewTenant();
-        await using var context = fixture.CreateContext();
+        await using var context = fixture.CreateContext(tenant.Id);
         context.Tenants.Add(tenant);
         await context.SaveChangesAsync(TestContext.Current.CancellationToken);
         context.ChangeTracker.Clear();
@@ -139,7 +140,7 @@ public sealed class TenancyLicensingTests(PostgreSqlFixture fixture)
         var error = await Assert.ThrowsAsync<DbUpdateException>(() => context.SaveChangesAsync(TestContext.Current.CancellationToken));
         Assert.Equal(PostgresErrorCodes.UniqueViolation, Assert.IsType<PostgresException>(error.InnerException).SqlState);
 
-        await using var verification = fixture.CreateContext();
+        await using var verification = fixture.CreateContext(tenant.Id);
         Assert.Single(await verification.Licenses.Where(value => value.TenantId == tenant.Id).ToListAsync(TestContext.Current.CancellationToken));
         Assert.Single(await verification.LicenseChanges.Where(value => value.TenantId == tenant.Id).ToListAsync(TestContext.Current.CancellationToken));
     }
@@ -147,8 +148,9 @@ public sealed class TenancyLicensingTests(PostgreSqlFixture fixture)
     [Fact]
     public async Task DatabaseRejectsLicenseWithoutTenant()
     {
-        await using var context = fixture.CreateContext();
-        context.Licenses.Add(License.Create(Guid.NewGuid(), Now, Now.AddMonths(1), 1, LicenseStatus.Active, Guid.NewGuid(), Now));
+        var missingTenant = Guid.NewGuid();
+        await using var context = fixture.CreateContext(missingTenant);
+        context.Licenses.Add(License.Create(missingTenant, Now, Now.AddMonths(1), 1, LicenseStatus.Active, Guid.NewGuid(), Now));
 
         var error = await Assert.ThrowsAsync<DbUpdateException>(() => context.SaveChangesAsync(TestContext.Current.CancellationToken));
         Assert.Equal(PostgresErrorCodes.ForeignKeyViolation, Assert.IsType<PostgresException>(error.InnerException).SqlState);
@@ -159,8 +161,11 @@ public sealed class TenancyLicensingTests(PostgreSqlFixture fixture)
     {
         var first = NewTenant();
         var second = NewTenant();
-        await using var context = fixture.CreateContext();
-        context.Tenants.AddRange(first, second);
+        await using var firstContext = fixture.CreateContext(first.Id);
+        firstContext.Tenants.Add(first);
+        await firstContext.SaveChangesAsync(TestContext.Current.CancellationToken);
+        await using var context = fixture.CreateContext(second.Id);
+        context.Tenants.Add(second);
         await context.SaveChangesAsync(TestContext.Current.CancellationToken);
 
         var error = await Assert.ThrowsAsync<PostgresException>(() => context.Database.ExecuteSqlInterpolatedAsync(
@@ -175,7 +180,7 @@ public sealed class TenancyLicensingTests(PostgreSqlFixture fixture)
     public async Task DatabaseProtectsBranchLimits(int limit)
     {
         var tenant = NewTenant();
-        await using var context = fixture.CreateContext();
+        await using var context = fixture.CreateContext(tenant.Id);
         context.Tenants.Add(tenant);
         await context.SaveChangesAsync(TestContext.Current.CancellationToken);
 
@@ -188,7 +193,7 @@ public sealed class TenancyLicensingTests(PostgreSqlFixture fixture)
     public async Task DatabaseProtectsPeriodAndStableStatusCodes()
     {
         var tenant = NewTenant();
-        await using var context = fixture.CreateContext();
+        await using var context = fixture.CreateContext(tenant.Id);
         context.Tenants.Add(tenant);
         await context.SaveChangesAsync(TestContext.Current.CancellationToken);
 
@@ -204,7 +209,7 @@ public sealed class TenancyLicensingTests(PostgreSqlFixture fixture)
     public async Task NormalPersistenceCannotModifyOrRemoveExistingHistory()
     {
         var tenant = NewTenant();
-        await using var context = fixture.CreateContext();
+        await using var context = fixture.CreateContext(tenant.Id);
         context.Tenants.Add(tenant);
         await context.SaveChangesAsync(TestContext.Current.CancellationToken);
         var change = Assert.Single(tenant.License.Changes);
@@ -243,7 +248,7 @@ public sealed class TenancyLicensingTests(PostgreSqlFixture fixture)
         var error = await Assert.ThrowsAsync<InvalidOperationException>(() => secondStore.SaveLicenseAsync(second, TestContext.Current.CancellationToken));
         Assert.IsType<DbUpdateConcurrencyException>(error.InnerException);
 
-        await using var context = fixture.CreateContext();
+        await using var context = fixture.CreateContext(created.TenantId);
         var persisted = await context.Licenses.Include(value => value.Changes)
             .SingleAsync(value => value.Id == created.LicenseId, TestContext.Current.CancellationToken);
         Assert.Equal(Now.AddMonths(3), persisted.ExpiresAt);
@@ -268,7 +273,7 @@ public sealed class TenancyLicensingTests(PostgreSqlFixture fixture)
 
     private async Task AssertStoredStatusAsync(LicenseDetails created, LicenseStatus status, int historyCount)
     {
-        await using var context = fixture.CreateContext();
+        await using var context = fixture.CreateContext(created.TenantId);
         var license = await context.Licenses.Include(value => value.Changes)
             .SingleAsync(value => value.TenantId == created.TenantId && value.Id == created.LicenseId, TestContext.Current.CancellationToken);
         Assert.Equal(status, license.Status);

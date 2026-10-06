@@ -16,6 +16,7 @@ using MediPOS.Application.Modules.TenancyLicensing.ReactivateLicense;
 using MediPOS.Application.Modules.TenancyLicensing.RenewLicense;
 using MediPOS.Application.Modules.TenancyLicensing.RequestTenantPurge;
 using MediPOS.Application.Modules.TenancyLicensing.SuspendLicense;
+using MediPOS.Application.Tenancy;
 using MediPOS.Infrastructure.Modules.Branches.Persistence;
 using MediPOS.Infrastructure.Modules.IdentityAccess.Persistence;
 using MediPOS.Infrastructure.Modules.TenancyLicensing.Persistence;
@@ -42,6 +43,7 @@ public static class DependencyInjection
         }
 
         services.AddDbContext<MediPosDbContext>(options => options.UseNpgsql(connectionString));
+        services.AddScoped<ITenantDataContext, TenantDataContext>();
         services.TryAddSingleton(TimeProvider.System);
         services.AddScoped<ITenancyLicensingStore, TenancyLicensingStore>();
         services.AddScoped<CreateTenantHandler>();

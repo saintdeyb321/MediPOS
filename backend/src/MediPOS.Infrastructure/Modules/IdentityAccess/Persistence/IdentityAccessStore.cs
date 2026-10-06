@@ -24,18 +24,28 @@ internal sealed class IdentityAccessStore(MediPosDbContext context) : IIdentityA
     public Task<bool> UserExistsAsync(Guid userId, CancellationToken cancellationToken) =>
         context.Users.AnyAsync(value => value.Id == userId, cancellationToken);
 
-    public Task<bool> HasActiveMembershipAsync(Guid tenantId, Guid userId, CancellationToken cancellationToken) =>
-        context.Memberships.AnyAsync(value => value.TenantId == tenantId && value.UserId == userId && value.IsActive, cancellationToken);
+    public Task<bool> HasActiveMembershipAsync(Guid tenantId, Guid userId, CancellationToken cancellationToken)
+    {
+        context.SelectTenant(tenantId);
+        return context.Memberships.AnyAsync(value => value.TenantId == tenantId && value.UserId == userId && value.IsActive, cancellationToken);
+    }
 
-    public Task<int> CountActiveOwnersAsync(Guid tenantId, CancellationToken cancellationToken) =>
-        context.Memberships.CountAsync(value => value.TenantId == tenantId && value.IsActive && value.Role == TenantRole.Owner, cancellationToken);
+    public Task<int> CountActiveOwnersAsync(Guid tenantId, CancellationToken cancellationToken)
+    {
+        context.SelectTenant(tenantId);
+        return context.Memberships.CountAsync(value => value.TenantId == tenantId && value.IsActive && value.Role == TenantRole.Owner, cancellationToken);
+    }
 
-    public Task<Membership?> FindMembershipAsync(Guid tenantId, Guid membershipId, CancellationToken cancellationToken) =>
-        context.Memberships.AsNoTracking().SingleOrDefaultAsync(
+    public Task<Membership?> FindMembershipAsync(Guid tenantId, Guid membershipId, CancellationToken cancellationToken)
+    {
+        context.SelectTenant(tenantId);
+        return context.Memberships.AsNoTracking().SingleOrDefaultAsync(
             value => value.TenantId == tenantId && value.Id == membershipId, cancellationToken);
+    }
 
     public async Task AddMembershipAsync(Membership membership, CancellationToken cancellationToken)
     {
+        context.SelectTenant(membership.TenantId);
         RequireProvisioningTransaction();
         context.Memberships.Add(membership);
         await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
@@ -43,6 +53,7 @@ internal sealed class IdentityAccessStore(MediPosDbContext context) : IIdentityA
 
     public async Task SaveDeactivationAsync(Membership membership, CancellationToken cancellationToken)
     {
+        context.SelectTenant(membership.TenantId);
         RequireProvisioningTransaction();
         var updated = await context.Memberships.Where(value => value.TenantId == membership.TenantId && value.Id == membership.Id)
             .ExecuteUpdateAsync(setters => setters
@@ -55,6 +66,9 @@ internal sealed class IdentityAccessStore(MediPosDbContext context) : IIdentityA
     public async Task ReplaceBranchesAsync(
         Guid tenantId, Guid membershipId, IReadOnlyList<MembershipBranch> branches, CancellationToken cancellationToken)
     {
+        context.SelectTenant(tenantId);
+        if (branches.Any(value => value.TenantId != tenantId || value.MembershipId != membershipId))
+            throw new InvalidOperationException("Assignments must belong to the selected tenant and membership.");
         RequireProvisioningTransaction();
         await context.MembershipBranches.Where(value => value.TenantId == tenantId && value.MembershipId == membershipId)
             .ExecuteDeleteAsync(cancellationToken).ConfigureAwait(false);
@@ -67,6 +81,9 @@ internal sealed class IdentityAccessStore(MediPosDbContext context) : IIdentityA
     public async Task ReplaceScheduleAsync(
         Guid tenantId, Guid membershipId, IReadOnlyList<WorkSchedule> schedule, CancellationToken cancellationToken)
     {
+        context.SelectTenant(tenantId);
+        if (schedule.Any(value => value.TenantId != tenantId || value.MembershipId != membershipId))
+            throw new InvalidOperationException("Work windows must belong to the selected tenant and membership.");
         RequireProvisioningTransaction();
         await context.WorkSchedules.Where(value => value.TenantId == tenantId && value.MembershipId == membershipId)
             .ExecuteDeleteAsync(cancellationToken).ConfigureAwait(false);
