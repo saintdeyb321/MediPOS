@@ -10,4 +10,5 @@ public static class CatalogErrors
     public static readonly ApplicationError BusinessProductNotFound = new("catalog.business_product_not_found", ErrorCategory.NotFound, "Business product was not found for the tenant.");
     public static readonly ApplicationError InternalCodeDuplicate = new("catalog.internal_code_duplicate", ErrorCategory.Conflict, "Internal code already exists for this tenant.");
     public static readonly ApplicationError ConcurrentChange = new("catalog.concurrent_change", ErrorCategory.Conflict, "Business product changed concurrently; reload before retrying.");
+    public static readonly ApplicationError PharmaNormalizationRequired = new("catalog.pharma_normalization_required", ErrorCategory.Conflict, "Legacy medicine requires structured component review before copying into a new product.");
 }

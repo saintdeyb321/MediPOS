@@ -25,7 +25,7 @@ public sealed class CatalogApplicationTests
         var setup = new Setup();
         var category = await new CreateCategoryHandler(setup.Global, setup.Clock).HandleAsync(new(" Medicines "), TestContext.Current.CancellationToken);
         var product = await new CreateGlobalProductHandler(setup.Global, setup.Clock).HandleAsync(
-            new(ProductType.Medicine, " Tablet ", category.Id, " Lab ", null, new(["A", "B"], "1 mg + 2 mg", "Tablet")),
+            new(ProductType.Medicine, " Tablet ", category.Id, " Lab ", null, new([new("A", "1 mg"), new("B", "2 mg")], "Tablet")),
             TestContext.Current.CancellationToken);
         Assert.Equal(category.Id, product.CategoryId);
         Assert.Equal(Now, product.CreatedAt);
@@ -42,7 +42,7 @@ public sealed class CatalogApplicationTests
         var setup = new Setup();
         var category = setup.Global.Categories[0];
         var global = GlobalProduct.Create(ProductType.Medicine, "Medicine", category.Id, "Lab", "123",
-            MedicineData.Create(["A", "B"], "1 mg + 2 mg", "Tablet", "Oral", "RS1"), Now);
+            MedicineData.Create([MedicineComponent.Create("A", "1 mg"), MedicineComponent.Create("B", "2 mg")], "Tablet", "Oral", "RS1"), Now);
         setup.Global.Products.Add(global);
         using var activity = new Activity("catalog-create").SetIdFormat(ActivityIdFormat.W3C).Start();
         var result = await setup.FromGlobal.HandleAsync(new(setup.TenantId, global.Id, " M1 ", 1.25m, 1m, setup.ActorId),
@@ -65,7 +65,7 @@ public sealed class CatalogApplicationTests
         using var snapshot = JsonDocument.Parse(audit.AfterJson!);
         Assert.Equal(1.25m, snapshot.RootElement.GetProperty("retailPrice").GetDecimal());
         Assert.Equal("medicine", snapshot.RootElement.GetProperty("productType").GetString());
-        Assert.Equal(2, snapshot.RootElement.GetProperty("medicine").GetProperty("activeIngredients").GetArrayLength());
+        Assert.Equal(2, snapshot.RootElement.GetProperty("medicine").GetProperty("components").GetArrayLength());
         Assert.True(setup.Provisioning.LastScope!.Completed);
         Assert.True(setup.Provisioning.LastScope.Disposed);
     }
@@ -255,7 +255,7 @@ public sealed class CatalogApplicationTests
 
         public CreateLocalBusinessProductCommand LocalCommand(ProductType type = ProductType.Retail) =>
             new(TenantId, "R1", type, "Local", Global.Categories[0].Id, "Brand", null,
-                type == ProductType.Medicine ? new(["A", "B"], "1 mg + 2 mg", "Tablet") : null, 0m, null, ActorId);
+                type == ProductType.Medicine ? new([new("A", "1 mg"), new("B", "2 mg")], "Tablet") : null, 0m, null, ActorId);
     }
 
     private sealed class Clock : TimeProvider

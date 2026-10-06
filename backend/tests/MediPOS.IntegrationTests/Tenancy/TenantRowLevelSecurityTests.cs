@@ -9,7 +9,7 @@ namespace MediPOS.IntegrationTests.Tenancy;
 public sealed class TenantRowLevelSecurityTests(PostgreSqlFixture fixture)
 {
     private static readonly string[] ProtectedTables =
-        ["licenses", "license_changes", "legal_entities", "branches", "memberships", "membership_branches", "work_schedules", "business_products"];
+        ["licenses", "license_changes", "legal_entities", "branches", "memberships", "membership_branches", "work_schedules", "business_products", "product_units"];
 
     [Fact]
     public async Task MigrationForcesPoliciesOnEveryPrivateTableAndRuntimeCannotBypassThem()
@@ -44,6 +44,7 @@ public sealed class TenantRowLevelSecurityTests(PostgreSqlFixture fixture)
     [InlineData("membership_branches")]
     [InlineData("work_schedules")]
     [InlineData("business_products")]
+    [InlineData("product_units")]
     public async Task DirectSqlCannotReadUpdateDeleteOrInsertAnotherTenant(string table)
     {
         Assert.Contains(table, ProtectedTables);
@@ -94,6 +95,7 @@ public sealed class TenantRowLevelSecurityTests(PostgreSqlFixture fixture)
     [InlineData("membership_branches")]
     [InlineData("work_schedules")]
     [InlineData("business_products")]
+    [InlineData("product_units")]
     public async Task MissingAndEmptySettingDenyPrivateReadsAndInserts(string table)
     {
         Assert.Contains(table, ProtectedTables);
@@ -184,6 +186,10 @@ public sealed class TenantRowLevelSecurityTests(PostgreSqlFixture fixture)
                     brand_or_laboratory, retail_price, is_active, created_at)
                 VALUES ({Guid.NewGuid()}, {target.TenantId}, {Guid.NewGuid().ToString("N")}, 'Runtime insert',
                     'retail', {target.CategoryId}, 'Brand', 0, true, {now})
+                """,
+            "product_units" => $"""
+                INSERT INTO product_units (id, tenant_id, business_product_id, name, conversion_to_base, is_base_unit, is_active)
+                VALUES ({Guid.NewGuid()}, {target.TenantId}, {target.BusinessProductId}, {Guid.NewGuid().ToString("N")}, 2.5, false, true)
                 """,
             _ => throw new ArgumentOutOfRangeException(nameof(table)),
         };

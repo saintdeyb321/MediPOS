@@ -22,6 +22,8 @@ internal static class CatalogFields
             throw new ArgumentException("A category identifier is required.", nameof(categoryId));
         if (type == ProductType.Medicine && medicine is null)
             throw new ArgumentException("Medicine metadata is required.", nameof(medicine));
+        if (type == ProductType.Medicine && medicine is { IsNormalized: false })
+            throw new ArgumentException("New medicines require structured normalized components.", nameof(medicine));
         if (type == ProductType.Retail && medicine is not null)
             throw new ArgumentException("Medicine metadata belongs to pharmaceutical products.", nameof(medicine));
     }

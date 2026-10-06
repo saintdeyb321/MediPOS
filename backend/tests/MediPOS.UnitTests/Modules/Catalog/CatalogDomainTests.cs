@@ -6,8 +6,9 @@ namespace MediPOS.UnitTests.Modules.Catalog;
 public sealed class CatalogDomainTests
 {
     private static readonly DateTimeOffset Now = new(2026, 10, 6, 9, 0, 0, TimeSpan.FromHours(-5));
-    private static readonly string[] ExpectedIngredients = ["Paracetamol", "Cafeína"];
-    private static MedicineData Medicine() => MedicineData.Create([" Paracetamol ", "Cafeína"], "500 mg + 30 mg", " Tableta ", " Oral ", " RS-1 ");
+    private static readonly string[] ExpectedIngredients = ["PARACETAMOL", "CAFEINA"];
+    private static MedicineData Medicine() => MedicineData.Create(
+        [MedicineComponent.Create(" Paracetamol ", "500 mg"), MedicineComponent.Create("Cafeína", "30 mg")], " Tableta ", " Oral ", " RS-1 ");
 
     [Fact]
     public void CategoryTrimsNameAndUsesUtcAndUuidV7()
@@ -28,11 +29,11 @@ public sealed class CatalogDomainTests
     [Fact]
     public void MedicinePreservesMultipleIngredientsAndDefensivelyCopiesInputs()
     {
-        var ingredients = new[] { " Paracetamol ", " Cafeína " };
-        var data = MedicineData.Create(ingredients, " 500 mg + 30 mg ", " Tableta ", " ", null);
-        ingredients[0] = "Changed";
+        var ingredients = new[] { MedicineComponent.Create(" Paracetamol ", "500 mg"), MedicineComponent.Create(" Cafeína ", "30 mg") };
+        var data = MedicineData.Create(ingredients, " Tableta ", " ", null);
+        ingredients[0] = MedicineComponent.Create("Changed", "1 mg");
         Assert.Equal(ExpectedIngredients, data.ActiveIngredients);
-        Assert.Equal("500 mg + 30 mg", data.NormalizedStrength);
+        Assert.Equal("500 MG + 30 MG", data.NormalizedStrength);
         Assert.Equal("Tableta", data.DosageForm);
         Assert.Null(data.Route);
         Assert.Null(data.SanitaryRegistration);
@@ -46,8 +47,8 @@ public sealed class CatalogDomainTests
     [InlineData(3)]
     public void MedicineRequiresCompositionStrengthAndForm(int invalid)
     {
-        Assert.Throws<ArgumentException>(() => MedicineData.Create(invalid == 0 ? [] : [invalid == 1 ? " " : "Paracetamol"],
-            invalid == 2 ? " " : "500 mg", invalid == 3 ? "" : "Tableta"));
+        Assert.Throws<ArgumentException>(() => MedicineData.Create(invalid == 0 ? [] :
+            [MedicineComponent.Create(invalid == 1 ? " " : "Paracetamol", invalid == 2 ? " " : "500 mg")], invalid == 3 ? "" : "Tableta"));
     }
 
     [Fact]

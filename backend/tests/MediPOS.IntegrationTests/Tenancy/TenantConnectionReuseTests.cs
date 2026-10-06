@@ -30,6 +30,7 @@ public sealed class TenantConnectionReuseTests(PostgreSqlFixture fixture)
             AssertOnlyTenant(await firstContext.Branches.Select(value => value.TenantId).ToListAsync(TestContext.Current.CancellationToken), first.TenantId);
             AssertOnlyTenant(await firstContext.AuditLogs.Select(value => value.TenantId).ToListAsync(TestContext.Current.CancellationToken), first.TenantId);
             AssertOnlyTenant(await firstContext.BusinessProducts.Select(value => value.TenantId).ToListAsync(TestContext.Current.CancellationToken), first.TenantId);
+            AssertOnlyTenant(await firstContext.ProductUnits.Select(value => value.TenantId).ToListAsync(TestContext.Current.CancellationToken), first.TenantId);
         }
         await using (var noTenant = CreateContext(connectionString, null))
         {
@@ -39,6 +40,7 @@ public sealed class TenantConnectionReuseTests(PostgreSqlFixture fixture)
             Assert.Empty(await noTenant.Branches.ToListAsync(TestContext.Current.CancellationToken));
             Assert.Empty(await noTenant.AuditLogs.ToListAsync(TestContext.Current.CancellationToken));
             Assert.Empty(await noTenant.BusinessProducts.ToListAsync(TestContext.Current.CancellationToken));
+            Assert.Empty(await noTenant.ProductUnits.ToListAsync(TestContext.Current.CancellationToken));
             Assert.True(await noTenant.Categories.AnyAsync(value => value.Id == first.CategoryId, TestContext.Current.CancellationToken));
             // This direct SQL has no EF query filter, so it proves the RLS setting was cleared.
             await using var command = noTenant.Database.GetDbConnection().CreateCommand();
@@ -47,6 +49,8 @@ public sealed class TenantConnectionReuseTests(PostgreSqlFixture fixture)
             command.CommandText = "SELECT count(*) FROM audit_logs";
             Assert.Equal(0L, await command.ExecuteScalarAsync(TestContext.Current.CancellationToken));
             command.CommandText = "SELECT count(*) FROM business_products";
+            Assert.Equal(0L, await command.ExecuteScalarAsync(TestContext.Current.CancellationToken));
+            command.CommandText = "SELECT count(*) FROM product_units";
             Assert.Equal(0L, await command.ExecuteScalarAsync(TestContext.Current.CancellationToken));
         }
         await using (var secondContext = CreateContext(connectionString, second.TenantId))
@@ -58,6 +62,7 @@ public sealed class TenantConnectionReuseTests(PostgreSqlFixture fixture)
             AssertOnlyTenant(secondContext.Branches.Select(value => value.TenantId).ToList(), second.TenantId);
             AssertOnlyTenant(secondContext.AuditLogs.Select(value => value.TenantId).ToList(), second.TenantId);
             AssertOnlyTenant(secondContext.BusinessProducts.Select(value => value.TenantId).ToList(), second.TenantId);
+            AssertOnlyTenant(secondContext.ProductUnits.Select(value => value.TenantId).ToList(), second.TenantId);
         }
     }
 

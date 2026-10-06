@@ -28,7 +28,7 @@ namespace MediPOS.IntegrationTests.Modules.Catalog;
 public sealed class CatalogFoundationTests(PostgreSqlFixture fixture)
 {
     private static DateTimeOffset Now => IdentityAccessTestSetup.Now;
-    private static readonly string[] Ingredients = ["Paracetamol", "Cafeína"];
+    private static readonly string[] Ingredients = ["PARACETAMOL", "CAFEINA"];
 
     [Fact]
     public async Task MigrationAndGlobalCatalogWorkWithoutTenantAndSchemaHasNoPrivateOperationalColumns()
@@ -43,7 +43,7 @@ public sealed class CatalogFoundationTests(PostgreSqlFixture fixture)
             value => value.Id == global.ProductId, TestContext.Current.CancellationToken);
         Assert.Equal(ProductType.Medicine, product.ProductType);
         Assert.Equal(Ingredients, product.MedicineProfile!.Data.ActiveIngredients);
-        Assert.Equal("500 mg + 30 mg", product.MedicineProfile.Data.NormalizedStrength);
+        Assert.Equal("500 MG + 30 MG", product.MedicineProfile.Data.NormalizedStrength);
         Assert.Equal("Oral", product.MedicineProfile.Data.Route);
         Assert.Equal("RS1", product.MedicineProfile.Data.SanitaryRegistration);
         Assert.Null(product.Barcode);
@@ -299,14 +299,14 @@ public sealed class CatalogFoundationTests(PostgreSqlFixture fixture)
         var category = await source.GetRequiredService<CreateCategoryHandler>().HandleAsync(new("Medicines"), TestContext.Current.CancellationToken);
         var product = await source.GetRequiredService<CreateGlobalProductHandler>().HandleAsync(
             new(ProductType.Medicine, "Global medicine", category.Id, "Lab", null,
-                new(Ingredients, "500 mg + 30 mg", "Tableta", "Oral", "RS1")), TestContext.Current.CancellationToken);
+                new([new("Paracetamol", "500 mg"), new("Cafeína", "30 mg")], "Tableta", "Oral", "RS1")), TestContext.Current.CancellationToken);
         Assert.Null(source.GetRequiredService<ITenantDataContext>().TenantId);
         return (category.Id, product.Id);
     }
 
     private static CreateLocalBusinessProductCommand LocalCommand(TenantIsolationTestData.TenantRows row, string code, ProductType type = ProductType.Retail) =>
         new(row.TenantId, code, type, "Local product", row.CategoryId, "Local brand", null,
-            type == ProductType.Medicine ? new(Ingredients, "500 mg + 30 mg", "Tableta", "Oral") : null, 0m, null, row.Identity.ActorId);
+            type == ProductType.Medicine ? new([new("Paracetamol", "500 mg"), new("Cafeína", "30 mg")], "Tableta", "Oral") : null, 0m, null, row.Identity.ActorId);
 
     private static decimal ReadRetailPrice(string json)
     {

@@ -16,6 +16,8 @@ internal sealed class BusinessProductConfiguration : IEntityTypeConfiguration<Bu
             table.HasCheckConstraint("ck_business_products_type", "product_type IN ('medicine', 'retail')");
             table.HasCheckConstraint("ck_business_products_text", "length(btrim(internal_code)) > 0 AND internal_code = btrim(internal_code) AND length(btrim(name)) > 0 AND length(btrim(brand_or_laboratory)) > 0 AND (barcode IS NULL OR length(btrim(barcode)) > 0)");
             table.HasCheckConstraint("ck_business_products_prices", "retail_price >= 0 AND (wholesale_price IS NULL OR wholesale_price >= 0)");
+            table.HasCheckConstraint("ck_business_products_normalization", PharmaNormalizationConstraint.ForColumns("medicine_"));
+            table.HasCheckConstraint("ck_business_products_retail_normalization", "product_type = 'medicine' OR medicine_equivalence_key IS NULL");
             table.HasCheckConstraint("ck_business_products_medicine", """
                 (product_type = 'medicine' AND medicine_active_ingredients IS NOT NULL
                     AND cardinality(medicine_active_ingredients) > 0 AND array_position(medicine_active_ingredients, NULL) IS NULL
@@ -27,6 +29,7 @@ internal sealed class BusinessProductConfiguration : IEntityTypeConfiguration<Bu
                 """);
         });
         builder.HasKey(value => value.Id);
+        builder.HasAlternateKey(value => new { value.TenantId, value.Id });
         builder.Property(value => value.Id).HasColumnName("id").ValueGeneratedNever();
         builder.Property(value => value.TenantId).HasColumnName("tenant_id");
         builder.Property(value => value.GlobalProductId).HasColumnName("global_product_id");

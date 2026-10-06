@@ -11,6 +11,7 @@ internal sealed class MedicineProfileConfiguration : IEntityTypeConfiguration<Me
         builder.ToTable("medicine_profiles", table =>
         {
             table.HasCheckConstraint("ck_medicine_profiles_type", "product_type = 'medicine'");
+            table.HasCheckConstraint("ck_medicine_profiles_normalization", PharmaNormalizationConstraint.ForColumns(string.Empty));
             table.HasCheckConstraint("ck_medicine_profiles_data", """
                 cardinality(active_ingredients) > 0 AND array_position(active_ingredients, NULL) IS NULL
                 AND array_position(active_ingredients, '') IS NULL AND length(btrim(normalized_strength)) > 0

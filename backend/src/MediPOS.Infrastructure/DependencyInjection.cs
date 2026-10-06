@@ -7,6 +7,7 @@ using MediPOS.Application.Modules.Catalog.CreateBusinessProductFromGlobal;
 using MediPOS.Application.Modules.Catalog.CreateCategory;
 using MediPOS.Application.Modules.Catalog.CreateGlobalProduct;
 using MediPOS.Application.Modules.Catalog.CreateLocalBusinessProduct;
+using MediPOS.Application.Modules.Catalog.ReplaceProductUnits;
 using MediPOS.Application.Modules.Catalog.SetBusinessProductStatus;
 using MediPOS.Application.Modules.Catalog.UpdateBusinessProductPrices;
 using MediPOS.Application.Modules.IdentityAccess;
@@ -78,6 +79,8 @@ public static class DependencyInjection
         services.AddScoped<CreateLocalBusinessProductHandler>();
         services.AddScoped<UpdateBusinessProductPricesHandler>();
         services.AddScoped<SetBusinessProductStatusHandler>();
+        services.AddScoped<IProductUnitStore, ProductUnitStore>();
+        services.AddScoped<ReplaceProductUnitsHandler>();
 
         return services;
     }

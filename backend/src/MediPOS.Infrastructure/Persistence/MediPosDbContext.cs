@@ -38,6 +38,7 @@ public sealed class MediPosDbContext(DbContextOptions<MediPosDbContext> options,
     public DbSet<GlobalProduct> GlobalProducts => Set<GlobalProduct>();
     public DbSet<MedicineProfile> MedicineProfiles => Set<MedicineProfile>();
     public DbSet<BusinessProduct> BusinessProducts => Set<BusinessProduct>();
+    public DbSet<ProductUnit> ProductUnits => Set<ProductUnit>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -56,6 +57,7 @@ public sealed class MediPosDbContext(DbContextOptions<MediPosDbContext> options,
         modelBuilder.ApplyConfiguration(new GlobalProductConfiguration());
         modelBuilder.ApplyConfiguration(new MedicineProfileConfiguration());
         modelBuilder.ApplyConfiguration(new BusinessProductConfiguration());
+        modelBuilder.ApplyConfiguration(new MediPOS.Infrastructure.Modules.Catalog.Persistence.Configurations.ProductUnitConfiguration());
 
         // Context properties are evaluated per query, rather than captured into the cached EF model.
         // User is global. Tenant is a platform root; its administration requires a separate authorized boundary.
@@ -68,6 +70,7 @@ public sealed class MediPosDbContext(DbContextOptions<MediPosDbContext> options,
         modelBuilder.Entity<WorkSchedule>().HasQueryFilter(value => SelectedTenantId.HasValue && value.TenantId == SelectedTenantId);
         modelBuilder.Entity<AuditLog>().HasQueryFilter(value => SelectedTenantId.HasValue && value.TenantId == SelectedTenantId);
         modelBuilder.Entity<BusinessProduct>().HasQueryFilter(value => SelectedTenantId.HasValue && value.TenantId == SelectedTenantId);
+        modelBuilder.Entity<ProductUnit>().HasQueryFilter(value => SelectedTenantId.HasValue && value.TenantId == SelectedTenantId);
     }
 
     public override int SaveChanges(bool acceptAllChangesOnSuccess)
@@ -143,6 +146,7 @@ public sealed class MediPosDbContext(DbContextOptions<MediPosDbContext> options,
                 WorkSchedule value => value.TenantId,
                 AuditLog value => value.TenantId,
                 BusinessProduct value => value.TenantId,
+                ProductUnit value => value.TenantId,
                 _ => null,
             };
             if (!tenantId.HasValue)

@@ -21,10 +21,19 @@ public interface IBusinessProductStore
     Task SaveAsync(BusinessProduct product, AuditLog audit, CancellationToken cancellationToken);
 }
 
-public sealed record MedicineInput(IReadOnlyList<string> ActiveIngredients, string NormalizedStrength,
+public sealed record MedicineComponentInput(string Ingredient, string StrengthNormalized);
+
+public sealed record MedicineInput(IReadOnlyList<MedicineComponentInput> Components,
     string DosageForm, string? Route = null, string? SanitaryRegistration = null)
 {
-    internal MedicineData ToData() => MedicineData.Create(ActiveIngredients, NormalizedStrength, DosageForm, Route, SanitaryRegistration);
+    internal MedicineData ToData()
+    {
+        ArgumentNullException.ThrowIfNull(Components);
+        if (Components.Any(value => value is null))
+            throw new ArgumentException("Medicine components cannot be null.", nameof(Components));
+        return MedicineData.Create(Components.Select(value => MedicineComponent.Create(value.Ingredient, value.StrengthNormalized)),
+            DosageForm, Route, SanitaryRegistration);
+    }
 }
 
 public sealed record CategoryDetails(Guid Id, string Name, bool IsActive, DateTimeOffset CreatedAt)

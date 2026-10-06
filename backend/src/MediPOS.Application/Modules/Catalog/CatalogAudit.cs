@@ -20,11 +20,11 @@ public static class CatalogAudit
         product.IsActive,
         medicine = product.Medicine is { } data ? new
         {
-            data.ActiveIngredients,
-            data.NormalizedStrength,
-            data.DosageForm,
-            data.Route,
+            data.Components,
+            data.CanonicalDosageForm,
+            data.CanonicalRoute,
             data.SanitaryRegistration,
+            data.EquivalenceKey,
         } : null,
     }, Options);
 

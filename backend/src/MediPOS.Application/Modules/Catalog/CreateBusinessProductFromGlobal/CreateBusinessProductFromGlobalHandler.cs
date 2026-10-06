@@ -30,6 +30,8 @@ public sealed class CreateBusinessProductFromGlobalHandler(
             ?? throw new ApplicationErrorException(CatalogErrors.GlobalProductNotFound);
         if (!global.IsActive)
             throw new ApplicationErrorException(CatalogErrors.GlobalProductInactive);
+        if (global.ProductType == ProductType.Medicine && global.MedicineProfile?.Data.IsNormalized != true)
+            throw new ApplicationErrorException(CatalogErrors.PharmaNormalizationRequired);
         BusinessProduct product;
         try
         {

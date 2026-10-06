@@ -4,9 +4,9 @@ This is the single execution roadmap for the backend. Prompts are given in chat 
 
 ## Working state
 - **Current milestone:** M1 — Catalog, purchasing & inventory
-- **Current sprint:** B1.1 — Global catalog & tenant products
+- **Current sprint:** B1.2 — Units and pharmaceutical normalization
 - **Status:** IN_PROGRESS
-- **Next gate:** B1.1 local restore/build/unit tests/architecture tests/format and review; PostgreSQL integration validation in another environment
+- **Next gate:** B1.2 local restore/build/unit tests/architecture tests/format and review; PostgreSQL integration validation in another environment
 
 Local policy: this machine has no Docker and will not install it. Do not check/start Docker or run PostgreSQL/Testcontainers here. B0.1 is complete locally. Keep real PostgreSQL integration tests for another environment; they are not part of the local gate and must not be reported as passed without execution.
 
@@ -71,10 +71,12 @@ Goal: safe base for all business modules.
 Goal: trustworthy product and stock core.
 
 ### B1.1 — Global catalog & tenant products
+**Status:** DONE — audited/completed locally; PostgreSQL tests remain prepared for external validation.
 **Requirements:** FR-CAT-001..005, FR-CAT-007, BR-012, BR-013.
 **Scope:** GlobalProduct, MedicineProfile, Category, BusinessProduct; global/private data separation.
 
 ### B1.2 — Units and pharmaceutical normalization
+**Status:** IN_PROGRESS
 **Requirements:** FR-CAT-004, FR-CAT-006.
 **Scope:** ProductUnit, exact base-unit conversion, normalized ingredient/strength/form/route, equivalence key.
 
