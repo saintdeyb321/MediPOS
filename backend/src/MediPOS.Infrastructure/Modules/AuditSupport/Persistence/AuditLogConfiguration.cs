@@ -19,7 +19,8 @@ internal sealed class AuditLogConfiguration : IEntityTypeConfiguration<AuditLog>
                 (entity_type = 'legal_entity' AND action = 'legal_entity.created') OR
                 (entity_type = 'branch' AND action IN ('branch.created', 'branch.main_hub_changed')) OR
                 (entity_type = 'membership' AND action IN ('membership.created', 'membership.branches_replaced', 'membership.schedule_replaced', 'membership.deactivated')) OR
-                (entity_type = 'business_product' AND action IN ('business_product.created', 'business_product.price_changed', 'business_product.status_changed', 'business_product.units_changed'))
+                (entity_type = 'business_product' AND action IN ('business_product.created', 'business_product.price_changed', 'business_product.status_changed', 'business_product.units_changed')) OR
+                (entity_type = 'purchase' AND action = 'purchase.confirmed')
                 """);
             table.HasCheckConstraint("ck_audit_logs_correlation",
                 "correlation_id ~ '^[0-9a-f]{32}$' AND correlation_id <> repeat('0', 32)");

@@ -18,6 +18,13 @@ using MediPOS.Application.Modules.IdentityAccess.OperationalAccess;
 using MediPOS.Application.Modules.IdentityAccess.ReplaceWorkSchedule;
 using MediPOS.Application.Modules.IdentityAccess.SetMembershipBranches;
 using MediPOS.Application.Modules.IdentityAccess.UpsertGoogleUser;
+using MediPOS.Application.Modules.Inventory;
+using MediPOS.Application.Modules.Purchasing;
+using MediPOS.Application.Modules.Purchasing.ConfirmPurchase;
+using MediPOS.Application.Modules.Purchasing.CreatePurchase;
+using MediPOS.Application.Modules.Purchasing.CreateSupplier;
+using MediPOS.Application.Modules.Purchasing.FindPurchasesByDocumentReference;
+using MediPOS.Application.Modules.Purchasing.ReplacePurchaseLines;
 using MediPOS.Application.Modules.TenancyLicensing;
 using MediPOS.Application.Modules.TenancyLicensing.CreateTenant;
 using MediPOS.Application.Modules.TenancyLicensing.ReactivateLicense;
@@ -28,6 +35,8 @@ using MediPOS.Application.Tenancy;
 using MediPOS.Infrastructure.Modules.Branches.Persistence;
 using MediPOS.Infrastructure.Modules.Catalog.Persistence;
 using MediPOS.Infrastructure.Modules.IdentityAccess.Persistence;
+using MediPOS.Infrastructure.Modules.Inventory.Persistence;
+using MediPOS.Infrastructure.Modules.Purchasing.Persistence;
 using MediPOS.Infrastructure.Modules.TenancyLicensing.Persistence;
 using MediPOS.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
@@ -81,6 +90,14 @@ public static class DependencyInjection
         services.AddScoped<SetBusinessProductStatusHandler>();
         services.AddScoped<IProductUnitStore, ProductUnitStore>();
         services.AddScoped<ReplaceProductUnitsHandler>();
+
+        services.AddScoped<IPurchasingStore, PurchasingStore>();
+        services.AddScoped<IPurchaseReceiptWriter, PurchaseReceiptWriter>();
+        services.AddScoped<CreateSupplierHandler>();
+        services.AddScoped<CreatePurchaseHandler>();
+        services.AddScoped<ReplacePurchaseLinesHandler>();
+        services.AddScoped<ConfirmPurchaseHandler>();
+        services.AddScoped<FindPurchasesByDocumentReferenceHandler>();
 
         return services;
     }

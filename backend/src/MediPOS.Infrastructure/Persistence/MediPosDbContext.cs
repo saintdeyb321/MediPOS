@@ -3,11 +3,15 @@ using MediPOS.Domain.Modules.AuditSupport;
 using MediPOS.Domain.Modules.Branches;
 using MediPOS.Domain.Modules.Catalog;
 using MediPOS.Domain.Modules.IdentityAccess;
+using MediPOS.Domain.Modules.Inventory;
+using MediPOS.Domain.Modules.Purchasing;
 using MediPOS.Domain.Modules.TenancyLicensing;
 using MediPOS.Infrastructure.Modules.AuditSupport.Persistence;
 using MediPOS.Infrastructure.Modules.Branches.Persistence.Configurations;
 using MediPOS.Infrastructure.Modules.Catalog.Persistence.Configurations;
 using MediPOS.Infrastructure.Modules.IdentityAccess.Persistence.Configurations;
+using MediPOS.Infrastructure.Modules.Inventory.Persistence.Configurations;
+using MediPOS.Infrastructure.Modules.Purchasing.Persistence.Configurations;
 using MediPOS.Infrastructure.Modules.TenancyLicensing.Persistence.Configurations;
 using Microsoft.EntityFrameworkCore;
 
@@ -40,6 +44,16 @@ public sealed class MediPosDbContext(DbContextOptions<MediPosDbContext> options,
     public DbSet<BusinessProduct> BusinessProducts => Set<BusinessProduct>();
     public DbSet<ProductUnit> ProductUnits => Set<ProductUnit>();
 
+    public DbSet<Supplier> Suppliers => Set<Supplier>();
+
+    public DbSet<Purchase> Purchases => Set<Purchase>();
+
+    public DbSet<PurchaseLine> PurchaseLines => Set<PurchaseLine>();
+
+    public DbSet<InventoryLot> InventoryLots => Set<InventoryLot>();
+
+    public DbSet<StockMovement> StockMovements => Set<StockMovement>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
@@ -59,6 +73,16 @@ public sealed class MediPosDbContext(DbContextOptions<MediPosDbContext> options,
         modelBuilder.ApplyConfiguration(new BusinessProductConfiguration());
         modelBuilder.ApplyConfiguration(new MediPOS.Infrastructure.Modules.Catalog.Persistence.Configurations.ProductUnitConfiguration());
 
+        modelBuilder.ApplyConfiguration(new SupplierConfiguration());
+
+        modelBuilder.ApplyConfiguration(new PurchaseConfiguration());
+
+        modelBuilder.ApplyConfiguration(new PurchaseLineConfiguration());
+
+        modelBuilder.ApplyConfiguration(new InventoryLotConfiguration());
+
+        modelBuilder.ApplyConfiguration(new StockMovementConfiguration());
+
         // Context properties are evaluated per query, rather than captured into the cached EF model.
         // User is global. Tenant is a platform root; its administration requires a separate authorized boundary.
         modelBuilder.Entity<License>().HasQueryFilter(value => SelectedTenantId.HasValue && value.TenantId == SelectedTenantId);
@@ -70,6 +94,11 @@ public sealed class MediPosDbContext(DbContextOptions<MediPosDbContext> options,
         modelBuilder.Entity<WorkSchedule>().HasQueryFilter(value => SelectedTenantId.HasValue && value.TenantId == SelectedTenantId);
         modelBuilder.Entity<AuditLog>().HasQueryFilter(value => SelectedTenantId.HasValue && value.TenantId == SelectedTenantId);
         modelBuilder.Entity<BusinessProduct>().HasQueryFilter(value => SelectedTenantId.HasValue && value.TenantId == SelectedTenantId);
+        modelBuilder.Entity<Supplier>().HasQueryFilter(value => SelectedTenantId.HasValue && value.TenantId == SelectedTenantId);
+        modelBuilder.Entity<Purchase>().HasQueryFilter(value => SelectedTenantId.HasValue && value.TenantId == SelectedTenantId);
+        modelBuilder.Entity<PurchaseLine>().HasQueryFilter(value => SelectedTenantId.HasValue && value.TenantId == SelectedTenantId);
+        modelBuilder.Entity<InventoryLot>().HasQueryFilter(value => SelectedTenantId.HasValue && value.TenantId == SelectedTenantId);
+        modelBuilder.Entity<StockMovement>().HasQueryFilter(value => SelectedTenantId.HasValue && value.TenantId == SelectedTenantId);
         modelBuilder.Entity<ProductUnit>().HasQueryFilter(value => SelectedTenantId.HasValue && value.TenantId == SelectedTenantId);
     }
 
@@ -77,6 +106,7 @@ public sealed class MediPosDbContext(DbContextOptions<MediPosDbContext> options,
     {
         ValidateLicenseHistory();
         ValidateAuditHistory();
+        ValidateStockHistory();
         ValidateTenantWrites();
         return base.SaveChanges(acceptAllChangesOnSuccess);
     }
@@ -85,6 +115,7 @@ public sealed class MediPosDbContext(DbContextOptions<MediPosDbContext> options,
     {
         ValidateLicenseHistory();
         ValidateAuditHistory();
+        ValidateStockHistory();
         ValidateTenantWrites();
         return base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken);
     }
@@ -101,6 +132,12 @@ public sealed class MediPosDbContext(DbContextOptions<MediPosDbContext> options,
     {
         if (ChangeTracker.Entries<AuditLog>().Any(entry => entry.State is EntityState.Modified or EntityState.Deleted))
             throw new InvalidOperationException("Audit history is append-only.");
+    }
+
+    private void ValidateStockHistory()
+    {
+        if (ChangeTracker.Entries<StockMovement>().Any(entry => entry.State is EntityState.Modified or EntityState.Deleted))
+            throw new InvalidOperationException("Stock movement history is append-only.");
     }
 
     internal void AddAudit(AuditLog audit, Guid tenantId, AuditAction action, Guid entityId)
@@ -146,6 +183,11 @@ public sealed class MediPosDbContext(DbContextOptions<MediPosDbContext> options,
                 WorkSchedule value => value.TenantId,
                 AuditLog value => value.TenantId,
                 BusinessProduct value => value.TenantId,
+                Supplier value => value.TenantId,
+                Purchase value => value.TenantId,
+                PurchaseLine value => value.TenantId,
+                InventoryLot value => value.TenantId,
+                StockMovement value => value.TenantId,
                 ProductUnit value => value.TenantId,
                 _ => null,
             };

@@ -33,7 +33,7 @@ internal sealed class TenantLicenseProvisioning(MediPosDbContext context) : ITen
                 return null;
             }
 
-            return new ProvisioningScope(transaction, license);
+            return new ProvisioningScope(transaction, license, context);
         }
         catch
         {
@@ -42,12 +42,25 @@ internal sealed class TenantLicenseProvisioning(MediPosDbContext context) : ITen
         }
     }
 
-    private sealed class ProvisioningScope(IDbContextTransaction transaction, License license) : ITenantLicenseProvisioningScope
+    private sealed class ProvisioningScope(IDbContextTransaction transaction, License license, MediPosDbContext context) : ITenantLicenseProvisioningScope
     {
         public Guid TenantId => license.TenantId;
         public int MaxBranches => license.MaxBranches;
         public bool AllowsOperation(DateTimeOffset at) => license.AllowsOperation(at);
-        public Task CompleteAsync(CancellationToken cancellationToken) => transaction.CommitAsync(cancellationToken);
-        public ValueTask DisposeAsync() => transaction.DisposeAsync();
+        private bool _committed;
+        public async Task CompleteAsync(CancellationToken cancellationToken)
+        {
+            await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+            _committed = true;
+        }
+        public async ValueTask DisposeAsync()
+        {
+            try { await transaction.DisposeAsync().ConfigureAwait(false); }
+            finally
+            {
+                // Rolled-back mutations must never escape through a later SaveChanges in this scope.
+                if (!_committed) context.ChangeTracker.Clear();
+            }
+        }
     }
 }
