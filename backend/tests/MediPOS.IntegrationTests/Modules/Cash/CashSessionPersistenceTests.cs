@@ -27,7 +27,8 @@ public sealed class CashSessionPersistenceTests(PostgreSqlFixture fixture)
         Assert.False(context.Database.HasPendingModelChanges());
         Assert.Contains(await context.Database.GetAppliedMigrationsAsync(TestContext.Current.CancellationToken), name => name.EndsWith("_AddCashSessions", StringComparison.Ordinal));
         Assert.Equal(3, await context.Database.SqlQueryRaw<int>("""
-            SELECT count(*)::int AS "Value" FROM pg_indexes WHERE schemaname = 'public' AND tablename = 'cash_sessions' AND indexname <> 'PK_cash_sessions'
+            SELECT count(*)::int AS "Value" FROM pg_indexes WHERE schemaname = 'public' AND tablename = 'cash_sessions'
+              AND indexname NOT LIKE 'PK_%' AND indexname NOT LIKE 'AK_%'
             """).SingleAsync(TestContext.Current.CancellationToken));
         var index = await context.Database.SqlQueryRaw<string>("""
             SELECT indexdef AS "Value" FROM pg_indexes WHERE schemaname = 'public' AND indexname = 'ux_cash_sessions_tenant_branch_membership_open'

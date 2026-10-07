@@ -4,9 +4,9 @@ This is the single execution roadmap for the backend. Prompts are given in chat 
 
 ## Working state
 - **Current milestone:** M2 — POS & Cash
-- **Current sprint:** B2.1 — Cash session
+- **Current sprint:** B2.2 — Sale draft aggregate & checkout preparation
 - **Status:** IN_PROGRESS
-- **Next gate:** B2.1 local restore/build/unit tests/architecture tests/format and review; PostgreSQL integration validation in another environment
+- **Next gate:** B2.2 local restore/build/unit tests/architecture tests/format and review; PostgreSQL integration validation in another environment
 
 Local policy: this machine has no Docker and will not install it. Do not check/start Docker or run PostgreSQL/Testcontainers here. B0.1 is complete locally. Keep real PostgreSQL integration tests for another environment; they are not part of the local gate and must not be reported as passed without execution.
 
@@ -110,18 +110,19 @@ Goal: trustworthy product and stock core.
 Goal: complete reliable online sale workflow.
 
 ### B2.1 — Cash session
-**Status:** IN_PROGRESS.
+**Status:** DONE / audited locally.
 **Requirements:** FR-CASH-001, FR-CASH-005.
 **Scope:** CashSession open state, seller/branch ownership, permission checks.
-**FR-CASH-005:** partially covered in B2.1 (status/opening/seller/branch); accumulated sales remain pending until Sale exists in B2.2.
+**FR-CASH-005:** partially covered in B2.1 (status/opening/seller/branch); accumulated sales remain pending until confirmed sales exist in B2.3.
 
-### B2.2 — Sale aggregate & atomic checkout
+### B2.2 — Sale draft aggregate & checkout preparation
+**Status:** IN_PROGRESS.
 **Requirements:** FR-POS-001, FR-POS-004, FR-POS-009, BR-002..004.
-**Scope:** Sale/SaleLine, exact unit conversion, FEFO allocation, stock movements, seller/cash linkage, one transaction.
+**Scope:** Sale/SaleLine, seller/cash linkage, ProductUnit conversion, server-side price snapshots and totals. No stock mutation, confirmation or payments. FR-POS-001 remains primarily a frontend/usability requirement.
 
-### B2.3 — Payments
+### B2.3 — Atomic sale confirmation & payments
 **Requirements:** FR-POS-005..007, BR-006.
-**Scope:** SalePayment, supported methods, exact mixed-payment total validation.
+**Scope:** SalePayment, exact payment total, FEFO allocation, lot locking, StockMovement, Sale confirmation and audit in one transaction.
 
 ### B2.4 — Void/reversal & commissions hook
 **Requirements:** FR-POS-010, BR-007.

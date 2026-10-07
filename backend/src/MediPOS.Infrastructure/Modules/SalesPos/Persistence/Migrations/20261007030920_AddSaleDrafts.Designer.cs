@@ -3,17 +3,20 @@ using System;
 using MediPOS.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
 #nullable disable
 
-namespace MediPOS.Infrastructure.Modules.TenancyLicensing.Persistence.Migrations
+namespace MediPOS.Infrastructure.Modules.SalesPos.Persistence.Migrations
 {
     [DbContext(typeof(MediPosDbContext))]
-    partial class MediPosDbContextModelSnapshot : ModelSnapshot
+    [Migration("20261007030920_AddSaleDrafts")]
+    partial class AddSaleDrafts
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder

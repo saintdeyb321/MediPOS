@@ -33,6 +33,10 @@ using MediPOS.Application.Modules.Purchasing.CreatePurchase;
 using MediPOS.Application.Modules.Purchasing.CreateSupplier;
 using MediPOS.Application.Modules.Purchasing.FindPurchasesByDocumentReference;
 using MediPOS.Application.Modules.Purchasing.ReplacePurchaseLines;
+using MediPOS.Application.Modules.SalesPos;
+using MediPOS.Application.Modules.SalesPos.CreateSaleDraft;
+using MediPOS.Application.Modules.SalesPos.GetSaleDraft;
+using MediPOS.Application.Modules.SalesPos.ReplaceSaleLines;
 using MediPOS.Application.Modules.TenancyLicensing;
 using MediPOS.Application.Modules.TenancyLicensing.CreateTenant;
 using MediPOS.Application.Modules.TenancyLicensing.ReactivateLicense;
@@ -47,6 +51,7 @@ using MediPOS.Infrastructure.Modules.Catalog.ProductImport;
 using MediPOS.Infrastructure.Modules.IdentityAccess.Persistence;
 using MediPOS.Infrastructure.Modules.Inventory.Persistence;
 using MediPOS.Infrastructure.Modules.Purchasing.Persistence;
+using MediPOS.Infrastructure.Modules.SalesPos.Persistence;
 using MediPOS.Infrastructure.Modules.TenancyLicensing.Persistence;
 using MediPOS.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
@@ -89,6 +94,7 @@ public static class DependencyInjection
         services.AddScoped<IOpenCashSessionWriter, OpenCashSessionWriter>();
         services.AddScoped<IFindOpenCashSession, CashSessionReader>();
         services.AddScoped<IActiveCashSessionsReader, CashSessionReader>();
+        services.AddScoped<ISaleDraftStore, SaleDraftStore>();
         services.AddScoped<CreateMembershipHandler>();
         services.AddScoped<SetMembershipBranchesHandler>();
         services.AddScoped<ReplaceWorkScheduleHandler>();
@@ -139,6 +145,9 @@ public static class DependencyInjection
         services.AddScoped<ResolveAccessContextHandler>();
         services.AddScoped<OpenCashSessionHandler>();
         services.AddScoped<GetActiveCashSessionsHandler>();
+        services.AddScoped<CreateSaleDraftHandler>();
+        services.AddScoped<ReplaceSaleLinesHandler>();
+        services.AddScoped<GetSaleDraftHandler>();
         return services;
     }
 }

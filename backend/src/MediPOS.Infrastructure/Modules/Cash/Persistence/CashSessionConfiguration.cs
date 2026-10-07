@@ -26,6 +26,7 @@ internal sealed class CashSessionConfiguration : IEntityTypeConfiguration<CashSe
                 """);
         });
         builder.HasKey(value => value.Id);
+        builder.HasAlternateKey(value => new { value.TenantId, value.BranchId, value.MembershipId, value.Id });
         builder.Property(value => value.Id).HasColumnName("id").ValueGeneratedNever();
         builder.Property(value => value.TenantId).HasColumnName("tenant_id");
         builder.Property(value => value.BranchId).HasColumnName("branch_id");

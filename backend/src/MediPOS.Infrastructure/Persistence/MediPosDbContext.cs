@@ -7,6 +7,7 @@ using MediPOS.Domain.Modules.Catalog.ProductImport;
 using MediPOS.Domain.Modules.IdentityAccess;
 using MediPOS.Domain.Modules.Inventory;
 using MediPOS.Domain.Modules.Purchasing;
+using MediPOS.Domain.Modules.SalesPos;
 using MediPOS.Domain.Modules.TenancyLicensing;
 using MediPOS.Infrastructure.Modules.AuditSupport.Persistence;
 using MediPOS.Infrastructure.Modules.Branches.Persistence.Configurations;
@@ -15,6 +16,7 @@ using MediPOS.Infrastructure.Modules.Catalog.Persistence.Configurations;
 using MediPOS.Infrastructure.Modules.IdentityAccess.Persistence.Configurations;
 using MediPOS.Infrastructure.Modules.Inventory.Persistence.Configurations;
 using MediPOS.Infrastructure.Modules.Purchasing.Persistence.Configurations;
+using MediPOS.Infrastructure.Modules.SalesPos.Persistence;
 using MediPOS.Infrastructure.Modules.TenancyLicensing.Persistence.Configurations;
 using Microsoft.EntityFrameworkCore;
 
@@ -42,6 +44,8 @@ public sealed class MediPosDbContext(DbContextOptions<MediPosDbContext> options,
     public DbSet<WorkSchedule> WorkSchedules => Set<WorkSchedule>();
     public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
     public DbSet<CashSession> CashSessions => Set<CashSession>();
+    public DbSet<Sale> Sales => Set<Sale>();
+    public DbSet<SaleLine> SaleLines => Set<SaleLine>();
     public DbSet<Category> Categories => Set<Category>();
     public DbSet<GlobalProduct> GlobalProducts => Set<GlobalProduct>();
     public DbSet<MedicineProfile> MedicineProfiles => Set<MedicineProfile>();
@@ -76,6 +80,8 @@ public sealed class MediPosDbContext(DbContextOptions<MediPosDbContext> options,
         modelBuilder.ApplyConfiguration(new WorkScheduleConfiguration());
         modelBuilder.ApplyConfiguration(new AuditLogConfiguration());
         modelBuilder.ApplyConfiguration(new CashSessionConfiguration());
+        modelBuilder.ApplyConfiguration(new SaleLineConfiguration());
+        modelBuilder.ApplyConfiguration(new SaleConfiguration());
         modelBuilder.ApplyConfiguration(new CategoryConfiguration());
         modelBuilder.ApplyConfiguration(new GlobalProductConfiguration());
         modelBuilder.ApplyConfiguration(new MedicineProfileConfiguration());
@@ -105,6 +111,8 @@ public sealed class MediPosDbContext(DbContextOptions<MediPosDbContext> options,
         modelBuilder.Entity<WorkSchedule>().HasQueryFilter(value => SelectedTenantId.HasValue && value.TenantId == SelectedTenantId);
         modelBuilder.Entity<AuditLog>().HasQueryFilter(value => SelectedTenantId.HasValue && value.TenantId == SelectedTenantId);
         modelBuilder.Entity<CashSession>().HasQueryFilter(value => SelectedTenantId.HasValue && value.TenantId == SelectedTenantId);
+        modelBuilder.Entity<Sale>().HasQueryFilter(value => SelectedTenantId.HasValue && value.TenantId == SelectedTenantId);
+        modelBuilder.Entity<SaleLine>().HasQueryFilter(value => SelectedTenantId.HasValue && value.TenantId == SelectedTenantId);
         modelBuilder.Entity<BusinessProduct>().HasQueryFilter(value => SelectedTenantId.HasValue && value.TenantId == SelectedTenantId);
         modelBuilder.Entity<Supplier>().HasQueryFilter(value => SelectedTenantId.HasValue && value.TenantId == SelectedTenantId);
         modelBuilder.Entity<Purchase>().HasQueryFilter(value => SelectedTenantId.HasValue && value.TenantId == SelectedTenantId);
@@ -123,6 +131,7 @@ public sealed class MediPosDbContext(DbContextOptions<MediPosDbContext> options,
         ValidateStockHistory();
         ValidateImportHistory();
         ValidateCashOpenings();
+        ValidateSaleDraftWrites();
         ValidateStockBalances();
         ValidateTenantWrites();
         return base.SaveChanges(acceptAllChangesOnSuccess);
@@ -135,6 +144,7 @@ public sealed class MediPosDbContext(DbContextOptions<MediPosDbContext> options,
         ValidateStockHistory();
         ValidateImportHistory();
         ValidateCashOpenings();
+        ValidateSaleDraftWrites();
         ValidateStockBalances();
         ValidateTenantWrites();
         return base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken);
@@ -192,6 +202,19 @@ public sealed class MediPosDbContext(DbContextOptions<MediPosDbContext> options,
             audits.Any(audit => !sessions.Any(session => session.Id == audit.EntityId && session.TenantId == audit.TenantId &&
                 session.OpenedByActorId == audit.ActorId && session.OpenedAt == audit.OccurredAt))))
             throw new InvalidOperationException("Cash opening and its single matching audit require one transaction.");
+    }
+
+    private void ValidateSaleDraftWrites()
+    {
+        var sales = ChangeTracker.Entries<Sale>().Where(value => value.State is EntityState.Added or EntityState.Modified or EntityState.Deleted).ToArray();
+        var lines = ChangeTracker.Entries<SaleLine>().Where(value => value.State is EntityState.Added or EntityState.Modified or EntityState.Deleted).ToArray();
+        if ((sales.Length != 0 || lines.Length != 0) && Database.CurrentTransaction is null)
+            throw new InvalidOperationException("Draft writes require an explicit transaction.");
+        if (sales.Any(value => value.State == EntityState.Deleted || value.Entity.Status != SaleStatus.Draft ||
+            (value.State == EntityState.Modified && (value.Property(sale => sale.Status).OriginalValue != SaleStatus.Draft ||
+                value.Property(sale => sale.BranchId).IsModified || value.Property(sale => sale.SellerMembershipId).IsModified ||
+                value.Property(sale => sale.CashSessionId).IsModified))))
+            throw new InvalidOperationException("Draft ownership is immutable; sale confirmation is not implemented yet.");
     }
 
     private void ValidateStockBalances()
@@ -266,6 +289,8 @@ public sealed class MediPosDbContext(DbContextOptions<MediPosDbContext> options,
                 WorkSchedule value => value.TenantId,
                 AuditLog value => value.TenantId,
                 CashSession value => value.TenantId,
+                Sale value => value.TenantId,
+                SaleLine value => value.TenantId,
                 BusinessProduct value => value.TenantId,
                 Supplier value => value.TenantId,
                 Purchase value => value.TenantId,
