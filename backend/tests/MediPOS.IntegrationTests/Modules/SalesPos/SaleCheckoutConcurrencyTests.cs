@@ -89,20 +89,18 @@ public sealed class SaleCheckoutConcurrencyTests(PostgreSqlFixture fixture)
             rows = await SaleCheckoutTestData.CreateAsync(scope.ServiceProvider, tenant);
         var marker = "checkout-cash-" + Guid.NewGuid().ToString("N");
         await using var services = SaleCheckoutTestData.CreateServices(fixture, marker);
-        await using var blocker = fixture.CreateContext(tenant.TenantId);
-        await using var held = await blocker.Database.BeginTransactionAsync(TestContext.Current.CancellationToken);
-        await blocker.Database.SqlQuery<Guid>($"SELECT id AS \"Value\" FROM cash_sessions WHERE id = {rows.Cash.CashSessionId} FOR UPDATE")
-            .SingleAsync(TestContext.Current.CancellationToken);
+        await using var blocker = setupServices.CreateAsyncScope();
+        await using var held = await blocker.ServiceProvider.GetRequiredService<ICashCloseTransaction>().BeginAsync(
+            tenant.TenantId, tenant.Identity.BranchId, rows.Cash.CashSessionId, TestContext.Current.CancellationToken);
         await using var scopeToConfirm = services.CreateAsyncScope();
         var pending = SaleCheckoutTestData.ConfirmAsync(scopeToConfirm.ServiceProvider, rows);
         try
         {
             await WaitForDatabaseLockAsync(marker);
             Assert.False(pending.IsCompleted);
-            // A test-only database state change represents the future cash close writer holding this same row lock.
-            await blocker.Database.ExecuteSqlInterpolatedAsync($"UPDATE cash_sessions SET status = 'closed' WHERE id = {rows.Cash.CashSessionId}", TestContext.Current.CancellationToken);
+            await CashCloseTestData.CompleteHeldAsync(held, tenant.Identity.UserId);
         }
-        finally { await held.CommitAsync(TestContext.Current.CancellationToken); }
+        finally { await held.DisposeAsync(); }
         var error = await Assert.ThrowsAsync<ApplicationErrorException>(() => pending);
         Assert.Equal(SalesPosErrors.CashSessionRequired, error.Error);
         await using var verify = fixture.CreateContext(tenant.TenantId);

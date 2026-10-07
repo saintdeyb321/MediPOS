@@ -17,6 +17,14 @@ internal sealed class CashSessionConfiguration : IEntityTypeConfiguration<CashSe
         {
             table.HasCheckConstraint("ck_cash_sessions_status", "status IN ('open', 'closed')");
             table.HasCheckConstraint("ck_cash_sessions_opening_amount", "opening_amount >= 0 AND opening_amount <= 99999999999999.9999");
+            table.HasCheckConstraint("ck_cash_sessions_closure", """
+                (status = 'open' AND closed_at IS NULL AND closed_by_actor_id IS NULL AND counted_cash_amount IS NULL AND expected_cash_amount IS NULL AND cash_difference IS NULL) OR
+                (status = 'closed' AND closed_at IS NOT NULL AND closed_at >= opened_at AND closed_by_actor_id IS NOT NULL
+                    AND closed_by_actor_id <> '00000000-0000-0000-0000-000000000000'::uuid AND counted_cash_amount IS NOT NULL
+                    AND counted_cash_amount >= 0 AND counted_cash_amount <= 999999999999999999999999.9999 AND expected_cash_amount IS NOT NULL
+                    AND expected_cash_amount >= 0 AND expected_cash_amount <= 999999999999999999999999.9999 AND cash_difference IS NOT NULL
+                    AND cash_difference = counted_cash_amount - expected_cash_amount)
+                """);
             table.HasCheckConstraint("ck_cash_sessions_identifiers", """
                 id <> '00000000-0000-0000-0000-000000000000'::uuid AND
                 tenant_id <> '00000000-0000-0000-0000-000000000000'::uuid AND
@@ -33,9 +41,14 @@ internal sealed class CashSessionConfiguration : IEntityTypeConfiguration<CashSe
         builder.Property(value => value.MembershipId).HasColumnName("membership_id");
         builder.Property(value => value.OpeningAmount).HasColumnName("opening_amount").HasPrecision(18, 4);
         builder.Property(value => value.Status).HasColumnName("status").HasMaxLength(16)
-            .HasConversion(value => CashSessionStatusCodes.ToCode(value), value => CashSessionStatusCodes.FromCode(value));
+            .HasConversion(value => CashSessionStatusCodes.ToCode(value), value => CashSessionStatusCodes.FromCode(value)).IsConcurrencyToken();
         builder.Property(value => value.OpenedAt).HasColumnName("opened_at").HasColumnType("timestamp with time zone");
         builder.Property(value => value.OpenedByActorId).HasColumnName("opened_by_actor_id");
+        builder.Property(value => value.ClosedAt).HasColumnName("closed_at").HasColumnType("timestamp with time zone");
+        builder.Property(value => value.ClosedByActorId).HasColumnName("closed_by_actor_id");
+        builder.Property(value => value.CountedCashAmount).HasColumnName("counted_cash_amount").HasPrecision(28, 4);
+        builder.Property(value => value.ExpectedCashAmount).HasColumnName("expected_cash_amount").HasPrecision(28, 4);
+        builder.Property(value => value.CashDifference).HasColumnName("cash_difference").HasPrecision(28, 4);
         builder.HasOne<Tenant>().WithMany().HasForeignKey(value => value.TenantId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne<Branch>().WithMany().HasForeignKey(value => new { value.TenantId, value.BranchId })
             .HasPrincipalKey(value => new { value.TenantId, value.Id }).OnDelete(DeleteBehavior.Restrict);

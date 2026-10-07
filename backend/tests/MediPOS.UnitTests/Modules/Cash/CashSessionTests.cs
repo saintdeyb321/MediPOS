@@ -49,7 +49,7 @@ public sealed class CashSessionTests
     }
 
     [Fact]
-    public void StableCodesReserveClosedWithoutAddingAClosingOperation()
+    public void OpenAndClosedHaveStablePersistedCodes()
     {
         Assert.Equal(CashSessionStatus.Open, CashSessionStatusCodes.FromCode("open"));
         Assert.Equal(CashSessionStatus.Closed, CashSessionStatusCodes.FromCode("closed"));

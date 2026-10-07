@@ -23,7 +23,7 @@ internal sealed class AuditLogConfiguration : IEntityTypeConfiguration<AuditLog>
                 (entity_type = 'purchase' AND action = 'purchase.confirmed') OR
                 (entity_type = 'inventory_lot' AND action = 'inventory.adjusted') OR
                 (entity_type = 'import_job' AND action = 'catalog.products_imported') OR
-                (entity_type = 'cash_session' AND action = 'cash_session.opened') OR
+                (entity_type = 'cash_session' AND action IN ('cash_session.opened', 'cash_session.closed')) OR
                 (entity_type = 'sale' AND action IN ('sale.confirmed', 'sale.voided'))
                 """);
             table.HasCheckConstraint("ck_audit_logs_correlation",

@@ -6,7 +6,7 @@ public enum AuditAction
     LegalEntityCreated, BranchCreated, BranchMainHubChanged,
     MembershipCreated, MembershipBranchesReplaced, MembershipScheduleReplaced, MembershipDeactivated,
     BusinessProductCreated, BusinessProductPriceChanged, BusinessProductStatusChanged,
-    BusinessProductUnitsChanged, PurchaseConfirmed, InventoryAdjusted, CatalogProductsImported, CashSessionOpened, SaleConfirmed, SaleVoided,
+    BusinessProductUnitsChanged, PurchaseConfirmed, InventoryAdjusted, CatalogProductsImported, CashSessionOpened, SaleConfirmed, SaleVoided, CashSessionClosed,
 }
 
 public enum AuditEntityType { Tenant, License, LegalEntity, Branch, Membership, BusinessProduct, Purchase, InventoryLot, ImportJob, CashSession, Sale }
@@ -35,6 +35,7 @@ public static class AuditCodes
         AuditAction.InventoryAdjusted => "inventory.adjusted",
         AuditAction.CatalogProductsImported => "catalog.products_imported",
         AuditAction.CashSessionOpened => "cash_session.opened",
+        AuditAction.CashSessionClosed => "cash_session.closed",
         AuditAction.SaleConfirmed => "sale.confirmed",
         AuditAction.SaleVoided => "sale.voided",
         _ => throw new ArgumentOutOfRangeException(nameof(action)),
@@ -62,6 +63,7 @@ public static class AuditCodes
         "inventory.adjusted" => AuditAction.InventoryAdjusted,
         "catalog.products_imported" => AuditAction.CatalogProductsImported,
         "cash_session.opened" => AuditAction.CashSessionOpened,
+        "cash_session.closed" => AuditAction.CashSessionClosed,
         "sale.confirmed" => AuditAction.SaleConfirmed,
         "sale.voided" => AuditAction.SaleVoided,
         _ => throw new InvalidOperationException("Unknown persisted audit action."),
@@ -80,7 +82,7 @@ public static class AuditCodes
         AuditAction.PurchaseConfirmed => AuditEntityType.Purchase,
         AuditAction.InventoryAdjusted => AuditEntityType.InventoryLot,
         AuditAction.CatalogProductsImported => AuditEntityType.ImportJob,
-        AuditAction.CashSessionOpened => AuditEntityType.CashSession,
+        AuditAction.CashSessionOpened or AuditAction.CashSessionClosed => AuditEntityType.CashSession,
         AuditAction.SaleConfirmed or AuditAction.SaleVoided => AuditEntityType.Sale,
         _ => throw new ArgumentOutOfRangeException(nameof(action)),
     };

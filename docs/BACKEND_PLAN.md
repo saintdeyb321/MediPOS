@@ -4,9 +4,9 @@ This is the single execution roadmap for the backend. Prompts are given in chat 
 
 ## Working state
 - **Current milestone:** M2 — POS & Cash
-- **Current sprint:** B2.4 — Sale void & compensating reversals
+- **Current sprint:** B2.5 — Cash close & reconciliation
 - **Status:** IN_PROGRESS
-- **Next gate:** B2.4 implementation review; PostgreSQL integration validation in another environment
+- **Next gate:** B2.5 implementation review and PostgreSQL integration validation in another environment; local gate passed
 
 Local policy: this machine has no Docker and will not install it. Do not check/start Docker or run PostgreSQL/Testcontainers here. B0.1 is complete locally. Keep real PostgreSQL integration tests for another environment; they are not part of the local gate and must not be reported as passed without execution.
 
@@ -126,11 +126,12 @@ Goal: complete reliable online sale workflow.
 **Scope:** SalePayment, exact payment total, FEFO allocation, lot locking, StockMovement, Sale confirmation and audit in one transaction.
 
 ### B2.4 — Sale void & compensating reversals
-**Status:** IN_PROGRESS.
+**Status:** DONE / audited locally.
 **Requirements:** FR-POS-010, BR-007.
 **Scope:** permissioned sale void, compensating stock movements, payment reversal ledger and audit in one transaction. BR-010 remains pending B4.1, which must extend this same transaction with real commission compensation; no commission hook/service in B2.4.
 
 ### B2.5 — Cash close & reconciliation
+**Status:** IN_PROGRESS / local gate passed; PostgreSQL integration tests prepared and compiled, not executed locally.
 **Requirements:** FR-CASH-002..003.
 **Scope:** expected totals by method, counted cash, difference and close time.
 

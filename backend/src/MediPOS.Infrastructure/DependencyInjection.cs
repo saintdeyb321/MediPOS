@@ -3,7 +3,9 @@ using MediPOS.Application.Modules.Branches.CreateBranch;
 using MediPOS.Application.Modules.Branches.CreateLegalEntity;
 using MediPOS.Application.Modules.Branches.SetMainHubBranch;
 using MediPOS.Application.Modules.Cash;
+using MediPOS.Application.Modules.Cash.CloseCashSession;
 using MediPOS.Application.Modules.Cash.GetActiveCashSessions;
+using MediPOS.Application.Modules.Cash.GetCashSessionReconciliation;
 using MediPOS.Application.Modules.Cash.OpenCashSession;
 using MediPOS.Application.Modules.Catalog;
 using MediPOS.Application.Modules.Catalog.CreateBusinessProductFromGlobal;
@@ -96,6 +98,8 @@ public static class DependencyInjection
         services.AddScoped<IOpenCashSessionWriter, OpenCashSessionWriter>();
         services.AddScoped<IFindOpenCashSession, CashSessionReader>();
         services.AddScoped<IActiveCashSessionsReader, CashSessionReader>();
+        services.AddScoped<ICashCloseTransaction, CashCloseTransaction>();
+        services.AddScoped<ICashSessionReconciliationReader, CashSessionReconciliationReader>();
         services.AddScoped<ISaleDraftStore, SaleDraftStore>();
         services.AddScoped<ISaleCheckoutTransaction, SaleCheckoutTransaction>();
         services.AddScoped<ISaleVoidTransaction, SaleVoidTransaction>();
@@ -149,6 +153,8 @@ public static class DependencyInjection
         services.AddScoped<ResolveAccessContextHandler>();
         services.AddScoped<OpenCashSessionHandler>();
         services.AddScoped<GetActiveCashSessionsHandler>();
+        services.AddScoped<CloseCashSessionHandler>();
+        services.AddScoped<GetCashSessionReconciliationHandler>();
         services.AddScoped<CreateSaleDraftHandler>();
         services.AddScoped<ConfirmSaleHandler>();
         services.AddScoped<VoidSaleHandler>();

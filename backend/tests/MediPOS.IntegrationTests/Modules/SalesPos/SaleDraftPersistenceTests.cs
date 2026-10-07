@@ -1,4 +1,5 @@
 using MediPOS.Application.Errors;
+using MediPOS.Application.Modules.Cash.CloseCashSession;
 using MediPOS.Application.Modules.Catalog;
 using MediPOS.Application.Modules.Catalog.ReplaceProductUnits;
 using MediPOS.Application.Modules.Catalog.UpdateBusinessProductPrices;
@@ -83,8 +84,8 @@ public sealed class SaleDraftPersistenceTests(PostgreSqlFixture fixture)
             new(tenant.TenantId, tenant.Identity.BranchId), TestContext.Current.CancellationToken));
         Assert.Equal(SalesPosErrors.CashSessionRequired, missing.Error);
         var rows = await SaleDraftTestData.CreateAsync(source, tenant);
-        await using (var seed = fixture.CreateConstraintContext())
-            await seed.Database.ExecuteSqlInterpolatedAsync($"UPDATE cash_sessions SET status = 'closed' WHERE id = {rows.Cash.CashSessionId}", TestContext.Current.CancellationToken);
+        await source.GetRequiredService<CloseCashSessionHandler>().HandleAsync(
+            CashCloseTestData.Command(tenant.TenantId, tenant.Identity.BranchId, rows.Cash.CashSessionId), TestContext.Current.CancellationToken);
         var closed = await Assert.ThrowsAsync<ApplicationErrorException>(() => source.GetRequiredService<ReplaceSaleLinesHandler>().HandleAsync(
             SaleDraftTestData.Command(rows), TestContext.Current.CancellationToken));
         Assert.Equal(SalesPosErrors.CashSessionRequired, closed.Error);

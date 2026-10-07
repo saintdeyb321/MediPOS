@@ -1,6 +1,7 @@
 using MediPOS.Application.Errors;
 using MediPOS.Application.Modules.Branches.CreateBranch;
 using MediPOS.Application.Modules.Cash;
+using MediPOS.Application.Modules.Cash.CloseCashSession;
 using MediPOS.Application.Modules.Cash.GetActiveCashSessions;
 using MediPOS.Application.Modules.Cash.OpenCashSession;
 using MediPOS.Application.Modules.IdentityAccess.CreateMembership;
@@ -137,9 +138,8 @@ public sealed class CashSessionPersistenceTests(PostgreSqlFixture fixture)
         var source = scope.ServiceProvider;
         var setup = await CashSessionTestData.CreateAsync(source, TenantRole.Owner);
         var historical = await CashSessionTestData.OpenAsync(source, setup);
-        // Seed future historical state in the database only; B2.1 exposes no Close operation.
-        await using (var seed = fixture.CreateConstraintContext(setup.TenantId))
-            await seed.Database.ExecuteSqlInterpolatedAsync($"UPDATE cash_sessions SET status = 'closed' WHERE id = {historical.CashSessionId}", TestContext.Current.CancellationToken);
+        await source.GetRequiredService<CloseCashSessionHandler>().HandleAsync(
+            CashCloseTestData.Command(setup.TenantId, setup.BranchId, historical.CashSessionId), TestContext.Current.CancellationToken);
         var current = await CashSessionTestData.OpenAsync(source, setup);
         Assert.Equal(current, await source.GetRequiredService<IFindOpenCashSession>().FindAsync(
             setup.TenantId, setup.BranchId, setup.MembershipId, TestContext.Current.CancellationToken));

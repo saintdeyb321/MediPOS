@@ -136,7 +136,7 @@ public sealed class MediPosDbContext(DbContextOptions<MediPosDbContext> options,
         ValidateAuditHistory();
         ValidateStockHistory();
         ValidateImportHistory();
-        ValidateCashOpenings();
+        ValidateCashWrites();
         ValidateSaleWrites();
         ValidateSaleConfirmations();
         ValidateSaleVoids();
@@ -151,7 +151,7 @@ public sealed class MediPosDbContext(DbContextOptions<MediPosDbContext> options,
         ValidateAuditHistory();
         ValidateStockHistory();
         ValidateImportHistory();
-        ValidateCashOpenings();
+        ValidateCashWrites();
         ValidateSaleWrites();
         ValidateSaleConfirmations();
         ValidateSaleVoids();
@@ -198,20 +198,39 @@ public sealed class MediPosDbContext(DbContextOptions<MediPosDbContext> options,
             throw new InvalidOperationException("Import completion and its single summary audit require one transaction.");
     }
 
-    private void ValidateCashOpenings()
+    private void ValidateCashWrites()
     {
-        if (ChangeTracker.Entries<CashSession>().Any(value => value.State is EntityState.Modified or EntityState.Deleted))
-            throw new InvalidOperationException("Cash sessions preserve their opening history; closing is not implemented yet.");
+        foreach (var entry in ChangeTracker.Entries<CashSession>())
+        {
+            if (entry.State == EntityState.Deleted || (entry.State == EntityState.Modified &&
+                (entry.Property(session => session.Status).OriginalValue != CashSessionStatus.Open || entry.Entity.Status != CashSessionStatus.Closed ||
+                    entry.Properties.Any(property => property.IsModified && property.Metadata.Name is not
+                        (nameof(CashSession.Status) or nameof(CashSession.ClosedAt) or nameof(CashSession.ClosedByActorId) or nameof(CashSession.CountedCashAmount) or nameof(CashSession.ExpectedCashAmount) or nameof(CashSession.CashDifference))))))
+                throw new InvalidOperationException("Cash opening ownership/history and closed reconciliation are immutable; only Open -> Closed is permitted.");
+        }
         var sessions = ChangeTracker.Entries<CashSession>().Where(value => value.State == EntityState.Added).Select(value => value.Entity).ToArray();
         var audits = ChangeTracker.Entries<AuditLog>().Where(value => value.State == EntityState.Added &&
             value.Entity.Action == AuditAction.CashSessionOpened).Select(value => value.Entity).ToArray();
         if ((sessions.Length > 0 || audits.Length > 0) && (Database.CurrentTransaction is null ||
-            sessions.Any(session => session.Status != CashSessionStatus.Open || audits.Count(audit =>
+            sessions.Any(session => session.Status != CashSessionStatus.Open || session.ClosedAt.HasValue || session.ClosedByActorId.HasValue || session.CountedCashAmount.HasValue ||
+                session.ExpectedCashAmount.HasValue || session.CashDifference.HasValue || audits.Count(audit =>
                 audit.EntityId == session.Id && audit.TenantId == session.TenantId && audit.ActorId == session.OpenedByActorId &&
                 audit.OccurredAt == session.OpenedAt) != 1) ||
             audits.Any(audit => !sessions.Any(session => session.Id == audit.EntityId && session.TenantId == audit.TenantId &&
                 session.OpenedByActorId == audit.ActorId && session.OpenedAt == audit.OccurredAt))))
             throw new InvalidOperationException("Cash opening and its single matching audit require one transaction.");
+        var closed = ChangeTracker.Entries<CashSession>().Where(entry => entry.State == EntityState.Modified && entry.Entity.Status == CashSessionStatus.Closed).Select(entry => entry.Entity).ToArray();
+        var closingAudits = ChangeTracker.Entries<AuditLog>().Where(entry => entry.State == EntityState.Added && entry.Entity.Action == AuditAction.CashSessionClosed).Select(entry => entry.Entity).ToArray();
+        if ((closed.Length > 0 || closingAudits.Length > 0) && (Database.CurrentTransaction is null ||
+            closingAudits.Any(audit => !closed.Any(session => session.Id == audit.EntityId && session.TenantId == audit.TenantId))))
+            throw new InvalidOperationException("Cash close and audit require one explicit transaction.");
+        foreach (var session in closed)
+        {
+            session.ValidateClosed();
+            var own = closingAudits.Where(audit => audit.EntityId == session.Id && audit.TenantId == session.TenantId).ToArray();
+            if (own.Length != 1 || own[0].ActorId != session.ClosedByActorId || own[0].OccurredAt != session.ClosedAt)
+                throw new InvalidOperationException("Cash close requires exactly one audit matching actor and time.");
+        }
     }
 
     private void ValidateSaleWrites()

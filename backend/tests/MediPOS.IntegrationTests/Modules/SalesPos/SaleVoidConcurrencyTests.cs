@@ -1,4 +1,5 @@
 using MediPOS.Application.Errors;
+using MediPOS.Application.Modules.Cash;
 using MediPOS.Application.Modules.IdentityAccess.OperationalAccess;
 using MediPOS.Application.Modules.SalesPos;
 using MediPOS.Application.Modules.SalesPos.VoidSale;
@@ -79,9 +80,9 @@ public sealed class SaleVoidConcurrencyTests(PostgreSqlFixture fixture)
         await using var services = SaleCheckoutTestData.CreateServices(fixture, marker);
         await using var scopeToVoid = services.CreateAsyncScope();
         CashSessionTestData.Authenticate(scopeToVoid.ServiceProvider, owner);
-        await using var blocker = fixture.CreateContext(tenant.TenantId);
-        await using var held = await blocker.Database.BeginTransactionAsync(TestContext.Current.CancellationToken);
-        await blocker.Database.SqlQuery<Guid>($"SELECT id AS \"Value\" FROM cash_sessions WHERE id = {rows.Checkout.Cash.CashSessionId} FOR UPDATE").SingleAsync(TestContext.Current.CancellationToken);
+        await using var blocker = setup.CreateAsyncScope();
+        await using var held = await blocker.ServiceProvider.GetRequiredService<ICashCloseTransaction>().BeginAsync(
+            tenant.TenantId, tenant.Identity.BranchId, rows.Checkout.Cash.CashSessionId, TestContext.Current.CancellationToken);
         var pending = scopeToVoid.ServiceProvider.GetRequiredService<VoidSaleHandler>().HandleAsync(SaleVoidTestData.Command(rows), TestContext.Current.CancellationToken);
         try
         {
@@ -91,10 +92,9 @@ public sealed class SaleVoidConcurrencyTests(PostgreSqlFixture fixture)
             while (await monitor.Database.SqlQuery<int>($"SELECT count(*)::int AS \"Value\" FROM pg_stat_activity WHERE application_name = {marker} AND wait_event_type = 'Lock'").SingleAsync(timeout.Token) == 0)
                 await Task.Delay(10, timeout.Token);
             Assert.False(pending.IsCompleted);
-            // Test state represents a future close operation owning this same cash row.
-            await blocker.Database.ExecuteSqlInterpolatedAsync($"UPDATE cash_sessions SET status = 'closed' WHERE id = {rows.Checkout.Cash.CashSessionId}", TestContext.Current.CancellationToken);
+            await CashCloseTestData.CompleteHeldAsync(held, owner);
         }
-        finally { await held.CommitAsync(TestContext.Current.CancellationToken); }
+        finally { await held.DisposeAsync(); }
         var error = await Assert.ThrowsAsync<ApplicationErrorException>(() => pending);
         Assert.Equal(SalesPosErrors.CashSessionClosed, error.Error);
         await SaleVoidTestData.AssertStillConfirmedAsync(fixture, rows);
