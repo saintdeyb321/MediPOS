@@ -57,11 +57,13 @@ internal sealed class SaleDraftStore(MediPosDbContext context) : ISaleDraftStore
             if (updated != 1) throw new ApplicationErrorException(SalesPosErrors.ConcurrentEdit);
             await context.SaleLines.Where(value => value.TenantId == sale.TenantId && value.SaleId == sale.Id)
                 .ExecuteDeleteAsync(cancellationToken).ConfigureAwait(false);
+            context.Sales.Attach(sale);
             context.SaleLines.AddRange(sale.Lines);
             await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
             var version = await context.Sales.Where(value => value.TenantId == sale.TenantId && value.Id == sale.Id)
                 .Select(value => EF.Property<uint>(value, "Version")).SingleAsync(cancellationToken).ConfigureAwait(false);
             await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+            context.Entry(sale).State = EntityState.Detached;
             foreach (var line in sale.Lines) context.Entry(line).State = EntityState.Detached;
             return version;
         }

@@ -46,6 +46,7 @@ public sealed class MediPosDbContext(DbContextOptions<MediPosDbContext> options,
     public DbSet<CashSession> CashSessions => Set<CashSession>();
     public DbSet<Sale> Sales => Set<Sale>();
     public DbSet<SaleLine> SaleLines => Set<SaleLine>();
+    public DbSet<SalePayment> SalePayments => Set<SalePayment>();
     public DbSet<Category> Categories => Set<Category>();
     public DbSet<GlobalProduct> GlobalProducts => Set<GlobalProduct>();
     public DbSet<MedicineProfile> MedicineProfiles => Set<MedicineProfile>();
@@ -82,6 +83,7 @@ public sealed class MediPosDbContext(DbContextOptions<MediPosDbContext> options,
         modelBuilder.ApplyConfiguration(new CashSessionConfiguration());
         modelBuilder.ApplyConfiguration(new SaleLineConfiguration());
         modelBuilder.ApplyConfiguration(new SaleConfiguration());
+        modelBuilder.ApplyConfiguration(new SalePaymentConfiguration());
         modelBuilder.ApplyConfiguration(new CategoryConfiguration());
         modelBuilder.ApplyConfiguration(new GlobalProductConfiguration());
         modelBuilder.ApplyConfiguration(new MedicineProfileConfiguration());
@@ -113,6 +115,7 @@ public sealed class MediPosDbContext(DbContextOptions<MediPosDbContext> options,
         modelBuilder.Entity<CashSession>().HasQueryFilter(value => SelectedTenantId.HasValue && value.TenantId == SelectedTenantId);
         modelBuilder.Entity<Sale>().HasQueryFilter(value => SelectedTenantId.HasValue && value.TenantId == SelectedTenantId);
         modelBuilder.Entity<SaleLine>().HasQueryFilter(value => SelectedTenantId.HasValue && value.TenantId == SelectedTenantId);
+        modelBuilder.Entity<SalePayment>().HasQueryFilter(value => SelectedTenantId.HasValue && value.TenantId == SelectedTenantId);
         modelBuilder.Entity<BusinessProduct>().HasQueryFilter(value => SelectedTenantId.HasValue && value.TenantId == SelectedTenantId);
         modelBuilder.Entity<Supplier>().HasQueryFilter(value => SelectedTenantId.HasValue && value.TenantId == SelectedTenantId);
         modelBuilder.Entity<Purchase>().HasQueryFilter(value => SelectedTenantId.HasValue && value.TenantId == SelectedTenantId);
@@ -132,6 +135,7 @@ public sealed class MediPosDbContext(DbContextOptions<MediPosDbContext> options,
         ValidateImportHistory();
         ValidateCashOpenings();
         ValidateSaleDraftWrites();
+        ValidateSaleConfirmations();
         ValidateStockBalances();
         ValidateTenantWrites();
         return base.SaveChanges(acceptAllChangesOnSuccess);
@@ -145,6 +149,7 @@ public sealed class MediPosDbContext(DbContextOptions<MediPosDbContext> options,
         ValidateImportHistory();
         ValidateCashOpenings();
         ValidateSaleDraftWrites();
+        ValidateSaleConfirmations();
         ValidateStockBalances();
         ValidateTenantWrites();
         return base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken);
@@ -210,11 +215,56 @@ public sealed class MediPosDbContext(DbContextOptions<MediPosDbContext> options,
         var lines = ChangeTracker.Entries<SaleLine>().Where(value => value.State is EntityState.Added or EntityState.Modified or EntityState.Deleted).ToArray();
         if ((sales.Length != 0 || lines.Length != 0) && Database.CurrentTransaction is null)
             throw new InvalidOperationException("Draft writes require an explicit transaction.");
-        if (sales.Any(value => value.State == EntityState.Deleted || value.Entity.Status != SaleStatus.Draft ||
+        if (sales.Any(value => value.State == EntityState.Deleted ||
+            (value.State == EntityState.Added && (value.Entity.Status != SaleStatus.Draft || value.Entity.ConfirmedAt.HasValue)) ||
             (value.State == EntityState.Modified && (value.Property(sale => sale.Status).OriginalValue != SaleStatus.Draft ||
                 value.Property(sale => sale.BranchId).IsModified || value.Property(sale => sale.SellerMembershipId).IsModified ||
                 value.Property(sale => sale.CashSessionId).IsModified))))
-            throw new InvalidOperationException("Draft ownership is immutable; sale confirmation is not implemented yet.");
+            throw new InvalidOperationException("Sale ownership and confirmed history are immutable.");
+        if (lines.Any(line => !ChangeTracker.Entries<Sale>().Any(parent => parent.Entity.Id == line.Entity.SaleId &&
+            parent.Entity.TenantId == line.Entity.TenantId && parent.Entity.Status == SaleStatus.Draft)))
+            throw new InvalidOperationException("Line writes require their tracked draft; confirmed lines are immutable.");
+        if (ChangeTracker.Entries<SalePayment>().Any(value => value.State is EntityState.Modified or EntityState.Deleted))
+            throw new InvalidOperationException("Payments preserve their confirmation history.");
+    }
+
+    private void ValidateSaleConfirmations()
+    {
+        var sales = ChangeTracker.Entries<Sale>().Where(entry => entry.State == EntityState.Modified &&
+            entry.Property(sale => sale.Status).OriginalValue == SaleStatus.Draft && entry.Entity.Status == SaleStatus.Confirmed).Select(entry => entry.Entity).ToArray();
+        var payments = ChangeTracker.Entries<SalePayment>().Where(entry => entry.State == EntityState.Added).Select(entry => entry.Entity).ToArray();
+        var movements = ChangeTracker.Entries<StockMovement>().Where(entry => entry.State == EntityState.Added && entry.Entity.MovementType == StockMovementType.Sale)
+            .Select(entry => entry.Entity).ToArray();
+        var audits = ChangeTracker.Entries<AuditLog>().Where(entry => entry.State == EntityState.Added && entry.Entity.Action == AuditAction.SaleConfirmed)
+            .Select(entry => entry.Entity).ToArray();
+        if (sales.Length + payments.Length + movements.Length + audits.Length == 0) return;
+        if (Database.CurrentTransaction is null || payments.Any(payment => !sales.Any(sale => sale.Id == payment.SaleId && sale.TenantId == payment.TenantId)) ||
+            movements.Any(movement => !sales.Any(sale => sale.TenantId == movement.TenantId && sale.BranchId == movement.BranchId &&
+                sale.Lines.Any(line => line.Id == movement.SourceSaleLineId && line.BusinessProductId == movement.BusinessProductId))) ||
+            audits.Any(audit => !sales.Any(sale => sale.Id == audit.EntityId && sale.TenantId == audit.TenantId)))
+            throw new InvalidOperationException("Sale payments, consumptions and audit require their tracked confirmation transaction.");
+        foreach (var sale in sales)
+        {
+            var ownPayments = payments.Where(payment => payment.SaleId == sale.Id && payment.TenantId == sale.TenantId).ToArray();
+            try { sale.ValidateForCheckout(); sale.ValidatePayments(ownPayments); }
+            catch (Exception error) when (error is ArgumentException or ArithmeticException)
+            { throw new InvalidOperationException("Confirmation must preserve valid snapshots and exact payments.", error); }
+            var ownAudits = audits.Where(audit => audit.EntityId == sale.Id && audit.TenantId == sale.TenantId).ToArray();
+            if (ownAudits.Length != 1 || ownAudits[0].OccurredAt != sale.ConfirmedAt)
+                throw new InvalidOperationException("A confirmation requires its single matching audit.");
+            foreach (var line in sale.Lines)
+            {
+                var consumed = 0m;
+                foreach (var movement in movements.Where(movement => movement.SourceSaleLineId == line.Id && movement.TenantId == sale.TenantId))
+                {
+                    if (movement.QuantityDeltaBase >= 0 || movement.SourcePurchaseLineId.HasValue || movement.Reason is not null ||
+                        movement.ActorId != ownAudits[0].ActorId || movement.OccurredAt != sale.ConfirmedAt)
+                        throw new InvalidOperationException("Sale consumptions must match the confirmation actor/time.");
+                    consumed = StockQuantity.Add(consumed, -movement.QuantityDeltaBase);
+                }
+                if (consumed != line.BaseQuantity) throw new InvalidOperationException("Each confirmed line requires its exact full stock consumption.");
+            }
+        }
     }
 
     private void ValidateStockBalances()
@@ -239,7 +289,7 @@ public sealed class MediPosDbContext(DbContextOptions<MediPosDbContext> options,
                 if (movement.TenantId != lot.TenantId || movement.BranchId != lot.BranchId || movement.BusinessProductId != lot.BusinessProductId ||
                     (movement.MovementType == StockMovementType.PurchaseReceipt && movement.SourcePurchaseLineId != lot.SourcePurchaseLineId))
                     throw new InvalidOperationException("Movement ownership must match the lot.");
-                expected = checked(expected + movement.QuantityDeltaBase);
+                expected = StockQuantity.Add(expected, movement.QuantityDeltaBase);
             }
             if (receipts.Length == 0 || lot.QuantityAvailableBase != expected || expected < 0)
                 throw new InvalidOperationException("Every balance change requires its matching movement delta.");
@@ -291,6 +341,7 @@ public sealed class MediPosDbContext(DbContextOptions<MediPosDbContext> options,
                 CashSession value => value.TenantId,
                 Sale value => value.TenantId,
                 SaleLine value => value.TenantId,
+                SalePayment value => value.TenantId,
                 BusinessProduct value => value.TenantId,
                 Supplier value => value.TenantId,
                 Purchase value => value.TenantId,

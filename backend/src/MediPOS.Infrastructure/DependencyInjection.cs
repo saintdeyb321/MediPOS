@@ -34,6 +34,7 @@ using MediPOS.Application.Modules.Purchasing.CreateSupplier;
 using MediPOS.Application.Modules.Purchasing.FindPurchasesByDocumentReference;
 using MediPOS.Application.Modules.Purchasing.ReplacePurchaseLines;
 using MediPOS.Application.Modules.SalesPos;
+using MediPOS.Application.Modules.SalesPos.ConfirmSale;
 using MediPOS.Application.Modules.SalesPos.CreateSaleDraft;
 using MediPOS.Application.Modules.SalesPos.GetSaleDraft;
 using MediPOS.Application.Modules.SalesPos.ReplaceSaleLines;
@@ -95,6 +96,7 @@ public static class DependencyInjection
         services.AddScoped<IFindOpenCashSession, CashSessionReader>();
         services.AddScoped<IActiveCashSessionsReader, CashSessionReader>();
         services.AddScoped<ISaleDraftStore, SaleDraftStore>();
+        services.AddScoped<ISaleCheckoutTransaction, SaleCheckoutTransaction>();
         services.AddScoped<CreateMembershipHandler>();
         services.AddScoped<SetMembershipBranchesHandler>();
         services.AddScoped<ReplaceWorkScheduleHandler>();
@@ -146,6 +148,7 @@ public static class DependencyInjection
         services.AddScoped<OpenCashSessionHandler>();
         services.AddScoped<GetActiveCashSessionsHandler>();
         services.AddScoped<CreateSaleDraftHandler>();
+        services.AddScoped<ConfirmSaleHandler>();
         services.AddScoped<ReplaceSaleLinesHandler>();
         services.AddScoped<GetSaleDraftHandler>();
         return services;

@@ -76,6 +76,23 @@ public sealed class SaleLine
         };
     }
 
+    public void ValidateSnapshots(Sale sale)
+    {
+        ArgumentNullException.ThrowIfNull(sale);
+        if (Id == Guid.Empty || TenantId != sale.TenantId || SaleId != sale.Id || BusinessProductId == Guid.Empty ||
+            ProductUnitIdSnapshot == Guid.Empty || !Enum.IsDefined(PriceKind) ||
+            string.IsNullOrWhiteSpace(ProductNameSnapshot) || ProductNameSnapshot.Length > 256 ||
+            string.IsNullOrWhiteSpace(UnitNameSnapshot) || UnitNameSnapshot.Length > 128 ||
+            UnitPriceSnapshot < 0 || UnitPriceSnapshot > Sale.MaximumAmount || decimal.Round(UnitPriceSnapshot, 4) != UnitPriceSnapshot)
+            throw new ArgumentException("Invalid sale line snapshots.");
+        ValidateQuantity(Quantity);
+        ValidateQuantity(BaseQuantity);
+        ValidateQuantity(ConversionToBaseSnapshot);
+        if (ProductUnit.ConvertExactly(Quantity, ConversionToBaseSnapshot) != BaseQuantity ||
+            CalculateTotal(BaseQuantity, UnitPriceSnapshot) != LineTotal)
+            throw new ArgumentException("Sale line quantities and amount must match their exact snapshots.");
+    }
+
     private static void ValidateQuantity(decimal value)
     {
         if (value <= 0 || value > MaximumQuantity || decimal.Round(value, 12) != value)

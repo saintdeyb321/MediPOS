@@ -41,9 +41,16 @@ public sealed class ProductUnit
     {
         if (!IsActive)
             throw new InvalidOperationException("An inactive presentation is unavailable for operations.");
-        var converted = checked(quantity * ConversionToBase);
+        return ConvertExactly(quantity, ConversionToBase);
+    }
+
+    // Also validates historical presentation snapshots without requiring a surviving ProductUnit entity.
+    public static decimal ConvertExactly(decimal quantity, decimal conversionToBase)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(conversionToBase);
+        var converted = checked(quantity * conversionToBase);
         var (quantityMantissa, quantityScale) = Parts(quantity);
-        var (factorMantissa, factorScale) = Parts(ConversionToBase);
+        var (factorMantissa, factorScale) = Parts(conversionToBase);
         var (resultMantissa, resultScale) = Parts(converted);
         // Check the rational result independently: decimal multiplication can lose low-order precision.
         if (quantityMantissa * factorMantissa * BigInteger.Pow(10, resultScale) !=

@@ -4,6 +4,11 @@ namespace MediPOS.Application.Modules.SalesPos;
 
 public static class SalesPosErrors
 {
+    public static readonly ApplicationError InvalidPayments = new("sale.invalid_payments", ErrorCategory.Validation, "Positive, exactly representable payments with valid methods are required.");
+    public static readonly ApplicationError DuplicatePaymentMethod = new("sale.duplicate_payment_method", ErrorCategory.Validation, "Each payment method may occur only once.");
+    public static readonly ApplicationError PaymentTotalMismatch = new("sale.payment_total_mismatch", ErrorCategory.Validation, "Payments must equal the sale total exactly.");
+    public static readonly ApplicationError InconsistentDraft = new("sale.inconsistent_draft", ErrorCategory.Conflict, "Draft quantities, snapshots or totals are inconsistent.");
+    public static readonly ApplicationError CheckoutWindowChanged = new("sale.checkout_window_changed", ErrorCategory.Conflict, "The checkout date policy changed during a lock wait; retry confirmation.");
     public static readonly ApplicationError CashSessionRequired = new("sale.open_cash_session_required", ErrorCategory.Conflict, "An open cash session is required.");
     public static readonly ApplicationError CashSessionMismatch = new("sale.cash_session_mismatch", ErrorCategory.Conflict, "Cash session ownership must match the draft and authenticated seller.");
     public static readonly ApplicationError DraftNotFound = new("sale.draft_not_found", ErrorCategory.NotFound, "Sale draft was not found in the selected branch.");

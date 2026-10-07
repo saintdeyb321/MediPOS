@@ -2,7 +2,7 @@ using System.Numerics;
 
 namespace MediPOS.Domain.Modules.Inventory;
 
-internal static class StockQuantity
+public static class StockQuantity
 {
     internal static (BigInteger Mantissa, int Scale) Parts(decimal value)
     {
@@ -11,7 +11,7 @@ internal static class StockQuantity
         return (bits[3] < 0 ? -mantissa : mantissa, (bits[3] >> 16) & 0xff);
     }
 
-    internal static decimal Add(decimal before, decimal delta)
+    public static decimal Add(decimal before, decimal delta)
     {
         var result = checked(before + delta);
         var (a, scaleA) = Parts(before);

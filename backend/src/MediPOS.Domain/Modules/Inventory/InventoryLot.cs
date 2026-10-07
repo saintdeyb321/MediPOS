@@ -40,6 +40,16 @@ public sealed class InventoryLot
         return after;
     }
 
+    public void ApplySale(StockMovement movement)
+    {
+        ArgumentNullException.ThrowIfNull(movement);
+        if (movement.MovementType != StockMovementType.Sale || !movement.SourceSaleLineId.HasValue || movement.SourcePurchaseLineId.HasValue ||
+            movement.Reason is not null || movement.QuantityDeltaBase >= 0 || movement.InventoryLotId != Id ||
+            movement.TenantId != TenantId || movement.BranchId != BranchId || movement.BusinessProductId != BusinessProductId)
+            throw new ArgumentException("Sale movement must belong to this lot.", nameof(movement));
+        QuantityAvailableBase = PreviewAdjustment(movement.QuantityDeltaBase);
+    }
+
     // Called by the persistence transaction boundary only, with its matching append-only movement.
     public void ApplyAdjustment(StockMovement adjustment)
     {

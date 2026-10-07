@@ -7,7 +7,7 @@ namespace MediPOS.Application.Modules.Cash.GetActiveCashSessions;
 public sealed record GetActiveCashSessionsQuery(Guid TenantId, Guid? BranchId = null, int Offset = 0, int Limit = 50);
 
 public sealed record ActiveCashSessionDetails(Guid CashSessionId, Guid BranchId, string BranchName,
-    Guid MembershipId, Guid UserId, string DisplayName, decimal OpeningAmount, DateTimeOffset OpenedAt);
+    Guid MembershipId, Guid UserId, string DisplayName, decimal OpeningAmount, DateTimeOffset OpenedAt, decimal AccumulatedSales);
 
 public interface IActiveCashSessionsReader
 {

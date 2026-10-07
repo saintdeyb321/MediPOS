@@ -27,6 +27,7 @@ internal sealed class SaleLineConfiguration : IEntityTypeConfiguration<SaleLine>
             table.HasCheckConstraint("ck_sale_lines_identifiers", "id <> '00000000-0000-0000-0000-000000000000'::uuid AND product_unit_id_snapshot <> '00000000-0000-0000-0000-000000000000'::uuid");
         });
         builder.HasKey(value => value.Id);
+        builder.HasAlternateKey(value => new { value.TenantId, value.Id });
         builder.Property(value => value.Id).HasColumnName("id").ValueGeneratedNever();
         builder.Property(value => value.TenantId).HasColumnName("tenant_id");
         builder.Property(value => value.SaleId).HasColumnName("sale_id");

@@ -33,6 +33,7 @@ public sealed class Sale
     public decimal TotalAmount { get; private set; }
     public DateTimeOffset CreatedAt { get; private set; }
     public DateTimeOffset UpdatedAt { get; private set; }
+    public DateTimeOffset? ConfirmedAt { get; private set; }
     public IReadOnlyList<SaleLine> Lines => _lines.AsReadOnly();
 
     public static Sale CreateDraft(Guid tenantId, Guid branchId, Guid sellerMembershipId, Guid cashSessionId, DateTimeOffset now)
@@ -55,6 +56,52 @@ public sealed class Sale
     public void EnsureDraft()
     {
         if (Status != SaleStatus.Draft) throw new InvalidOperationException("Only draft sales can be edited.");
+    }
+
+    public void ValidateForCheckout()
+    {
+        if (Id == Guid.Empty || TenantId == Guid.Empty || BranchId == Guid.Empty || SellerMembershipId == Guid.Empty || CashSessionId == Guid.Empty ||
+            !Enum.IsDefined(Status) || CreatedAt.Offset != TimeSpan.Zero || UpdatedAt.Offset != TimeSpan.Zero || UpdatedAt < CreatedAt ||
+            (Status == SaleStatus.Draft && ConfirmedAt.HasValue) || (Status == SaleStatus.Confirmed &&
+                (!ConfirmedAt.HasValue || ConfirmedAt.Value.Offset != TimeSpan.Zero || ConfirmedAt < CreatedAt || ConfirmedAt > UpdatedAt)) ||
+            _lines.Count is 0 or > MaximumLines || _lines.Select(value => value.Id).Distinct().Count() != _lines.Count ||
+            _lines.Select(value => (value.BusinessProductId, value.ProductUnitIdSnapshot, value.PriceKind)).Distinct().Count() != _lines.Count)
+            throw new ArgumentException("Sale header/lines are inconsistent.");
+        var total = 0m;
+        foreach (var line in _lines)
+        {
+            line.ValidateSnapshots(this);
+            total = checked(total + line.LineTotal);
+        }
+        if (total > MaximumAmount || total != TotalAmount) throw new ArgumentException("Sale total must equal the exact sum of line totals.");
+    }
+
+    public void ValidatePayments(IReadOnlyList<SalePayment> payments)
+    {
+        ArgumentNullException.ThrowIfNull(payments);
+        if (payments.Count is 0 or > 5 || payments.Any(value => value is null) ||
+            payments.Select(value => value.Method).Distinct().Count() != payments.Count ||
+            payments.Select(value => value.Id).Distinct().Count() != payments.Count)
+            throw new ArgumentException("Distinct valid payment methods are required.", nameof(payments));
+        var total = 0m;
+        foreach (var payment in payments)
+        {
+            payment.ValidateFor(this);
+            total = checked(total + payment.Amount);
+        }
+        if (total != TotalAmount) throw new ArgumentException("Payments must equal the sale total exactly.", nameof(payments));
+    }
+
+    public void Confirm(IReadOnlyList<SalePayment> payments, DateTimeOffset now)
+    {
+        EnsureDraft();
+        ValidateForCheckout();
+        ValidatePayments(payments);
+        var at = now.ToUniversalTime();
+        if (at < UpdatedAt) throw new ArgumentOutOfRangeException(nameof(now), "Confirmation cannot precede the draft update.");
+        Status = SaleStatus.Confirmed;
+        ConfirmedAt = at;
+        UpdatedAt = at;
     }
 
     public void ReplaceLines(IReadOnlyList<SaleLine> lines, DateTimeOffset now)

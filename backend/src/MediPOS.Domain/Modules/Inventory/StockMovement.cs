@@ -1,6 +1,8 @@
+using MediPOS.Domain.Modules.SalesPos;
+
 namespace MediPOS.Domain.Modules.Inventory;
 
-public enum StockMovementType { PurchaseReceipt, Adjustment }
+public enum StockMovementType { PurchaseReceipt, Adjustment, Sale }
 
 public static class StockMovementCodes
 {
@@ -8,12 +10,14 @@ public static class StockMovementCodes
     {
         StockMovementType.PurchaseReceipt => "purchase_receipt",
         StockMovementType.Adjustment => "adjustment",
+        StockMovementType.Sale => "sale",
         _ => throw new ArgumentOutOfRangeException(nameof(type)),
     };
     public static StockMovementType FromCode(string code) => code switch
     {
         "purchase_receipt" => StockMovementType.PurchaseReceipt,
         "adjustment" => StockMovementType.Adjustment,
+        "sale" => StockMovementType.Sale,
         _ => throw new InvalidOperationException("Unknown persisted stock movement type."),
     };
 }
@@ -30,6 +34,7 @@ public sealed class StockMovement
     public StockMovementType MovementType { get; private set; }
     public decimal QuantityDeltaBase { get; private set; }
     public Guid? SourcePurchaseLineId { get; private set; }
+    public Guid? SourceSaleLineId { get; private set; }
     public string? Reason { get; private set; }
     public Guid ActorId { get; private set; }
     public DateTimeOffset OccurredAt { get; private set; }
@@ -53,6 +58,31 @@ public sealed class StockMovement
             OccurredAt = now.ToUniversalTime(),
         };
     }
+    public static StockMovement Sell(InventoryLot lot, Sale sale, SaleLine line, decimal quantityBase, Guid actorId, DateTimeOffset now)
+    {
+        ArgumentNullException.ThrowIfNull(lot);
+        ArgumentNullException.ThrowIfNull(sale);
+        ArgumentNullException.ThrowIfNull(line);
+        sale.EnsureDraft();
+        if (actorId == Guid.Empty || line.TenantId != sale.TenantId || line.SaleId != sale.Id || lot.TenantId != sale.TenantId ||
+            lot.BranchId != sale.BranchId || lot.BusinessProductId != line.BusinessProductId || quantityBase <= 0 || quantityBase > line.BaseQuantity)
+            throw new ArgumentException("Sale consumption must match the sale, line, lot and actor.");
+        lot.PreviewAdjustment(-quantityBase);
+        return new StockMovement
+        {
+            Id = Guid.CreateVersion7(),
+            TenantId = lot.TenantId,
+            BranchId = lot.BranchId,
+            BusinessProductId = lot.BusinessProductId,
+            InventoryLotId = lot.Id,
+            SourceSaleLineId = line.Id,
+            MovementType = StockMovementType.Sale,
+            QuantityDeltaBase = -quantityBase,
+            ActorId = actorId,
+            OccurredAt = now.ToUniversalTime(),
+        };
+    }
+
     public static StockMovement Adjust(InventoryLot lot, decimal delta, string reason, Guid actorId, DateTimeOffset now)
     {
         ArgumentNullException.ThrowIfNull(lot);

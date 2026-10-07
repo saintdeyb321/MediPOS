@@ -6,10 +6,10 @@ public enum AuditAction
     LegalEntityCreated, BranchCreated, BranchMainHubChanged,
     MembershipCreated, MembershipBranchesReplaced, MembershipScheduleReplaced, MembershipDeactivated,
     BusinessProductCreated, BusinessProductPriceChanged, BusinessProductStatusChanged,
-    BusinessProductUnitsChanged, PurchaseConfirmed, InventoryAdjusted, CatalogProductsImported, CashSessionOpened,
+    BusinessProductUnitsChanged, PurchaseConfirmed, InventoryAdjusted, CatalogProductsImported, CashSessionOpened, SaleConfirmed,
 }
 
-public enum AuditEntityType { Tenant, License, LegalEntity, Branch, Membership, BusinessProduct, Purchase, InventoryLot, ImportJob, CashSession }
+public enum AuditEntityType { Tenant, License, LegalEntity, Branch, Membership, BusinessProduct, Purchase, InventoryLot, ImportJob, CashSession, Sale }
 
 public static class AuditCodes
 {
@@ -35,6 +35,7 @@ public static class AuditCodes
         AuditAction.InventoryAdjusted => "inventory.adjusted",
         AuditAction.CatalogProductsImported => "catalog.products_imported",
         AuditAction.CashSessionOpened => "cash_session.opened",
+        AuditAction.SaleConfirmed => "sale.confirmed",
         _ => throw new ArgumentOutOfRangeException(nameof(action)),
     };
 
@@ -60,6 +61,7 @@ public static class AuditCodes
         "inventory.adjusted" => AuditAction.InventoryAdjusted,
         "catalog.products_imported" => AuditAction.CatalogProductsImported,
         "cash_session.opened" => AuditAction.CashSessionOpened,
+        "sale.confirmed" => AuditAction.SaleConfirmed,
         _ => throw new InvalidOperationException("Unknown persisted audit action."),
     };
 
@@ -77,6 +79,7 @@ public static class AuditCodes
         AuditAction.InventoryAdjusted => AuditEntityType.InventoryLot,
         AuditAction.CatalogProductsImported => AuditEntityType.ImportJob,
         AuditAction.CashSessionOpened => AuditEntityType.CashSession,
+        AuditAction.SaleConfirmed => AuditEntityType.Sale,
         _ => throw new ArgumentOutOfRangeException(nameof(action)),
     };
 
@@ -92,6 +95,7 @@ public static class AuditCodes
         AuditEntityType.InventoryLot => "inventory_lot",
         AuditEntityType.ImportJob => "import_job",
         AuditEntityType.CashSession => "cash_session",
+        AuditEntityType.Sale => "sale",
         _ => throw new ArgumentOutOfRangeException(nameof(entityType)),
     };
 
@@ -107,6 +111,7 @@ public static class AuditCodes
         "inventory_lot" => AuditEntityType.InventoryLot,
         "import_job" => AuditEntityType.ImportJob,
         "cash_session" => AuditEntityType.CashSession,
+        "sale" => AuditEntityType.Sale,
         _ => throw new InvalidOperationException("Unknown persisted audit entity type."),
     };
 }

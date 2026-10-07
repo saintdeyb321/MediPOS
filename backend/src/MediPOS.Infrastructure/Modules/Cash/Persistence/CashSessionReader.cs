@@ -2,6 +2,7 @@ using MediPOS.Application.Errors;
 using MediPOS.Application.Modules.Cash;
 using MediPOS.Application.Modules.Cash.GetActiveCashSessions;
 using MediPOS.Domain.Modules.Cash;
+using MediPOS.Domain.Modules.SalesPos;
 using MediPOS.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 
@@ -37,7 +38,9 @@ internal sealed class CashSessionReader(MediPosDbContext context) : IFindOpenCas
                        join user in context.Users on membership.UserId equals user.Id
                        orderby session.OpenedAt descending, session.Id descending
                        select new ActiveCashSessionDetails(session.Id, branch.Id, branch.Name, membership.Id,
-                           user.Id, user.DisplayName, session.OpeningAmount, session.OpenedAt);
+                           user.Id, user.DisplayName, session.OpeningAmount, session.OpenedAt,
+                           context.Sales.Where(sale => sale.TenantId == session.TenantId && sale.CashSessionId == session.Id && sale.Status == SaleStatus.Confirmed)
+                               .Sum(sale => (decimal?)sale.TotalAmount) ?? 0m);
         return await sessions.Skip(query.Offset).Take(query.Limit).ToListAsync(cancellationToken).ConfigureAwait(false);
     }
 }

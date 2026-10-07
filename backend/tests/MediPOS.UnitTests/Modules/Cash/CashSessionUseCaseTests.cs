@@ -160,7 +160,7 @@ public sealed class CashSessionUseCaseTests
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public async Task OwnerQueryPassesValidatedTenantBranchAndBoundedPageWithoutSalesOrAudit(bool filterBranch)
+    public async Task OwnerQueryPassesValidatedTenantBranchAndBoundedPageWithoutAudit(bool filterBranch)
     {
         var setup = new Setup(TenantRole.Owner);
         var query = new GetActiveCashSessionsQuery(setup.TenantId, filterBranch ? setup.BranchId : null, 2, 10);
@@ -168,7 +168,6 @@ public sealed class CashSessionUseCaseTests
         Assert.Same(setup.Active.Results, result);
         Assert.Equal(query, setup.Active.Query);
         Assert.Empty(setup.Writer.Attempts);
-        Assert.DoesNotContain(typeof(ActiveCashSessionDetails).GetProperties(), property => property.Name.Contains("Sales", StringComparison.OrdinalIgnoreCase));
     }
 
     [Theory]

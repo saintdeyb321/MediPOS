@@ -15,6 +15,7 @@ internal sealed class SaleConfiguration : IEntityTypeConfiguration<Sale>
         builder.ToTable("sales", table =>
         {
             table.HasCheckConstraint("ck_sales_status", "status IN ('draft', 'confirmed')");
+            table.HasCheckConstraint("ck_sales_confirmation", "(status = 'draft' AND confirmed_at IS NULL) OR (status = 'confirmed' AND confirmed_at IS NOT NULL AND confirmed_at >= created_at AND confirmed_at <= updated_at)");
             table.HasCheckConstraint("ck_sales_total", "total_amount >= 0 AND total_amount <= 99999999999999.9999");
             table.HasCheckConstraint("ck_sales_timestamps", "updated_at >= created_at");
             table.HasCheckConstraint("ck_sales_identifiers", """
@@ -35,6 +36,7 @@ internal sealed class SaleConfiguration : IEntityTypeConfiguration<Sale>
         builder.Property(value => value.TotalAmount).HasColumnName("total_amount").HasPrecision(18, 4);
         builder.Property(value => value.CreatedAt).HasColumnName("created_at").HasColumnType("timestamp with time zone");
         builder.Property(value => value.UpdatedAt).HasColumnName("updated_at").HasColumnType("timestamp with time zone");
+        builder.Property(value => value.ConfirmedAt).HasColumnName("confirmed_at").HasColumnType("timestamp with time zone");
         builder.Property(value => value.Status).HasColumnName("status").HasMaxLength(16)
             .HasConversion(value => SaleStatusCodes.ToCode(value), value => SaleStatusCodes.FromCode(value));
         builder.Property<uint>("Version").IsRowVersion().HasColumnName("xmin");
