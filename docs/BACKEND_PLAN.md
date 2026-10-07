@@ -4,9 +4,9 @@ This is the single execution roadmap for the backend. Prompts are given in chat 
 
 ## Working state
 - **Current milestone:** M1 — Catalog, purchasing & inventory
-- **Current sprint:** B1.5 — Search engine
+- **Current sprint:** B1.6 — Excel product import
 - **Status:** IN_PROGRESS
-- **Next gate:** B1.5 local restore/build/unit tests/architecture tests/format and review; PostgreSQL integration validation in another environment
+- **Next gate:** B1.6 local restore/build/unit tests/architecture tests/format and review; PostgreSQL integration validation in another environment
 
 Local policy: this machine has no Docker and will not install it. Do not check/start Docker or run PostgreSQL/Testcontainers here. B0.1 is complete locally. Keep real PostgreSQL integration tests for another environment; they are not part of the local gate and must not be reported as passed without execution.
 
@@ -92,12 +92,13 @@ Goal: trustworthy product and stock core.
 **Exit:** last-stock race integration tests and FEFO pass.
 
 ### B1.5 — Search engine
-**Status:** IN_PROGRESS
+**Status:** DONE / audited locally; PostgreSQL integration tests prepared for another environment.
 **Requirements:** FR-POS-002..003 plus catalog search rules.
 **Scope:** `unaccent`, `pg_trgm`, indexes/ranking, branch stock, equivalence fallback, other-branch availability.
 **Exit:** typo/accent and structured-equivalence tests pass within representative target dataset.
 
 ### B1.6 — Excel product import
+**Status:** IN_PROGRESS.
 **Requirements:** FR-CAT-009.
 **Scope:** ImportJob, bounded file validation, staging/result per row, partial validity behavior without importing invalid rows.
 

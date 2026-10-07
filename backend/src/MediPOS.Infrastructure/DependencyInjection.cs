@@ -7,6 +7,7 @@ using MediPOS.Application.Modules.Catalog.CreateBusinessProductFromGlobal;
 using MediPOS.Application.Modules.Catalog.CreateCategory;
 using MediPOS.Application.Modules.Catalog.CreateGlobalProduct;
 using MediPOS.Application.Modules.Catalog.CreateLocalBusinessProduct;
+using MediPOS.Application.Modules.Catalog.ProductImport;
 using MediPOS.Application.Modules.Catalog.ReplaceProductUnits;
 using MediPOS.Application.Modules.Catalog.SearchProducts;
 using MediPOS.Application.Modules.Catalog.SetBusinessProductStatus;
@@ -38,6 +39,7 @@ using MediPOS.Application.Modules.TenancyLicensing.SuspendLicense;
 using MediPOS.Application.Tenancy;
 using MediPOS.Infrastructure.Modules.Branches.Persistence;
 using MediPOS.Infrastructure.Modules.Catalog.Persistence;
+using MediPOS.Infrastructure.Modules.Catalog.ProductImport;
 using MediPOS.Infrastructure.Modules.IdentityAccess.Persistence;
 using MediPOS.Infrastructure.Modules.Inventory.Persistence;
 using MediPOS.Infrastructure.Modules.Purchasing.Persistence;
@@ -96,6 +98,12 @@ public static class DependencyInjection
         services.AddScoped<SetBusinessProductStatusHandler>();
         services.AddScoped<IProductUnitStore, ProductUnitStore>();
         services.AddScoped<ReplaceProductUnitsHandler>();
+        services.AddScoped<IProductImportStore, ProductImportStore>();
+        services.AddSingleton<IProductImportWorkbookReader, MediPOS.Infrastructure.Modules.Catalog.ProductImport.ProductImportWorkbook>();
+        services.AddSingleton<IProductImportTemplateWriter, MediPOS.Infrastructure.Modules.Catalog.ProductImport.ProductImportWorkbook>();
+        services.AddScoped<ImportProductsFromExcelHandler>();
+        services.AddScoped<GetImportJobResultHandler>();
+        services.AddSingleton<GenerateProductImportTemplateHandler>();
 
         services.AddScoped<IPurchasingStore, PurchasingStore>();
         services.AddScoped<IPurchaseReceiptWriter, PurchaseReceiptWriter>();

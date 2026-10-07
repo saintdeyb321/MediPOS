@@ -2,6 +2,7 @@ using MediPOS.Application.Tenancy;
 using MediPOS.Domain.Modules.AuditSupport;
 using MediPOS.Domain.Modules.Branches;
 using MediPOS.Domain.Modules.Catalog;
+using MediPOS.Domain.Modules.Catalog.ProductImport;
 using MediPOS.Domain.Modules.IdentityAccess;
 using MediPOS.Domain.Modules.Inventory;
 using MediPOS.Domain.Modules.Purchasing;
@@ -43,6 +44,8 @@ public sealed class MediPosDbContext(DbContextOptions<MediPosDbContext> options,
     public DbSet<MedicineProfile> MedicineProfiles => Set<MedicineProfile>();
     public DbSet<BusinessProduct> BusinessProducts => Set<BusinessProduct>();
     public DbSet<ProductUnit> ProductUnits => Set<ProductUnit>();
+    public DbSet<ImportJob> ImportJobs => Set<ImportJob>();
+    public DbSet<ImportRowResult> ImportRowResults => Set<ImportRowResult>();
 
     public DbSet<Supplier> Suppliers => Set<Supplier>();
 
@@ -74,6 +77,8 @@ public sealed class MediPosDbContext(DbContextOptions<MediPosDbContext> options,
         modelBuilder.ApplyConfiguration(new MedicineProfileConfiguration());
         modelBuilder.ApplyConfiguration(new BusinessProductConfiguration());
         modelBuilder.ApplyConfiguration(new MediPOS.Infrastructure.Modules.Catalog.Persistence.Configurations.ProductUnitConfiguration());
+        modelBuilder.ApplyConfiguration(new ImportJobConfiguration());
+        modelBuilder.ApplyConfiguration(new ImportRowResultConfiguration());
 
         modelBuilder.ApplyConfiguration(new SupplierConfiguration());
 
@@ -102,6 +107,8 @@ public sealed class MediPosDbContext(DbContextOptions<MediPosDbContext> options,
         modelBuilder.Entity<InventoryLot>().HasQueryFilter(value => SelectedTenantId.HasValue && value.TenantId == SelectedTenantId);
         modelBuilder.Entity<StockMovement>().HasQueryFilter(value => SelectedTenantId.HasValue && value.TenantId == SelectedTenantId);
         modelBuilder.Entity<ProductUnit>().HasQueryFilter(value => SelectedTenantId.HasValue && value.TenantId == SelectedTenantId);
+        modelBuilder.Entity<ImportJob>().HasQueryFilter(value => SelectedTenantId.HasValue && value.TenantId == SelectedTenantId);
+        modelBuilder.Entity<ImportRowResult>().HasQueryFilter(value => SelectedTenantId.HasValue && value.TenantId == SelectedTenantId);
     }
 
     public override int SaveChanges(bool acceptAllChangesOnSuccess)
@@ -109,6 +116,7 @@ public sealed class MediPosDbContext(DbContextOptions<MediPosDbContext> options,
         ValidateLicenseHistory();
         ValidateAuditHistory();
         ValidateStockHistory();
+        ValidateImportHistory();
         ValidateStockBalances();
         ValidateTenantWrites();
         return base.SaveChanges(acceptAllChangesOnSuccess);
@@ -119,6 +127,7 @@ public sealed class MediPosDbContext(DbContextOptions<MediPosDbContext> options,
         ValidateLicenseHistory();
         ValidateAuditHistory();
         ValidateStockHistory();
+        ValidateImportHistory();
         ValidateStockBalances();
         ValidateTenantWrites();
         return base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken);
@@ -142,6 +151,24 @@ public sealed class MediPosDbContext(DbContextOptions<MediPosDbContext> options,
     {
         if (ChangeTracker.Entries<StockMovement>().Any(entry => entry.State is EntityState.Modified or EntityState.Deleted))
             throw new InvalidOperationException("Stock movement history is append-only.");
+    }
+
+    private void ValidateImportHistory()
+    {
+        if (ChangeTracker.Entries<ImportRowResult>().Any(value => value.State is EntityState.Modified or EntityState.Deleted) ||
+            ChangeTracker.Entries<ImportJob>().Any(value => value.State == EntityState.Deleted ||
+                (value.State == EntityState.Modified && value.Property(job => job.Status).OriginalValue != ImportJobStatus.Processing)))
+            throw new InvalidOperationException("Import outcomes and finished jobs preserve their history.");
+        var completed = ChangeTracker.Entries<ImportJob>()
+            .Where(value => value.State == EntityState.Modified && value.Entity.Status == ImportJobStatus.Completed)
+            .Select(value => value.Entity).ToArray();
+        var summaries = ChangeTracker.Entries<AuditLog>().Where(value => value.State == EntityState.Added &&
+            value.Entity.Action == AuditAction.CatalogProductsImported).Select(value => value.Entity).ToArray();
+        if ((completed.Length > 0 || summaries.Length > 0) && (Database.CurrentTransaction is null ||
+            completed.Any(job => summaries.Count(audit => audit.EntityId == job.Id && audit.TenantId == job.TenantId &&
+                audit.ActorId == job.ActorId) != 1) ||
+            summaries.Any(audit => !completed.Any(job => job.Id == audit.EntityId && job.TenantId == audit.TenantId))))
+            throw new InvalidOperationException("Import completion and its single summary audit require one transaction.");
     }
 
     private void ValidateStockBalances()
@@ -222,6 +249,8 @@ public sealed class MediPosDbContext(DbContextOptions<MediPosDbContext> options,
                 InventoryLot value => value.TenantId,
                 StockMovement value => value.TenantId,
                 ProductUnit value => value.TenantId,
+                ImportJob value => value.TenantId,
+                ImportRowResult value => value.TenantId,
                 _ => null,
             };
             if (!tenantId.HasValue)

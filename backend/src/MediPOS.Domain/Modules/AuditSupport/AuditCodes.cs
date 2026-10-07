@@ -6,10 +6,10 @@ public enum AuditAction
     LegalEntityCreated, BranchCreated, BranchMainHubChanged,
     MembershipCreated, MembershipBranchesReplaced, MembershipScheduleReplaced, MembershipDeactivated,
     BusinessProductCreated, BusinessProductPriceChanged, BusinessProductStatusChanged,
-    BusinessProductUnitsChanged, PurchaseConfirmed, InventoryAdjusted,
+    BusinessProductUnitsChanged, PurchaseConfirmed, InventoryAdjusted, CatalogProductsImported,
 }
 
-public enum AuditEntityType { Tenant, License, LegalEntity, Branch, Membership, BusinessProduct, Purchase, InventoryLot }
+public enum AuditEntityType { Tenant, License, LegalEntity, Branch, Membership, BusinessProduct, Purchase, InventoryLot, ImportJob }
 
 public static class AuditCodes
 {
@@ -33,6 +33,7 @@ public static class AuditCodes
         AuditAction.BusinessProductUnitsChanged => "business_product.units_changed",
         AuditAction.PurchaseConfirmed => "purchase.confirmed",
         AuditAction.InventoryAdjusted => "inventory.adjusted",
+        AuditAction.CatalogProductsImported => "catalog.products_imported",
         _ => throw new ArgumentOutOfRangeException(nameof(action)),
     };
 
@@ -56,6 +57,7 @@ public static class AuditCodes
         "business_product.units_changed" => AuditAction.BusinessProductUnitsChanged,
         "purchase.confirmed" => AuditAction.PurchaseConfirmed,
         "inventory.adjusted" => AuditAction.InventoryAdjusted,
+        "catalog.products_imported" => AuditAction.CatalogProductsImported,
         _ => throw new InvalidOperationException("Unknown persisted audit action."),
     };
 
@@ -71,6 +73,7 @@ public static class AuditCodes
             AuditAction.BusinessProductStatusChanged or AuditAction.BusinessProductUnitsChanged => AuditEntityType.BusinessProduct,
         AuditAction.PurchaseConfirmed => AuditEntityType.Purchase,
         AuditAction.InventoryAdjusted => AuditEntityType.InventoryLot,
+        AuditAction.CatalogProductsImported => AuditEntityType.ImportJob,
         _ => throw new ArgumentOutOfRangeException(nameof(action)),
     };
 
@@ -84,6 +87,7 @@ public static class AuditCodes
         AuditEntityType.BusinessProduct => "business_product",
         AuditEntityType.Purchase => "purchase",
         AuditEntityType.InventoryLot => "inventory_lot",
+        AuditEntityType.ImportJob => "import_job",
         _ => throw new ArgumentOutOfRangeException(nameof(entityType)),
     };
 
@@ -97,6 +101,7 @@ public static class AuditCodes
         "business_product" => AuditEntityType.BusinessProduct,
         "purchase" => AuditEntityType.Purchase,
         "inventory_lot" => AuditEntityType.InventoryLot,
+        "import_job" => AuditEntityType.ImportJob,
         _ => throw new InvalidOperationException("Unknown persisted audit entity type."),
     };
 }

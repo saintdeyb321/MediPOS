@@ -38,6 +38,8 @@ public sealed class ProjectDependencyTests
         Assert.DoesNotContain(dependencies, dependency =>
             dependency.StartsWith("Microsoft.EntityFrameworkCore", StringComparison.OrdinalIgnoreCase)
             || dependency.StartsWith("Npgsql", StringComparison.OrdinalIgnoreCase)
+            || dependency.StartsWith("ClosedXML", StringComparison.OrdinalIgnoreCase)
+            || dependency.StartsWith("DocumentFormat.OpenXml", StringComparison.OrdinalIgnoreCase)
             || dependency.StartsWith("Microsoft.AspNetCore", StringComparison.OrdinalIgnoreCase));
         Assert.Empty(project.Descendants("FrameworkReference"));
     }
