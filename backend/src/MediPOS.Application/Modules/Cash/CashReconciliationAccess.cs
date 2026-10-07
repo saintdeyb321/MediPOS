@@ -21,9 +21,16 @@ internal static class CashReconciliationAccess
         { throw new ApplicationErrorException(CashSessionErrors.CorruptedLedger); }
     }
 
-    public static decimal ExpectedCash(CashSession session, CashPaymentTotals totals)
+    public static CashTransferTotals Transfers(CashSession session, CashPaymentLedger ledger)
     {
-        try { return CashReconciliation.ExpectedCash(session.OpeningAmount, totals); }
+        try { return CashReconciliation.CalculateTransfers(session, ledger); }
+        catch (Exception error) when (error is ArgumentException or ArithmeticException or InvalidOperationException)
+        { throw new ApplicationErrorException(CashSessionErrors.CorruptedLedger); }
+    }
+
+    public static decimal ExpectedCash(CashSession session, CashPaymentTotals totals, CashTransferTotals? transfers = null)
+    {
+        try { return CashReconciliation.ExpectedCash(session.OpeningAmount, totals, transfers); }
         catch (Exception error) when (error is ArgumentException or ArithmeticException)
         { throw new ApplicationErrorException(CashSessionErrors.CorruptedLedger); }
     }

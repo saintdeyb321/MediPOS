@@ -18,6 +18,27 @@ public sealed class VoidSaleUseCaseTests
 {
     private static readonly string[] AfterFields = ["paymentReversalCount", "reason", "status", "stockReversalCount", "totalAmount", "voidedAt"];
 
+    [Fact]
+    public async Task CashRefundCannotUseMoneyAlreadyDispatchedButCanRetryAfterAnIncomingReceipt()
+    {
+        var setup = new Setup();
+        var cash = setup.Scope.CashSession;
+        var outgoing = CashTransfer.Dispatch(cash, cash.BranchId, .25m, .5m, cash.OpenedByActorId, setup.Clock.Now);
+        setup.Scope.CashTransfers = [outgoing];
+        var error = await Assert.ThrowsAsync<ApplicationErrorException>(() => setup.Handler.HandleAsync(setup.Command(), TestContext.Current.CancellationToken));
+        Assert.Equal(SalesPosErrors.InsufficientCash, error.Error);
+        Assert.Equal(SaleStatus.Confirmed, setup.Sale.Status);
+        Assert.Equal(0, setup.Scope.LotLocks);
+        Assert.Equal(0, setup.Scope.Completions);
+        var donor = CashSession.Open(cash.TenantId, cash.BranchId, Guid.NewGuid(), 1m, cash.OpenedAt, Guid.NewGuid());
+        var incoming = CashTransfer.Dispatch(donor, cash.BranchId, .25m, 1m, donor.OpenedByActorId, setup.Clock.Now);
+        incoming.Receive(cash, cash.OpenedByActorId, setup.Clock.Now);
+        setup.Scope.CashTransfers = [outgoing, incoming];
+        await setup.Handler.HandleAsync(setup.Command(), TestContext.Current.CancellationToken);
+        Assert.Equal(SaleStatus.Voided, setup.Sale.Status);
+        Assert.True(setup.Scope.Committed);
+    }
+
     [Theory]
     [InlineData(TenantRole.Owner, false)]
     [InlineData(TenantRole.Owner, true)]
@@ -196,6 +217,8 @@ public sealed class VoidSaleUseCaseTests
         public Sale Sale => sale;
         public uint Version { get; set; } = 1;
         public SaleVoidEffects Effects { get; set; } = effects;
+        public IReadOnlyList<CashTransfer> CashTransfers { get; set; } = [];
+        public Task<CashPaymentLedger> ReadCashLedgerAsync(CancellationToken cancellationToken) => Task.FromResult(new CashPaymentLedger([sale], Effects.Payments, [], CashTransfers));
         public IReadOnlyList<InventoryLot> Lots => lots;
         public int LotLocks { get; private set; }
         public int Completions { get; private set; }

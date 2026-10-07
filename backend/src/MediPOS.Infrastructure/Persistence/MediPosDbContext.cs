@@ -46,6 +46,7 @@ public sealed partial class MediPosDbContext(DbContextOptions<MediPosDbContext> 
     public DbSet<WorkSchedule> WorkSchedules => Set<WorkSchedule>();
     public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
     public DbSet<CashSession> CashSessions => Set<CashSession>();
+    public DbSet<CashTransfer> CashTransfers => Set<CashTransfer>();
     public DbSet<Sale> Sales => Set<Sale>();
     public DbSet<SaleLine> SaleLines => Set<SaleLine>();
     public DbSet<SalePayment> SalePayments => Set<SalePayment>();
@@ -88,6 +89,7 @@ public sealed partial class MediPosDbContext(DbContextOptions<MediPosDbContext> 
         modelBuilder.ApplyConfiguration(new WorkScheduleConfiguration());
         modelBuilder.ApplyConfiguration(new AuditLogConfiguration());
         modelBuilder.ApplyConfiguration(new CashSessionConfiguration());
+        modelBuilder.ApplyConfiguration(new CashTransferConfiguration());
         modelBuilder.ApplyConfiguration(new SaleLineConfiguration());
         modelBuilder.ApplyConfiguration(new SaleConfiguration());
         modelBuilder.ApplyConfiguration(new SalePaymentConfiguration());
@@ -136,6 +138,7 @@ public sealed partial class MediPosDbContext(DbContextOptions<MediPosDbContext> 
         modelBuilder.Entity<InventoryLot>().HasQueryFilter(value => SelectedTenantId.HasValue && value.TenantId == SelectedTenantId);
         modelBuilder.Entity<StockMovement>().HasQueryFilter(value => SelectedTenantId.HasValue && value.TenantId == SelectedTenantId);
         modelBuilder.Entity<Transfer>().HasQueryFilter(value => SelectedTenantId.HasValue && value.TenantId == SelectedTenantId);
+        modelBuilder.Entity<CashTransfer>().HasQueryFilter(value => SelectedTenantId.HasValue && value.TenantId == SelectedTenantId);
         modelBuilder.Entity<TransferLine>().HasQueryFilter(value => SelectedTenantId.HasValue && value.TenantId == SelectedTenantId);
         modelBuilder.Entity<TransferEvent>().HasQueryFilter(value => SelectedTenantId.HasValue && value.TenantId == SelectedTenantId);
         modelBuilder.Entity<TransferLotAllocation>().HasQueryFilter(value => SelectedTenantId.HasValue && value.TenantId == SelectedTenantId);
@@ -156,6 +159,7 @@ public sealed partial class MediPosDbContext(DbContextOptions<MediPosDbContext> 
         ValidateSaleVoids();
         ValidateStockBalances();
         ValidateTransferWrites();
+        ValidateCashTransferWrites();
         ValidateTenantWrites();
         return base.SaveChanges(acceptAllChangesOnSuccess);
     }
@@ -172,6 +176,7 @@ public sealed partial class MediPosDbContext(DbContextOptions<MediPosDbContext> 
         ValidateSaleVoids();
         ValidateStockBalances();
         ValidateTransferWrites();
+        ValidateCashTransferWrites();
         ValidateTenantWrites();
         return base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken);
     }
@@ -429,6 +434,7 @@ public sealed partial class MediPosDbContext(DbContextOptions<MediPosDbContext> 
                 WorkSchedule value => value.TenantId,
                 AuditLog value => value.TenantId,
                 CashSession value => value.TenantId,
+                CashTransfer value => value.TenantId,
                 Sale value => value.TenantId,
                 SaleLine value => value.TenantId,
                 SalePayment value => value.TenantId,

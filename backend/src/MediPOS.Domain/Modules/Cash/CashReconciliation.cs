@@ -2,7 +2,17 @@ using MediPOS.Domain.Modules.SalesPos;
 
 namespace MediPOS.Domain.Modules.Cash;
 
-public sealed record CashPaymentLedger(IReadOnlyList<Sale> Sales, IReadOnlyList<SalePayment> Payments, IReadOnlyList<SalePaymentReversal> Reversals);
+public sealed record CashPaymentLedger(IReadOnlyList<Sale> Sales, IReadOnlyList<SalePayment> Payments, IReadOnlyList<SalePaymentReversal> Reversals,
+    IReadOnlyList<CashTransfer>? Transfers = null);
+public sealed record CashTransferTotals(decimal Incoming, decimal Outgoing)
+{
+    public static CashTransferTotals Zero { get; } = new(0m, 0m);
+    public void Validate()
+    {
+        if (!CashSession.IsValidReconciliationAmount(Incoming) || !CashSession.IsValidReconciliationAmount(Outgoing))
+            throw new ArgumentException("Cash transfer totals must be nonnegative and fit monetary precision exactly.");
+    }
+}
 public sealed record CashPaymentTotals(decimal Cash, decimal Yape, decimal Plin, decimal Card, decimal Transfer)
 {
     public decimal NetSalesAmount()
@@ -69,12 +79,36 @@ public static class CashReconciliation
         return totals;
     }
 
-    public static decimal ExpectedCash(decimal opening, CashPaymentTotals totals)
+    public static CashTransferTotals CalculateTransfers(CashSession session, CashPaymentLedger ledger)
+    {
+        var transfers = ledger.Transfers ?? [];
+        if (transfers.Select(t => t.Id).Distinct().Count() != transfers.Count) throw new ArgumentException("Duplicate cash transfer effects.");
+        var incoming = 0m; var outgoing = 0m;
+        foreach (var transfer in transfers)
+        {
+            transfer.Validate();
+            var isSource = transfer.SourceCashSessionId == session.Id;
+            var isDestination = transfer.Status == CashTransferStatus.Received && transfer.DestinationCashSessionId == session.Id;
+            if (transfer.TenantId != session.TenantId || (!isSource && !isDestination) ||
+                (isSource && (transfer.SourceBranchId != session.BranchId || transfer.DispatchedAt < session.OpenedAt ||
+                    (session.ClosedAt.HasValue && transfer.DispatchedAt > session.ClosedAt))) ||
+                (isDestination && (transfer.DestinationBranchId != session.BranchId || transfer.ReceivedAt < session.OpenedAt ||
+                    (session.ClosedAt.HasValue && transfer.ReceivedAt > session.ClosedAt))))
+                throw new ArgumentException("Transfer ledger must belong to this session and its operational interval.");
+            if (isSource) outgoing = Add(outgoing, transfer.Amount);
+            if (isDestination) incoming = Add(incoming, transfer.Amount);
+        }
+        return new(incoming, outgoing);
+    }
+
+    public static decimal ExpectedCash(decimal opening, CashPaymentTotals totals, CashTransferTotals? transfers = null)
     {
         ArgumentNullException.ThrowIfNull(totals);
         totals.NetSalesAmount();
         if (!CashSession.IsValidOpeningAmount(opening)) throw new ArgumentOutOfRangeException(nameof(opening));
-        return Add(opening, totals.Cash);
+        transfers ??= CashTransferTotals.Zero;
+        transfers.Validate();
+        return Add(Add(Add(opening, totals.Cash), transfers.Incoming), -transfers.Outgoing);
     }
 
     internal static decimal Add(decimal first, decimal second)

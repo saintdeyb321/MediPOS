@@ -97,7 +97,7 @@ public sealed class CashClosePersistenceTests(PostgreSqlFixture fixture)
         using var beforeJson = JsonDocument.Parse(audit.BeforeJson!);
         using var afterJson = JsonDocument.Parse(audit.AfterJson!);
         Assert.Equal("open", beforeJson.RootElement.GetProperty("status").GetString());
-        Assert.Equal(7, afterJson.RootElement.EnumerateObject().Count());
+        Assert.Equal(8, afterJson.RootElement.EnumerateObject().Count());
         Assert.Equal(5, afterJson.RootElement.GetProperty("paymentTotals").EnumerateObject().Count());
         Assert.Equal(expected.Cash, afterJson.RootElement.GetProperty("paymentTotals").GetProperty("cash").GetDecimal());
         Assert.False(afterJson.RootElement.TryGetProperty("sales", out _));

@@ -21,6 +21,7 @@ public interface ISaleVoidScope : IAsyncDisposable
     Sale Sale { get; }
     uint Version { get; }
     Task<SaleVoidEffects> LoadEffectsAsync(CancellationToken cancellationToken);
+    Task<CashPaymentLedger> ReadCashLedgerAsync(CancellationToken cancellationToken);
     Task<IReadOnlyList<InventoryLot>> LockLotsAsync(CancellationToken cancellationToken);
     Task<uint> CompleteAsync(IReadOnlyList<SalePaymentReversal> payments, IReadOnlyList<StockMovement> movements,
         AuditLog audit, CancellationToken cancellationToken);

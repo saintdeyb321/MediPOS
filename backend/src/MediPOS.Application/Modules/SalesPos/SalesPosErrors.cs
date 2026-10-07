@@ -9,6 +9,7 @@ public static class SalesPosErrors
     public static readonly ApplicationError AlreadyVoided = new("sale.already_voided", ErrorCategory.Conflict, "Sale has already been voided.");
     public static readonly ApplicationError CashSessionClosed = new("sale.cash_session_closed", ErrorCategory.Conflict, "The original cash session must remain open to void this sale.");
     public static readonly ApplicationError ForbiddenVoid = new("sale.forbidden_void", ErrorCategory.Forbidden, "Void requires Owner permission or the sale's own seller membership.");
+    public static readonly ApplicationError InsufficientCash = new("sale.insufficient_cash", ErrorCategory.Conflict, "Current expected cash is insufficient for this cash refund.");
     public static readonly ApplicationError CorruptedHistory = new("sale.corrupted_history", ErrorCategory.Conflict, "Sale history is inconsistent; void cannot repair it.");
     public static readonly ApplicationError ReversalAlreadyExists = new("sale.reversal_already_exists", ErrorCategory.Conflict, "An original sale effect has already been reversed.");
     public static readonly ApplicationError InvalidVoidReason = new("sale.invalid_void_reason", ErrorCategory.Validation, "A nonblank void reason of at most 512 characters is required.");

@@ -74,6 +74,8 @@ public sealed class PostgreSqlFixture : IAsyncLifetime
             GRANT SELECT, INSERT ON transfers, transfer_lines, transfer_events, transfer_lot_allocations TO medipos_test_runtime;
             GRANT UPDATE (status, updated_at) ON transfers TO medipos_test_runtime;
             GRANT UPDATE (received_quantity_base) ON transfer_lot_allocations TO medipos_test_runtime;
+            GRANT SELECT, INSERT ON cash_transfers TO medipos_test_runtime;
+            GRANT UPDATE (status, destination_cash_session_id, received_at, received_by_actor_id) ON cash_transfers TO medipos_test_runtime;
             """;
         await command.ExecuteNonQueryAsync(timeout.Token);
         _runtimeConnectionString = new NpgsqlConnectionStringBuilder(_container.GetConnectionString())

@@ -24,8 +24,10 @@ public sealed class CloseCashSessionHandler(ResolveAccessContextHandler resolver
         access = await CashOperationalAccess.ResolveAsync(resolver, command.TenantId, command.BranchId, clock.GetUtcNow(), cancellationToken).ConfigureAwait(false);
         CashReconciliationAccess.Require(scope.Session, access, closing: true);
         if (scope.Session.Status != CashSessionStatus.Open) throw new ApplicationErrorException(CashSessionErrors.AlreadyClosed);
-        var totals = CashReconciliationAccess.Calculate(scope.Session, await scope.ReadLedgerAsync(cancellationToken).ConfigureAwait(false));
-        var expected = CashReconciliationAccess.ExpectedCash(scope.Session, totals);
+        var ledger = await scope.ReadLedgerAsync(cancellationToken).ConfigureAwait(false);
+        var totals = CashReconciliationAccess.Calculate(scope.Session, ledger);
+        var transfers = CashReconciliationAccess.Transfers(scope.Session, ledger);
+        var expected = CashReconciliationAccess.ExpectedCash(scope.Session, totals, transfers);
         var now = clock.GetUtcNow();
         access = await CashOperationalAccess.ResolveAsync(resolver, command.TenantId, command.BranchId, now, cancellationToken).ConfigureAwait(false);
         CashReconciliationAccess.Require(scope.Session, access, closing: true);
@@ -42,9 +44,10 @@ public sealed class CloseCashSessionHandler(ResolveAccessContextHandler resolver
                 countedCashAmount = scope.Session.CountedCashAmount,
                 cashDifference = scope.Session.CashDifference,
                 paymentTotals = totals,
+                cashTransfers = transfers,
                 closedAt = scope.Session.ClosedAt,
             }, JsonOptions));
         await scope.CompleteAsync(totals, audit, cancellationToken).ConfigureAwait(false);
-        return CashSessionReconciliationDetails.From(scope.Session, scope.Party, totals);
+        return CashSessionReconciliationDetails.From(scope.Session, scope.Party, totals, transfers);
     }
 }

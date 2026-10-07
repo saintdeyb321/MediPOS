@@ -43,7 +43,7 @@ public sealed class CashCloseUseCaseTests
         using var before = JsonDocument.Parse(setup.Scope.Audit.BeforeJson!);
         Assert.Equal("open", before.RootElement.GetProperty("status").GetString());
         using var after = JsonDocument.Parse(setup.Scope.Audit.AfterJson!);
-        Assert.Equal(7, after.RootElement.EnumerateObject().Count());
+        Assert.Equal(8, after.RootElement.EnumerateObject().Count());
         Assert.Equal(5, after.RootElement.GetProperty("paymentTotals").EnumerateObject().Count());
         Assert.Equal(1.1234m, after.RootElement.GetProperty("paymentTotals").GetProperty("cash").GetDecimal());
     }

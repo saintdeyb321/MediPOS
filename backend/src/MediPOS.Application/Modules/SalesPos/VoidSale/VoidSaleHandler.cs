@@ -32,6 +32,20 @@ public sealed class VoidSaleHandler(ResolveAccessContextHandler resolver, ISaleV
         RequireCash(scope);
         var effects = await scope.LoadEffectsAsync(cancellationToken).ConfigureAwait(false);
         ValidateHistory(scope.Sale, effects);
+        var cashRefund = effects.Payments.Where(p => p.Method == PaymentMethod.Cash).Sum(p => p.Amount);
+        if (cashRefund > 0)
+        {
+            decimal available;
+            try
+            {
+                var ledger = await scope.ReadCashLedgerAsync(cancellationToken).ConfigureAwait(false);
+                available = CashReconciliation.ExpectedCash(scope.CashSession.OpeningAmount, CashReconciliation.Calculate(scope.CashSession, ledger),
+                    CashReconciliation.CalculateTransfers(scope.CashSession, ledger));
+            }
+            catch (Exception error) when (error is ArgumentException or ArithmeticException or InvalidOperationException)
+            { throw new ApplicationErrorException(SalesPosErrors.CorruptedHistory); }
+            if (cashRefund > available) throw new ApplicationErrorException(SalesPosErrors.InsufficientCash);
+        }
         var lots = (await scope.LockLotsAsync(cancellationToken).ConfigureAwait(false)).ToDictionary(lot => lot.Id);
         var now = clock.GetUtcNow();
         access = await SaleDraftAccess.ResolveAsync(resolver, command.TenantId, command.BranchId, now, cancellationToken).ConfigureAwait(false);

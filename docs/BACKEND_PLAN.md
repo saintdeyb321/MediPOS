@@ -4,9 +4,9 @@ This is the single execution roadmap for the backend. Prompts are given in chat 
 
 ## Working state
 - **Current milestone:** M3 — Multi-branch operations
-- **Current sprint:** B3.1 — Product transfers
+- **Current sprint:** B3.2 — Cash-change transfers
 - **Status:** IN_PROGRESS
-- **Next gate:** B3.1 implementation review and PostgreSQL integration validation in another environment; local gate passed
+- **Next gate:** B3.2 implementation review and PostgreSQL external validation; local gate passed
 
 Local policy: this machine has no Docker and will not install it. Do not check/start Docker or run PostgreSQL/Testcontainers here. B0.1 is complete locally. Keep real PostgreSQL integration tests for another environment; they are not part of the local gate and must not be reported as passed without execution.
 
@@ -149,11 +149,12 @@ Goal: complete reliable online sale workflow.
 Goal: safe branch-to-branch movement and owner consolidation.
 
 ### B3.1 — Product transfers
-**Status:** IN_PROGRESS / local gate passed; implementation review and PostgreSQL external validation pending.
+**Status:** DONE / audited locally.
 **Requirements:** FR-TRF-001..006, BR-008..009.
 **Scope:** Transfer/Line/Event state machine, approval, batch-preserving dispatch/receipt, quantity validation.
 
 ### B3.2 — Cash-change transfers
+**Status:** IN_PROGRESS / local gate passed; implementation review and PostgreSQL external validation pending.
 **Requirements:** FR-CASH-004.
 **Scope:** linked origin/receipt flow between branches/cash desks with audit.
 

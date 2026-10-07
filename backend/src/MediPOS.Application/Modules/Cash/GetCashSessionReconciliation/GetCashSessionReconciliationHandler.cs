@@ -17,14 +17,16 @@ public sealed class GetCashSessionReconciliationHandler(ResolveAccessContextHand
             ?? throw new ApplicationErrorException(CashSessionErrors.NotFound);
         CashReconciliationAccess.Require(snapshot.Session, access, closing: false);
         if (snapshot.Session.Status != CashSessionStatus.Closed) throw new ApplicationErrorException(CashSessionErrors.NotClosed);
-        var totals = CashReconciliationAccess.Calculate(snapshot.Session, await reader.ReadLedgerAsync(snapshot.Session, cancellationToken).ConfigureAwait(false));
-        var expected = CashReconciliationAccess.ExpectedCash(snapshot.Session, totals);
+        var ledger = await reader.ReadLedgerAsync(snapshot.Session, cancellationToken).ConfigureAwait(false);
+        var totals = CashReconciliationAccess.Calculate(snapshot.Session, ledger);
+        var transfers = CashReconciliationAccess.Transfers(snapshot.Session, ledger);
+        var expected = CashReconciliationAccess.ExpectedCash(snapshot.Session, totals, transfers);
         try
         {
             snapshot.Session.ValidateClosed();
             if (snapshot.Session.ExpectedCashAmount != expected) throw new ArgumentException("Stored reconciliation must match the immutable ledger.");
         }
         catch (ArgumentException) { throw new ApplicationErrorException(CashSessionErrors.CorruptedLedger); }
-        return CashSessionReconciliationDetails.From(snapshot.Session, snapshot.Party, totals);
+        return CashSessionReconciliationDetails.From(snapshot.Session, snapshot.Party, totals, transfers);
     }
 }

@@ -9,12 +9,14 @@ public sealed record CashSessionReconciliationDetails(Guid CashSessionId, Guid T
     decimal OpeningAmount, CashPaymentTotals PaymentTotals, decimal NetSalesAmount, decimal ExpectedCashAmount,
     decimal CountedCashAmount, decimal CashDifference, DateTimeOffset OpenedAt, DateTimeOffset ClosedAt, Guid ClosedByActorId)
 {
-    public static CashSessionReconciliationDetails From(CashSession session, CashSessionParty party, CashPaymentTotals totals)
+    public CashTransferTotals CashTransfers { get; init; } = CashTransferTotals.Zero;
+    public static CashSessionReconciliationDetails From(CashSession session, CashSessionParty party, CashPaymentTotals totals, CashTransferTotals? transfers = null)
     {
         ArgumentNullException.ThrowIfNull(session);
         session.ValidateClosed();
         return new(session.Id, session.TenantId, party, session.OpeningAmount, totals, totals.NetSalesAmount(), session.ExpectedCashAmount!.Value,
-            session.CountedCashAmount!.Value, session.CashDifference!.Value, session.OpenedAt, session.ClosedAt!.Value, session.ClosedByActorId!.Value);
+            session.CountedCashAmount!.Value, session.CashDifference!.Value, session.OpenedAt, session.ClosedAt!.Value, session.ClosedByActorId!.Value)
+        { CashTransfers = transfers ?? CashTransferTotals.Zero };
     }
 }
 

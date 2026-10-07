@@ -23,7 +23,7 @@ Not MVP: full accounting/payroll/advanced AR/AP/CRM, loyalty, patient clinical h
 - **BR-004** Medication outbound allocation proposes FEFO.
 - **BR-005** Standard MVP expiration alert: 30 days.
 - **BR-006** Mixed-payment sum must equal sale total exactly.
-- **BR-007** Voided sale is not deleted; compensate/reverse and audit.
+- **BR-007** Voided sale is not deleted; compensate/reverse and audit. Cash refunds must not exceed current expected cash under the original CashSession lock, including cash-transfer inflows/outflows; retry after sufficient cash arrives.
 - **BR-008** Transfer flow: requested → approved → dispatched → received/cancelled.
 - **BR-009** Batch/expiration traceability is preserved across transfers.
 - **BR-010** Commission belongs to seller/line and is compensated on void.

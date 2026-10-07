@@ -31,6 +31,9 @@ internal sealed class CashSessionReconciliationReader(MediPosDbContext context) 
             .ToArrayAsync(cancellationToken).ConfigureAwait(false);
         var reversals = await context.SalePaymentReversals.AsNoTracking().Where(reversal => reversal.TenantId == session.TenantId && ids.Contains(reversal.SaleId))
             .ToArrayAsync(cancellationToken).ConfigureAwait(false);
-        return new(sales, payments, reversals);
+        var transfers = await context.CashTransfers.AsNoTracking().Where(t => t.TenantId == session.TenantId &&
+            (t.SourceCashSessionId == session.Id || (t.Status == CashTransferStatus.Received && t.DestinationCashSessionId == session.Id)))
+            .ToArrayAsync(cancellationToken).ConfigureAwait(false);
+        return new(sales, payments, reversals, transfers);
     }
 }

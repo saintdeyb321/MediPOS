@@ -6,6 +6,7 @@ using MediPOS.Domain.Modules.AuditSupport;
 using MediPOS.Domain.Modules.Cash;
 using MediPOS.Domain.Modules.Inventory;
 using MediPOS.Domain.Modules.SalesPos;
+using MediPOS.Infrastructure.Modules.Cash.Persistence;
 using MediPOS.Infrastructure.Modules.Inventory.Persistence.Configurations;
 using MediPOS.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
@@ -63,10 +64,19 @@ internal sealed class SaleVoidTransaction(MediPosDbContext context) : ISaleVoidT
         private bool _committed;
         private bool _lotsLocked;
         private SaleVoidEffects? _effects;
+        private decimal? _availableCash;
         private readonly Dictionary<Guid, InventoryLot> _lots = [];
         public CashSession CashSession => cash;
         public Sale Sale => sale;
         public uint Version => version;
+        public async Task<CashPaymentLedger> ReadCashLedgerAsync(CancellationToken cancellationToken)
+        {
+            if (_availableCash.HasValue || _committed || _effects is null || cash.Status != CashSessionStatus.Open)
+                throw new InvalidOperationException("Read cash availability once from the locked original open session.");
+            var ledger = await CashSessionReconciliationReader.LoadLedgerAsync(context, cash, cancellationToken).ConfigureAwait(false);
+            _availableCash = CashReconciliation.ExpectedCash(cash.OpeningAmount, CashReconciliation.Calculate(cash, ledger), CashReconciliation.CalculateTransfers(cash, ledger));
+            return ledger;
+        }
 
         public async Task<SaleVoidEffects> LoadEffectsAsync(CancellationToken cancellationToken)
         {
@@ -131,6 +141,9 @@ internal sealed class SaleVoidTransaction(MediPosDbContext context) : ISaleVoidT
                 cash.Id != sale.CashSessionId || cash.TenantId != sale.TenantId || cash.BranchId != sale.BranchId || cash.MembershipId != sale.SellerMembershipId)
                 throw new InvalidOperationException("Void completion requires its locked original sale/cash/lots.");
             SaleVoidHistory.ValidateReversals(sale, _effects.Payments, _effects.Movements, payments, movements);
+            var cashRefund = payments.Where(p => p.Method == PaymentMethod.Cash).Sum(p => p.Amount);
+            if (cashRefund > 0 && (!_availableCash.HasValue || cashRefund > _availableCash.Value))
+                throw new InvalidOperationException("Cash refunds cannot exceed availability established under the cash row lock.");
             var originals = _effects.Movements.ToDictionary(movement => movement.Id);
             foreach (var movement in movements) _lots[movement.InventoryLotId].ApplySaleReversal(movement, originals[movement.ReversesStockMovementId!.Value]);
             context.SalePaymentReversals.AddRange(payments);

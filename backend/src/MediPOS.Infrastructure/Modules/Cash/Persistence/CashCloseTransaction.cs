@@ -61,7 +61,7 @@ internal sealed class CashCloseTransaction(MediPosDbContext context) : ICashClos
             if (_committed || _ledger is null || session.Status != CashSessionStatus.Closed) throw new InvalidOperationException("Close completion requires its locked session and ledger.");
             var actual = CashReconciliation.Calculate(session, _ledger);
             session.ValidateClosed();
-            if (actual != totals || session.ExpectedCashAmount != CashReconciliation.ExpectedCash(session.OpeningAmount, actual))
+            if (actual != totals || session.ExpectedCashAmount != CashReconciliation.ExpectedCash(session.OpeningAmount, actual, CashReconciliation.CalculateTransfers(session, _ledger)))
                 throw new InvalidOperationException("Close must match its locked ledger exactly.");
             context.AddAudit(audit, session.TenantId, AuditAction.CashSessionClosed, session.Id);
             try
