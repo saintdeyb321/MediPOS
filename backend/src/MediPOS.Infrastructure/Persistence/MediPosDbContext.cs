@@ -47,6 +47,7 @@ public sealed class MediPosDbContext(DbContextOptions<MediPosDbContext> options,
     public DbSet<Sale> Sales => Set<Sale>();
     public DbSet<SaleLine> SaleLines => Set<SaleLine>();
     public DbSet<SalePayment> SalePayments => Set<SalePayment>();
+    public DbSet<SalePaymentReversal> SalePaymentReversals => Set<SalePaymentReversal>();
     public DbSet<Category> Categories => Set<Category>();
     public DbSet<GlobalProduct> GlobalProducts => Set<GlobalProduct>();
     public DbSet<MedicineProfile> MedicineProfiles => Set<MedicineProfile>();
@@ -84,6 +85,7 @@ public sealed class MediPosDbContext(DbContextOptions<MediPosDbContext> options,
         modelBuilder.ApplyConfiguration(new SaleLineConfiguration());
         modelBuilder.ApplyConfiguration(new SaleConfiguration());
         modelBuilder.ApplyConfiguration(new SalePaymentConfiguration());
+        modelBuilder.ApplyConfiguration(new SalePaymentReversalConfiguration());
         modelBuilder.ApplyConfiguration(new CategoryConfiguration());
         modelBuilder.ApplyConfiguration(new GlobalProductConfiguration());
         modelBuilder.ApplyConfiguration(new MedicineProfileConfiguration());
@@ -116,6 +118,7 @@ public sealed class MediPosDbContext(DbContextOptions<MediPosDbContext> options,
         modelBuilder.Entity<Sale>().HasQueryFilter(value => SelectedTenantId.HasValue && value.TenantId == SelectedTenantId);
         modelBuilder.Entity<SaleLine>().HasQueryFilter(value => SelectedTenantId.HasValue && value.TenantId == SelectedTenantId);
         modelBuilder.Entity<SalePayment>().HasQueryFilter(value => SelectedTenantId.HasValue && value.TenantId == SelectedTenantId);
+        modelBuilder.Entity<SalePaymentReversal>().HasQueryFilter(value => SelectedTenantId.HasValue && value.TenantId == SelectedTenantId);
         modelBuilder.Entity<BusinessProduct>().HasQueryFilter(value => SelectedTenantId.HasValue && value.TenantId == SelectedTenantId);
         modelBuilder.Entity<Supplier>().HasQueryFilter(value => SelectedTenantId.HasValue && value.TenantId == SelectedTenantId);
         modelBuilder.Entity<Purchase>().HasQueryFilter(value => SelectedTenantId.HasValue && value.TenantId == SelectedTenantId);
@@ -134,8 +137,9 @@ public sealed class MediPosDbContext(DbContextOptions<MediPosDbContext> options,
         ValidateStockHistory();
         ValidateImportHistory();
         ValidateCashOpenings();
-        ValidateSaleDraftWrites();
+        ValidateSaleWrites();
         ValidateSaleConfirmations();
+        ValidateSaleVoids();
         ValidateStockBalances();
         ValidateTenantWrites();
         return base.SaveChanges(acceptAllChangesOnSuccess);
@@ -148,8 +152,9 @@ public sealed class MediPosDbContext(DbContextOptions<MediPosDbContext> options,
         ValidateStockHistory();
         ValidateImportHistory();
         ValidateCashOpenings();
-        ValidateSaleDraftWrites();
+        ValidateSaleWrites();
         ValidateSaleConfirmations();
+        ValidateSaleVoids();
         ValidateStockBalances();
         ValidateTenantWrites();
         return base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken);
@@ -209,23 +214,37 @@ public sealed class MediPosDbContext(DbContextOptions<MediPosDbContext> options,
             throw new InvalidOperationException("Cash opening and its single matching audit require one transaction.");
     }
 
-    private void ValidateSaleDraftWrites()
+    private void ValidateSaleWrites()
     {
         var sales = ChangeTracker.Entries<Sale>().Where(value => value.State is EntityState.Added or EntityState.Modified or EntityState.Deleted).ToArray();
         var lines = ChangeTracker.Entries<SaleLine>().Where(value => value.State is EntityState.Added or EntityState.Modified or EntityState.Deleted).ToArray();
         if ((sales.Length != 0 || lines.Length != 0) && Database.CurrentTransaction is null)
-            throw new InvalidOperationException("Draft writes require an explicit transaction.");
-        if (sales.Any(value => value.State == EntityState.Deleted ||
-            (value.State == EntityState.Added && (value.Entity.Status != SaleStatus.Draft || value.Entity.ConfirmedAt.HasValue)) ||
-            (value.State == EntityState.Modified && (value.Property(sale => sale.Status).OriginalValue != SaleStatus.Draft ||
-                value.Property(sale => sale.BranchId).IsModified || value.Property(sale => sale.SellerMembershipId).IsModified ||
-                value.Property(sale => sale.CashSessionId).IsModified))))
-            throw new InvalidOperationException("Sale ownership and confirmed history are immutable.");
+            throw new InvalidOperationException("Sale writes require an explicit transaction.");
+        foreach (var entry in sales)
+        {
+            if (entry.State == EntityState.Deleted || (entry.State == EntityState.Added &&
+                (entry.Entity.Status != SaleStatus.Draft || entry.Entity.ConfirmedAt.HasValue || entry.Entity.VoidedAt.HasValue || entry.Entity.VoidedByActorId.HasValue || entry.Entity.VoidReason is not null)))
+                throw new InvalidOperationException("Sales must start as drafts and preserve history.");
+            if (entry.State != EntityState.Modified) continue;
+            var original = entry.Property(sale => sale.Status).OriginalValue;
+            var transitionAllowed = original switch
+            {
+                SaleStatus.Draft => entry.Entity.Status is SaleStatus.Draft or SaleStatus.Confirmed,
+                SaleStatus.Confirmed => entry.Entity.Status == SaleStatus.Voided,
+                _ => false,
+            };
+            if (!transitionAllowed || entry.Property(sale => sale.BranchId).IsModified || entry.Property(sale => sale.SellerMembershipId).IsModified ||
+                entry.Property(sale => sale.CashSessionId).IsModified || (original == SaleStatus.Confirmed && entry.Properties.Any(property => property.IsModified &&
+                    property.Metadata.Name is not (nameof(Sale.Status) or nameof(Sale.UpdatedAt) or nameof(Sale.VoidedAt) or nameof(Sale.VoidedByActorId) or nameof(Sale.VoidReason)))))
+                throw new InvalidOperationException("Only the void transition may change confirmed history; ownership and snapshots are immutable.");
+        }
         if (lines.Any(line => !ChangeTracker.Entries<Sale>().Any(parent => parent.Entity.Id == line.Entity.SaleId &&
             parent.Entity.TenantId == line.Entity.TenantId && parent.Entity.Status == SaleStatus.Draft)))
             throw new InvalidOperationException("Line writes require their tracked draft; confirmed lines are immutable.");
         if (ChangeTracker.Entries<SalePayment>().Any(value => value.State is EntityState.Modified or EntityState.Deleted))
             throw new InvalidOperationException("Payments preserve their confirmation history.");
+        if (ChangeTracker.Entries<SalePaymentReversal>().Any(value => value.State is EntityState.Modified or EntityState.Deleted))
+            throw new InvalidOperationException("Payment reversals are append-only.");
     }
 
     private void ValidateSaleConfirmations()
@@ -257,13 +276,46 @@ public sealed class MediPosDbContext(DbContextOptions<MediPosDbContext> options,
                 var consumed = 0m;
                 foreach (var movement in movements.Where(movement => movement.SourceSaleLineId == line.Id && movement.TenantId == sale.TenantId))
                 {
-                    if (movement.QuantityDeltaBase >= 0 || movement.SourcePurchaseLineId.HasValue || movement.Reason is not null ||
+                    if (movement.QuantityDeltaBase >= 0 || movement.SourcePurchaseLineId.HasValue || movement.ReversesStockMovementId.HasValue || movement.Reason is not null ||
                         movement.ActorId != ownAudits[0].ActorId || movement.OccurredAt != sale.ConfirmedAt)
                         throw new InvalidOperationException("Sale consumptions must match the confirmation actor/time.");
                     consumed = StockQuantity.Add(consumed, -movement.QuantityDeltaBase);
                 }
                 if (consumed != line.BaseQuantity) throw new InvalidOperationException("Each confirmed line requires its exact full stock consumption.");
             }
+        }
+    }
+
+    private void ValidateSaleVoids()
+    {
+        var sales = ChangeTracker.Entries<Sale>().Where(entry => entry.State == EntityState.Modified &&
+            entry.Property(sale => sale.Status).OriginalValue == SaleStatus.Confirmed && entry.Entity.Status == SaleStatus.Voided).Select(entry => entry.Entity).ToArray();
+        var payments = ChangeTracker.Entries<SalePaymentReversal>().Where(entry => entry.State == EntityState.Added).Select(entry => entry.Entity).ToArray();
+        var movements = ChangeTracker.Entries<StockMovement>().Where(entry => entry.State == EntityState.Added && entry.Entity.MovementType == StockMovementType.SaleReversal)
+            .Select(entry => entry.Entity).ToArray();
+        var audits = ChangeTracker.Entries<AuditLog>().Where(entry => entry.State == EntityState.Added && entry.Entity.Action == AuditAction.SaleVoided).Select(entry => entry.Entity).ToArray();
+        if (sales.Length + payments.Length + movements.Length + audits.Length == 0) return;
+        if (Database.CurrentTransaction is null || payments.Any(payment => !sales.Any(sale => sale.Id == payment.SaleId && sale.TenantId == payment.TenantId)) ||
+            movements.Any(movement => !sales.Any(sale => sale.TenantId == movement.TenantId && sale.BranchId == movement.BranchId && sale.Lines.Any(line => line.Id == movement.SourceSaleLineId))) ||
+            audits.Any(audit => !sales.Any(sale => sale.Id == audit.EntityId && sale.TenantId == audit.TenantId)))
+            throw new InvalidOperationException("Reversals and audit require their tracked sale void in one transaction.");
+        foreach (var sale in sales)
+        {
+            var originals = ChangeTracker.Entries<SalePayment>().Where(entry => entry.State == EntityState.Unchanged && entry.Entity.TenantId == sale.TenantId && entry.Entity.SaleId == sale.Id)
+                .Select(entry => entry.Entity).ToArray();
+            var lineIds = sale.Lines.Select(line => line.Id).ToArray();
+            var consumptions = ChangeTracker.Entries<StockMovement>().Where(entry => entry.State == EntityState.Unchanged && entry.Entity.TenantId == sale.TenantId &&
+                entry.Entity.MovementType == StockMovementType.Sale && entry.Entity.SourceSaleLineId.HasValue && lineIds.Contains(entry.Entity.SourceSaleLineId.Value)).Select(entry => entry.Entity).ToArray();
+            try
+            {
+                SaleVoidHistory.ValidateReversals(sale, originals, consumptions, payments.Where(payment => payment.SaleId == sale.Id && payment.TenantId == sale.TenantId).ToArray(),
+                    movements.Where(movement => movement.TenantId == sale.TenantId && movement.SourceSaleLineId.HasValue && lineIds.Contains(movement.SourceSaleLineId.Value)).ToArray());
+            }
+            catch (Exception error) when (error is ArgumentException or ArithmeticException or InvalidOperationException)
+            { throw new InvalidOperationException("Void must exactly compensate all original effects.", error); }
+            var ownAudits = audits.Where(audit => audit.EntityId == sale.Id && audit.TenantId == sale.TenantId).ToArray();
+            if (ownAudits.Length != 1 || ownAudits[0].ActorId != sale.VoidedByActorId || ownAudits[0].OccurredAt != sale.VoidedAt)
+                throw new InvalidOperationException("Void requires its single matching audit.");
         }
     }
 
@@ -342,6 +394,7 @@ public sealed class MediPosDbContext(DbContextOptions<MediPosDbContext> options,
                 Sale value => value.TenantId,
                 SaleLine value => value.TenantId,
                 SalePayment value => value.TenantId,
+                SalePaymentReversal value => value.TenantId,
                 BusinessProduct value => value.TenantId,
                 Supplier value => value.TenantId,
                 Purchase value => value.TenantId,

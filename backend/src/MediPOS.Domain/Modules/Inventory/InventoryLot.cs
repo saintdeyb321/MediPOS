@@ -44,10 +44,19 @@ public sealed class InventoryLot
     {
         ArgumentNullException.ThrowIfNull(movement);
         if (movement.MovementType != StockMovementType.Sale || !movement.SourceSaleLineId.HasValue || movement.SourcePurchaseLineId.HasValue ||
-            movement.Reason is not null || movement.QuantityDeltaBase >= 0 || movement.InventoryLotId != Id ||
+            movement.ReversesStockMovementId.HasValue || movement.Reason is not null || movement.QuantityDeltaBase >= 0 || movement.InventoryLotId != Id ||
             movement.TenantId != TenantId || movement.BranchId != BranchId || movement.BusinessProductId != BusinessProductId)
             throw new ArgumentException("Sale movement must belong to this lot.", nameof(movement));
         QuantityAvailableBase = PreviewAdjustment(movement.QuantityDeltaBase);
+    }
+
+    public void ApplySaleReversal(StockMovement reversal, StockMovement original)
+    {
+        ArgumentNullException.ThrowIfNull(reversal);
+        reversal.ValidateSaleReversal(original);
+        if (reversal.InventoryLotId != Id || reversal.TenantId != TenantId || reversal.BranchId != BranchId || reversal.BusinessProductId != BusinessProductId)
+            throw new ArgumentException("Sale reversal must restore its original lot.", nameof(reversal));
+        QuantityAvailableBase = StockQuantity.Add(QuantityAvailableBase, reversal.QuantityDeltaBase);
     }
 
     // Called by the persistence transaction boundary only, with its matching append-only movement.

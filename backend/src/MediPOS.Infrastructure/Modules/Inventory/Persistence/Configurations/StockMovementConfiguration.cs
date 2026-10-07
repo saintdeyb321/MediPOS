@@ -10,14 +10,16 @@ namespace MediPOS.Infrastructure.Modules.Inventory.Persistence.Configurations;
 
 internal sealed class StockMovementConfiguration : IEntityTypeConfiguration<StockMovement>
 {
+    internal const string ReversalIndex = "ux_stock_movements_tenant_reverses";
     public void Configure(EntityTypeBuilder<StockMovement> builder)
     {
         builder.ToTable("stock_movements", table =>
         {
             table.HasCheckConstraint("ck_stock_movements_delta",
-                "(movement_type = 'purchase_receipt' AND quantity_delta_base > 0 AND source_purchase_line_id IS NOT NULL AND source_sale_line_id IS NULL AND reason IS NULL) OR " +
-                "(movement_type = 'adjustment' AND quantity_delta_base <> 0 AND source_purchase_line_id IS NULL AND source_sale_line_id IS NULL AND reason ~ '[^[:space:]]' AND reason = btrim(reason) AND reason IS NOT NULL) OR " +
-                "(movement_type = 'sale' AND quantity_delta_base < 0 AND source_sale_line_id IS NOT NULL AND source_purchase_line_id IS NULL AND reason IS NULL)");
+                "(movement_type = 'purchase_receipt' AND quantity_delta_base > 0 AND source_purchase_line_id IS NOT NULL AND source_sale_line_id IS NULL AND reverses_stock_movement_id IS NULL AND reason IS NULL) OR " +
+                "(movement_type = 'adjustment' AND quantity_delta_base <> 0 AND source_purchase_line_id IS NULL AND source_sale_line_id IS NULL AND reverses_stock_movement_id IS NULL AND reason ~ '[^[:space:]]' AND reason = btrim(reason) AND reason IS NOT NULL) OR " +
+                "(movement_type = 'sale' AND quantity_delta_base < 0 AND source_sale_line_id IS NOT NULL AND source_purchase_line_id IS NULL AND reverses_stock_movement_id IS NULL AND reason IS NULL) OR " +
+                "(movement_type = 'sale_reversal' AND quantity_delta_base > 0 AND source_sale_line_id IS NOT NULL AND reverses_stock_movement_id IS NOT NULL AND reverses_stock_movement_id <> id AND source_purchase_line_id IS NULL AND reason IS NULL)");
             table.HasCheckConstraint("ck_stock_movements_actor", "actor_id <> '00000000-0000-0000-0000-000000000000'::uuid");
         });
         builder.HasKey(value => value.Id);
@@ -29,6 +31,7 @@ internal sealed class StockMovementConfiguration : IEntityTypeConfiguration<Stoc
         builder.Property(value => value.InventoryLotId).HasColumnName("inventory_lot_id");
         builder.Property(value => value.SourcePurchaseLineId).HasColumnName("source_purchase_line_id");
         builder.Property(value => value.SourceSaleLineId).HasColumnName("source_sale_line_id");
+        builder.Property(value => value.ReversesStockMovementId).HasColumnName("reverses_stock_movement_id");
         builder.Property(value => value.MovementType).HasColumnName("movement_type").HasMaxLength(32).HasConversion(
             value => StockMovementCodes.ToCode(value), value => StockMovementCodes.FromCode(value));
         builder.Property(value => value.QuantityDeltaBase).HasColumnName("quantity_delta_base").HasColumnType("numeric");
@@ -43,6 +46,8 @@ internal sealed class StockMovementConfiguration : IEntityTypeConfiguration<Stoc
             .HasPrincipalKey(value => new { value.TenantId, value.Id, value.BusinessProductId }).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne<SaleLine>().WithMany().HasForeignKey(value => new { value.TenantId, value.SourceSaleLineId })
             .HasPrincipalKey(value => new { value.TenantId, value.Id }).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne<StockMovement>().WithMany().HasForeignKey(value => new { value.TenantId, value.ReversesStockMovementId })
+            .HasPrincipalKey(value => new { value.TenantId, value.Id }).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne<InventoryLot>().WithMany().HasForeignKey(value => new { value.TenantId, value.InventoryLotId, value.BranchId, value.BusinessProductId })
             .HasPrincipalKey(value => new { value.TenantId, value.Id, value.BranchId, value.BusinessProductId }).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne<InventoryLot>().WithMany().HasForeignKey(value => new { value.TenantId, value.InventoryLotId, value.BranchId, value.BusinessProductId, value.SourcePurchaseLineId })
@@ -51,5 +56,6 @@ internal sealed class StockMovementConfiguration : IEntityTypeConfiguration<Stoc
         builder.HasIndex(value => new { value.TenantId, value.InventoryLotId, value.OccurredAt });
         builder.HasIndex(value => new { value.TenantId, value.SourcePurchaseLineId }).IsUnique().HasFilter("source_purchase_line_id IS NOT NULL");
         builder.HasIndex(value => new { value.TenantId, value.SourceSaleLineId }).HasFilter("source_sale_line_id IS NOT NULL");
+        builder.HasIndex(value => new { value.TenantId, value.ReversesStockMovementId }).IsUnique().HasFilter("reverses_stock_movement_id IS NOT NULL").HasDatabaseName(ReversalIndex);
     }
 }

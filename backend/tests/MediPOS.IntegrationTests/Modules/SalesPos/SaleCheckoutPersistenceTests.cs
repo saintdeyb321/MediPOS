@@ -32,7 +32,7 @@ public sealed class SaleCheckoutPersistenceTests(PostgreSqlFixture fixture)
         Assert.False(context.Database.HasPendingModelChanges());
         Assert.Contains(await context.Database.GetAppliedMigrationsAsync(TestContext.Current.CancellationToken), name => name.EndsWith("_AddAtomicSaleConfirmationAndPayments", StringComparison.Ordinal));
         Assert.Equal(1, await context.Database.SqlQueryRaw<int>("""
-            SELECT count(*)::int AS "Value" FROM pg_indexes WHERE schemaname = 'public' AND tablename = 'sale_payments' AND indexname <> 'PK_sale_payments'
+            SELECT count(*)::int AS "Value" FROM pg_indexes WHERE schemaname = 'public' AND tablename = 'sale_payments' AND indexname = 'ux_sale_payments_tenant_sale_method'
             """).SingleAsync(TestContext.Current.CancellationToken));
         Assert.Equal(0, await context.Database.SqlQueryRaw<int>("""
             SELECT count(*)::int AS "Value" FROM pg_indexes WHERE schemaname = 'public' AND tablename = 'sales' AND indexdef LIKE '%confirmed_at%'

@@ -6,7 +6,7 @@ public enum AuditAction
     LegalEntityCreated, BranchCreated, BranchMainHubChanged,
     MembershipCreated, MembershipBranchesReplaced, MembershipScheduleReplaced, MembershipDeactivated,
     BusinessProductCreated, BusinessProductPriceChanged, BusinessProductStatusChanged,
-    BusinessProductUnitsChanged, PurchaseConfirmed, InventoryAdjusted, CatalogProductsImported, CashSessionOpened, SaleConfirmed,
+    BusinessProductUnitsChanged, PurchaseConfirmed, InventoryAdjusted, CatalogProductsImported, CashSessionOpened, SaleConfirmed, SaleVoided,
 }
 
 public enum AuditEntityType { Tenant, License, LegalEntity, Branch, Membership, BusinessProduct, Purchase, InventoryLot, ImportJob, CashSession, Sale }
@@ -36,6 +36,7 @@ public static class AuditCodes
         AuditAction.CatalogProductsImported => "catalog.products_imported",
         AuditAction.CashSessionOpened => "cash_session.opened",
         AuditAction.SaleConfirmed => "sale.confirmed",
+        AuditAction.SaleVoided => "sale.voided",
         _ => throw new ArgumentOutOfRangeException(nameof(action)),
     };
 
@@ -62,6 +63,7 @@ public static class AuditCodes
         "catalog.products_imported" => AuditAction.CatalogProductsImported,
         "cash_session.opened" => AuditAction.CashSessionOpened,
         "sale.confirmed" => AuditAction.SaleConfirmed,
+        "sale.voided" => AuditAction.SaleVoided,
         _ => throw new InvalidOperationException("Unknown persisted audit action."),
     };
 
@@ -79,7 +81,7 @@ public static class AuditCodes
         AuditAction.InventoryAdjusted => AuditEntityType.InventoryLot,
         AuditAction.CatalogProductsImported => AuditEntityType.ImportJob,
         AuditAction.CashSessionOpened => AuditEntityType.CashSession,
-        AuditAction.SaleConfirmed => AuditEntityType.Sale,
+        AuditAction.SaleConfirmed or AuditAction.SaleVoided => AuditEntityType.Sale,
         _ => throw new ArgumentOutOfRangeException(nameof(action)),
     };
 

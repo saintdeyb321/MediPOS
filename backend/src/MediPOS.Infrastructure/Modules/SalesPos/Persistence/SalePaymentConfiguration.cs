@@ -16,6 +16,7 @@ internal sealed class SalePaymentConfiguration : IEntityTypeConfiguration<SalePa
             table.HasCheckConstraint("ck_sale_payments_identifier", "id <> '00000000-0000-0000-0000-000000000000'::uuid");
         });
         builder.HasKey(value => value.Id);
+        builder.HasAlternateKey(value => new { value.TenantId, value.Id, value.SaleId });
         builder.Property(value => value.Id).HasColumnName("id").ValueGeneratedNever();
         builder.Property(value => value.TenantId).HasColumnName("tenant_id");
         builder.Property(value => value.SaleId).HasColumnName("sale_id");

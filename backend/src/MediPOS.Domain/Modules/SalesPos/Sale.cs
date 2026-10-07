@@ -1,6 +1,6 @@
 namespace MediPOS.Domain.Modules.SalesPos;
 
-public enum SaleStatus { Draft, Confirmed }
+public enum SaleStatus { Draft, Confirmed, Voided }
 
 public static class SaleStatusCodes
 {
@@ -8,12 +8,14 @@ public static class SaleStatusCodes
     {
         SaleStatus.Draft => "draft",
         SaleStatus.Confirmed => "confirmed",
+        SaleStatus.Voided => "voided",
         _ => throw new ArgumentOutOfRangeException(nameof(status)),
     };
     public static SaleStatus FromCode(string code) => code switch
     {
         "draft" => SaleStatus.Draft,
         "confirmed" => SaleStatus.Confirmed,
+        "voided" => SaleStatus.Voided,
         _ => throw new InvalidOperationException("Unknown persisted sale status."),
     };
 }
@@ -22,6 +24,7 @@ public sealed class Sale
 {
     public const decimal MaximumAmount = 99999999999999.9999m; // numeric(18,4).
     public const int MaximumLines = 200;
+    public const int MaximumVoidReasonLength = 512;
     private readonly List<SaleLine> _lines = [];
     private Sale() { }
     public Guid Id { get; private set; }
@@ -34,6 +37,9 @@ public sealed class Sale
     public DateTimeOffset CreatedAt { get; private set; }
     public DateTimeOffset UpdatedAt { get; private set; }
     public DateTimeOffset? ConfirmedAt { get; private set; }
+    public DateTimeOffset? VoidedAt { get; private set; }
+    public Guid? VoidedByActorId { get; private set; }
+    public string? VoidReason { get; private set; }
     public IReadOnlyList<SaleLine> Lines => _lines.AsReadOnly();
 
     public static Sale CreateDraft(Guid tenantId, Guid branchId, Guid sellerMembershipId, Guid cashSessionId, DateTimeOffset now)
@@ -62,8 +68,11 @@ public sealed class Sale
     {
         if (Id == Guid.Empty || TenantId == Guid.Empty || BranchId == Guid.Empty || SellerMembershipId == Guid.Empty || CashSessionId == Guid.Empty ||
             !Enum.IsDefined(Status) || CreatedAt.Offset != TimeSpan.Zero || UpdatedAt.Offset != TimeSpan.Zero || UpdatedAt < CreatedAt ||
-            (Status == SaleStatus.Draft && ConfirmedAt.HasValue) || (Status == SaleStatus.Confirmed &&
+            (Status == SaleStatus.Draft && ConfirmedAt.HasValue) || (Status is SaleStatus.Confirmed or SaleStatus.Voided &&
                 (!ConfirmedAt.HasValue || ConfirmedAt.Value.Offset != TimeSpan.Zero || ConfirmedAt < CreatedAt || ConfirmedAt > UpdatedAt)) ||
+            (Status != SaleStatus.Voided && (VoidedAt.HasValue || VoidedByActorId.HasValue || VoidReason is not null)) ||
+            (Status == SaleStatus.Voided && (!VoidedAt.HasValue || VoidedAt.Value.Offset != TimeSpan.Zero || VoidedAt < ConfirmedAt || VoidedAt > UpdatedAt ||
+                !VoidedByActorId.HasValue || VoidedByActorId == Guid.Empty || !IsValidVoidReason(VoidReason) || VoidReason != VoidReason!.Trim())) ||
             _lines.Count is 0 or > MaximumLines || _lines.Select(value => value.Id).Distinct().Count() != _lines.Count ||
             _lines.Select(value => (value.BusinessProductId, value.ProductUnitIdSnapshot, value.PriceKind)).Distinct().Count() != _lines.Count)
             throw new ArgumentException("Sale header/lines are inconsistent.");
@@ -101,6 +110,23 @@ public sealed class Sale
         if (at < UpdatedAt) throw new ArgumentOutOfRangeException(nameof(now), "Confirmation cannot precede the draft update.");
         Status = SaleStatus.Confirmed;
         ConfirmedAt = at;
+        UpdatedAt = at;
+    }
+
+    public static bool IsValidVoidReason(string? reason) => !string.IsNullOrWhiteSpace(reason) && reason.Trim().Length <= MaximumVoidReasonLength;
+
+    public void Void(string reason, Guid actorId, DateTimeOffset now)
+    {
+        if (Status != SaleStatus.Confirmed) throw new InvalidOperationException("Only confirmed sales can be voided once.");
+        if (!IsValidVoidReason(reason)) throw new ArgumentException("A bounded void reason is required.", nameof(reason));
+        if (actorId == Guid.Empty) throw new ArgumentException("A void actor is required.", nameof(actorId));
+        ValidateForCheckout();
+        var at = now.ToUniversalTime();
+        if (at < UpdatedAt) throw new ArgumentOutOfRangeException(nameof(now), "Void cannot precede the sale's last update.");
+        Status = SaleStatus.Voided;
+        VoidedAt = at;
+        VoidedByActorId = actorId;
+        VoidReason = reason.Trim();
         UpdatedAt = at;
     }
 

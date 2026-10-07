@@ -4,9 +4,9 @@ This is the single execution roadmap for the backend. Prompts are given in chat 
 
 ## Working state
 - **Current milestone:** M2 — POS & Cash
-- **Current sprint:** B2.3 — Atomic sale confirmation & payments
+- **Current sprint:** B2.4 — Sale void & compensating reversals
 - **Status:** IN_PROGRESS
-- **Next gate:** B2.3 implementation review; PostgreSQL integration validation in another environment
+- **Next gate:** B2.4 implementation review; PostgreSQL integration validation in another environment
 
 Local policy: this machine has no Docker and will not install it. Do not check/start Docker or run PostgreSQL/Testcontainers here. B0.1 is complete locally. Keep real PostgreSQL integration tests for another environment; they are not part of the local gate and must not be reported as passed without execution.
 
@@ -121,13 +121,14 @@ Goal: complete reliable online sale workflow.
 **Scope:** Sale/SaleLine, seller/cash linkage, ProductUnit conversion, server-side price snapshots and totals. No stock mutation, confirmation or payments. FR-POS-001 remains primarily a frontend/usability requirement.
 
 ### B2.3 — Atomic sale confirmation & payments
-**Status:** IN_PROGRESS.
+**Status:** DONE / audited locally.
 **Requirements:** FR-POS-005..007, BR-006.
 **Scope:** SalePayment, exact payment total, FEFO allocation, lot locking, StockMovement, Sale confirmation and audit in one transaction.
 
-### B2.4 — Void/reversal & commissions hook
+### B2.4 — Sale void & compensating reversals
+**Status:** IN_PROGRESS.
 **Requirements:** FR-POS-010, BR-007.
-**Scope:** permissioned sale void, compensating stock/payment effects, audit; extension point for commission reversal.
+**Scope:** permissioned sale void, compensating stock movements, payment reversal ledger and audit in one transaction. BR-010 remains pending B4.1, which must extend this same transaction with real commission compensation; no commission hook/service in B2.4.
 
 ### B2.5 — Cash close & reconciliation
 **Requirements:** FR-CASH-002..003.

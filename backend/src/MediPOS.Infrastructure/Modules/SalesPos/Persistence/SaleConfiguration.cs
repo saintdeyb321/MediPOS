@@ -14,8 +14,14 @@ internal sealed class SaleConfiguration : IEntityTypeConfiguration<Sale>
     {
         builder.ToTable("sales", table =>
         {
-            table.HasCheckConstraint("ck_sales_status", "status IN ('draft', 'confirmed')");
-            table.HasCheckConstraint("ck_sales_confirmation", "(status = 'draft' AND confirmed_at IS NULL) OR (status = 'confirmed' AND confirmed_at IS NOT NULL AND confirmed_at >= created_at AND confirmed_at <= updated_at)");
+            table.HasCheckConstraint("ck_sales_status", "status IN ('draft', 'confirmed', 'voided')");
+            table.HasCheckConstraint("ck_sales_confirmation", "(status = 'draft' AND confirmed_at IS NULL) OR (status IN ('confirmed', 'voided') AND confirmed_at IS NOT NULL AND confirmed_at >= created_at AND confirmed_at <= updated_at)");
+            table.HasCheckConstraint("ck_sales_void", """
+                (status IN ('draft', 'confirmed') AND voided_at IS NULL AND voided_by_actor_id IS NULL AND void_reason IS NULL) OR
+                (status = 'voided' AND voided_at IS NOT NULL AND voided_at >= confirmed_at AND voided_at <= updated_at
+                    AND voided_by_actor_id IS NOT NULL AND voided_by_actor_id <> '00000000-0000-0000-0000-000000000000'::uuid
+                    AND void_reason IS NOT NULL AND void_reason ~ '[^[:space:]]' AND void_reason = btrim(void_reason) AND length(void_reason) <= 512)
+                """);
             table.HasCheckConstraint("ck_sales_total", "total_amount >= 0 AND total_amount <= 99999999999999.9999");
             table.HasCheckConstraint("ck_sales_timestamps", "updated_at >= created_at");
             table.HasCheckConstraint("ck_sales_identifiers", """
@@ -37,6 +43,9 @@ internal sealed class SaleConfiguration : IEntityTypeConfiguration<Sale>
         builder.Property(value => value.CreatedAt).HasColumnName("created_at").HasColumnType("timestamp with time zone");
         builder.Property(value => value.UpdatedAt).HasColumnName("updated_at").HasColumnType("timestamp with time zone");
         builder.Property(value => value.ConfirmedAt).HasColumnName("confirmed_at").HasColumnType("timestamp with time zone");
+        builder.Property(value => value.VoidedAt).HasColumnName("voided_at").HasColumnType("timestamp with time zone");
+        builder.Property(value => value.VoidedByActorId).HasColumnName("voided_by_actor_id");
+        builder.Property(value => value.VoidReason).HasColumnName("void_reason").HasMaxLength(Sale.MaximumVoidReasonLength);
         builder.Property(value => value.Status).HasColumnName("status").HasMaxLength(16)
             .HasConversion(value => SaleStatusCodes.ToCode(value), value => SaleStatusCodes.FromCode(value));
         builder.Property<uint>("Version").IsRowVersion().HasColumnName("xmin");
