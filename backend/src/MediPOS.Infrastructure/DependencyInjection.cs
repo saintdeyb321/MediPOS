@@ -38,6 +38,7 @@ using MediPOS.Application.Modules.Purchasing.ReplacePurchaseLines;
 using MediPOS.Application.Modules.SalesPos;
 using MediPOS.Application.Modules.SalesPos.ConfirmSale;
 using MediPOS.Application.Modules.SalesPos.CreateSaleDraft;
+using MediPOS.Application.Modules.SalesPos.GetInternalTicket;
 using MediPOS.Application.Modules.SalesPos.GetSaleDraft;
 using MediPOS.Application.Modules.SalesPos.ReplaceSaleLines;
 using MediPOS.Application.Modules.SalesPos.VoidSale;
@@ -103,6 +104,7 @@ public static class DependencyInjection
         services.AddScoped<ISaleDraftStore, SaleDraftStore>();
         services.AddScoped<ISaleCheckoutTransaction, SaleCheckoutTransaction>();
         services.AddScoped<ISaleVoidTransaction, SaleVoidTransaction>();
+        services.AddScoped<IInternalTicketReader, InternalTicketReader>();
         services.AddScoped<CreateMembershipHandler>();
         services.AddScoped<SetMembershipBranchesHandler>();
         services.AddScoped<ReplaceWorkScheduleHandler>();
@@ -160,6 +162,7 @@ public static class DependencyInjection
         services.AddScoped<VoidSaleHandler>();
         services.AddScoped<ReplaceSaleLinesHandler>();
         services.AddScoped<GetSaleDraftHandler>();
+        services.AddScoped<GetInternalTicketHandler>();
         return services;
     }
 }
