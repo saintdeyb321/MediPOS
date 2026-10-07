@@ -3,10 +3,10 @@
 This is the single execution roadmap for the backend. Prompts are given in chat and are **not** stored in the repository.
 
 ## Working state
-- **Current milestone:** M1 — Catalog, purchasing & inventory
-- **Current sprint:** B1.6 — Excel product import
+- **Current milestone:** M2 — POS & Cash
+- **Current sprint:** B2.1 — Cash session
 - **Status:** IN_PROGRESS
-- **Next gate:** B1.6 local restore/build/unit tests/architecture tests/format and review; PostgreSQL integration validation in another environment
+- **Next gate:** B2.1 local restore/build/unit tests/architecture tests/format and review; PostgreSQL integration validation in another environment
 
 Local policy: this machine has no Docker and will not install it. Do not check/start Docker or run PostgreSQL/Testcontainers here. B0.1 is complete locally. Keep real PostgreSQL integration tests for another environment; they are not part of the local gate and must not be reported as passed without execution.
 
@@ -98,11 +98,11 @@ Goal: trustworthy product and stock core.
 **Exit:** typo/accent and structured-equivalence tests pass within representative target dataset.
 
 ### B1.6 — Excel product import
-**Status:** IN_PROGRESS.
+**Status:** DONE / audited locally.
 **Requirements:** FR-CAT-009.
 **Scope:** ImportJob, bounded file validation, staging/result per row, partial validity behavior without importing invalid rows.
 
-**M1 gate:** catalog + purchase + batches + ledger + FEFO + safe search are ready for POS.
+**M1 gate:** local implementation complete; PostgreSQL integration validation remains pending in an external environment.
 
 ---
 
@@ -110,8 +110,10 @@ Goal: trustworthy product and stock core.
 Goal: complete reliable online sale workflow.
 
 ### B2.1 — Cash session
+**Status:** IN_PROGRESS.
 **Requirements:** FR-CASH-001, FR-CASH-005.
 **Scope:** CashSession open state, seller/branch ownership, permission checks.
+**FR-CASH-005:** partially covered in B2.1 (status/opening/seller/branch); accumulated sales remain pending until Sale exists in B2.2.
 
 ### B2.2 — Sale aggregate & atomic checkout
 **Requirements:** FR-POS-001, FR-POS-004, FR-POS-009, BR-002..004.

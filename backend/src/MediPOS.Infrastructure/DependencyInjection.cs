@@ -2,6 +2,9 @@ using MediPOS.Application.Modules.Branches;
 using MediPOS.Application.Modules.Branches.CreateBranch;
 using MediPOS.Application.Modules.Branches.CreateLegalEntity;
 using MediPOS.Application.Modules.Branches.SetMainHubBranch;
+using MediPOS.Application.Modules.Cash;
+using MediPOS.Application.Modules.Cash.GetActiveCashSessions;
+using MediPOS.Application.Modules.Cash.OpenCashSession;
 using MediPOS.Application.Modules.Catalog;
 using MediPOS.Application.Modules.Catalog.CreateBusinessProductFromGlobal;
 using MediPOS.Application.Modules.Catalog.CreateCategory;
@@ -38,6 +41,7 @@ using MediPOS.Application.Modules.TenancyLicensing.RequestTenantPurge;
 using MediPOS.Application.Modules.TenancyLicensing.SuspendLicense;
 using MediPOS.Application.Tenancy;
 using MediPOS.Infrastructure.Modules.Branches.Persistence;
+using MediPOS.Infrastructure.Modules.Cash.Persistence;
 using MediPOS.Infrastructure.Modules.Catalog.Persistence;
 using MediPOS.Infrastructure.Modules.Catalog.ProductImport;
 using MediPOS.Infrastructure.Modules.IdentityAccess.Persistence;
@@ -82,6 +86,9 @@ public static class DependencyInjection
         services.AddScoped<SetMainHubBranchHandler>();
         services.AddScoped<IIdentityAccessStore, IdentityAccessStore>();
         services.AddScoped<IOperationalAccessReader, OperationalAccessReader>();
+        services.AddScoped<IOpenCashSessionWriter, OpenCashSessionWriter>();
+        services.AddScoped<IFindOpenCashSession, CashSessionReader>();
+        services.AddScoped<IActiveCashSessionsReader, CashSessionReader>();
         services.AddScoped<CreateMembershipHandler>();
         services.AddScoped<SetMembershipBranchesHandler>();
         services.AddScoped<ReplaceWorkScheduleHandler>();
@@ -130,6 +137,8 @@ public static class DependencyInjection
         services.AddScoped<IAuthenticatedMediPosUser, TAuthenticatedUser>();
         services.AddScoped<UpsertGoogleUserHandler>();
         services.AddScoped<ResolveAccessContextHandler>();
+        services.AddScoped<OpenCashSessionHandler>();
+        services.AddScoped<GetActiveCashSessionsHandler>();
         return services;
     }
 }

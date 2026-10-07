@@ -1,6 +1,7 @@
 using MediPOS.Application.Tenancy;
 using MediPOS.Domain.Modules.AuditSupport;
 using MediPOS.Domain.Modules.Branches;
+using MediPOS.Domain.Modules.Cash;
 using MediPOS.Domain.Modules.Catalog;
 using MediPOS.Domain.Modules.Catalog.ProductImport;
 using MediPOS.Domain.Modules.IdentityAccess;
@@ -9,6 +10,7 @@ using MediPOS.Domain.Modules.Purchasing;
 using MediPOS.Domain.Modules.TenancyLicensing;
 using MediPOS.Infrastructure.Modules.AuditSupport.Persistence;
 using MediPOS.Infrastructure.Modules.Branches.Persistence.Configurations;
+using MediPOS.Infrastructure.Modules.Cash.Persistence;
 using MediPOS.Infrastructure.Modules.Catalog.Persistence.Configurations;
 using MediPOS.Infrastructure.Modules.IdentityAccess.Persistence.Configurations;
 using MediPOS.Infrastructure.Modules.Inventory.Persistence.Configurations;
@@ -39,6 +41,7 @@ public sealed class MediPosDbContext(DbContextOptions<MediPosDbContext> options,
     public DbSet<MembershipBranch> MembershipBranches => Set<MembershipBranch>();
     public DbSet<WorkSchedule> WorkSchedules => Set<WorkSchedule>();
     public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
+    public DbSet<CashSession> CashSessions => Set<CashSession>();
     public DbSet<Category> Categories => Set<Category>();
     public DbSet<GlobalProduct> GlobalProducts => Set<GlobalProduct>();
     public DbSet<MedicineProfile> MedicineProfiles => Set<MedicineProfile>();
@@ -72,6 +75,7 @@ public sealed class MediPosDbContext(DbContextOptions<MediPosDbContext> options,
         modelBuilder.ApplyConfiguration(new MembershipBranchConfiguration());
         modelBuilder.ApplyConfiguration(new WorkScheduleConfiguration());
         modelBuilder.ApplyConfiguration(new AuditLogConfiguration());
+        modelBuilder.ApplyConfiguration(new CashSessionConfiguration());
         modelBuilder.ApplyConfiguration(new CategoryConfiguration());
         modelBuilder.ApplyConfiguration(new GlobalProductConfiguration());
         modelBuilder.ApplyConfiguration(new MedicineProfileConfiguration());
@@ -100,6 +104,7 @@ public sealed class MediPosDbContext(DbContextOptions<MediPosDbContext> options,
         modelBuilder.Entity<MembershipBranch>().HasQueryFilter(value => SelectedTenantId.HasValue && value.TenantId == SelectedTenantId);
         modelBuilder.Entity<WorkSchedule>().HasQueryFilter(value => SelectedTenantId.HasValue && value.TenantId == SelectedTenantId);
         modelBuilder.Entity<AuditLog>().HasQueryFilter(value => SelectedTenantId.HasValue && value.TenantId == SelectedTenantId);
+        modelBuilder.Entity<CashSession>().HasQueryFilter(value => SelectedTenantId.HasValue && value.TenantId == SelectedTenantId);
         modelBuilder.Entity<BusinessProduct>().HasQueryFilter(value => SelectedTenantId.HasValue && value.TenantId == SelectedTenantId);
         modelBuilder.Entity<Supplier>().HasQueryFilter(value => SelectedTenantId.HasValue && value.TenantId == SelectedTenantId);
         modelBuilder.Entity<Purchase>().HasQueryFilter(value => SelectedTenantId.HasValue && value.TenantId == SelectedTenantId);
@@ -117,6 +122,7 @@ public sealed class MediPosDbContext(DbContextOptions<MediPosDbContext> options,
         ValidateAuditHistory();
         ValidateStockHistory();
         ValidateImportHistory();
+        ValidateCashOpenings();
         ValidateStockBalances();
         ValidateTenantWrites();
         return base.SaveChanges(acceptAllChangesOnSuccess);
@@ -128,6 +134,7 @@ public sealed class MediPosDbContext(DbContextOptions<MediPosDbContext> options,
         ValidateAuditHistory();
         ValidateStockHistory();
         ValidateImportHistory();
+        ValidateCashOpenings();
         ValidateStockBalances();
         ValidateTenantWrites();
         return base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken);
@@ -169,6 +176,22 @@ public sealed class MediPosDbContext(DbContextOptions<MediPosDbContext> options,
                 audit.ActorId == job.ActorId) != 1) ||
             summaries.Any(audit => !completed.Any(job => job.Id == audit.EntityId && job.TenantId == audit.TenantId))))
             throw new InvalidOperationException("Import completion and its single summary audit require one transaction.");
+    }
+
+    private void ValidateCashOpenings()
+    {
+        if (ChangeTracker.Entries<CashSession>().Any(value => value.State is EntityState.Modified or EntityState.Deleted))
+            throw new InvalidOperationException("Cash sessions preserve their opening history; closing is not implemented yet.");
+        var sessions = ChangeTracker.Entries<CashSession>().Where(value => value.State == EntityState.Added).Select(value => value.Entity).ToArray();
+        var audits = ChangeTracker.Entries<AuditLog>().Where(value => value.State == EntityState.Added &&
+            value.Entity.Action == AuditAction.CashSessionOpened).Select(value => value.Entity).ToArray();
+        if ((sessions.Length > 0 || audits.Length > 0) && (Database.CurrentTransaction is null ||
+            sessions.Any(session => session.Status != CashSessionStatus.Open || audits.Count(audit =>
+                audit.EntityId == session.Id && audit.TenantId == session.TenantId && audit.ActorId == session.OpenedByActorId &&
+                audit.OccurredAt == session.OpenedAt) != 1) ||
+            audits.Any(audit => !sessions.Any(session => session.Id == audit.EntityId && session.TenantId == audit.TenantId &&
+                session.OpenedByActorId == audit.ActorId && session.OpenedAt == audit.OccurredAt))))
+            throw new InvalidOperationException("Cash opening and its single matching audit require one transaction.");
     }
 
     private void ValidateStockBalances()
@@ -242,6 +265,7 @@ public sealed class MediPosDbContext(DbContextOptions<MediPosDbContext> options,
                 MembershipBranch value => value.TenantId,
                 WorkSchedule value => value.TenantId,
                 AuditLog value => value.TenantId,
+                CashSession value => value.TenantId,
                 BusinessProduct value => value.TenantId,
                 Supplier value => value.TenantId,
                 Purchase value => value.TenantId,
