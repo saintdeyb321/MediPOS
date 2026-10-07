@@ -48,6 +48,13 @@ using MediPOS.Application.Modules.TenancyLicensing.ReactivateLicense;
 using MediPOS.Application.Modules.TenancyLicensing.RenewLicense;
 using MediPOS.Application.Modules.TenancyLicensing.RequestTenantPurge;
 using MediPOS.Application.Modules.TenancyLicensing.SuspendLicense;
+using MediPOS.Application.Modules.Transfers;
+using MediPOS.Application.Modules.Transfers.ApproveTransfer;
+using MediPOS.Application.Modules.Transfers.CancelTransfer;
+using MediPOS.Application.Modules.Transfers.DispatchTransfer;
+using MediPOS.Application.Modules.Transfers.GetTransfer;
+using MediPOS.Application.Modules.Transfers.ReceiveTransfer;
+using MediPOS.Application.Modules.Transfers.RequestTransfer;
 using MediPOS.Application.Tenancy;
 using MediPOS.Infrastructure.Modules.Branches.Persistence;
 using MediPOS.Infrastructure.Modules.Cash.Persistence;
@@ -58,6 +65,7 @@ using MediPOS.Infrastructure.Modules.Inventory.Persistence;
 using MediPOS.Infrastructure.Modules.Purchasing.Persistence;
 using MediPOS.Infrastructure.Modules.SalesPos.Persistence;
 using MediPOS.Infrastructure.Modules.TenancyLicensing.Persistence;
+using MediPOS.Infrastructure.Modules.Transfers.Persistence;
 using MediPOS.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -105,6 +113,9 @@ public static class DependencyInjection
         services.AddScoped<ISaleCheckoutTransaction, SaleCheckoutTransaction>();
         services.AddScoped<ISaleVoidTransaction, SaleVoidTransaction>();
         services.AddScoped<IInternalTicketReader, InternalTicketReader>();
+        services.AddScoped<ITransferRequestStore, TransferRequestStore>();
+        services.AddScoped<ITransferReader, TransferReader>();
+        services.AddScoped<ITransferTransaction, TransferTransaction>();
         services.AddScoped<CreateMembershipHandler>();
         services.AddScoped<SetMembershipBranchesHandler>();
         services.AddScoped<ReplaceWorkScheduleHandler>();
@@ -163,6 +174,12 @@ public static class DependencyInjection
         services.AddScoped<ReplaceSaleLinesHandler>();
         services.AddScoped<GetSaleDraftHandler>();
         services.AddScoped<GetInternalTicketHandler>();
+        services.AddScoped<RequestTransferHandler>();
+        services.AddScoped<ApproveTransferHandler>();
+        services.AddScoped<CancelTransferHandler>();
+        services.AddScoped<DispatchTransferHandler>();
+        services.AddScoped<ReceiveTransferHandler>();
+        services.AddScoped<GetTransferHandler>();
         return services;
     }
 }

@@ -24,7 +24,8 @@ internal sealed class AuditLogConfiguration : IEntityTypeConfiguration<AuditLog>
                 (entity_type = 'inventory_lot' AND action = 'inventory.adjusted') OR
                 (entity_type = 'import_job' AND action = 'catalog.products_imported') OR
                 (entity_type = 'cash_session' AND action IN ('cash_session.opened', 'cash_session.closed')) OR
-                (entity_type = 'sale' AND action IN ('sale.confirmed', 'sale.voided'))
+                (entity_type = 'sale' AND action IN ('sale.confirmed', 'sale.voided')) OR
+                (entity_type = 'transfer' AND action IN ('transfer.requested', 'transfer.approved', 'transfer.dispatched', 'transfer.received', 'transfer.cancelled'))
                 """);
             table.HasCheckConstraint("ck_audit_logs_correlation",
                 "correlation_id ~ '^[0-9a-f]{32}$' AND correlation_id <> repeat('0', 32)");

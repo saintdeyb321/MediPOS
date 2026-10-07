@@ -9,6 +9,7 @@ using MediPOS.Domain.Modules.Inventory;
 using MediPOS.Domain.Modules.Purchasing;
 using MediPOS.Domain.Modules.SalesPos;
 using MediPOS.Domain.Modules.TenancyLicensing;
+using MediPOS.Domain.Modules.Transfers;
 using MediPOS.Infrastructure.Modules.AuditSupport.Persistence;
 using MediPOS.Infrastructure.Modules.Branches.Persistence.Configurations;
 using MediPOS.Infrastructure.Modules.Cash.Persistence;
@@ -18,11 +19,12 @@ using MediPOS.Infrastructure.Modules.Inventory.Persistence.Configurations;
 using MediPOS.Infrastructure.Modules.Purchasing.Persistence.Configurations;
 using MediPOS.Infrastructure.Modules.SalesPos.Persistence;
 using MediPOS.Infrastructure.Modules.TenancyLicensing.Persistence.Configurations;
+using MediPOS.Infrastructure.Modules.Transfers.Persistence;
 using Microsoft.EntityFrameworkCore;
 
 namespace MediPOS.Infrastructure.Persistence;
 
-public sealed class MediPosDbContext(DbContextOptions<MediPosDbContext> options, ITenantDataContext tenantContext) : DbContext(options)
+public sealed partial class MediPosDbContext(DbContextOptions<MediPosDbContext> options, ITenantDataContext tenantContext) : DbContext(options)
 {
     public Guid? SelectedTenantId => tenantContext.TenantId;
     public void SelectTenant(Guid tenantId) => tenantContext.SelectTenant(tenantId);
@@ -65,6 +67,10 @@ public sealed class MediPosDbContext(DbContextOptions<MediPosDbContext> options,
     public DbSet<InventoryLot> InventoryLots => Set<InventoryLot>();
 
     public DbSet<StockMovement> StockMovements => Set<StockMovement>();
+    public DbSet<Transfer> Transfers => Set<Transfer>();
+    public DbSet<TransferLine> TransferLines => Set<TransferLine>();
+    public DbSet<TransferEvent> TransferEvents => Set<TransferEvent>();
+    public DbSet<TransferLotAllocation> TransferLotAllocations => Set<TransferLotAllocation>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -103,6 +109,10 @@ public sealed class MediPosDbContext(DbContextOptions<MediPosDbContext> options,
         modelBuilder.ApplyConfiguration(new InventoryLotConfiguration());
 
         modelBuilder.ApplyConfiguration(new StockMovementConfiguration());
+        modelBuilder.ApplyConfiguration(new TransferConfiguration());
+        modelBuilder.ApplyConfiguration(new TransferLineConfiguration());
+        modelBuilder.ApplyConfiguration(new TransferEventConfiguration());
+        modelBuilder.ApplyConfiguration(new TransferLotAllocationConfiguration());
 
         // Context properties are evaluated per query, rather than captured into the cached EF model.
         // User is global. Tenant is a platform root; its administration requires a separate authorized boundary.
@@ -125,6 +135,10 @@ public sealed class MediPosDbContext(DbContextOptions<MediPosDbContext> options,
         modelBuilder.Entity<PurchaseLine>().HasQueryFilter(value => SelectedTenantId.HasValue && value.TenantId == SelectedTenantId);
         modelBuilder.Entity<InventoryLot>().HasQueryFilter(value => SelectedTenantId.HasValue && value.TenantId == SelectedTenantId);
         modelBuilder.Entity<StockMovement>().HasQueryFilter(value => SelectedTenantId.HasValue && value.TenantId == SelectedTenantId);
+        modelBuilder.Entity<Transfer>().HasQueryFilter(value => SelectedTenantId.HasValue && value.TenantId == SelectedTenantId);
+        modelBuilder.Entity<TransferLine>().HasQueryFilter(value => SelectedTenantId.HasValue && value.TenantId == SelectedTenantId);
+        modelBuilder.Entity<TransferEvent>().HasQueryFilter(value => SelectedTenantId.HasValue && value.TenantId == SelectedTenantId);
+        modelBuilder.Entity<TransferLotAllocation>().HasQueryFilter(value => SelectedTenantId.HasValue && value.TenantId == SelectedTenantId);
         modelBuilder.Entity<ProductUnit>().HasQueryFilter(value => SelectedTenantId.HasValue && value.TenantId == SelectedTenantId);
         modelBuilder.Entity<ImportJob>().HasQueryFilter(value => SelectedTenantId.HasValue && value.TenantId == SelectedTenantId);
         modelBuilder.Entity<ImportRowResult>().HasQueryFilter(value => SelectedTenantId.HasValue && value.TenantId == SelectedTenantId);
@@ -141,6 +155,7 @@ public sealed class MediPosDbContext(DbContextOptions<MediPosDbContext> options,
         ValidateSaleConfirmations();
         ValidateSaleVoids();
         ValidateStockBalances();
+        ValidateTransferWrites();
         ValidateTenantWrites();
         return base.SaveChanges(acceptAllChangesOnSuccess);
     }
@@ -156,6 +171,7 @@ public sealed class MediPosDbContext(DbContextOptions<MediPosDbContext> options,
         ValidateSaleConfirmations();
         ValidateSaleVoids();
         ValidateStockBalances();
+        ValidateTransferWrites();
         ValidateTenantWrites();
         return base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken);
     }
@@ -340,6 +356,9 @@ public sealed class MediPosDbContext(DbContextOptions<MediPosDbContext> options,
 
     private void ValidateStockBalances()
     {
+        if (ChangeTracker.Entries<InventoryLot>().Any(e => e.State == EntityState.Deleted || (e.State == EntityState.Modified &&
+            e.Properties.Any(p => p.IsModified && p.Metadata.Name != nameof(InventoryLot.QuantityAvailableBase)))))
+            throw new InvalidOperationException("Lot ownership, provenance and receipt snapshots are immutable.");
         var movements = ChangeTracker.Entries<StockMovement>().Where(value => value.State == EntityState.Added).Select(value => value.Entity).ToArray();
         var lots = ChangeTracker.Entries<InventoryLot>().Where(value => value.State != EntityState.Detached).ToArray();
         var changed = lots.Where(value => value.State == EntityState.Added || value.Property(lot => lot.QuantityAvailableBase).IsModified).ToArray();
@@ -420,6 +439,10 @@ public sealed class MediPosDbContext(DbContextOptions<MediPosDbContext> options,
                 PurchaseLine value => value.TenantId,
                 InventoryLot value => value.TenantId,
                 StockMovement value => value.TenantId,
+                Transfer value => value.TenantId,
+                TransferLine value => value.TenantId,
+                TransferEvent value => value.TenantId,
+                TransferLotAllocation value => value.TenantId,
                 ProductUnit value => value.TenantId,
                 ImportJob value => value.TenantId,
                 ImportRowResult value => value.TenantId,

@@ -8,6 +8,7 @@ public sealed class InventoryLot
     public Guid BranchId { get; private set; }
     public Guid BusinessProductId { get; private set; }
     public Guid SourcePurchaseLineId { get; private set; }
+    public Guid? SourceTransferLotAllocationId { get; private set; }
     public string? BatchNumber { get; private set; }
     public DateOnly? ExpirationDate { get; private set; }
     public decimal QuantityAvailableBase { get; private set; }
@@ -40,11 +41,34 @@ public sealed class InventoryLot
         return after;
     }
 
+    public static InventoryLot ReceiveTransfer(MediPOS.Domain.Modules.Transfers.TransferLotAllocation allocation, DateTimeOffset now)
+    {
+        ArgumentNullException.ThrowIfNull(allocation);
+        if (!allocation.ReceivedQuantityBase.HasValue || allocation.ReceivedQuantityBase.Value <= 0 || now.ToUniversalTime() < allocation.CreatedAt)
+            throw new ArgumentException("Positive recorded allocation receipt is required.");
+        allocation.ValidateReceived(allocation.ReceivedQuantityBase.Value);
+        var lot = Receive(allocation.TenantId, allocation.DestinationBranchId, allocation.BusinessProductId, allocation.SourcePurchaseLineId,
+            allocation.ReceivedQuantityBase.Value, allocation.BatchNumberSnapshot, allocation.ExpirationDateSnapshot, now);
+        lot.SourceTransferLotAllocationId = allocation.Id;
+        return lot;
+    }
+
+    public void ApplyTransferDispatch(StockMovement movement)
+    {
+        ArgumentNullException.ThrowIfNull(movement);
+        if (movement.MovementType != StockMovementType.TransferDispatch || !movement.SourceTransferLotAllocationId.HasValue ||
+            movement.SourcePurchaseLineId.HasValue || movement.SourceSaleLineId.HasValue || movement.ReversesStockMovementId.HasValue ||
+            movement.Reason is not null || movement.QuantityDeltaBase >= 0 || movement.InventoryLotId != Id ||
+            movement.TenantId != TenantId || movement.BranchId != BranchId || movement.BusinessProductId != BusinessProductId)
+            throw new ArgumentException("Transfer dispatch must match this source lot.");
+        QuantityAvailableBase = PreviewAdjustment(movement.QuantityDeltaBase);
+    }
+
     public void ApplySale(StockMovement movement)
     {
         ArgumentNullException.ThrowIfNull(movement);
         if (movement.MovementType != StockMovementType.Sale || !movement.SourceSaleLineId.HasValue || movement.SourcePurchaseLineId.HasValue ||
-            movement.ReversesStockMovementId.HasValue || movement.Reason is not null || movement.QuantityDeltaBase >= 0 || movement.InventoryLotId != Id ||
+            movement.ReversesStockMovementId.HasValue || movement.SourceTransferLotAllocationId.HasValue || movement.Reason is not null || movement.QuantityDeltaBase >= 0 || movement.InventoryLotId != Id ||
             movement.TenantId != TenantId || movement.BranchId != BranchId || movement.BusinessProductId != BusinessProductId)
             throw new ArgumentException("Sale movement must belong to this lot.", nameof(movement));
         QuantityAvailableBase = PreviewAdjustment(movement.QuantityDeltaBase);

@@ -7,9 +7,10 @@ public enum AuditAction
     MembershipCreated, MembershipBranchesReplaced, MembershipScheduleReplaced, MembershipDeactivated,
     BusinessProductCreated, BusinessProductPriceChanged, BusinessProductStatusChanged,
     BusinessProductUnitsChanged, PurchaseConfirmed, InventoryAdjusted, CatalogProductsImported, CashSessionOpened, SaleConfirmed, SaleVoided, CashSessionClosed,
+    TransferRequested, TransferApproved, TransferDispatched, TransferReceived, TransferCancelled,
 }
 
-public enum AuditEntityType { Tenant, License, LegalEntity, Branch, Membership, BusinessProduct, Purchase, InventoryLot, ImportJob, CashSession, Sale }
+public enum AuditEntityType { Tenant, License, LegalEntity, Branch, Membership, BusinessProduct, Purchase, InventoryLot, ImportJob, CashSession, Sale, Transfer }
 
 public static class AuditCodes
 {
@@ -38,6 +39,11 @@ public static class AuditCodes
         AuditAction.CashSessionClosed => "cash_session.closed",
         AuditAction.SaleConfirmed => "sale.confirmed",
         AuditAction.SaleVoided => "sale.voided",
+        AuditAction.TransferRequested => "transfer.requested",
+        AuditAction.TransferApproved => "transfer.approved",
+        AuditAction.TransferDispatched => "transfer.dispatched",
+        AuditAction.TransferReceived => "transfer.received",
+        AuditAction.TransferCancelled => "transfer.cancelled",
         _ => throw new ArgumentOutOfRangeException(nameof(action)),
     };
 
@@ -66,6 +72,11 @@ public static class AuditCodes
         "cash_session.closed" => AuditAction.CashSessionClosed,
         "sale.confirmed" => AuditAction.SaleConfirmed,
         "sale.voided" => AuditAction.SaleVoided,
+        "transfer.requested" => AuditAction.TransferRequested,
+        "transfer.approved" => AuditAction.TransferApproved,
+        "transfer.dispatched" => AuditAction.TransferDispatched,
+        "transfer.received" => AuditAction.TransferReceived,
+        "transfer.cancelled" => AuditAction.TransferCancelled,
         _ => throw new InvalidOperationException("Unknown persisted audit action."),
     };
 
@@ -84,6 +95,7 @@ public static class AuditCodes
         AuditAction.CatalogProductsImported => AuditEntityType.ImportJob,
         AuditAction.CashSessionOpened or AuditAction.CashSessionClosed => AuditEntityType.CashSession,
         AuditAction.SaleConfirmed or AuditAction.SaleVoided => AuditEntityType.Sale,
+        AuditAction.TransferRequested or AuditAction.TransferApproved or AuditAction.TransferDispatched or AuditAction.TransferReceived or AuditAction.TransferCancelled => AuditEntityType.Transfer,
         _ => throw new ArgumentOutOfRangeException(nameof(action)),
     };
 
@@ -100,6 +112,7 @@ public static class AuditCodes
         AuditEntityType.ImportJob => "import_job",
         AuditEntityType.CashSession => "cash_session",
         AuditEntityType.Sale => "sale",
+        AuditEntityType.Transfer => "transfer",
         _ => throw new ArgumentOutOfRangeException(nameof(entityType)),
     };
 
@@ -116,6 +129,7 @@ public static class AuditCodes
         "import_job" => AuditEntityType.ImportJob,
         "cash_session" => AuditEntityType.CashSession,
         "sale" => AuditEntityType.Sale,
+        "transfer" => AuditEntityType.Transfer,
         _ => throw new InvalidOperationException("Unknown persisted audit entity type."),
     };
 }

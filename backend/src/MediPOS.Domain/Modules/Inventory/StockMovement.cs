@@ -1,8 +1,9 @@
 using MediPOS.Domain.Modules.SalesPos;
+using MediPOS.Domain.Modules.Transfers;
 
 namespace MediPOS.Domain.Modules.Inventory;
 
-public enum StockMovementType { PurchaseReceipt, Adjustment, Sale, SaleReversal }
+public enum StockMovementType { PurchaseReceipt, Adjustment, Sale, SaleReversal, TransferDispatch, TransferReceipt }
 
 public static class StockMovementCodes
 {
@@ -12,6 +13,8 @@ public static class StockMovementCodes
         StockMovementType.Adjustment => "adjustment",
         StockMovementType.Sale => "sale",
         StockMovementType.SaleReversal => "sale_reversal",
+        StockMovementType.TransferDispatch => "transfer_dispatch",
+        StockMovementType.TransferReceipt => "transfer_receipt",
         _ => throw new ArgumentOutOfRangeException(nameof(type)),
     };
     public static StockMovementType FromCode(string code) => code switch
@@ -20,6 +23,8 @@ public static class StockMovementCodes
         "adjustment" => StockMovementType.Adjustment,
         "sale" => StockMovementType.Sale,
         "sale_reversal" => StockMovementType.SaleReversal,
+        "transfer_dispatch" => StockMovementType.TransferDispatch,
+        "transfer_receipt" => StockMovementType.TransferReceipt,
         _ => throw new InvalidOperationException("Unknown persisted stock movement type."),
     };
 }
@@ -37,6 +42,7 @@ public sealed class StockMovement
     public decimal QuantityDeltaBase { get; private set; }
     public Guid? SourcePurchaseLineId { get; private set; }
     public Guid? SourceSaleLineId { get; private set; }
+    public Guid? SourceTransferLotAllocationId { get; private set; }
     public Guid? ReversesStockMovementId { get; private set; }
     public string? Reason { get; private set; }
     public Guid ActorId { get; private set; }
@@ -85,6 +91,45 @@ public sealed class StockMovement
             OccurredAt = now.ToUniversalTime(),
         };
     }
+
+    public static StockMovement DispatchTransfer(InventoryLot lot, TransferLotAllocation allocation, Guid actorId, DateTimeOffset now)
+    {
+        ArgumentNullException.ThrowIfNull(lot); ArgumentNullException.ThrowIfNull(allocation);
+        if (lot.Id != allocation.SourceInventoryLotId || lot.TenantId != allocation.TenantId || lot.BranchId != allocation.SourceBranchId ||
+            lot.BusinessProductId != allocation.BusinessProductId || lot.SourcePurchaseLineId != allocation.SourcePurchaseLineId ||
+            lot.BatchNumber != allocation.BatchNumberSnapshot || lot.ExpirationDate != allocation.ExpirationDateSnapshot ||
+            actorId == Guid.Empty || now.ToUniversalTime() != allocation.CreatedAt)
+            throw new ArgumentException("Dispatch must preserve its allocation source and actor/time.");
+        lot.PreviewAdjustment(-allocation.DispatchedQuantityBase);
+        return TransferMovement(lot, allocation, StockMovementType.TransferDispatch, -allocation.DispatchedQuantityBase, actorId, now);
+    }
+
+    public static StockMovement ReceiveTransfer(InventoryLot lot, TransferLotAllocation allocation, Guid actorId, DateTimeOffset now)
+    {
+        ArgumentNullException.ThrowIfNull(lot); ArgumentNullException.ThrowIfNull(allocation);
+        if (lot.SourceTransferLotAllocationId != allocation.Id || lot.TenantId != allocation.TenantId || lot.BranchId != allocation.DestinationBranchId ||
+            lot.BusinessProductId != allocation.BusinessProductId || lot.SourcePurchaseLineId != allocation.SourcePurchaseLineId ||
+            lot.BatchNumber != allocation.BatchNumberSnapshot || lot.ExpirationDate != allocation.ExpirationDateSnapshot ||
+            !allocation.ReceivedQuantityBase.HasValue || allocation.ReceivedQuantityBase.Value <= 0 ||
+            lot.QuantityAvailableBase != allocation.ReceivedQuantityBase || actorId == Guid.Empty || now.ToUniversalTime() != lot.CreatedAt)
+            throw new ArgumentException("Receipt must preserve its positive allocation quantity and destination provenance.");
+        return TransferMovement(lot, allocation, StockMovementType.TransferReceipt, allocation.ReceivedQuantityBase.Value, actorId, now);
+    }
+
+    private static StockMovement TransferMovement(InventoryLot lot, TransferLotAllocation allocation, StockMovementType type,
+        decimal delta, Guid actor, DateTimeOffset now) => new()
+        {
+            Id = Guid.CreateVersion7(),
+            TenantId = lot.TenantId,
+            BranchId = lot.BranchId,
+            BusinessProductId = lot.BusinessProductId,
+            InventoryLotId = lot.Id,
+            SourceTransferLotAllocationId = allocation.Id,
+            MovementType = type,
+            QuantityDeltaBase = delta,
+            ActorId = actor,
+            OccurredAt = now.ToUniversalTime(),
+        };
 
     public static StockMovement Adjust(InventoryLot lot, decimal delta, string reason, Guid actorId, DateTimeOffset now)
     {
@@ -145,9 +190,9 @@ public sealed class StockMovement
     {
         ArgumentNullException.ThrowIfNull(original);
         if (Id == Guid.Empty || original.Id == Guid.Empty || MovementType != StockMovementType.SaleReversal || original.MovementType != StockMovementType.Sale ||
-            original.QuantityDeltaBase >= 0 || original.SourcePurchaseLineId.HasValue || original.ReversesStockMovementId.HasValue || original.Reason is not null ||
+            original.QuantityDeltaBase >= 0 || original.SourcePurchaseLineId.HasValue || original.SourceTransferLotAllocationId.HasValue || original.ReversesStockMovementId.HasValue || original.Reason is not null ||
             !original.SourceSaleLineId.HasValue || ReversesStockMovementId != original.Id || SourceSaleLineId != original.SourceSaleLineId ||
-            SourcePurchaseLineId.HasValue || Reason is not null || QuantityDeltaBase <= 0 || QuantityDeltaBase != -original.QuantityDeltaBase ||
+            SourcePurchaseLineId.HasValue || SourceTransferLotAllocationId.HasValue || Reason is not null || QuantityDeltaBase <= 0 || QuantityDeltaBase != -original.QuantityDeltaBase ||
             TenantId != original.TenantId || BranchId != original.BranchId || BusinessProductId != original.BusinessProductId || InventoryLotId != original.InventoryLotId ||
             ActorId == Guid.Empty || OccurredAt.Offset != TimeSpan.Zero || OccurredAt < original.OccurredAt)
             throw new ArgumentException("A sale reversal must be the exact inverse on the original lot/line.");

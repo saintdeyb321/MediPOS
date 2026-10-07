@@ -2,6 +2,7 @@ using MediPOS.Domain.Modules.Branches;
 using MediPOS.Domain.Modules.Catalog;
 using MediPOS.Domain.Modules.Inventory;
 using MediPOS.Domain.Modules.Purchasing;
+using MediPOS.Domain.Modules.Transfers;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
@@ -23,6 +24,7 @@ internal sealed class InventoryLotConfiguration : IEntityTypeConfiguration<Inven
         builder.Property(value => value.BranchId).HasColumnName("branch_id");
         builder.Property(value => value.BusinessProductId).HasColumnName("business_product_id");
         builder.Property(value => value.SourcePurchaseLineId).HasColumnName("source_purchase_line_id");
+        builder.Property(value => value.SourceTransferLotAllocationId).HasColumnName("source_transfer_lot_allocation_id");
         builder.Property(value => value.BatchNumber).HasColumnName("batch_number").HasMaxLength(128);
         builder.Property(value => value.ExpirationDate).HasColumnName("expiration_date").HasColumnType("date");
         builder.Property(value => value.QuantityAvailableBase).HasColumnName("quantity_available_base").HasColumnType("numeric");
@@ -39,6 +41,11 @@ internal sealed class InventoryLotConfiguration : IEntityTypeConfiguration<Inven
             .HasFilter("quantity_available_base > 0 AND expiration_date IS NOT NULL").HasDatabaseName("ix_inventory_lots_fefo");
         builder.HasIndex(value => new { value.TenantId, value.ExpirationDate, value.BranchId })
             .HasFilter("quantity_available_base > 0 AND expiration_date IS NOT NULL").HasDatabaseName("ix_inventory_lots_expiring");
-        builder.HasIndex(value => new { value.TenantId, value.SourcePurchaseLineId }).IsUnique();
+        builder.HasIndex(value => new { value.TenantId, value.SourcePurchaseLineId });
+        builder.HasIndex(value => new { value.TenantId, value.SourceTransferLotAllocationId }).IsUnique().HasFilter("source_transfer_lot_allocation_id IS NOT NULL")
+            .HasDatabaseName("ux_inventory_lots_transfer_allocation");
+        builder.HasOne<TransferLotAllocation>().WithMany()
+            .HasForeignKey(value => new { value.TenantId, value.BranchId, value.BusinessProductId, value.SourcePurchaseLineId, value.SourceTransferLotAllocationId })
+            .HasPrincipalKey(value => new { value.TenantId, value.DestinationBranchId, value.BusinessProductId, value.SourcePurchaseLineId, value.Id }).OnDelete(DeleteBehavior.Restrict);
     }
 }

@@ -3,10 +3,10 @@
 This is the single execution roadmap for the backend. Prompts are given in chat and are **not** stored in the repository.
 
 ## Working state
-- **Current milestone:** M2 — POS & Cash
-- **Current sprint:** B2.6 — Internal ticket
+- **Current milestone:** M3 — Multi-branch operations
+- **Current sprint:** B3.1 — Product transfers
 - **Status:** IN_PROGRESS
-- **Next gate:** B2.6 implementation review and PostgreSQL integration validation in another environment; local gate passed
+- **Next gate:** B3.1 implementation review and PostgreSQL integration validation in another environment; local gate passed
 
 Local policy: this machine has no Docker and will not install it. Do not check/start Docker or run PostgreSQL/Testcontainers here. B0.1 is complete locally. Keep real PostgreSQL integration tests for another environment; they are not part of the local gate and must not be reported as passed without execution.
 
@@ -136,11 +136,12 @@ Goal: complete reliable online sale workflow.
 **Scope:** expected totals by method, counted cash, difference and close time.
 
 ### B2.6 — Internal ticket
-**Status:** IN_PROGRESS / local gate passed; PostgreSQL integration tests prepared and compiled, not executed locally.
+**Status:** DONE / audited locally.
 **Requirements:** FR-POS-008, BR-014.
 **Scope:** InternalTicket representation/data endpoint; explicitly non-CPE.
 
 **M2 gate:** online sale is atomic, auditable, concurrent-safe and cash-accounted.
+**M2 status:** local implementation completed; PostgreSQL external validation pending.
 
 ---
 
@@ -148,6 +149,7 @@ Goal: complete reliable online sale workflow.
 Goal: safe branch-to-branch movement and owner consolidation.
 
 ### B3.1 — Product transfers
+**Status:** IN_PROGRESS / local gate passed; implementation review and PostgreSQL external validation pending.
 **Requirements:** FR-TRF-001..006, BR-008..009.
 **Scope:** Transfer/Line/Event state machine, approval, batch-preserving dispatch/receipt, quantity validation.
 
