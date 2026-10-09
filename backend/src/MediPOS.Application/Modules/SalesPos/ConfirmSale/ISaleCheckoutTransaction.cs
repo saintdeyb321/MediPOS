@@ -1,4 +1,6 @@
+using MediPOS.Application.Modules.Commissions;
 using MediPOS.Domain.Modules.AuditSupport;
+using MediPOS.Domain.Modules.Commissions;
 using MediPOS.Domain.Modules.Cash;
 using MediPOS.Domain.Modules.Catalog;
 using MediPOS.Domain.Modules.Inventory;
@@ -19,8 +21,9 @@ public interface ISaleCheckoutScope : IAsyncDisposable
     CashSession CashSession { get; }
     Sale Sale { get; }
     uint Version { get; }
+    Task<CommissionConfigurationSnapshot> ReadCommissionConfigurationAsync(CancellationToken cancellationToken);
     Task<IReadOnlyList<InventoryLot>> LockLotsAsync(Guid productId, ProductType productType, decimal requested,
         DateOnly today, CancellationToken cancellationToken);
     Task<uint> CompleteAsync(IReadOnlyList<SalePayment> payments, IReadOnlyList<StockMovement> movements,
-        AuditLog audit, CancellationToken cancellationToken);
+        IReadOnlyList<CommissionEntry> commissions, AuditLog audit, CancellationToken cancellationToken);
 }

@@ -3,10 +3,10 @@
 This is the single execution roadmap for the backend. Prompts are given in chat and are **not** stored in the repository.
 
 ## Working state
-- **Current milestone:** M3 — Multi-branch operations
-- **Current sprint:** B3.3 — Consolidated owner queries
+- **Current milestone:** M4 — Commissions, reporting & alerts
+- **Current sprint:** B4.1 — Commissions
 - **Status:** IN_PROGRESS
-- **Next gate:** M3 implementation review; B3.3 local gate passed, PostgreSQL external validation pending
+- **Next gate:** B4.1 local gate and implementation review; PostgreSQL integration validation pending externally
 
 Local policy: this machine has no Docker and will not install it. Do not check/start Docker or run PostgreSQL/Testcontainers here. B0.1 is complete locally. Keep real PostgreSQL integration tests for another environment; they are not part of the local gate and must not be reported as passed without execution.
 
@@ -160,11 +160,12 @@ Goal: safe branch-to-branch movement and owner consolidation.
 **Provisional MVP decision:** reject cash refunds exceeding expected cash after transfer outflows; functional validation pending. This restriction is not part of original BR-007; implementation remains unchanged.
 
 ### B3.3 — Consolidated owner queries
-**Status:** IN_PROGRESS — implemented, local gate passed; M3 closure audit and PostgreSQL external validation pending.
+**Status:** DONE / audited locally.
 **Requirements:** FR-TEN-004.
 **Scope:** tenant-wide/branch-filtered read models needed by owner operations.
 
 **M3 gate:** branch stock/cash movement is traceable and consolidated queries respect permissions.
+**M3 status:** implementation and code review completed locally; real PostgreSQL integration validation remains pending externally.
 
 ---
 
@@ -172,6 +173,7 @@ Goal: safe branch-to-branch movement and owner consolidation.
 Goal: owner control and operational visibility.
 
 ### B4.1 — Commissions
+**Status:** IN_PROGRESS.
 **Requirements:** FR-COM-001..004, BR-010.
 **Scope:** CommissionRule/Entry, fixed/percentage rules, sale posting, compensating reversal, reports.
 

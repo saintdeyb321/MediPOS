@@ -27,7 +27,7 @@ internal static class OwnerOverviewTestData
     internal static CancellationToken Token => TestContext.Current.CancellationToken;
 
     internal static ServiceProvider CreateServices(PostgreSqlFixture fixture, Clock? clock = null,
-        SqlObserver? observer = null, string? connectionString = null)
+        DbCommandInterceptor? observer = null, string? connectionString = null)
     {
         var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
         { ["ConnectionStrings:MediPosDatabase"] = connectionString ?? fixture.ConnectionString }).Build();

@@ -23,6 +23,7 @@ internal sealed class SaleConfiguration : IEntityTypeConfiguration<Sale>
                     AND void_reason IS NOT NULL AND void_reason ~ '[^[:space:]]' AND void_reason = btrim(void_reason) AND length(void_reason) <= 512)
                 """);
             table.HasCheckConstraint("ck_sales_total", "total_amount >= 0 AND total_amount <= 99999999999999.9999");
+            table.HasCheckConstraint("ck_sales_commission_posting", "commission_entry_count IS NULL OR (status IN ('confirmed', 'voided') AND commission_entry_count BETWEEN 0 AND 200)");
             table.HasCheckConstraint("ck_sales_timestamps", "updated_at >= created_at");
             table.HasCheckConstraint("ck_sales_identifiers", """
                 id <> '00000000-0000-0000-0000-000000000000'::uuid AND
@@ -40,6 +41,7 @@ internal sealed class SaleConfiguration : IEntityTypeConfiguration<Sale>
         builder.Property(value => value.SellerMembershipId).HasColumnName("seller_membership_id");
         builder.Property(value => value.CashSessionId).HasColumnName("cash_session_id");
         builder.Property(value => value.TotalAmount).HasColumnName("total_amount").HasPrecision(18, 4);
+        builder.Property(value => value.CommissionEntryCount).HasColumnName("commission_entry_count");
         builder.Property(value => value.CreatedAt).HasColumnName("created_at").HasColumnType("timestamp with time zone");
         builder.Property(value => value.UpdatedAt).HasColumnName("updated_at").HasColumnType("timestamp with time zone");
         builder.Property(value => value.ConfirmedAt).HasColumnName("confirmed_at").HasColumnType("timestamp with time zone");

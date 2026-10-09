@@ -1,4 +1,6 @@
 using System.Text.Json;
+using MediPOS.Application.Modules.Commissions;
+using MediPOS.Domain.Modules.Commissions;
 using MediPOS.Application.Errors;
 using MediPOS.Application.Modules.Cash;
 using MediPOS.Application.Modules.Catalog;
@@ -21,7 +23,7 @@ namespace MediPOS.UnitTests.Modules.SalesPos;
 public sealed class ConfirmSaleUseCaseTests
 {
     private static readonly DateTimeOffset Now = new(2026, 10, 6, 14, 0, 0, TimeSpan.Zero);
-    private static readonly string[] AuditFields = ["branchId", "cashSessionId", "confirmedAt", "lineCount", "paymentMethods", "sellerMembershipId", "totalAmount"];
+    private static readonly string[] AuditFields = ["branchId", "cashSessionId", "commissionEntryCount", "confirmedAt", "lineCount", "paymentMethods", "sellerMembershipId", "totalAmount", "totalCommissionAmount"];
 
     [Fact]
     public async Task ValidMixedPaymentCommitsOneSpecificAtomicPortWithServerActorAndMinimalAudit()
@@ -48,6 +50,113 @@ public sealed class ConfirmSaleUseCaseTests
         Assert.Equal(4m, json.RootElement.GetProperty("totalAmount").GetDecimal());
         Assert.Equal(1, json.RootElement.GetProperty("lineCount").GetInt32());
     }
+
+    [Theory]
+    [InlineData(CommissionRuleType.Fixed)]
+    [InlineData(CommissionRuleType.Percentage)]
+    public async Task EnabledRulePostsOncePerLineWithOriginalSellerDespiteMixedPaymentsAndCurrentPrices(CommissionRuleType type)
+    {
+        var setup = new Setup();
+        var rule = Rule(setup, type, type == CommissionRuleType.Fixed ? .2m : 10m);
+        setup.Scope.Configuration = new(true, [rule]);
+        setup.Product.UpdatePrices(1000m, 900m);
+        await setup.Handler.HandleAsync(setup.Command(new(PaymentMethod.Cash, 1m), new(PaymentMethod.Yape, 3m)), TestContext.Current.CancellationToken);
+        var entry = Assert.Single(setup.Scope.Commissions);
+        Assert.Equal(.4m, entry.Amount);
+        Assert.Equal(setup.Sale.SellerMembershipId, entry.SellerMembershipId);
+        Assert.Equal(rule.Id, entry.CommissionRuleId);
+        Assert.Equal(1, setup.Sale.CommissionEntryCount);
+        rule.Deactivate(setup.Membership.UserId, Now);
+        entry.ValidateOriginal(setup.Sale);
+        Assert.Equal(.4m, entry.Amount);
+    }
+
+    [Theory]
+    [InlineData("disabled")]
+    [InlineData("missing")]
+    [InlineData("future")]
+    [InlineData("expired")]
+    [InlineData("zero")]
+    public async Task NoApplicablePositiveCommissionStillConfirmsWithExplicitZeroPosting(string scenario)
+    {
+        var setup = new Setup();
+        var rule = scenario switch
+        {
+            "future" => CommissionRule.Create(setup.Sale.TenantId, setup.Product.Id, CommissionRuleType.Fixed, 1m, Now.AddSeconds(1), null, setup.Membership.UserId, Now),
+            "expired" => CommissionRule.Create(setup.Sale.TenantId, setup.Product.Id, CommissionRuleType.Fixed, 1m, Now.AddDays(-1), Now, setup.Membership.UserId, Now.AddDays(-1)),
+            "zero" => Rule(setup, CommissionRuleType.Percentage, .0001m),
+            _ => Rule(setup, CommissionRuleType.Fixed, .2m),
+        };
+        setup.Scope.Configuration = new(scenario != "disabled", scenario == "missing" ? [] : [rule]);
+        await setup.Handler.HandleAsync(setup.Command(), TestContext.Current.CancellationToken);
+        Assert.Empty(setup.Scope.Commissions);
+        Assert.Equal(0, setup.Sale.CommissionEntryCount);
+        Assert.True(setup.Scope.Committed);
+    }
+
+    [Fact]
+    public async Task CapturedRuleVersionRemainsCoherentWhileOwnerReplacesConfigurationDuringStockWait()
+    {
+        var setup = new Setup();
+        var original = Rule(setup, CommissionRuleType.Fixed, .2m);
+        setup.Scope.Configuration = new(true, [original]);
+        setup.Scope.AfterLock = () => setup.Scope.Configuration = new(false, [Rule(setup, CommissionRuleType.Fixed, 99m)]);
+        await setup.Handler.HandleAsync(setup.Command(), TestContext.Current.CancellationToken);
+        var entry = Assert.Single(setup.Scope.Commissions);
+        Assert.Equal(original.Id, entry.CommissionRuleId);
+        Assert.Equal(.4m, entry.Amount);
+    }
+
+    [Fact]
+    public async Task SeveralPresentationsProduceIndependentEntriesFromTheirBaseQuantities()
+    {
+        var setup = new Setup();
+        var second = SaleLine.Create(setup.Sale, setup.Product, SaleDomainTests.Unit(setup.Product, 2m), 1m, PriceKind.Wholesale);
+        setup.Sale.ReplaceLines([setup.Sale.Lines[0], second], Now);
+        setup.Scope.Lots = [SaleConfirmationDomainTests.Lot(setup.Sale, setup.Product, 4m, new(2026, 10, 6), Now)];
+        setup.Scope.Configuration = new(true, [Rule(setup, CommissionRuleType.Fixed, .2m)]);
+        await setup.Handler.HandleAsync(setup.Command(new SalePaymentInput(PaymentMethod.Cash, 6m)), TestContext.Current.CancellationToken);
+        Assert.Equal(2, setup.Scope.Commissions.Count);
+        Assert.All(setup.Scope.Commissions, entry => Assert.Equal(.4m, entry.Amount));
+        Assert.Equal(2, setup.Sale.CommissionEntryCount);
+    }
+
+    [Theory]
+    [InlineData("duplicate", "commissions.corrupted_configuration")]
+    [InlineData("foreign", "commissions.corrupted_configuration")]
+    [InlineData("overflow", "commissions.invalid_amount")]
+    public async Task InvalidConfigurationAndOverflowStopBeforeStockLocks(string scenario, string code)
+    {
+        var setup = new Setup();
+        var rule = Rule(setup, CommissionRuleType.Fixed, scenario == "overflow" ? Sale.MaximumAmount : .2m);
+        setup.Scope.Configuration = scenario switch
+        {
+            "duplicate" => new(true, [rule, Rule(setup, CommissionRuleType.Fixed, 1m)]),
+            "foreign" => new(true, [CommissionRule.Create(Guid.NewGuid(), setup.Product.Id, CommissionRuleType.Fixed, 1m, Now, null, setup.Membership.UserId, Now)]),
+            _ => new(true, [rule]),
+        };
+        var error = await Assert.ThrowsAsync<ApplicationErrorException>(() => setup.Handler.HandleAsync(setup.Command(), TestContext.Current.CancellationToken));
+        Assert.Equal(code, error.Error.Code);
+        Assert.Equal(SaleStatus.Draft, setup.Sale.Status);
+        Assert.Equal(0, setup.Scope.LotLocks);
+        Assert.Equal(0, setup.Scope.Completions);
+    }
+
+    [Fact]
+    public async Task CommissionPostingFailureNeverReportsACommit()
+    {
+        var setup = new Setup();
+        setup.Scope.Configuration = new(true, [Rule(setup, CommissionRuleType.Fixed, .2m)]);
+        setup.Scope.Fail = true;
+        await Assert.ThrowsAsync<InvalidOperationException>(() => setup.Handler.HandleAsync(setup.Command(), TestContext.Current.CancellationToken));
+        Assert.Single(setup.Scope.Commissions);
+        Assert.False(setup.Scope.Committed);
+        Assert.True(setup.Scope.Disposed);
+        // Persistence rollback is validated only by the prepared real PostgreSQL tests.
+    }
+
+    private static CommissionRule Rule(Setup setup, CommissionRuleType type, decimal value) =>
+        CommissionRule.Create(setup.Sale.TenantId, setup.Product.Id, type, value, Now.AddDays(-1), null, setup.Membership.UserId, Now.AddDays(-1));
 
     [Theory]
     [InlineData("empty", "sale.invalid_payments")]
@@ -240,12 +349,15 @@ public sealed class ConfirmSaleUseCaseTests
         public bool Fail { get; set; }
         public Action? AfterLock { get; set; }
         public AuditLog? Audit { get; private set; }
+        public CommissionConfigurationSnapshot Configuration { get; set; } = new(false, []);
+        public IReadOnlyList<CommissionEntry> Commissions { get; private set; } = [];
+        public Task<CommissionConfigurationSnapshot> ReadCommissionConfigurationAsync(CancellationToken token) => Task.FromResult(Configuration);
         public IReadOnlyList<StockMovement> Movements { get; private set; } = [];
         public Task<IReadOnlyList<InventoryLot>> LockLotsAsync(Guid productId, ProductType productType, decimal requested, DateOnly today, CancellationToken cancellationToken)
         { LotLocks++; AfterLock?.Invoke(); return Task.FromResult(Lots); }
-        public Task<uint> CompleteAsync(IReadOnlyList<SalePayment> payments, IReadOnlyList<StockMovement> movements, AuditLog audit, CancellationToken cancellationToken)
+        public Task<uint> CompleteAsync(IReadOnlyList<SalePayment> payments, IReadOnlyList<StockMovement> movements, IReadOnlyList<CommissionEntry> commissions, AuditLog audit, CancellationToken cancellationToken)
         {
-            Completions++; Audit = audit; Movements = movements;
+            Completions++; Audit = audit; Movements = movements; Commissions = commissions;
             if (Fail) return Task.FromException<uint>(new InvalidOperationException("Persistence failed."));
             Committed = true; return Task.FromResult(2u);
         }

@@ -150,11 +150,13 @@ public sealed class SaleCheckoutPersistenceTests(PostgreSqlFixture fixture)
         {
             var context = source.GetRequiredService<MediPosDbContext>();
             var line = Assert.Single(checkout.Sale.Lines);
+            await checkout.ReadCommissionConfigurationAsync(TestContext.Current.CancellationToken);
             var lot = Assert.Single(await checkout.LockLotsAsync(rows.ProductId, MediPOS.Domain.Modules.Catalog.ProductType.Retail, line.BaseQuantity,
                 SaleCheckoutTestData.Today, TestContext.Current.CancellationToken));
             var payment = SalePayment.Create(checkout.Sale, PaymentMethod.Cash, checkout.Sale.TotalAmount);
             var movement = StockMovement.Sell(lot, checkout.Sale, line, line.BaseQuantity, tenant.Identity.UserId, IdentityAccessTestSetup.Now);
             checkout.Sale.Confirm([payment], IdentityAccessTestSetup.Now);
+            checkout.Sale.RecordCommissionPosting(0);
             if (omitted != "payment") context.SalePayments.Add(payment);
             if (omitted != "movement") { lot.ApplySale(movement); context.StockMovements.Add(movement); }
             if (omitted != "audit") context.AuditLogs.Add(AuditTrail.Record(tenant.TenantId, tenant.Identity.UserId, AuditAction.SaleConfirmed,

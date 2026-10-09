@@ -2,8 +2,10 @@ using System.Text.Json;
 using MediPOS.Application.Errors;
 using MediPOS.Application.Modules.AuditSupport;
 using MediPOS.Application.Modules.IdentityAccess.OperationalAccess;
+using MediPOS.Application.Modules.Commissions;
 using MediPOS.Domain.Modules.AuditSupport;
 using MediPOS.Domain.Modules.Cash;
+using MediPOS.Domain.Modules.Commissions;
 using MediPOS.Domain.Modules.IdentityAccess;
 using MediPOS.Domain.Modules.Inventory;
 using MediPOS.Domain.Modules.SalesPos;
@@ -53,11 +55,13 @@ public sealed class VoidSaleHandler(ResolveAccessContextHandler resolver, ISaleV
         RequireCash(scope);
         SalePaymentReversal[] payments;
         StockMovement[] movements;
+        CommissionEntry[] commissions;
         try
         {
             payments = effects.Payments.OrderBy(payment => payment.Id).Select(payment => SalePaymentReversal.Reverse(scope.Sale, payment, access.UserId, now)).ToArray();
             movements = effects.Movements.OrderBy(movement => movement.Id).Select(movement =>
                 StockMovement.ReverseSale(lots[movement.InventoryLotId], scope.Sale, movement, access.UserId, now)).ToArray();
+            commissions = effects.Commissions.OrderBy(entry => entry.Id).Select(entry => CommissionEntry.Reverse(scope.Sale, entry, now)).ToArray();
             scope.Sale.Void(command.Reason, access.UserId, now);
         }
         catch (Exception error) when (error is ArgumentException or ArithmeticException or InvalidOperationException or KeyNotFoundException)
@@ -71,8 +75,10 @@ public sealed class VoidSaleHandler(ResolveAccessContextHandler resolver, ISaleV
                 totalAmount = scope.Sale.TotalAmount,
                 paymentReversalCount = payments.Length,
                 stockReversalCount = movements.Length,
+                commissionEntryCount = commissions.Length,
+                totalCommissionAmount = commissions.Sum(entry => entry.Amount),
             }));
-        var version = await scope.CompleteAsync(payments, movements, audit, cancellationToken).ConfigureAwait(false);
+        var version = await scope.CompleteAsync(payments, movements, commissions, audit, cancellationToken).ConfigureAwait(false);
         return new(scope.Sale.Id, scope.Sale.VoidedAt.Value, version, payments.Length, movements.Length);
     }
 
@@ -95,7 +101,7 @@ public sealed class VoidSaleHandler(ResolveAccessContextHandler resolver, ISaleV
 
     private static void ValidateHistory(Sale sale, SaleVoidEffects effects)
     {
-        try { SaleVoidHistory.Validate(sale, effects.Payments, effects.Movements); }
+        try { SaleVoidHistory.Validate(sale, effects.Payments, effects.Movements); SaleCommissionHistory.ValidateOriginals(sale, effects.Commissions); }
         catch (Exception error) when (error is ArgumentException or ArithmeticException or InvalidOperationException)
         { throw new ApplicationErrorException(SalesPosErrors.CorruptedHistory); }
     }

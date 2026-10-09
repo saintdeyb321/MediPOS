@@ -1,12 +1,16 @@
 using MediPOS.Domain.Modules.AuditSupport;
 using MediPOS.Domain.Modules.Cash;
+using MediPOS.Domain.Modules.Commissions;
 using MediPOS.Domain.Modules.Inventory;
 using MediPOS.Domain.Modules.SalesPos;
 
 namespace MediPOS.Application.Modules.SalesPos.VoidSale;
 
 public sealed record SaleVoidSnapshot(Sale Sale, uint Version);
-public sealed record SaleVoidEffects(IReadOnlyList<SalePayment> Payments, IReadOnlyList<StockMovement> Movements);
+public sealed record SaleVoidEffects(IReadOnlyList<SalePayment> Payments, IReadOnlyList<StockMovement> Movements)
+{
+    public IReadOnlyList<CommissionEntry> Commissions { get; init; } = [];
+}
 
 public interface ISaleVoidTransaction
 {
@@ -24,5 +28,5 @@ public interface ISaleVoidScope : IAsyncDisposable
     Task<CashPaymentLedger> ReadCashLedgerAsync(CancellationToken cancellationToken);
     Task<IReadOnlyList<InventoryLot>> LockLotsAsync(CancellationToken cancellationToken);
     Task<uint> CompleteAsync(IReadOnlyList<SalePaymentReversal> payments, IReadOnlyList<StockMovement> movements,
-        AuditLog audit, CancellationToken cancellationToken);
+        IReadOnlyList<CommissionEntry> commissions, AuditLog audit, CancellationToken cancellationToken);
 }

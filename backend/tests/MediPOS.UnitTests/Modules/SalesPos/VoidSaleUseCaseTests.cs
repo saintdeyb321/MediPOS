@@ -1,4 +1,5 @@
 using System.Text.Json;
+using MediPOS.Domain.Modules.Commissions;
 using MediPOS.Application.Errors;
 using MediPOS.Application.Modules.IdentityAccess.Authentication;
 using MediPOS.Application.Modules.IdentityAccess.OperationalAccess;
@@ -16,7 +17,68 @@ namespace MediPOS.UnitTests.Modules.SalesPos;
 
 public sealed class VoidSaleUseCaseTests
 {
-    private static readonly string[] AfterFields = ["paymentReversalCount", "reason", "status", "stockReversalCount", "totalAmount", "voidedAt"];
+    private static readonly string[] AfterFields = ["commissionEntryCount", "paymentReversalCount", "reason", "status", "stockReversalCount", "totalAmount", "totalCommissionAmount", "voidedAt"];
+
+    [Fact]
+    public async Task VoidCompensatesOriginalSellerAndAmountDespiteDeactivatedRuleAndOwnerActor()
+    {
+        var setup = new Setup(TenantRole.Owner, ownSale: false);
+        var rule = CommissionRule.Create(setup.Sale.TenantId, setup.Sale.Lines[0].BusinessProductId, CommissionRuleType.Fixed,
+            .2m, setup.Sale.CreatedAt, null, setup.Membership.UserId, setup.Sale.CreatedAt);
+        var original = CommissionEntry.Earn(setup.Sale, setup.Sale.Lines[0], rule, setup.Sale.ConfirmedAt!.Value);
+        setup.Sale.RecordCommissionPosting(1);
+        setup.Scope.Effects = setup.Scope.Effects with { Commissions = [original] };
+        rule.Deactivate(setup.Membership.UserId, setup.Clock.Now);
+        await setup.Handler.HandleAsync(setup.Command(), TestContext.Current.CancellationToken);
+        var reversal = Assert.Single(setup.Scope.Commissions);
+        Assert.Equal(-original.Amount, reversal.Amount);
+        Assert.Equal(original.SellerMembershipId, reversal.SellerMembershipId);
+        Assert.NotEqual(setup.Membership.Id, reversal.SellerMembershipId);
+        Assert.Equal(original.Id, reversal.ReversesCommissionEntryId);
+        reversal.ValidateReversal(setup.Sale, original);
+        Assert.True(original.Amount > 0);
+        var again = await Assert.ThrowsAsync<ApplicationErrorException>(() => setup.Handler.HandleAsync(setup.Command(), TestContext.Current.CancellationToken));
+        Assert.Equal(SalesPosErrors.AlreadyVoided, again.Error);
+        Assert.Equal(1, setup.Scope.Completions);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task LegacyAndExplicitZeroPostingsVoidWithoutInventingReversals(bool newSale)
+    {
+        var setup = new Setup();
+        if (newSale) setup.Sale.RecordCommissionPosting(0);
+        await setup.Handler.HandleAsync(setup.Command(), TestContext.Current.CancellationToken);
+        Assert.Empty(setup.Scope.Commissions);
+        Assert.True(setup.Scope.Committed);
+    }
+
+    [Fact]
+    public async Task IncompleteCommissionHistoryIsRejectedBeforeAnyLotLock()
+    {
+        var setup = new Setup();
+        setup.Sale.RecordCommissionPosting(1);
+        var error = await Assert.ThrowsAsync<ApplicationErrorException>(() => setup.Handler.HandleAsync(setup.Command(), TestContext.Current.CancellationToken));
+        Assert.Equal(SalesPosErrors.CorruptedHistory, error.Error);
+        Assert.Equal(0, setup.Scope.LotLocks);
+        Assert.Equal(SaleStatus.Confirmed, setup.Sale.Status);
+    }
+
+    [Fact]
+    public async Task FailedCommissionCompensationNeverReportsACommit()
+    {
+        var setup = new Setup();
+        var rule = CommissionRule.Create(setup.Sale.TenantId, setup.Sale.Lines[0].BusinessProductId, CommissionRuleType.Fixed,
+            .2m, setup.Sale.CreatedAt, null, setup.Membership.UserId, setup.Sale.CreatedAt);
+        setup.Scope.Effects = setup.Scope.Effects with { Commissions = [CommissionEntry.Earn(setup.Sale, setup.Sale.Lines[0], rule, setup.Sale.ConfirmedAt!.Value)] };
+        setup.Sale.RecordCommissionPosting(1);
+        setup.Scope.Fail = true;
+        await Assert.ThrowsAsync<InvalidOperationException>(() => setup.Handler.HandleAsync(setup.Command(), TestContext.Current.CancellationToken));
+        Assert.Single(setup.Scope.Commissions);
+        Assert.False(setup.Scope.Committed);
+        // Database rollback is asserted separately against real PostgreSQL.
+    }
 
     [Fact]
     public async Task CashRefundCannotUseMoneyAlreadyDispatchedButCanRetryAfterAnIncomingReceipt()
@@ -230,12 +292,13 @@ public sealed class VoidSaleUseCaseTests
         public IReadOnlyList<SalePaymentReversal> Reversals { get; private set; } = [];
         public IReadOnlyList<StockMovement> Stock { get; private set; } = [];
         public AuditLog? Audit { get; private set; }
+        public IReadOnlyList<CommissionEntry> Commissions { get; private set; } = [];
         public Task<SaleVoidEffects> LoadEffectsAsync(CancellationToken cancellationToken) => ReversalExists
             ? Task.FromException<SaleVoidEffects>(new ApplicationErrorException(SalesPosErrors.ReversalAlreadyExists)) : Task.FromResult(Effects);
         public Task<IReadOnlyList<InventoryLot>> LockLotsAsync(CancellationToken cancellationToken) { LotLocks++; AfterLots?.Invoke(); return Task.FromResult(lots); }
-        public Task<uint> CompleteAsync(IReadOnlyList<SalePaymentReversal> payments, IReadOnlyList<StockMovement> movements, AuditLog audit, CancellationToken cancellationToken)
+        public Task<uint> CompleteAsync(IReadOnlyList<SalePaymentReversal> payments, IReadOnlyList<StockMovement> movements, IReadOnlyList<CommissionEntry> commissions, AuditLog audit, CancellationToken cancellationToken)
         {
-            Completions++; Reversals = payments; Stock = movements; Audit = audit;
+            Completions++; Reversals = payments; Stock = movements; Audit = audit; Commissions = commissions;
             if (Fail) return Task.FromException<uint>(new InvalidOperationException("Persistence failure"));
             Committed = true; return Task.FromResult(2u);
         }

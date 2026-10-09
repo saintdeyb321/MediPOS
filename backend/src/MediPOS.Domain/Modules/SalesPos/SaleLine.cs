@@ -1,5 +1,5 @@
-using System.Numerics;
 using MediPOS.Domain.Modules.Catalog;
+using MediPOS.SharedKernel;
 
 namespace MediPOS.Domain.Modules.SalesPos;
 
@@ -101,29 +101,10 @@ public sealed class SaleLine
 
     private static decimal CalculateTotal(decimal quantity, decimal price)
     {
-        // Compute the exact decimal product, then one ToEven rounding at 4 places.
-        // decimal multiplication alone can discard digits before rounding at large magnitudes.
-        var (quantityMantissa, quantityScale) = Parts(quantity);
-        var (priceMantissa, priceScale) = Parts(price);
-        var mantissa = quantityMantissa * priceMantissa;
-        var scale = quantityScale + priceScale;
-        BigInteger rounded;
-        if (scale <= 4) rounded = mantissa * BigInteger.Pow(10, 4 - scale);
-        else
+        try { return ExactMoney.MultiplyAndRoundToEven4(quantity, price); }
+        catch (ArgumentOutOfRangeException)
         {
-            var divisor = BigInteger.Pow(10, scale - 4);
-            rounded = BigInteger.DivRem(mantissa, divisor, out var remainder);
-            var midpoint = (remainder * 2).CompareTo(divisor);
-            if (midpoint > 0 || (midpoint == 0 && !rounded.IsEven)) rounded++;
-        }
-        if (rounded > (BigInteger)(Sale.MaximumAmount * 10000m))
             throw new ArgumentOutOfRangeException(nameof(quantity), "Line total exceeds numeric(18,4).");
-        return (decimal)rounded / 10000m;
-    }
-
-    private static (BigInteger Mantissa, int Scale) Parts(decimal value)
-    {
-        var bits = decimal.GetBits(value);
-        return ((BigInteger)(uint)bits[0] + ((BigInteger)(uint)bits[1] << 32) + ((BigInteger)(uint)bits[2] << 64), (bits[3] >> 16) & 0xff);
+        }
     }
 }

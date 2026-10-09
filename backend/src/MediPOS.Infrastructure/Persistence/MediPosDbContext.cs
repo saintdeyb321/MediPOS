@@ -4,6 +4,7 @@ using MediPOS.Domain.Modules.Branches;
 using MediPOS.Domain.Modules.Cash;
 using MediPOS.Domain.Modules.Catalog;
 using MediPOS.Domain.Modules.Catalog.ProductImport;
+using MediPOS.Domain.Modules.Commissions;
 using MediPOS.Domain.Modules.IdentityAccess;
 using MediPOS.Domain.Modules.Inventory;
 using MediPOS.Domain.Modules.Purchasing;
@@ -14,6 +15,7 @@ using MediPOS.Infrastructure.Modules.AuditSupport.Persistence;
 using MediPOS.Infrastructure.Modules.Branches.Persistence.Configurations;
 using MediPOS.Infrastructure.Modules.Cash.Persistence;
 using MediPOS.Infrastructure.Modules.Catalog.Persistence.Configurations;
+using MediPOS.Infrastructure.Modules.Commissions.Persistence;
 using MediPOS.Infrastructure.Modules.IdentityAccess.Persistence.Configurations;
 using MediPOS.Infrastructure.Modules.Inventory.Persistence.Configurations;
 using MediPOS.Infrastructure.Modules.Purchasing.Persistence.Configurations;
@@ -51,6 +53,9 @@ public sealed partial class MediPosDbContext(DbContextOptions<MediPosDbContext> 
     public DbSet<SaleLine> SaleLines => Set<SaleLine>();
     public DbSet<SalePayment> SalePayments => Set<SalePayment>();
     public DbSet<SalePaymentReversal> SalePaymentReversals => Set<SalePaymentReversal>();
+    public DbSet<TenantCommissionSettings> TenantCommissionSettings => Set<TenantCommissionSettings>();
+    public DbSet<CommissionRule> CommissionRules => Set<CommissionRule>();
+    public DbSet<CommissionEntry> CommissionEntries => Set<CommissionEntry>();
     public DbSet<Category> Categories => Set<Category>();
     public DbSet<GlobalProduct> GlobalProducts => Set<GlobalProduct>();
     public DbSet<MedicineProfile> MedicineProfiles => Set<MedicineProfile>();
@@ -94,6 +99,9 @@ public sealed partial class MediPosDbContext(DbContextOptions<MediPosDbContext> 
         modelBuilder.ApplyConfiguration(new SaleConfiguration());
         modelBuilder.ApplyConfiguration(new SalePaymentConfiguration());
         modelBuilder.ApplyConfiguration(new SalePaymentReversalConfiguration());
+        modelBuilder.ApplyConfiguration(new TenantCommissionSettingsConfiguration());
+        modelBuilder.ApplyConfiguration(new CommissionRuleConfiguration());
+        modelBuilder.ApplyConfiguration(new CommissionEntryConfiguration());
         modelBuilder.ApplyConfiguration(new CategoryConfiguration());
         modelBuilder.ApplyConfiguration(new GlobalProductConfiguration());
         modelBuilder.ApplyConfiguration(new MedicineProfileConfiguration());
@@ -131,6 +139,9 @@ public sealed partial class MediPosDbContext(DbContextOptions<MediPosDbContext> 
         modelBuilder.Entity<SaleLine>().HasQueryFilter(value => SelectedTenantId.HasValue && value.TenantId == SelectedTenantId);
         modelBuilder.Entity<SalePayment>().HasQueryFilter(value => SelectedTenantId.HasValue && value.TenantId == SelectedTenantId);
         modelBuilder.Entity<SalePaymentReversal>().HasQueryFilter(value => SelectedTenantId.HasValue && value.TenantId == SelectedTenantId);
+        modelBuilder.Entity<TenantCommissionSettings>().HasQueryFilter(value => SelectedTenantId.HasValue && value.TenantId == SelectedTenantId);
+        modelBuilder.Entity<CommissionRule>().HasQueryFilter(value => SelectedTenantId.HasValue && value.TenantId == SelectedTenantId);
+        modelBuilder.Entity<CommissionEntry>().HasQueryFilter(value => SelectedTenantId.HasValue && value.TenantId == SelectedTenantId);
         modelBuilder.Entity<BusinessProduct>().HasQueryFilter(value => SelectedTenantId.HasValue && value.TenantId == SelectedTenantId);
         modelBuilder.Entity<Supplier>().HasQueryFilter(value => SelectedTenantId.HasValue && value.TenantId == SelectedTenantId);
         modelBuilder.Entity<Purchase>().HasQueryFilter(value => SelectedTenantId.HasValue && value.TenantId == SelectedTenantId);
@@ -160,6 +171,7 @@ public sealed partial class MediPosDbContext(DbContextOptions<MediPosDbContext> 
         ValidateStockBalances();
         ValidateTransferWrites();
         ValidateCashTransferWrites();
+        ValidateCommissionWrites();
         ValidateTenantWrites();
         return base.SaveChanges(acceptAllChangesOnSuccess);
     }
@@ -177,6 +189,7 @@ public sealed partial class MediPosDbContext(DbContextOptions<MediPosDbContext> 
         ValidateStockBalances();
         ValidateTransferWrites();
         ValidateCashTransferWrites();
+        ValidateCommissionWrites();
         ValidateTenantWrites();
         return base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken);
     }
@@ -439,6 +452,9 @@ public sealed partial class MediPosDbContext(DbContextOptions<MediPosDbContext> 
                 SaleLine value => value.TenantId,
                 SalePayment value => value.TenantId,
                 SalePaymentReversal value => value.TenantId,
+                TenantCommissionSettings value => value.TenantId,
+                CommissionRule value => value.TenantId,
+                CommissionEntry value => value.TenantId,
                 BusinessProduct value => value.TenantId,
                 Supplier value => value.TenantId,
                 Purchase value => value.TenantId,

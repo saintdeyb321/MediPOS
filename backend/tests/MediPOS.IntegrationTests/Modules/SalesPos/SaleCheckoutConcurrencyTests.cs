@@ -1,3 +1,5 @@
+using MediPOS.Application.Modules.Commissions;
+using MediPOS.Domain.Modules.Commissions;
 using MediPOS.Application.Errors;
 using MediPOS.Application.Modules.Cash;
 using MediPOS.Application.Modules.Catalog;
@@ -198,13 +200,14 @@ public sealed class SaleCheckoutConcurrencyTests(PostgreSqlFixture fixture)
         public CashSession CashSession => inner.CashSession;
         public Sale Sale => inner.Sale;
         public uint Version => inner.Version;
+        public Task<CommissionConfigurationSnapshot> ReadCommissionConfigurationAsync(CancellationToken token) => inner.ReadCommissionConfigurationAsync(token);
         public async Task<IReadOnlyList<InventoryLot>> LockLotsAsync(Guid productId, ProductType productType, decimal requested, DateOnly today, CancellationToken cancellationToken)
         {
             if (beforeLots) await barrier.ArriveAsync(cancellationToken);
             return await inner.LockLotsAsync(productId, productType, requested, today, cancellationToken);
         }
-        public Task<uint> CompleteAsync(IReadOnlyList<SalePayment> payments, IReadOnlyList<StockMovement> movements, AuditLog audit, CancellationToken cancellationToken) =>
-            inner.CompleteAsync(payments, movements, audit, cancellationToken);
+        public Task<uint> CompleteAsync(IReadOnlyList<SalePayment> payments, IReadOnlyList<StockMovement> movements, IReadOnlyList<CommissionEntry> commissions, AuditLog audit, CancellationToken cancellationToken) =>
+            inner.CompleteAsync(payments, movements, commissions, audit, cancellationToken);
         public ValueTask DisposeAsync() => inner.DisposeAsync();
     }
 }

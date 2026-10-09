@@ -1,13 +1,16 @@
 using System.Data;
 using MediPOS.Application.Errors;
+using MediPOS.Application.Modules.Commissions;
 using MediPOS.Application.Modules.SalesPos;
 using MediPOS.Application.Modules.SalesPos.ConfirmSale;
 using MediPOS.Domain.Modules.AuditSupport;
 using MediPOS.Domain.Modules.Cash;
 using MediPOS.Domain.Modules.Catalog;
+using MediPOS.Domain.Modules.Commissions;
 using MediPOS.Domain.Modules.Inventory;
 using MediPOS.Domain.Modules.SalesPos;
 using MediPOS.Infrastructure.Persistence;
+using MediPOS.Infrastructure.Modules.Commissions.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
 using Npgsql;
@@ -42,6 +45,7 @@ internal sealed class SaleCheckoutTransaction(MediPosDbContext context) : ISaleC
             var lineIds = sale.Lines.Select(line => line.Id).ToArray();
             if (sale.Status == SaleStatus.Draft && (
                 await context.SalePayments.AnyAsync(payment => payment.SaleId == sale.Id, cancellationToken).ConfigureAwait(false) ||
+                await context.CommissionEntries.AnyAsync(entry => entry.SaleId == sale.Id, cancellationToken).ConfigureAwait(false) ||
                 await context.StockMovements.AnyAsync(movement => movement.SourceSaleLineId.HasValue && lineIds.Contains(movement.SourceSaleLineId.Value), cancellationToken).ConfigureAwait(false) ||
                 await context.AuditLogs.AnyAsync(audit => audit.EntityId == sale.Id && audit.Action == AuditAction.SaleConfirmed, cancellationToken).ConfigureAwait(false)))
                 throw new ApplicationErrorException(SalesPosErrors.InconsistentDraft);
@@ -65,11 +69,21 @@ internal sealed class SaleCheckoutTransaction(MediPosDbContext context) : ISaleC
         CashSession cash, Sale sale, uint version) : ISaleCheckoutScope
     {
         private bool _committed;
+        private CommissionConfigurationSnapshot? _commissionConfiguration;
         private Guid? _lastProductId;
         private readonly Dictionary<Guid, InventoryLot> _lockedLots = [];
         public CashSession CashSession => cash;
         public Sale Sale => sale;
         public uint Version => version;
+
+        public async Task<CommissionConfigurationSnapshot> ReadCommissionConfigurationAsync(CancellationToken cancellationToken)
+        {
+            if (_committed || _commissionConfiguration is not null || _lastProductId.HasValue || sale.Status != SaleStatus.Draft)
+                throw new InvalidOperationException("Read commission configuration once from the locked draft before stock locks.");
+            _commissionConfiguration = await CommissionConfigurationReader.ReadAsync(context, sale.TenantId,
+                sale.Lines.Select(line => line.BusinessProductId).Distinct().ToArray(), cancellationToken).ConfigureAwait(false);
+            return _commissionConfiguration;
+        }
 
         public async Task<IReadOnlyList<InventoryLot>> LockLotsAsync(Guid productId, ProductType productType, decimal requested,
             DateOnly today, CancellationToken cancellationToken)
@@ -111,7 +125,7 @@ internal sealed class SaleCheckoutTransaction(MediPosDbContext context) : ISaleC
         }
 
         public async Task<uint> CompleteAsync(IReadOnlyList<SalePayment> payments, IReadOnlyList<StockMovement> movements,
-            AuditLog audit, CancellationToken cancellationToken)
+            IReadOnlyList<CommissionEntry> commissions, AuditLog audit, CancellationToken cancellationToken)
         {
             if (_committed || cash.Status != CashSessionStatus.Open || sale.Status != SaleStatus.Confirmed ||
                 sale.TenantId != cash.TenantId || sale.BranchId != cash.BranchId || sale.SellerMembershipId != cash.MembershipId || sale.CashSessionId != cash.Id)
@@ -119,6 +133,21 @@ internal sealed class SaleCheckoutTransaction(MediPosDbContext context) : ISaleC
             context.ValidateAudit(audit, sale.TenantId, AuditAction.SaleConfirmed, sale.Id);
             sale.ValidateForCheckout();
             sale.ValidatePayments(payments);
+            if (_commissionConfiguration is null || !sale.CommissionEntryCount.HasValue)
+                throw new InvalidOperationException("Confirmation requires its coherent commission configuration and posting marker.");
+            SaleCommissionHistory.ValidateOriginals(sale, commissions);
+            var expected = new List<(Guid LineId, Guid RuleId, decimal Amount)>();
+            if (_commissionConfiguration.IsEnabled)
+                foreach (var line in sale.Lines)
+                {
+                    var rule = _commissionConfiguration.Rules.SingleOrDefault(rule => rule.BusinessProductId == line.BusinessProductId && rule.AppliesAt(sale.ConfirmedAt!.Value));
+                    if (rule is null) continue;
+                    var amount = CommissionCalculation.Calculate(line, rule);
+                    if (amount > 0) expected.Add((line.Id, rule.Id, amount));
+                }
+            if (expected.Count != commissions.Count || expected.Any(item => !commissions.Any(entry =>
+                entry.SaleLineId == item.LineId && entry.CommissionRuleId == item.RuleId && entry.Amount == item.Amount)))
+                throw new InvalidOperationException("Earned entries must match exactly the captured rule version and sale snapshots.");
             foreach (var movement in movements)
             {
                 if (movement.MovementType != StockMovementType.Sale || !_lockedLots.TryGetValue(movement.InventoryLotId, out var lot))
@@ -127,6 +156,7 @@ internal sealed class SaleCheckoutTransaction(MediPosDbContext context) : ISaleC
             }
             context.SalePayments.AddRange(payments);
             context.StockMovements.AddRange(movements);
+            context.CommissionEntries.AddRange(commissions);
             context.AddAudit(audit, sale.TenantId, AuditAction.SaleConfirmed, sale.Id);
             try
             {

@@ -3,11 +3,13 @@ using MediPOS.Application.Errors;
 using MediPOS.Application.Modules.AuditSupport;
 using MediPOS.Application.Modules.Cash;
 using MediPOS.Application.Modules.Catalog;
+using MediPOS.Application.Modules.Commissions;
 using MediPOS.Application.Modules.IdentityAccess.OperationalAccess;
 using MediPOS.Application.Modules.Inventory;
 using MediPOS.Domain.Modules.AuditSupport;
 using MediPOS.Domain.Modules.Cash;
 using MediPOS.Domain.Modules.Catalog;
+using MediPOS.Domain.Modules.Commissions;
 using MediPOS.Domain.Modules.Inventory;
 using MediPOS.Domain.Modules.SalesPos;
 
@@ -53,6 +55,17 @@ public sealed class ConfirmSaleHandler(ResolveAccessContextHandler resolver, ISa
         if (payments.Sum(payment => payment.Amount) != sale.TotalAmount)
             throw new ApplicationErrorException(SalesPosErrors.PaymentTotalMismatch);
 
+        // One statement captures a coherent configuration version; a concurrent Owner change affects a later checkout.
+        var commissionConfiguration = await scope.ReadCommissionConfigurationAsync(cancellationToken).ConfigureAwait(false);
+        ValidateCommissionConfiguration(sale, commissionConfiguration);
+        // Preflight exact arithmetic before stock lock waits; eligibility is re-evaluated at the final ConfirmedAt.
+        if (commissionConfiguration.IsEnabled)
+            foreach (var line in sale.Lines)
+            {
+                var rule = commissionConfiguration.Rules.SingleOrDefault(rule => rule.BusinessProductId == line.BusinessProductId && rule.AppliesAt(clock.GetUtcNow()));
+                if (rule is not null) CalculateCommission(line, rule);
+            }
+
         var today = LocalDate(clock.GetUtcNow());
         var selections = new List<(Guid ProductId, ProductType ProductType, IReadOnlyList<InventoryLot> Lots)>();
         foreach (var group in sale.Lines.GroupBy(line => line.BusinessProductId).OrderBy(group => group.Key))
@@ -78,6 +91,7 @@ public sealed class ConfirmSaleHandler(ResolveAccessContextHandler resolver, ISa
         RequireCash(scope, finalAccess);
         if (LocalDate(now) != today) throw new ApplicationErrorException(SalesPosErrors.CheckoutWindowChanged);
         var movements = new List<StockMovement>();
+        CommissionEntry[] commissions;
         try
         {
             var lines = sale.Lines.ToDictionary(line => line.Id);
@@ -88,6 +102,12 @@ public sealed class ConfirmSaleHandler(ResolveAccessContextHandler resolver, ISa
                     movements.Add(StockMovement.Sell(lots[allocation.InventoryLotId], sale, lines[allocation.SaleLineId], allocation.QuantityBase, finalAccess.UserId, now));
             }
             sale.Confirm(payments, now);
+            commissions = commissionConfiguration.IsEnabled
+                ? sale.Lines.Select(line => (Line: line, Rule: commissionConfiguration.Rules.SingleOrDefault(rule => rule.BusinessProductId == line.BusinessProductId && rule.AppliesAt(sale.ConfirmedAt!.Value))))
+                    .Where(value => value.Rule is not null && CalculateCommission(value.Line, value.Rule) > 0)
+                    .Select(value => CommissionEntry.Earn(sale, value.Line, value.Rule!, sale.ConfirmedAt!.Value)).ToArray()
+                : [];
+            sale.RecordCommissionPosting(commissions.Length);
         }
         catch (InsufficientStockException) { throw new ApplicationErrorException(InventoryErrors.InsufficientStock); }
         catch (Exception error) when (error is ArgumentException or ArithmeticException or InvalidOperationException)
@@ -102,13 +122,32 @@ public sealed class ConfirmSaleHandler(ResolveAccessContextHandler resolver, ISa
                 lineCount = sale.Lines.Count,
                 paymentMethods = payments.Select(payment => PaymentMethodCodes.ToCode(payment.Method)).Order(StringComparer.Ordinal).ToArray(),
                 confirmedAt = sale.ConfirmedAt.Value,
+                commissionEntryCount = commissions.Length,
+                totalCommissionAmount = commissions.Sum(entry => entry.Amount),
             }));
-        var version = await scope.CompleteAsync(payments, movements, audit, cancellationToken).ConfigureAwait(false);
+        var version = await scope.CompleteAsync(payments, movements, commissions, audit, cancellationToken).ConfigureAwait(false);
         return new(sale.Id, sale.TotalAmount, sale.ConfirmedAt.Value, version,
             payments.Select(payment => new SalePaymentDetails(payment.Id, payment.Method, payment.Amount)).ToArray());
     }
 
     private static DateOnly LocalDate(DateTimeOffset instant) => DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(instant, Lima).DateTime);
+
+    private static decimal CalculateCommission(SaleLine line, CommissionRule rule)
+    {
+        try { return CommissionCalculation.Calculate(line, rule); }
+        catch (Exception error) when (error is ArgumentException or ArithmeticException)
+        { throw new ApplicationErrorException(new("commissions.invalid_amount", ErrorCategory.Validation, "Commission exceeds the supported exact monetary range.")); }
+    }
+
+    private static void ValidateCommissionConfiguration(Sale sale, CommissionConfigurationSnapshot configuration)
+    {
+        if (!configuration.IsEnabled) return;
+        if (configuration.Rules.Any(rule => rule.TenantId != sale.TenantId || !rule.IsActive || !sale.Lines.Any(line => line.BusinessProductId == rule.BusinessProductId)) ||
+            configuration.Rules.Select(rule => rule.BusinessProductId).Distinct().Count() != configuration.Rules.Count)
+            throw new ApplicationErrorException(new("commissions.corrupted_configuration", ErrorCategory.Conflict, "Commission configuration is inconsistent."));
+        try { foreach (var rule in configuration.Rules) rule.Validate(); }
+        catch (ArgumentException) { throw new ApplicationErrorException(new("commissions.corrupted_configuration", ErrorCategory.Conflict, "Commission configuration is inconsistent.")); }
+    }
 
     private static void RequireCash(ISaleCheckoutScope scope, AccessContext access)
     {

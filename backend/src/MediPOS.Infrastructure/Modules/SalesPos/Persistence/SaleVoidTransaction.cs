@@ -1,12 +1,15 @@
 using System.Data;
 using MediPOS.Application.Errors;
+using MediPOS.Application.Modules.Commissions;
 using MediPOS.Application.Modules.SalesPos;
 using MediPOS.Application.Modules.SalesPos.VoidSale;
 using MediPOS.Domain.Modules.AuditSupport;
 using MediPOS.Domain.Modules.Cash;
+using MediPOS.Domain.Modules.Commissions;
 using MediPOS.Domain.Modules.Inventory;
 using MediPOS.Domain.Modules.SalesPos;
 using MediPOS.Infrastructure.Modules.Cash.Persistence;
+using MediPOS.Infrastructure.Modules.Commissions.Persistence;
 using MediPOS.Infrastructure.Modules.Inventory.Persistence.Configurations;
 using MediPOS.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
@@ -88,6 +91,13 @@ internal sealed class SaleVoidTransaction(MediPosDbContext context) : ISaleVoidT
                 movement.MovementType == StockMovementType.Sale && movement.SourceSaleLineId.HasValue && lineIds.Contains(movement.SourceSaleLineId.Value))
                 .OrderBy(movement => movement.Id).ToArrayAsync(cancellationToken).ConfigureAwait(false);
             var movementIds = movements.Select(movement => movement.Id).ToArray();
+            var commissions = await context.CommissionEntries.AsNoTracking().Where(entry => entry.TenantId == sale.TenantId && entry.SaleId == sale.Id)
+                .OrderBy(entry => entry.Id).ToArrayAsync(cancellationToken).ConfigureAwait(false);
+            if (commissions.Any(entry => entry.EntryType == CommissionEntryType.Reversal))
+                throw new ApplicationErrorException(SalesPosErrors.ReversalAlreadyExists);
+            try { SaleCommissionHistory.ValidateOriginals(sale, commissions); }
+            catch (Exception error) when (error is ArgumentException or ArithmeticException or InvalidOperationException)
+            { throw new ApplicationErrorException(SalesPosErrors.CorruptedHistory); }
             var confirmation = await context.AuditLogs.AsNoTracking().Where(audit => audit.EntityId == sale.Id && audit.Action == AuditAction.SaleConfirmed)
                 .ToArrayAsync(cancellationToken).ConfigureAwait(false);
             if (confirmation.Length != 1 || confirmation[0].OccurredAt != sale.ConfirmedAt || movements.Any(movement => movement.ActorId != confirmation[0].ActorId))
@@ -107,7 +117,12 @@ internal sealed class SaleVoidTransaction(MediPosDbContext context) : ISaleVoidT
                 foreach (var tracked in context.ChangeTracker.Entries<StockMovement>().Where(entry => entry.Entity.Id == movement.Id).ToArray()) tracked.State = EntityState.Detached;
                 context.StockMovements.Attach(movement);
             }
-            _effects = new(payments, movements);
+            foreach (var commission in commissions)
+            {
+                foreach (var tracked in context.ChangeTracker.Entries<CommissionEntry>().Where(entry => entry.Entity.Id == commission.Id).ToArray()) tracked.State = EntityState.Detached;
+                context.CommissionEntries.Attach(commission);
+            }
+            _effects = new(payments, movements) { Commissions = commissions };
             return _effects;
         }
 
@@ -135,12 +150,13 @@ internal sealed class SaleVoidTransaction(MediPosDbContext context) : ISaleVoidT
         }
 
         public async Task<uint> CompleteAsync(IReadOnlyList<SalePaymentReversal> payments, IReadOnlyList<StockMovement> movements,
-            AuditLog audit, CancellationToken cancellationToken)
+            IReadOnlyList<CommissionEntry> commissions, AuditLog audit, CancellationToken cancellationToken)
         {
             if (_committed || !_lotsLocked || _effects is null || sale.Status != SaleStatus.Voided || cash.Status != CashSessionStatus.Open ||
                 cash.Id != sale.CashSessionId || cash.TenantId != sale.TenantId || cash.BranchId != sale.BranchId || cash.MembershipId != sale.SellerMembershipId)
                 throw new InvalidOperationException("Void completion requires its locked original sale/cash/lots.");
             SaleVoidHistory.ValidateReversals(sale, _effects.Payments, _effects.Movements, payments, movements);
+            SaleCommissionHistory.ValidateReversals(sale, _effects.Commissions, commissions);
             var cashRefund = payments.Where(p => p.Method == PaymentMethod.Cash).Sum(p => p.Amount);
             if (cashRefund > 0 && (!_availableCash.HasValue || cashRefund > _availableCash.Value))
                 throw new InvalidOperationException("Cash refunds cannot exceed availability established under the cash row lock.");
@@ -148,6 +164,7 @@ internal sealed class SaleVoidTransaction(MediPosDbContext context) : ISaleVoidT
             foreach (var movement in movements) _lots[movement.InventoryLotId].ApplySaleReversal(movement, originals[movement.ReversesStockMovementId!.Value]);
             context.SalePaymentReversals.AddRange(payments);
             context.StockMovements.AddRange(movements);
+            context.CommissionEntries.AddRange(commissions);
             context.AddAudit(audit, sale.TenantId, AuditAction.SaleVoided, sale.Id);
             try
             {
@@ -159,7 +176,7 @@ internal sealed class SaleVoidTransaction(MediPosDbContext context) : ISaleVoidT
             }
             catch (DbUpdateConcurrencyException) { throw new ApplicationErrorException(SalesPosErrors.ConcurrentEdit); }
             catch (DbUpdateException error) when (error.InnerException is PostgresException { SqlState: PostgresErrorCodes.UniqueViolation } unique &&
-                unique.ConstraintName is SalePaymentReversalConfiguration.OriginalPaymentIndex or StockMovementConfiguration.ReversalIndex)
+                unique.ConstraintName is SalePaymentReversalConfiguration.OriginalPaymentIndex or StockMovementConfiguration.ReversalIndex or CommissionEntryConfiguration.ReversedOriginalIndex)
             { throw new ApplicationErrorException(SalesPosErrors.ReversalAlreadyExists); }
             catch (Exception error) when ((error is PostgresException postgres ? postgres : error.InnerException as PostgresException) is { } conflict && IsLockConflict(conflict))
             { throw new ApplicationErrorException(SalesPosErrors.ConcurrentEdit); }

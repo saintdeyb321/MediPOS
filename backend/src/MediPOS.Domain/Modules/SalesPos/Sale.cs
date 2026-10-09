@@ -37,6 +37,8 @@ public sealed class Sale
     public DateTimeOffset CreatedAt { get; private set; }
     public DateTimeOffset UpdatedAt { get; private set; }
     public DateTimeOffset? ConfirmedAt { get; private set; }
+    // Null identifies pre-commission history; zero is an explicit new posting with no earned entries.
+    public int? CommissionEntryCount { get; private set; }
     public DateTimeOffset? VoidedAt { get; private set; }
     public Guid? VoidedByActorId { get; private set; }
     public string? VoidReason { get; private set; }
@@ -68,7 +70,8 @@ public sealed class Sale
     {
         if (Id == Guid.Empty || TenantId == Guid.Empty || BranchId == Guid.Empty || SellerMembershipId == Guid.Empty || CashSessionId == Guid.Empty ||
             !Enum.IsDefined(Status) || CreatedAt.Offset != TimeSpan.Zero || UpdatedAt.Offset != TimeSpan.Zero || UpdatedAt < CreatedAt ||
-            (Status == SaleStatus.Draft && ConfirmedAt.HasValue) || (Status is SaleStatus.Confirmed or SaleStatus.Voided &&
+            (Status == SaleStatus.Draft && (ConfirmedAt.HasValue || CommissionEntryCount.HasValue)) ||
+            (CommissionEntryCount.HasValue && (CommissionEntryCount < 0 || CommissionEntryCount > _lines.Count)) || (Status is SaleStatus.Confirmed or SaleStatus.Voided &&
                 (!ConfirmedAt.HasValue || ConfirmedAt.Value.Offset != TimeSpan.Zero || ConfirmedAt < CreatedAt || ConfirmedAt > UpdatedAt)) ||
             (Status != SaleStatus.Voided && (VoidedAt.HasValue || VoidedByActorId.HasValue || VoidReason is not null)) ||
             (Status == SaleStatus.Voided && (!VoidedAt.HasValue || VoidedAt.Value.Offset != TimeSpan.Zero || VoidedAt < ConfirmedAt || VoidedAt > UpdatedAt ||
@@ -114,6 +117,13 @@ public sealed class Sale
     }
 
     public static bool IsValidVoidReason(string? reason) => !string.IsNullOrWhiteSpace(reason) && reason.Trim().Length <= MaximumVoidReasonLength;
+
+    public void RecordCommissionPosting(int count)
+    {
+        if (Status != SaleStatus.Confirmed || CommissionEntryCount.HasValue || count < 0 || count > _lines.Count)
+            throw new InvalidOperationException("Record the bounded original commission count once at confirmation.");
+        CommissionEntryCount = count;
+    }
 
     public void Void(string reason, Guid actorId, DateTimeOffset now)
     {
