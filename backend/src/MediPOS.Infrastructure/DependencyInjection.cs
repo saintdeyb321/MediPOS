@@ -118,6 +118,7 @@ public static class DependencyInjection
         services.AddScoped<NotificationStore>();
         services.AddScoped<ISyncDeviceStore, SyncDeviceStore>();
         services.AddScoped<ISyncEventInbox, SyncEventInbox>();
+        services.AddScoped<IBranchCatalogSyncReader, BranchCatalogSyncReader>();
         services.AddScoped<IOfflineSaleConflictStore, OfflineSaleConflictStore>();
         services.AddScoped<IOfflineSaleCheckoutTransaction, SaleCheckoutTransaction>();
         services.AddScoped<INotificationReader>(provider => provider.GetRequiredService<NotificationStore>());
@@ -225,6 +226,9 @@ public static class DependencyInjection
         services.AddScoped<RevokeSyncDeviceHandler>();
         services.AddScoped<ReserveSyncEventReceiptHandler>();
         services.AddScoped<ProcessOfflineSyncBatchHandler>();
+        services.AddScoped<BranchCatalogSyncQueries>();
+        services.AddScoped<GetBranchCatalogSnapshotHandler>();
+        services.AddScoped<GetBranchCatalogChangesHandler>();
         services.AddScoped<OfflineSaleProcessor>();
         services.AddScoped<SaleConfirmationPosting>();
         services.AddScoped<GetOfflineSaleConflictsHandler>();

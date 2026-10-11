@@ -84,7 +84,7 @@ namespace MediPOS.Infrastructure.Modules.TenancyLicensing.Persistence.Migrations
 
                             t.HasCheckConstraint("ck_audit_logs_before", "before_json IS NULL OR jsonb_typeof(before_json) = 'object'");
 
-                            t.HasCheckConstraint("ck_audit_logs_codes", "(entity_type = 'tenant' AND action IN ('tenant.created', 'tenant.purge_requested')) OR\r\n(entity_type = 'license' AND action IN ('license.renewed', 'license.suspended', 'license.reactivated')) OR\r\n(entity_type = 'legal_entity' AND action = 'legal_entity.created') OR\r\n(entity_type = 'branch' AND action IN ('branch.created', 'branch.main_hub_changed')) OR\r\n(entity_type = 'membership' AND action IN ('membership.created', 'membership.branches_replaced', 'membership.schedule_replaced', 'membership.deactivated')) OR\r\n(entity_type = 'business_product' AND action IN ('business_product.created', 'business_product.price_changed', 'business_product.status_changed', 'business_product.units_changed')) OR\r\n(entity_type = 'purchase' AND action = 'purchase.confirmed') OR\r\n(entity_type = 'inventory_lot' AND action = 'inventory.adjusted') OR\r\n(entity_type = 'import_job' AND action = 'catalog.products_imported') OR\r\n(entity_type = 'cash_session' AND action IN ('cash_session.opened', 'cash_session.closed')) OR\r\n(entity_type = 'sale' AND action IN ('sale.confirmed', 'sale.voided')) OR\r\n(entity_type = 'transfer' AND action IN ('transfer.requested', 'transfer.approved', 'transfer.dispatched', 'transfer.received', 'transfer.cancelled')) OR\r\n(entity_type = 'cash_transfer' AND action IN ('cash_transfer.dispatched', 'cash_transfer.received')) OR\r\n(entity_type = 'tenant_commission_settings' AND action = 'commissions.settings_changed') OR\r\n(entity_type = 'commission_rule' AND action IN ('commission_rule.created', 'commission_rule.deactivated')) OR\r\n(entity_type = 'branch_stock_threshold' AND action = 'stock_threshold.changed') OR\r\n(entity_type = 'sync_device' AND action IN ('sync_device.registered', 'sync_device.revoked')) OR\r\n(entity_type = 'offline_sale_conflict' AND action = 'offline_sale_conflict.resolved')");
+                            t.HasCheckConstraint("ck_audit_logs_codes", "(entity_type = 'tenant' AND action IN ('tenant.created', 'tenant.purge_requested')) OR\n(entity_type = 'license' AND action IN ('license.renewed', 'license.suspended', 'license.reactivated')) OR\n(entity_type = 'legal_entity' AND action = 'legal_entity.created') OR\n(entity_type = 'branch' AND action IN ('branch.created', 'branch.main_hub_changed')) OR\n(entity_type = 'membership' AND action IN ('membership.created', 'membership.branches_replaced', 'membership.schedule_replaced', 'membership.deactivated')) OR\n(entity_type = 'business_product' AND action IN ('business_product.created', 'business_product.price_changed', 'business_product.status_changed', 'business_product.units_changed')) OR\n(entity_type = 'purchase' AND action = 'purchase.confirmed') OR\n(entity_type = 'inventory_lot' AND action = 'inventory.adjusted') OR\n(entity_type = 'import_job' AND action = 'catalog.products_imported') OR\n(entity_type = 'cash_session' AND action IN ('cash_session.opened', 'cash_session.closed')) OR\n(entity_type = 'sale' AND action IN ('sale.confirmed', 'sale.voided')) OR\n(entity_type = 'transfer' AND action IN ('transfer.requested', 'transfer.approved', 'transfer.dispatched', 'transfer.received', 'transfer.cancelled')) OR\n(entity_type = 'cash_transfer' AND action IN ('cash_transfer.dispatched', 'cash_transfer.received')) OR\n(entity_type = 'tenant_commission_settings' AND action = 'commissions.settings_changed') OR\n(entity_type = 'commission_rule' AND action IN ('commission_rule.created', 'commission_rule.deactivated')) OR\n(entity_type = 'branch_stock_threshold' AND action = 'stock_threshold.changed') OR\n(entity_type = 'sync_device' AND action IN ('sync_device.registered', 'sync_device.revoked')) OR\n(entity_type = 'offline_sale_conflict' AND action = 'offline_sale_conflict.resolved')");
 
                             t.HasCheckConstraint("ck_audit_logs_correlation", "correlation_id ~ '^[0-9a-f]{32}$' AND correlation_id <> repeat('0', 32)");
 
@@ -2024,7 +2024,7 @@ namespace MediPOS.Infrastructure.Modules.TenancyLicensing.Persistence.Migrations
 
                             t.HasCheckConstraint("ck_sales_confirmation", "(status = 'draft' AND confirmed_at IS NULL) OR (status IN ('confirmed', 'voided') AND confirmed_at IS NOT NULL AND confirmed_at >= created_at AND confirmed_at <= updated_at)");
 
-                            t.HasCheckConstraint("ck_sales_identifiers", "id <> '00000000-0000-0000-0000-000000000000'::uuid AND\r\ntenant_id <> '00000000-0000-0000-0000-000000000000'::uuid AND\r\nbranch_id <> '00000000-0000-0000-0000-000000000000'::uuid AND\r\nseller_membership_id <> '00000000-0000-0000-0000-000000000000'::uuid AND\r\ncash_session_id <> '00000000-0000-0000-0000-000000000000'::uuid");
+                            t.HasCheckConstraint("ck_sales_identifiers", "id <> '00000000-0000-0000-0000-000000000000'::uuid AND\ntenant_id <> '00000000-0000-0000-0000-000000000000'::uuid AND\nbranch_id <> '00000000-0000-0000-0000-000000000000'::uuid AND\nseller_membership_id <> '00000000-0000-0000-0000-000000000000'::uuid AND\ncash_session_id <> '00000000-0000-0000-0000-000000000000'::uuid");
 
                             t.HasCheckConstraint("ck_sales_status", "status IN ('draft', 'confirmed', 'voided')");
 
@@ -2032,7 +2032,7 @@ namespace MediPOS.Infrastructure.Modules.TenancyLicensing.Persistence.Migrations
 
                             t.HasCheckConstraint("ck_sales_total", "total_amount >= 0 AND total_amount <= 99999999999999.9999");
 
-                            t.HasCheckConstraint("ck_sales_void", "(status IN ('draft', 'confirmed') AND voided_at IS NULL AND voided_by_actor_id IS NULL AND void_reason IS NULL) OR\r\n(status = 'voided' AND voided_at IS NOT NULL AND voided_at >= confirmed_at AND voided_at <= updated_at\r\n    AND voided_by_actor_id IS NOT NULL AND voided_by_actor_id <> '00000000-0000-0000-0000-000000000000'::uuid\r\n    AND void_reason IS NOT NULL AND void_reason ~ '[^[:space:]]' AND void_reason = btrim(void_reason) AND length(void_reason) <= 512)");
+                            t.HasCheckConstraint("ck_sales_void", "(status IN ('draft', 'confirmed') AND voided_at IS NULL AND voided_by_actor_id IS NULL AND void_reason IS NULL) OR\n(status = 'voided' AND voided_at IS NOT NULL AND voided_at >= confirmed_at AND voided_at <= updated_at\n    AND voided_by_actor_id IS NOT NULL AND voided_by_actor_id <> '00000000-0000-0000-0000-000000000000'::uuid\n    AND void_reason IS NOT NULL AND void_reason ~ '[^[:space:]]' AND void_reason = btrim(void_reason) AND length(void_reason) <= 512)");
                         });
                 });
 
@@ -2618,6 +2618,124 @@ namespace MediPOS.Infrastructure.Modules.TenancyLicensing.Persistence.Migrations
                             t.HasCheckConstraint("ck_transfer_allocations_id", "id <> '00000000-0000-0000-0000-000000000000'::uuid");
 
                             t.HasCheckConstraint("ck_transfer_allocations_quantity", "dispatched_quantity_base > 0 AND dispatched_quantity_base <= 9999999999999999.999999999999 AND (received_quantity_base IS NULL OR (received_quantity_base >= 0 AND received_quantity_base <= dispatched_quantity_base))");
+                        });
+                });
+
+            modelBuilder.Entity("MediPOS.Infrastructure.Modules.OfflineSync.Persistence.BranchCatalogChange", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id")
+                        .HasDefaultValueSql("uuidv7()");
+
+                    b.Property<Guid>("BranchId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("branch_id");
+
+                    b.Property<Guid>("EntityId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("entity_id");
+
+                    b.Property<string>("EntityType")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)")
+                        .HasDefaultValue("product")
+                        .HasColumnName("entity_type");
+
+                    b.Property<DateTimeOffset?>("GeneratedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("generated_at_utc");
+
+                    b.Property<string>("Operation")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)")
+                        .HasDefaultValue("pending")
+                        .HasColumnName("operation");
+
+                    b.Property<string>("Projection")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("projection");
+
+                    b.Property<int>("SchemaVersion")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(1)
+                        .HasColumnName("schema_version");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("tenant_id");
+
+                    b.Property<string>("TransactionId")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("transaction_id");
+
+                    b.Property<long>("Version")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasDefaultValue(0L)
+                        .HasColumnName("version");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TenantId", "BranchId", "Version")
+                        .IsUnique()
+                        .HasFilter("version > 0");
+
+                    b.HasIndex("TenantId", "BranchId", "TransactionId", "EntityId")
+                        .IsUnique();
+
+                    b.HasIndex("TransactionId", "TenantId", "BranchId", "Version");
+
+                    b.ToTable("branch_catalog_changes", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_branch_catalog_change", "entity_type = 'product' AND schema_version = 1 AND entity_id <> '00000000-0000-0000-0000-000000000000'::uuid AND transaction_id ~ '^[0-9]{1,20}$' AND version >= 0");
+
+                            t.HasCheckConstraint("ck_branch_catalog_projection", "(version = 0 AND operation = 'pending' AND generated_at_utc IS NULL AND projection IS NULL) OR\n(version > 0 AND generated_at_utc IS NOT NULL AND isfinite(generated_at_utc) AND\n  ((operation = 'upsert' AND projection IS NOT NULL AND jsonb_typeof(projection) = 'object') OR (operation = 'tombstone' AND projection IS NULL)))");
+                        });
+                });
+
+            modelBuilder.Entity("MediPOS.Infrastructure.Modules.OfflineSync.Persistence.BranchCatalogSyncState", b =>
+                {
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("tenant_id");
+
+                    b.Property<Guid>("BranchId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("branch_id");
+
+                    b.Property<long>("CurrentVersion")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasDefaultValue(0L)
+                        .HasColumnName("current_version");
+
+                    b.Property<byte[]>("CursorKey")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bytea")
+                        .HasColumnName("cursor_key")
+                        .HasDefaultValueSql("decode(replace(gen_random_uuid()::text, '-', '') || replace(gen_random_uuid()::text, '-', ''), 'hex')");
+
+                    b.Property<long>("MinimumRetainedVersion")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasDefaultValue(0L)
+                        .HasColumnName("minimum_retained_version");
+
+                    b.HasKey("TenantId", "BranchId");
+
+                    b.ToTable("branch_catalog_sync_states", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_branch_catalog_state", "current_version >= 0 AND minimum_retained_version = 0 AND octet_length(cursor_key) = 32");
                         });
                 });
 
@@ -3462,6 +3580,25 @@ namespace MediPOS.Infrastructure.Modules.TenancyLicensing.Persistence.Migrations
                         .WithMany()
                         .HasForeignKey("TenantId", "SourceInventoryLotId", "SourceBranchId", "BusinessProductId", "SourcePurchaseLineId")
                         .HasPrincipalKey("TenantId", "Id", "BranchId", "BusinessProductId", "SourcePurchaseLineId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("MediPOS.Infrastructure.Modules.OfflineSync.Persistence.BranchCatalogChange", b =>
+                {
+                    b.HasOne("MediPOS.Infrastructure.Modules.OfflineSync.Persistence.BranchCatalogSyncState", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId", "BranchId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("MediPOS.Infrastructure.Modules.OfflineSync.Persistence.BranchCatalogSyncState", b =>
+                {
+                    b.HasOne("MediPOS.Domain.Modules.Branches.Branch", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId", "BranchId")
+                        .HasPrincipalKey("TenantId", "Id")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
                 });

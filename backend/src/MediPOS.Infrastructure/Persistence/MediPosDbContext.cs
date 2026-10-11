@@ -101,6 +101,8 @@ public sealed partial class MediPosDbContext(DbContextOptions<MediPosDbContext> 
         modelBuilder.ApplyConfiguration(new NotificationConfiguration());
         modelBuilder.ApplyConfiguration(new SyncDeviceConfiguration());
         modelBuilder.ApplyConfiguration(new SyncEventConfiguration());
+        modelBuilder.ApplyConfiguration(new BranchCatalogSyncStateConfiguration());
+        modelBuilder.ApplyConfiguration(new BranchCatalogChangeConfiguration());
         modelBuilder.ApplyConfiguration(new OfflineSaleConflictConfiguration());
         modelBuilder.ApplyConfiguration(new NotificationReadStateConfiguration());
         modelBuilder.ApplyConfiguration(new LicenseConfiguration());
@@ -148,6 +150,8 @@ public sealed partial class MediPosDbContext(DbContextOptions<MediPosDbContext> 
         modelBuilder.Entity<Notification>().HasQueryFilter(value => SelectedTenantId.HasValue && value.TenantId == SelectedTenantId);
         modelBuilder.Entity<SyncDevice>().HasQueryFilter(value => SelectedTenantId.HasValue && value.TenantId == SelectedTenantId);
         modelBuilder.Entity<OfflineSaleConflict>().HasQueryFilter(value => SelectedTenantId.HasValue && value.TenantId == SelectedTenantId);
+        modelBuilder.Entity<BranchCatalogSyncState>().HasQueryFilter(value => SelectedTenantId.HasValue && value.TenantId == SelectedTenantId);
+        modelBuilder.Entity<BranchCatalogChange>().HasQueryFilter(value => SelectedTenantId.HasValue && value.TenantId == SelectedTenantId);
         modelBuilder.Entity<SyncEvent>().HasQueryFilter(value => SelectedTenantId.HasValue && value.TenantId == SelectedTenantId);
         modelBuilder.Entity<NotificationReadState>().HasQueryFilter(value => SelectedTenantId.HasValue && value.TenantId == SelectedTenantId);
         // User is global. Tenant is a platform root; its administration requires a separate authorized boundary.
@@ -188,6 +192,8 @@ public sealed partial class MediPosDbContext(DbContextOptions<MediPosDbContext> 
     {
         ValidateLicenseHistory();
         ValidateSyncWrites();
+        if (ChangeTracker.Entries().Any(entry => entry.Entity is BranchCatalogSyncState or BranchCatalogChange && entry.State is EntityState.Added or EntityState.Modified or EntityState.Deleted))
+            throw new InvalidOperationException("Catalog sync history is maintained by PostgreSQL source triggers.");
         ValidateNotificationHistory();
         ValidateAuditHistory();
         ValidateStockHistory();
@@ -209,6 +215,8 @@ public sealed partial class MediPosDbContext(DbContextOptions<MediPosDbContext> 
     {
         ValidateLicenseHistory();
         ValidateSyncWrites();
+        if (ChangeTracker.Entries().Any(entry => entry.Entity is BranchCatalogSyncState or BranchCatalogChange && entry.State is EntityState.Added or EntityState.Modified or EntityState.Deleted))
+            throw new InvalidOperationException("Catalog sync history is maintained by PostgreSQL source triggers.");
         ValidateNotificationHistory();
         ValidateAuditHistory();
         ValidateStockHistory();
@@ -481,6 +489,8 @@ public sealed partial class MediPosDbContext(DbContextOptions<MediPosDbContext> 
                 Notification value => value.TenantId,
                 SyncDevice value => value.TenantId,
                 SyncEvent value => value.TenantId,
+                BranchCatalogSyncState value => value.TenantId,
+                BranchCatalogChange value => value.TenantId,
                 OfflineSaleConflict value => value.TenantId,
                 NotificationReadState value => value.TenantId,
                 LicenseChange value => value.TenantId,
