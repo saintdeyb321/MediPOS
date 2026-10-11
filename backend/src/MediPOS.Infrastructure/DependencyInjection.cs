@@ -222,6 +222,7 @@ public static class DependencyInjection
         services.AddScoped<RegisterSyncDeviceHandler>();
         services.AddScoped<RevokeSyncDeviceHandler>();
         services.AddScoped<ReserveSyncEventReceiptHandler>();
+        services.AddScoped<ProcessOfflineSyncBatchHandler>();
         services.AddScoped<GetNotificationsHandler>();
         services.AddScoped<GetUnreadNotificationCountHandler>();
         services.AddScoped<MarkNotificationReadHandler>();

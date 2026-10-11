@@ -4,9 +4,9 @@ This is the single execution roadmap for the backend. Prompts are given in chat 
 
 ## Working state
 - **Current milestone:** M5 — Offline synchronization backend
-- **Current sprint:** B5.1 — Devices, event contract & idempotency
+- **Current sprint:** B5.2 — Batch sync & durable acknowledgments
 - **Status:** DONE
-- **Next gate:** B5.1 implementation audit; local gate passed, real PostgreSQL integration validation pending externally (M0–M4 and B5.1 included)
+- **Next gate:** B5.2 implementation audit; local gate passed, real PostgreSQL integration validation pending externally (M0–M4 and B5.1–B5.2 included). Public HTTP activation requires a production server authentication adapter.
 
 Local policy: this machine has no Docker and will not install it. Do not check/start Docker or run PostgreSQL/Testcontainers here. B0.1 is complete locally. Keep real PostgreSQL integration tests for another environment; they are not part of the local gate and must not be reported as passed without execution.
 
@@ -206,13 +206,14 @@ Goal: owner control and operational visibility.
 Goal: safe limited contingency sync.
 
 ### B5.1 — Devices, event contract & idempotency
-**Status:** DONE — implementation and local gate complete; implementation audit and real PostgreSQL integration validation pending externally.
+**Status:** DONE / audited locally — real PostgreSQL integration validation pending externally.
 **Requirements:** FR-OFF-002, BR-018.
 **Scope:** SyncDevice/SyncEvent, event versioning, idempotency storage.
 
-### B5.2 — Batch sync endpoint
+### B5.2 — Batch sync & durable acknowledgments
+**Status:** DONE — implementation and local gate complete; implementation audit and real PostgreSQL integration validation pending externally. HTTP mapping prepared; public activation blocked until production OIDC/session authentication exists.
 **Requirements:** FR-OFF-003.
-**Scope:** Accepted/Conflict/Rejected responses, transactional application, cursor/version response.
+**Scope:** sequential reception with one transaction per event; durable pending acknowledgments and persisted terminal replays. HTTP activation requires production server authentication; business application belongs to B5.3. Protocol version 1, no incremental receipt cursor.
 
 ### B5.3 — Offline sale reconciliation
 **Requirements:** FR-OFF-004..005, BR-019.
