@@ -1,3 +1,4 @@
+using System.Globalization;
 using MediPOS.Application.Modules.Commissions.SetCommissionRule;
 using MediPOS.Application.Modules.Commissions.SetTenantCommissionsEnabled;
 using MediPOS.Application.Modules.Reporting.GetOwnerCommissionsReport;
@@ -8,6 +9,7 @@ using MediPOS.IntegrationTests.Modules.Reporting;
 using MediPOS.IntegrationTests.Modules.SalesPos;
 using MediPOS.IntegrationTests.Modules.TenancyLicensing;
 using MediPOS.IntegrationTests.Tenancy;
+using MediPOS.SharedKernel;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Npgsql;
@@ -50,6 +52,61 @@ public sealed class CommissionSchemaIsolationTests(PostgreSqlFixture fixture)
         Assert.Equal(.0002m, await context.Database.SqlQueryRaw<decimal>("SELECT commission_round_even4(0.00015::numeric) AS \"Value\"").SingleAsync(CommissionTestData.Token));
         Assert.Equal(.0002m, await context.Database.SqlQueryRaw<decimal>("SELECT commission_round_even4(0.00025::numeric) AS \"Value\"").SingleAsync(CommissionTestData.Token));
         Assert.Equal(-.0002m, await context.Database.SqlQueryRaw<decimal>("SELECT commission_round_even4(-0.00025::numeric) AS \"Value\"").SingleAsync(CommissionTestData.Token));
+    }
+
+    [Theory]
+    [InlineData("1.23456")]
+    [InlineData("-1.23456")]
+    [InlineData("0.00015")]
+    [InlineData("0.00025")]
+    [InlineData("-0.00015")]
+    [InlineData("-0.00025")]
+    [InlineData("0.00005")]
+    [InlineData("-0.00005")]
+    [InlineData("0")]
+    [InlineData("99999899999950.0001499999")]
+    [InlineData("-99999899999950.0001499999")]
+    [InlineData("99999999999999.9999")]
+    [InlineData("-99999999999999.9999")]
+    [InlineData("99999999999999.99994")]
+    [InlineData("-99999999999999.99994")]
+    public async Task PostgreSqlSignedRoundingMatchesTheBoundedCSharpContract(string input)
+    {
+        var value = decimal.Parse(input, CultureInfo.InvariantCulture);
+        await using var context = fixture.CreateContext();
+        var rounded = await context.Database.SqlQuery<decimal>($"SELECT commission_round_even4({value}) AS \"Value\"")
+            .SingleAsync(CommissionTestData.Token);
+        Assert.Equal(ExactMoney.RoundToEven4(value), rounded);
+        Assert.Equal(decimal.Round(value, 4, MidpointRounding.ToEven), rounded);
+    }
+
+    [Theory]
+    [InlineData("99999999999999.99995")]
+    [InlineData("-99999999999999.99995")]
+    [InlineData("100000000000000")]
+    [InlineData("-100000000000000")]
+    [InlineData("79228162514264337593543950335")]
+    [InlineData("-79228162514264337593543950335")]
+    public async Task PostgreSqlRejectsAmountsOutsideTheSameFinalMonetaryRangeAsCSharp(string input)
+    {
+        var value = decimal.Parse(input, CultureInfo.InvariantCulture);
+        Assert.Throws<ArgumentOutOfRangeException>(() => ExactMoney.RoundToEven4(value));
+        await using var context = fixture.CreateContext();
+        var error = await Assert.ThrowsAsync<PostgresException>(() => context.Database.SqlQuery<decimal>(
+            $"SELECT commission_round_even4({value}) AS \"Value\"").SingleAsync(CommissionTestData.Token));
+        Assert.Equal(PostgresErrorCodes.NumericValueOutOfRange, error.SqlState);
+    }
+
+    [Theory]
+    [InlineData("NaN")]
+    [InlineData("Infinity")]
+    [InlineData("-Infinity")]
+    public async Task PostgreSqlSpecialNumericValuesCannotBecomeMonetaryAmounts(string input)
+    {
+        await using var context = fixture.CreateContext();
+        var error = await Assert.ThrowsAsync<PostgresException>(() => context.Database.SqlQuery<decimal>(
+            $"SELECT commission_round_even4(CAST({input} AS numeric)) AS \"Value\"").SingleAsync(CommissionTestData.Token));
+        Assert.Equal(PostgresErrorCodes.NumericValueOutOfRange, error.SqlState);
     }
 
     [Fact]

@@ -53,9 +53,18 @@ public sealed class CommissionEntry
         if (amount <= 0) throw new ArgumentOutOfRangeException(nameof(line), "A commission rounded to zero does not produce a ledger entry.");
         return new()
         {
-            Id = Guid.CreateVersion7(), TenantId = sale.TenantId, SaleId = sale.Id, SaleLineId = line.Id,
-            SellerMembershipId = sale.SellerMembershipId, BusinessProductId = line.BusinessProductId, CommissionRuleId = rule.Id,
-            EntryType = CommissionEntryType.Earned, Amount = amount, RuleTypeSnapshot = rule.RuleType, RuleValueSnapshot = rule.Value, OccurredAt = at,
+            Id = Guid.CreateVersion7(),
+            TenantId = sale.TenantId,
+            SaleId = sale.Id,
+            SaleLineId = line.Id,
+            SellerMembershipId = sale.SellerMembershipId,
+            BusinessProductId = line.BusinessProductId,
+            CommissionRuleId = rule.Id,
+            EntryType = CommissionEntryType.Earned,
+            Amount = amount,
+            RuleTypeSnapshot = rule.RuleType,
+            RuleValueSnapshot = rule.Value,
+            OccurredAt = at,
         };
     }
 
@@ -69,10 +78,19 @@ public sealed class CommissionEntry
         if (at < sale.UpdatedAt || at < original.OccurredAt) throw new ArgumentOutOfRangeException(nameof(now));
         return new()
         {
-            Id = Guid.CreateVersion7(), TenantId = original.TenantId, SaleId = original.SaleId, SaleLineId = original.SaleLineId,
-            SellerMembershipId = original.SellerMembershipId, BusinessProductId = original.BusinessProductId, CommissionRuleId = original.CommissionRuleId,
-            EntryType = CommissionEntryType.Reversal, Amount = -original.Amount, RuleTypeSnapshot = original.RuleTypeSnapshot,
-            RuleValueSnapshot = original.RuleValueSnapshot, OccurredAt = at, ReversesCommissionEntryId = original.Id,
+            Id = Guid.CreateVersion7(),
+            TenantId = original.TenantId,
+            SaleId = original.SaleId,
+            SaleLineId = original.SaleLineId,
+            SellerMembershipId = original.SellerMembershipId,
+            BusinessProductId = original.BusinessProductId,
+            CommissionRuleId = original.CommissionRuleId,
+            EntryType = CommissionEntryType.Reversal,
+            Amount = -original.Amount,
+            RuleTypeSnapshot = original.RuleTypeSnapshot,
+            RuleValueSnapshot = original.RuleValueSnapshot,
+            OccurredAt = at,
+            ReversesCommissionEntryId = original.Id,
         };
     }
 

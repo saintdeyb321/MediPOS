@@ -1,5 +1,4 @@
 using System.Text.Json;
-using MediPOS.Domain.Modules.Commissions;
 using MediPOS.Application.Errors;
 using MediPOS.Application.Modules.IdentityAccess.Authentication;
 using MediPOS.Application.Modules.IdentityAccess.OperationalAccess;
@@ -8,6 +7,7 @@ using MediPOS.Application.Modules.SalesPos.VoidSale;
 using MediPOS.Application.Tenancy;
 using MediPOS.Domain.Modules.AuditSupport;
 using MediPOS.Domain.Modules.Cash;
+using MediPOS.Domain.Modules.Commissions;
 using MediPOS.Domain.Modules.IdentityAccess;
 using MediPOS.Domain.Modules.Inventory;
 using MediPOS.Domain.Modules.SalesPos;

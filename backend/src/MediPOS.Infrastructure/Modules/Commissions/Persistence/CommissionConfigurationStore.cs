@@ -92,7 +92,7 @@ internal sealed class CommissionConfigurationStore(MediPosDbContext context) : I
             try { await context.SaveAuditedChangesAsync(cancellationToken).ConfigureAwait(false); }
             catch (DbUpdateConcurrencyException error) { throw new ApplicationErrorException(CommissionErrors.ConcurrentChange, error); }
             catch (DbUpdateException error) when (error.InnerException is PostgresException
-                { SqlState: PostgresErrorCodes.UniqueViolation, ConstraintName: CommissionRuleConfiguration.ActiveProductIndex or "PK_tenant_commission_settings" })
+            { SqlState: PostgresErrorCodes.UniqueViolation, ConstraintName: CommissionRuleConfiguration.ActiveProductIndex or "PK_tenant_commission_settings" })
             { throw new ApplicationErrorException(CommissionErrors.ConcurrentChange, error); }
         }
 

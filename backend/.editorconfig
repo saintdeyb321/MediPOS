@@ -17,3 +17,10 @@ dotnet_sort_system_directives_first = true
 
 [*.md]
 trim_trailing_whitespace = false
+
+# Preserve registered EF-generated migration sources; corrections belong in a new migration.
+[src/MediPOS.Infrastructure/Modules/Commissions/Persistence/Migrations/20261009204921_AddCommissions.cs]
+generated_code = true
+
+[src/MediPOS.Infrastructure/Modules/Commissions/Persistence/Migrations/20261009205701_DiagnoseCommissionModel.cs]
+generated_code = true

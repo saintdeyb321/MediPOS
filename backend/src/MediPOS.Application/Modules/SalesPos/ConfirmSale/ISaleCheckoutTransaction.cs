@@ -1,8 +1,8 @@
 using MediPOS.Application.Modules.Commissions;
 using MediPOS.Domain.Modules.AuditSupport;
-using MediPOS.Domain.Modules.Commissions;
 using MediPOS.Domain.Modules.Cash;
 using MediPOS.Domain.Modules.Catalog;
+using MediPOS.Domain.Modules.Commissions;
 using MediPOS.Domain.Modules.Inventory;
 using MediPOS.Domain.Modules.SalesPos;
 

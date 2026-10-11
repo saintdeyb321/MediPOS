@@ -8,7 +8,8 @@ public sealed record CommissionReportRow(Guid CommissionEntryId, Guid SaleId, Gu
     DateTimeOffset? ReversedAtUtc)
 {
     public CommissionReportRow() : this(Guid.Empty, Guid.Empty, Guid.Empty, Guid.Empty, Guid.Empty, null,
-        Guid.Empty, null, default, 0m, 0m, 0m, null) { }
+        Guid.Empty, null, default, 0m, 0m, 0m, null)
+    { }
 }
 
 public sealed record CommissionReportTotals(long EarnedEntryCount, decimal OriginalEarnedAmount,

@@ -6,6 +6,13 @@ public static class ExactMoney
 {
     public const decimal MaximumAmount = 99999999999999.9999m; // numeric(18,4).
 
+    // Signed decimal rounding shares the same exact arithmetic and final monetary bound as posting.
+    public static decimal RoundToEven4(decimal value)
+    {
+        var magnitude = MultiplyAndRoundToEven4(decimal.Abs(value), 1m);
+        return value < 0 ? -magnitude : magnitude;
+    }
+
     public static decimal MultiplyAndRoundToEven4(decimal left, decimal right, int divisorPowerOfTen = 0)
     {
         ArgumentOutOfRangeException.ThrowIfNegative(left);

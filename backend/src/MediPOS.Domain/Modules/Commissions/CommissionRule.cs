@@ -49,8 +49,16 @@ public sealed class CommissionRule
         if (until.HasValue && until <= from) throw new ArgumentException("Rule expiration must be later than its start.", nameof(validUntil));
         return new()
         {
-            Id = Guid.CreateVersion7(), TenantId = tenantId, BusinessProductId = businessProductId, RuleType = ruleType,
-            Value = value, IsActive = true, ValidFrom = from, ValidUntil = until, CreatedAt = now.ToUniversalTime(), CreatedByActorId = actorId,
+            Id = Guid.CreateVersion7(),
+            TenantId = tenantId,
+            BusinessProductId = businessProductId,
+            RuleType = ruleType,
+            Value = value,
+            IsActive = true,
+            ValidFrom = from,
+            ValidUntil = until,
+            CreatedAt = now.ToUniversalTime(),
+            CreatedByActorId = actorId,
         };
     }
 
