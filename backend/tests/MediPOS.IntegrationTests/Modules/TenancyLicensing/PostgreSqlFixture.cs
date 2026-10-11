@@ -14,11 +14,16 @@ public sealed class PostgreSqlFixture : IAsyncLifetime
     private PostgreSqlContainer? _container;
     private string? _runtimeConnectionString;
     private string? _officialCatalogConnectionString;
+    private string? _catalogReviewConnectionString;
+    private string? _catalogPublicationConnectionString;
 
     public string ConnectionString => _runtimeConnectionString
         ?? throw new InvalidOperationException("The PostgreSQL fixture has not started.");
     public string OfficialCatalogConnectionString => _officialCatalogConnectionString
         ?? throw new InvalidOperationException("The PostgreSQL fixture has not started.");
+
+    public string CatalogReviewConnectionString => _catalogReviewConnectionString ?? throw new InvalidOperationException("Fixture has not started.");
+    public string CatalogPublicationConnectionString => _catalogPublicationConnectionString ?? throw new InvalidOperationException("Fixture has not started.");
 
     public MediPosDbContext CreateContext(Guid? tenantId = null) => CreateScopedContext(ConnectionString, tenantId);
 
@@ -105,6 +110,17 @@ public sealed class PostgreSqlFixture : IAsyncLifetime
         await command.ExecuteNonQueryAsync(timeout.Token);
         _officialCatalogConnectionString = new NpgsqlConnectionStringBuilder(_container.GetConnectionString())
         { Username = "medipos_test_catalog_platform", Password = catalogPassword }.ConnectionString;
+        var reviewPassword = Guid.NewGuid().ToString("N"); var publicationPassword = Guid.NewGuid().ToString("N");
+        command.CommandText = $"CREATE ROLE medipos_test_catalog_reviewer LOGIN NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE PASSWORD '{reviewPassword}'";
+        await command.ExecuteNonQueryAsync(timeout.Token);
+        command.CommandText = $"CREATE ROLE medipos_test_catalog_publisher LOGIN NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE PASSWORD '{publicationPassword}'";
+        await command.ExecuteNonQueryAsync(timeout.Token);
+        command.CommandText = "GRANT medipos_catalog_reviewer TO medipos_test_catalog_reviewer; GRANT medipos_catalog_publisher TO medipos_test_catalog_publisher";
+        await command.ExecuteNonQueryAsync(timeout.Token);
+        _catalogReviewConnectionString = new NpgsqlConnectionStringBuilder(_container.GetConnectionString())
+        { Username = "medipos_test_catalog_reviewer", Password = reviewPassword }.ConnectionString;
+        _catalogPublicationConnectionString = new NpgsqlConnectionStringBuilder(_container.GetConnectionString())
+        { Username = "medipos_test_catalog_publisher", Password = publicationPassword }.ConnectionString;
     }
 
     public async ValueTask DisposeAsync()

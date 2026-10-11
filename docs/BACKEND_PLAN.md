@@ -4,9 +4,9 @@ This is the single execution roadmap for the backend. Prompts are given in chat 
 
 ## Working state
 - **Current milestone:** M6 — Official pharmaceutical catalog pipeline
-- **Current sprint:** B6.1 — Staging/import pipeline
+- **Current sprint:** B6.2 — Normalize, deduplicate, curate, publish
 - **Status:** DONE
-- **Next gate:** B6.1 implementation audit; local gate passed, real PostgreSQL integration validation for M0–M5 and B6.1 remains pending externally. Platform authentication and an authorized source contract are required before activation.
+- **Next gate:** B6.2 implementation audit; local gate passed (1473 unit / 8 architecture tests, format and offline model/script checks). B6.1 audited locally; real PostgreSQL validation, including 24 prepared B6.2 cases, remains pending externally. Platform authentication and an authorized source contract are required before activation.
 
 Local policy: this machine has no Docker and will not install it. Do not check/start Docker or run PostgreSQL/Testcontainers here. B0.1 is complete locally. Keep real PostgreSQL integration tests for another environment; they are not part of the local gate and must not be reported as passed without execution.
 
@@ -233,10 +233,11 @@ Goal: safe limited contingency sync.
 Goal: controlled ingestion without fragile runtime dependency.
 
 ### B6.1 — Staging/import pipeline
-**Status:** DONE — completed locally; implementation audit and real PostgreSQL integration validation pending externally. Only synthetic CSV fixtures have been processed; production platform authentication and an authorized source adapter are required before activation.
+**Status:** DONE / audited locally — approved by static review; real PostgreSQL integration validation pending externally. Only synthetic CSV fixtures have been processed; production platform authentication and an authorized source adapter are required before activation.
 **Scope:** import official/versioned source into staging; preserve original text.
 
 ### B6.2 — Normalize, deduplicate, curate, publish
+**Status:** DONE locally — implementation complete, local gate passed; implementation audit and real PostgreSQL integration validation remain pending externally (24 prepared cases). Staging is immutable, administrative proposals/revisions and platform audit are preserved, and individual publication uses a separate restricted capability. Real-source semantics and production platform authorization remain prerequisites for activation. B6.3 has not started.
 **Requirements:** FR-CAT-008.
 **Scope:** normalization and superadmin review; only validated records become global.
 

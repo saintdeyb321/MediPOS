@@ -4,6 +4,7 @@ using MediPOS.Domain.Modules.AuditSupport;
 using MediPOS.Domain.Modules.Branches;
 using MediPOS.Domain.Modules.Cash;
 using MediPOS.Domain.Modules.Catalog;
+using MediPOS.Domain.Modules.Catalog.OfficialCuration;
 using MediPOS.Domain.Modules.Catalog.OfficialImport;
 using MediPOS.Domain.Modules.Catalog.ProductImport;
 using MediPOS.Domain.Modules.Commissions;
@@ -18,6 +19,7 @@ using MediPOS.Domain.Modules.Transfers;
 using MediPOS.Infrastructure.Modules.AuditSupport.Persistence;
 using MediPOS.Infrastructure.Modules.Branches.Persistence.Configurations;
 using MediPOS.Infrastructure.Modules.Cash.Persistence;
+using MediPOS.Infrastructure.Modules.Catalog.OfficialCuration;
 using MediPOS.Infrastructure.Modules.Catalog.OfficialImport;
 using MediPOS.Infrastructure.Modules.Catalog.Persistence.Configurations;
 using MediPOS.Infrastructure.Modules.Commissions.Persistence;
@@ -37,6 +39,8 @@ namespace MediPOS.Infrastructure.Persistence;
 public sealed partial class MediPosDbContext(DbContextOptions<MediPosDbContext> options, ITenantDataContext tenantContext) : DbContext(options)
 {
     private bool _officialCatalogWrites;
+    private int _officialCurationWrites;
+    internal void AllowOfficialCatalogCurationWrites(bool publisher) => _officialCurationWrites = publisher ? 2 : 1;
     internal void AllowOfficialCatalogWrites() => _officialCatalogWrites = true;
     public Guid? SelectedTenantId => tenantContext.TenantId;
     public void SelectTenant(Guid tenantId) => tenantContext.SelectTenant(tenantId);
@@ -74,6 +78,10 @@ public sealed partial class MediPosDbContext(DbContextOptions<MediPosDbContext> 
     public DbSet<Category> Categories => Set<Category>();
     public DbSet<OfficialCatalogImportBatch> OfficialCatalogImportBatches => Set<OfficialCatalogImportBatch>();
     public DbSet<OfficialCatalogStagingRow> OfficialCatalogStagingRows => Set<OfficialCatalogStagingRow>();
+    public DbSet<OfficialCatalogCuration> OfficialCatalogCurations => Set<OfficialCatalogCuration>();
+    public DbSet<OfficialCatalogRevision> OfficialCatalogRevisions => Set<OfficialCatalogRevision>();
+    public DbSet<OfficialCatalogPublication> OfficialCatalogPublications => Set<OfficialCatalogPublication>();
+    public DbSet<OfficialCatalogPlatformAudit> OfficialCatalogPlatformAudits => Set<OfficialCatalogPlatformAudit>();
     public DbSet<GlobalProduct> GlobalProducts => Set<GlobalProduct>();
     public DbSet<MedicineProfile> MedicineProfiles => Set<MedicineProfile>();
     public DbSet<BusinessProduct> BusinessProducts => Set<BusinessProduct>();
@@ -133,6 +141,10 @@ public sealed partial class MediPosDbContext(DbContextOptions<MediPosDbContext> 
         modelBuilder.ApplyConfiguration(new CategoryConfiguration());
         modelBuilder.ApplyConfiguration(new OfficialCatalogBatchConfiguration());
         modelBuilder.ApplyConfiguration(new OfficialCatalogStagingConfiguration());
+        modelBuilder.ApplyConfiguration(new OfficialCatalogCurationConfiguration());
+        modelBuilder.ApplyConfiguration(new OfficialCatalogRevisionConfiguration());
+        modelBuilder.ApplyConfiguration(new OfficialCatalogPublicationConfiguration());
+        modelBuilder.ApplyConfiguration(new OfficialCatalogPlatformAuditConfiguration());
         modelBuilder.ApplyConfiguration(new GlobalProductConfiguration());
         modelBuilder.ApplyConfiguration(new MedicineProfileConfiguration());
         modelBuilder.ApplyConfiguration(new BusinessProductConfiguration());
@@ -497,6 +509,16 @@ public sealed partial class MediPosDbContext(DbContextOptions<MediPosDbContext> 
                     throw new InvalidOperationException("Official staging writes require the dedicated platform import boundary; source history is immutable.");
             }
             else if (_officialCatalogWrites) throw new InvalidOperationException("The staging boundary cannot modify commercial or published catalog data.");
+            if (entry.Entity is OfficialCatalogCuration or OfficialCatalogRevision or OfficialCatalogPublication or OfficialCatalogPlatformAudit)
+            {
+                if (_officialCurationWrites == 0 || entry.State == EntityState.Deleted ||
+                    entry.Entity is not OfficialCatalogCuration && entry.State != EntityState.Added ||
+                    _officialCurationWrites == 1 && entry.Entity is OfficialCatalogPublication)
+                    throw new InvalidOperationException("Curation requires a dedicated platform boundary and append-only history.");
+            }
+            else if (_officialCurationWrites != 0 && !(_officialCurationWrites == 2 && entry.State == EntityState.Added &&
+                entry.Entity is GlobalProduct or MedicineProfile or MedicineData))
+                throw new InvalidOperationException("Catalog curation cannot modify staging, commercial data or existing global products.");
             Guid? tenantId = entry.Entity switch
             {
                 License value => value.TenantId,
