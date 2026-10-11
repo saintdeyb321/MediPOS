@@ -4,9 +4,9 @@ This is the single execution roadmap for the backend. Prompts are given in chat 
 
 ## Working state
 - **Current milestone:** M4 — Commissions, reporting & alerts
-- **Current sprint:** B4.1 — Commissions
+- **Current sprint:** B4.2 — Operational dashboards/reports
 - **Status:** IN_PROGRESS
-- **Next gate:** Renewed B4.1 audit; B4.1.1 local gate passed, PostgreSQL integration validation pending externally
+- **Next gate:** B4.2 implementation audit; local gate passed, PostgreSQL integration validation pending externally
 
 Local policy: this machine has no Docker and will not install it. Do not check/start Docker or run PostgreSQL/Testcontainers here. B0.1 is complete locally. Keep real PostgreSQL integration tests for another environment; they are not part of the local gate and must not be reported as passed without execution.
 
@@ -173,11 +173,12 @@ Goal: safe branch-to-branch movement and owner consolidation.
 Goal: owner control and operational visibility.
 
 ### B4.1 — Commissions
-**Status:** IN_PROGRESS — B4.1 code design audited; B4.1.1 rounding correction implemented and local gate passed. Renewed audit and real PostgreSQL validation remain pending externally.
+**Status:** DONE / audited locally — B4.1.1 correction integrated; real PostgreSQL validation remains pending externally.
 **Requirements:** FR-COM-001..004, BR-010.
 **Scope:** CommissionRule/Entry, fixed/percentage rules, sale posting, compensating reversal, reports.
 
 ### B4.2 — Operational dashboards/reports
+**Status:** IN_PROGRESS — implementation and local gate complete; audit and real PostgreSQL validation pending externally.
 **Requirements:** FR-RPT-001..004.
 **Scope:** period/branch/employee/product/category reporting; critical stock, expiration capital, rotation.
 

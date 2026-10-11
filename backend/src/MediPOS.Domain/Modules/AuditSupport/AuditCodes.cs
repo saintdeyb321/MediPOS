@@ -9,10 +9,10 @@ public enum AuditAction
     BusinessProductUnitsChanged, PurchaseConfirmed, InventoryAdjusted, CatalogProductsImported, CashSessionOpened, SaleConfirmed, SaleVoided, CashSessionClosed,
     TransferRequested, TransferApproved, TransferDispatched, TransferReceived, TransferCancelled,
     CashTransferDispatched, CashTransferReceived,
-    CommissionSettingsChanged, CommissionRuleCreated, CommissionRuleDeactivated,
+    CommissionSettingsChanged, CommissionRuleCreated, CommissionRuleDeactivated, StockThresholdChanged,
 }
 
-public enum AuditEntityType { Tenant, License, LegalEntity, Branch, Membership, BusinessProduct, Purchase, InventoryLot, ImportJob, CashSession, Sale, Transfer, CashTransfer, TenantCommissionSettings, CommissionRule }
+public enum AuditEntityType { Tenant, License, LegalEntity, Branch, Membership, BusinessProduct, Purchase, InventoryLot, ImportJob, CashSession, Sale, Transfer, CashTransfer, TenantCommissionSettings, CommissionRule, BranchStockThreshold }
 
 public static class AuditCodes
 {
@@ -51,6 +51,7 @@ public static class AuditCodes
         AuditAction.CommissionSettingsChanged => "commissions.settings_changed",
         AuditAction.CommissionRuleCreated => "commission_rule.created",
         AuditAction.CommissionRuleDeactivated => "commission_rule.deactivated",
+        AuditAction.StockThresholdChanged => "stock_threshold.changed",
         _ => throw new ArgumentOutOfRangeException(nameof(action)),
     };
 
@@ -89,6 +90,7 @@ public static class AuditCodes
         "commissions.settings_changed" => AuditAction.CommissionSettingsChanged,
         "commission_rule.created" => AuditAction.CommissionRuleCreated,
         "commission_rule.deactivated" => AuditAction.CommissionRuleDeactivated,
+        "stock_threshold.changed" => AuditAction.StockThresholdChanged,
         _ => throw new InvalidOperationException("Unknown persisted audit action."),
     };
 
@@ -111,6 +113,7 @@ public static class AuditCodes
         AuditAction.CashTransferDispatched or AuditAction.CashTransferReceived => AuditEntityType.CashTransfer,
         AuditAction.CommissionSettingsChanged => AuditEntityType.TenantCommissionSettings,
         AuditAction.CommissionRuleCreated or AuditAction.CommissionRuleDeactivated => AuditEntityType.CommissionRule,
+        AuditAction.StockThresholdChanged => AuditEntityType.BranchStockThreshold,
         _ => throw new ArgumentOutOfRangeException(nameof(action)),
     };
 
@@ -131,6 +134,7 @@ public static class AuditCodes
         AuditEntityType.CashTransfer => "cash_transfer",
         AuditEntityType.TenantCommissionSettings => "tenant_commission_settings",
         AuditEntityType.CommissionRule => "commission_rule",
+        AuditEntityType.BranchStockThreshold => "branch_stock_threshold",
         _ => throw new ArgumentOutOfRangeException(nameof(entityType)),
     };
 
@@ -151,6 +155,7 @@ public static class AuditCodes
         "cash_transfer" => AuditEntityType.CashTransfer,
         "tenant_commission_settings" => AuditEntityType.TenantCommissionSettings,
         "commission_rule" => AuditEntityType.CommissionRule,
+        "branch_stock_threshold" => AuditEntityType.BranchStockThreshold,
         _ => throw new InvalidOperationException("Unknown persisted audit entity type."),
     };
 }

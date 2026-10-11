@@ -1,3 +1,4 @@
+using MediPOS.Application.Modules.Reporting.Operational;
 using MediPOS.Application.Tenancy;
 using MediPOS.Domain.Modules.AuditSupport;
 using MediPOS.Domain.Modules.Branches;
@@ -17,6 +18,7 @@ using MediPOS.Infrastructure.Modules.Cash.Persistence;
 using MediPOS.Infrastructure.Modules.Catalog.Persistence.Configurations;
 using MediPOS.Infrastructure.Modules.Commissions.Persistence;
 using MediPOS.Infrastructure.Modules.IdentityAccess.Persistence.Configurations;
+using MediPOS.Infrastructure.Modules.Inventory.Persistence;
 using MediPOS.Infrastructure.Modules.Inventory.Persistence.Configurations;
 using MediPOS.Infrastructure.Modules.Purchasing.Persistence.Configurations;
 using MediPOS.Infrastructure.Modules.SalesPos.Persistence;
@@ -71,6 +73,7 @@ public sealed partial class MediPosDbContext(DbContextOptions<MediPosDbContext> 
     public DbSet<PurchaseLine> PurchaseLines => Set<PurchaseLine>();
 
     public DbSet<InventoryLot> InventoryLots => Set<InventoryLot>();
+    public DbSet<BranchProductStockThreshold> BranchProductStockThresholds => Set<BranchProductStockThreshold>();
 
     public DbSet<StockMovement> StockMovements => Set<StockMovement>();
     public DbSet<Transfer> Transfers => Set<Transfer>();
@@ -83,6 +86,8 @@ public sealed partial class MediPosDbContext(DbContextOptions<MediPosDbContext> 
         base.OnModelCreating(modelBuilder);
         modelBuilder.HasPostgresExtension("public", "pg_trgm");
         modelBuilder.HasPostgresExtension("public", "unaccent");
+        modelBuilder.HasDbFunction(typeof(OperationalReportMoney).GetMethod(nameof(OperationalReportMoney.LotCapital))!)
+            .HasName("report_lot_capital4").HasSchema("public");
         modelBuilder.ApplyConfiguration(new TenantConfiguration());
         modelBuilder.ApplyConfiguration(new LicenseConfiguration());
         modelBuilder.ApplyConfiguration(new LicenseChangeConfiguration());
@@ -102,6 +107,7 @@ public sealed partial class MediPosDbContext(DbContextOptions<MediPosDbContext> 
         modelBuilder.ApplyConfiguration(new TenantCommissionSettingsConfiguration());
         modelBuilder.ApplyConfiguration(new CommissionRuleConfiguration());
         modelBuilder.ApplyConfiguration(new CommissionEntryConfiguration());
+        modelBuilder.ApplyConfiguration(new BranchProductStockThresholdConfiguration());
         modelBuilder.ApplyConfiguration(new CategoryConfiguration());
         modelBuilder.ApplyConfiguration(new GlobalProductConfiguration());
         modelBuilder.ApplyConfiguration(new MedicineProfileConfiguration());
@@ -147,6 +153,7 @@ public sealed partial class MediPosDbContext(DbContextOptions<MediPosDbContext> 
         modelBuilder.Entity<Purchase>().HasQueryFilter(value => SelectedTenantId.HasValue && value.TenantId == SelectedTenantId);
         modelBuilder.Entity<PurchaseLine>().HasQueryFilter(value => SelectedTenantId.HasValue && value.TenantId == SelectedTenantId);
         modelBuilder.Entity<InventoryLot>().HasQueryFilter(value => SelectedTenantId.HasValue && value.TenantId == SelectedTenantId);
+        modelBuilder.Entity<BranchProductStockThreshold>().HasQueryFilter(value => SelectedTenantId.HasValue && value.TenantId == SelectedTenantId);
         modelBuilder.Entity<StockMovement>().HasQueryFilter(value => SelectedTenantId.HasValue && value.TenantId == SelectedTenantId);
         modelBuilder.Entity<Transfer>().HasQueryFilter(value => SelectedTenantId.HasValue && value.TenantId == SelectedTenantId);
         modelBuilder.Entity<CashTransfer>().HasQueryFilter(value => SelectedTenantId.HasValue && value.TenantId == SelectedTenantId);
@@ -172,6 +179,7 @@ public sealed partial class MediPosDbContext(DbContextOptions<MediPosDbContext> 
         ValidateTransferWrites();
         ValidateCashTransferWrites();
         ValidateCommissionWrites();
+        ValidateStockThresholdWrites();
         ValidateTenantWrites();
         return base.SaveChanges(acceptAllChangesOnSuccess);
     }
@@ -190,6 +198,7 @@ public sealed partial class MediPosDbContext(DbContextOptions<MediPosDbContext> 
         ValidateTransferWrites();
         ValidateCashTransferWrites();
         ValidateCommissionWrites();
+        ValidateStockThresholdWrites();
         ValidateTenantWrites();
         return base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken);
     }
@@ -460,6 +469,7 @@ public sealed partial class MediPosDbContext(DbContextOptions<MediPosDbContext> 
                 Purchase value => value.TenantId,
                 PurchaseLine value => value.TenantId,
                 InventoryLot value => value.TenantId,
+                BranchProductStockThreshold value => value.TenantId,
                 StockMovement value => value.TenantId,
                 Transfer value => value.TenantId,
                 TransferLine value => value.TenantId,

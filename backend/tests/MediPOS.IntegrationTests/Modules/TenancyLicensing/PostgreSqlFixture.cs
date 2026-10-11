@@ -72,6 +72,7 @@ public sealed class PostgreSqlFixture : IAsyncLifetime
             GRANT SELECT, INSERT ON sale_payments TO medipos_test_runtime;
             GRANT SELECT, INSERT ON sale_payment_reversals TO medipos_test_runtime;
             GRANT SELECT, INSERT, UPDATE ON tenant_commission_settings, commission_rules TO medipos_test_runtime;
+            GRANT SELECT, INSERT, UPDATE ON branch_product_stock_thresholds TO medipos_test_runtime;
             GRANT SELECT, INSERT ON commission_entries TO medipos_test_runtime;
             GRANT SELECT, INSERT ON transfers, transfer_lines, transfer_events, transfer_lot_allocations TO medipos_test_runtime;
             GRANT UPDATE (status, updated_at) ON transfers TO medipos_test_runtime;
