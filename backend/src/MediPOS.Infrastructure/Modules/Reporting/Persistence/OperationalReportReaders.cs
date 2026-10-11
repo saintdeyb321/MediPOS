@@ -38,10 +38,7 @@ internal sealed class OwnerSalesReportReader(MediPosDbContext context) : IOwnerS
             var products = context.BusinessProducts.AsNoTracking();
             var groups = OperationalSalesQueries.Groups(sales, lines, products, context.Branches.AsNoTracking(),
                 context.Memberships.AsNoTracking(), context.Users.AsNoTracking(), context.Categories.AsNoTracking(), request);
-            var totalsQuery = request.Dimension is OwnerSalesDimension.Branch or OwnerSalesDimension.Employee
-                ? OperationalSalesQueries.HeaderTotals(OperationalSalesQueries.Headers(sales, lines, products, request))
-                : OperationalSalesQueries.LineTotals(OperationalSalesQueries.Lines(sales, lines, products, request.Scope, request.Period,
-                    request.EmployeeMembershipId, request.BusinessProductId, request.CategoryId));
+            var totalsQuery = OperationalSalesQueries.Totals(sales, lines, products, request);
             var totals = await totalsQuery.SingleOrDefaultAsync(token).ConfigureAwait(false);
             var count = await groups.LongCountAsync(token).ConfigureAwait(false);
             var rows = await OperationalSalesQueries.Order(groups, request.Dimension, request.Sort).Skip(request.Offset).Take(request.Limit)

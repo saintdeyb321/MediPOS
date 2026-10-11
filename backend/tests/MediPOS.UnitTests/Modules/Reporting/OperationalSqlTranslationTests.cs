@@ -9,16 +9,29 @@ namespace MediPOS.UnitTests.Modules.Reporting;
 public sealed class OperationalSqlTranslationTests
 {
     [Theory]
-    [InlineData(OwnerSalesDimension.Branch)]
-    [InlineData(OwnerSalesDimension.Employee)]
-    [InlineData(OwnerSalesDimension.Product)]
-    [InlineData(OwnerSalesDimension.Category)]
-    public void SalesDimensionsComposeIntoServerAggregatesAndBoundedPages(OwnerSalesDimension dimension)
+    [InlineData(OwnerSalesDimension.Branch, 0)]
+    [InlineData(OwnerSalesDimension.Branch, 1)]
+    [InlineData(OwnerSalesDimension.Branch, 2)]
+    [InlineData(OwnerSalesDimension.Branch, 3)]
+    [InlineData(OwnerSalesDimension.Employee, 0)]
+    [InlineData(OwnerSalesDimension.Employee, 1)]
+    [InlineData(OwnerSalesDimension.Employee, 2)]
+    [InlineData(OwnerSalesDimension.Employee, 3)]
+    [InlineData(OwnerSalesDimension.Product, 0)]
+    [InlineData(OwnerSalesDimension.Product, 1)]
+    [InlineData(OwnerSalesDimension.Product, 2)]
+    [InlineData(OwnerSalesDimension.Product, 3)]
+    [InlineData(OwnerSalesDimension.Category, 0)]
+    [InlineData(OwnerSalesDimension.Category, 1)]
+    [InlineData(OwnerSalesDimension.Category, 2)]
+    [InlineData(OwnerSalesDimension.Category, 3)]
+    public void SalesDimensionsComposeIntoServerAggregatesAndBoundedPages(OwnerSalesDimension dimension, int filter)
     {
         using var context = Context();
         var scope = Scope(context);
         var period = OperationalReportPolicy.Resolve(new(OperationalPeriodType.Day, scope.TodayLocal), DateTimeOffset.UtcNow);
-        var request = new SalesReportReadRequest(scope, period, dimension, null, Guid.NewGuid(), Guid.NewGuid(), OwnerSalesSort.SalesAmountDesc, 10, 20);
+        var request = new SalesReportReadRequest(scope, period, dimension, Guid.NewGuid(), filter is 1 or 3 ? Guid.NewGuid() : null,
+            filter is 2 or 3 ? Guid.NewGuid() : null, OwnerSalesSort.SalesAmountDesc, 10, 20);
         var groups = OperationalSalesQueries.Groups(context.Sales.AsNoTracking(), context.SaleLines.AsNoTracking(), context.BusinessProducts.AsNoTracking(),
             context.Branches.AsNoTracking(), context.Memberships.AsNoTracking(), context.Users.AsNoTracking(), context.Categories.AsNoTracking(), request);
         var sql = OperationalSalesQueries.Order(groups, dimension, request.Sort).Skip(10).Take(20).ToQueryString();
@@ -26,11 +39,23 @@ public sealed class OperationalSqlTranslationTests
         Assert.Contains("LIMIT", sql, StringComparison.Ordinal);
         Assert.Contains("OFFSET", sql, StringComparison.Ordinal);
         Assert.DoesNotContain("sale_payments", sql, StringComparison.Ordinal);
-        var totalSql = dimension is OwnerSalesDimension.Branch or OwnerSalesDimension.Employee
-            ? OperationalSalesQueries.HeaderTotals(OperationalSalesQueries.Headers(context.Sales, context.SaleLines, context.BusinessProducts, request)).ToQueryString()
-            : OperationalSalesQueries.LineTotals(OperationalSalesQueries.Lines(context.Sales, context.SaleLines, context.BusinessProducts, scope, period)).ToQueryString();
+        var totalSql = OperationalSalesQueries.Totals(context.Sales, context.SaleLines, context.BusinessProducts, request).ToQueryString();
         Assert.DoesNotContain("LIMIT", totalSql, StringComparison.Ordinal);
-        if (dimension is OwnerSalesDimension.Product or OwnerSalesDimension.Category) Assert.Contains("DISTINCT", sql, StringComparison.Ordinal);
+        Assert.Contains("DISTINCT", sql, StringComparison.Ordinal);
+        Assert.Contains("DISTINCT", totalSql, StringComparison.Ordinal);
+        foreach (var statement in new[] { sql, totalSql })
+        {
+            if (dimension is OwnerSalesDimension.Branch or OwnerSalesDimension.Employee && filter == 0)
+            {
+                Assert.Contains("total_amount", statement, StringComparison.Ordinal);
+                Assert.DoesNotContain("sale_lines", statement, StringComparison.Ordinal);
+            }
+            else
+            {
+                Assert.Contains("line_total", statement, StringComparison.Ordinal);
+                Assert.DoesNotContain("total_amount", statement, StringComparison.Ordinal);
+            }
+        }
     }
 
     [Theory]

@@ -107,6 +107,30 @@ public sealed class OperationalAuthorizationTests
         Assert.Contains("no_heterogeneous", result.QuantityBasis, StringComparison.Ordinal);
     }
 
+    [Theory]
+    [InlineData(OwnerSalesDimension.Branch)]
+    [InlineData(OwnerSalesDimension.Employee)]
+    [InlineData(OwnerSalesDimension.Product)]
+    [InlineData(OwnerSalesDimension.Category)]
+    public async Task ZeroMatchingAmountsAreValidAndResponseBasisFollowsActualDimensionAndFilters(OwnerSalesDimension dimension)
+    {
+        var setup = new Setup();
+        foreach (var filter in new[] { 0, 1, 2, 3 })
+        {
+            var amount = filter == 0 ? 5m : 0m;
+            setup.Data.SalesPage = new([new() { GroupId = Guid.NewGuid(), SalesAmount = amount, SaleCount = 1,
+                BaseQuantitySold = dimension == OwnerSalesDimension.Product ? 2m : null }], new(1, 1, amount));
+            var product = filter is 1 or 3 ? (Guid?)Guid.NewGuid() : null;
+            var category = filter is 2 or 3 ? (Guid?)Guid.NewGuid() : null;
+            var report = await new GetOwnerSalesReportHandler(setup.Resolver, setup.Data, setup.Clock).HandleAsync(
+                new(setup.Member.TenantId, setup.Branch, new(OperationalPeriodType.Day), dimension,
+                    BusinessProductId: product, CategoryId: category), TestContext.Current.CancellationToken);
+            Assert.Equal(amount, Assert.Single(report.Rows).SalesAmount); Assert.Equal(1, report.Totals.DistinctSaleCount);
+            Assert.Equal(dimension is OwnerSalesDimension.Branch or OwnerSalesDimension.Employee && filter == 0 ? "whole_sale_headers" : "matching_sale_lines", report.AmountBasis);
+            Assert.Equal(product, report.BusinessProductId); Assert.Equal(category, report.CategoryId);
+        }
+    }
+
     [Fact]
     public async Task FailedThresholdAuditCannotCommitAndNoopDoesNotWriteAnotherAudit()
     {

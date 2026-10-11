@@ -17,6 +17,46 @@ namespace MediPOS.IntegrationTests.Modules.Reporting;
 public sealed class OperationalReportsConsistencyTests(PostgreSqlFixture fixture)
 {
     [Theory]
+    [InlineData(OwnerSalesDimension.Branch)]
+    [InlineData(OwnerSalesDimension.Employee)]
+    public async Task FilteredSalesKeepThreeSqlQueriesAndOneSnapshotWhileAnotherConnectionVoidsTheSale(OwnerSalesDimension dimension)
+    {
+        var (tenant, _) = await TenantIsolationTestData.CreatePairAsync(fixture); var clock = new OwnerOverviewTestData.Clock();
+        await using var writerServices = OwnerOverviewTestData.CreateServices(fixture, clock); OperationalReportTestData.Scenario data;
+        await using (var setup = writerServices.CreateAsyncScope())
+            data = await OperationalReportTestData.SeedAsync(setup.ServiceProvider, tenant, clock);
+        var observer = new OwnerOverviewTestData.SqlObserver();
+        await using var services = OwnerOverviewTestData.CreateServices(fixture, clock, observer); await using var read = services.CreateAsyncScope(); var source = read.ServiceProvider;
+        await OwnerOverviewTestData.SelectOwnerAsync(source, tenant.TenantId, data.Owner.UserId); observer.Reset(); var committed = false;
+        observer.BeforeSecondSelect = async (command, token) =>
+        {
+            Assert.Equal(IsolationLevel.RepeatableRead, command.Transaction!.IsolationLevel);
+            Assert.Equal("on", await SettingAsync(command, "SHOW transaction_read_only", token));
+            await using var write = writerServices.CreateAsyncScope(); var target = write.ServiceProvider;
+            CashSessionTestData.Authenticate(target, data.Owner.UserId);
+            await target.GetRequiredService<VoidSaleHandler>().HandleAsync(new(tenant.TenantId, tenant.Identity.BranchId, data.MixedSale, data.MixedVersion, "Concurrent filtered report void"), token);
+            committed = true;
+        };
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(OperationalReportTestData.Token); timeout.CancelAfter(TimeSpan.FromSeconds(30));
+        var period = OperationalReportPolicy.Resolve(OperationalReportTestData.SalePeriod, clock.Now);
+        var request = new SalesReportReadRequest(new(tenant.TenantId, null, OperationalReportTestData.Today), period, dimension,
+            data.Owner.MembershipId, data.MedicineA, tenant.CategoryId, OwnerSalesSort.SalesAmountDesc, 0, 1);
+        var result = await source.GetRequiredService<IOwnerSalesReportReader>().ReadAsync(request, timeout.Token);
+        Assert.True(committed); Assert.Equal(new SalesReportTotals(1, 1, 4m), result.Totals);
+        Assert.Equal(4m, Assert.Single(result.Rows).SalesAmount); Assert.Equal(1, Assert.Single(result.Rows).SaleCount);
+        Assert.Equal(3, observer.Selects.Count);
+        Assert.Contains(observer.Selects, sql => sql.Contains("GROUP BY", StringComparison.OrdinalIgnoreCase) && sql.Contains("DISTINCT", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(observer.Selects, sql => sql.Contains("LIMIT", StringComparison.OrdinalIgnoreCase));
+        Assert.All(observer.Selects, sql => Assert.DoesNotContain("sale_payments", sql, StringComparison.OrdinalIgnoreCase));
+        Assert.All(observer.Selects, sql => Assert.DoesNotContain("FOR UPDATE", sql, StringComparison.OrdinalIgnoreCase));
+        Assert.Equal("SET TRANSACTION READ ONLY", Assert.Single(observer.Writes));
+        Assert.Empty(source.GetRequiredService<MediPosDbContext>().ChangeTracker.Entries());
+        observer.BeforeSecondSelect = null; observer.Reset();
+        var fresh = await source.GetRequiredService<IOwnerSalesReportReader>().ReadAsync(request, OperationalReportTestData.Token);
+        Assert.Empty(fresh.Rows); Assert.Equal(new SalesReportTotals(0, 0, 0m), fresh.Totals);
+        Assert.Equal(3, observer.Selects.Count);
+    }
+    [Theory]
     [InlineData("dashboard", 5)]
     [InlineData("sales", 3)]
     [InlineData("risk", 2)]

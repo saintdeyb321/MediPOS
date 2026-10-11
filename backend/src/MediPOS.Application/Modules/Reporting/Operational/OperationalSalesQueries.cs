@@ -8,6 +8,8 @@ namespace MediPOS.Application.Modules.Reporting.Operational;
 public sealed record OperationalSalesLine
 {
     public Guid SaleId { get; init; }
+    public Guid BranchId { get; init; }
+    public Guid SellerMembershipId { get; init; }
     public Guid BusinessProductId { get; init; }
     public Guid CategoryId { get; init; }
     public string ProductNameSnapshot { get; init; } = string.Empty;
@@ -61,6 +63,8 @@ public static class OperationalSalesQueries
         select new OperationalSalesLine
         {
             SaleId = sale.Id,
+            BranchId = sale.BranchId,
+            SellerMembershipId = sale.SellerMembershipId,
             BusinessProductId = line.BusinessProductId,
             CategoryId = catalogue.CategoryId,
             ProductNameSnapshot = line.ProductNameSnapshot,
@@ -68,29 +72,39 @@ public static class OperationalSalesQueries
             BaseQuantity = line.BaseQuantity,
         };
 
-    public static IQueryable<Sale> Headers(IQueryable<Sale> sales, IQueryable<SaleLine> lines, IQueryable<BusinessProduct> products, SalesReportReadRequest request)
-    {
-        var eligibleLines = Lines(sales, lines, products, request.Scope, request.Period, request.EmployeeMembershipId, request.BusinessProductId, request.CategoryId);
-        return ConfirmedSales(sales, request.Scope, request.Period, request.EmployeeMembershipId)
-            .Where(sale => (!request.BusinessProductId.HasValue && !request.CategoryId.HasValue) || eligibleLines.Any(line => line.SaleId == sale.Id));
-    }
+    public static bool UsesWholeSaleHeaders(OwnerSalesDimension dimension, Guid? product, Guid? category) =>
+        dimension is OwnerSalesDimension.Branch or OwnerSalesDimension.Employee && !product.HasValue && !category.HasValue;
+
+    public static IQueryable<OperationalSalesTotals> Totals(IQueryable<Sale> sales, IQueryable<SaleLine> lines,
+        IQueryable<BusinessProduct> products, SalesReportReadRequest request) =>
+        UsesWholeSaleHeaders(request.Dimension, request.BusinessProductId, request.CategoryId)
+            ? HeaderTotals(ConfirmedSales(sales, request.Scope, request.Period, request.EmployeeMembershipId))
+            : LineTotals(Lines(sales, lines, products, request.Scope, request.Period,
+                request.EmployeeMembershipId, request.BusinessProductId, request.CategoryId));
 
     public static IQueryable<OwnerSalesRow> Groups(IQueryable<Sale> sales, IQueryable<SaleLine> lines, IQueryable<BusinessProduct> products,
         IQueryable<Branch> branches, IQueryable<Membership> memberships, IQueryable<User> users, IQueryable<Category> categories, SalesReportReadRequest request)
     {
-        var headers = Headers(sales, lines, products, request);
+        var headers = ConfirmedSales(sales, request.Scope, request.Period, request.EmployeeMembershipId);
+        var useHeaders = UsesWholeSaleHeaders(request.Dimension, request.BusinessProductId, request.CategoryId);
         var eligibleLines = Lines(sales, lines, products, request.Scope, request.Period, request.EmployeeMembershipId, request.BusinessProductId, request.CategoryId);
         switch (request.Dimension)
         {
             case OwnerSalesDimension.Branch:
-                var branchGroups = headers.GroupBy(sale => sale.BranchId).Select(group => new OwnerSalesRow
-                { GroupId = group.Key, SalesAmount = group.Sum(sale => sale.TotalAmount), SaleCount = group.LongCount() });
+                var branchGroups = useHeaders
+                    ? headers.GroupBy(sale => sale.BranchId).Select(group => new OwnerSalesRow
+                    { GroupId = group.Key, SalesAmount = group.Sum(sale => sale.TotalAmount), SaleCount = group.Select(sale => sale.Id).Distinct().LongCount() })
+                    : eligibleLines.GroupBy(line => line.BranchId).Select(group => new OwnerSalesRow
+                    { GroupId = group.Key, SalesAmount = group.Sum(line => line.LineTotal), SaleCount = group.Select(line => line.SaleId).Distinct().LongCount() });
                 return from metric in branchGroups
                        join branch in branches.Where(branch => branch.TenantId == request.Scope.TenantId) on metric.GroupId equals branch.Id
                        select new OwnerSalesRow { GroupId = metric.GroupId, GroupName = branch.Name, SalesAmount = metric.SalesAmount, SaleCount = metric.SaleCount };
             case OwnerSalesDimension.Employee:
-                var employeeGroups = headers.GroupBy(sale => sale.SellerMembershipId).Select(group => new OwnerSalesRow
-                { GroupId = group.Key, SalesAmount = group.Sum(sale => sale.TotalAmount), SaleCount = group.LongCount() });
+                var employeeGroups = useHeaders
+                    ? headers.GroupBy(sale => sale.SellerMembershipId).Select(group => new OwnerSalesRow
+                    { GroupId = group.Key, SalesAmount = group.Sum(sale => sale.TotalAmount), SaleCount = group.Select(sale => sale.Id).Distinct().LongCount() })
+                    : eligibleLines.GroupBy(line => line.SellerMembershipId).Select(group => new OwnerSalesRow
+                    { GroupId = group.Key, SalesAmount = group.Sum(line => line.LineTotal), SaleCount = group.Select(line => line.SaleId).Distinct().LongCount() });
                 return from metric in employeeGroups
                        join member in memberships.Where(member => member.TenantId == request.Scope.TenantId) on metric.GroupId equals member.Id into memberRows
                        from member in memberRows.DefaultIfEmpty()
@@ -132,7 +146,7 @@ public static class OperationalSalesQueries
     public static IQueryable<OperationalSalesTotals> LineTotals(IQueryable<OperationalSalesLine> lines) => lines.GroupBy(_ => 1).Select(group => new OperationalSalesTotals
     { SalesAmount = group.Sum(line => line.LineTotal), DistinctSaleCount = group.Select(line => line.SaleId).Distinct().LongCount() });
     public static IQueryable<OperationalSalesTotals> HeaderTotals(IQueryable<Sale> sales) => sales.GroupBy(_ => 1).Select(group => new OperationalSalesTotals
-    { SalesAmount = group.Sum(sale => sale.TotalAmount), DistinctSaleCount = group.LongCount() });
+    { SalesAmount = group.Sum(sale => sale.TotalAmount), DistinctSaleCount = group.Select(sale => sale.Id).Distinct().LongCount() });
 
     public static bool IsAllowedSort(OwnerSalesDimension dimension, OwnerSalesSort sort) => Enum.IsDefined(dimension) && (sort is
         OwnerSalesSort.SalesAmountAsc or OwnerSalesSort.SalesAmountDesc or OwnerSalesSort.SaleCountAsc or OwnerSalesSort.SaleCountDesc ||

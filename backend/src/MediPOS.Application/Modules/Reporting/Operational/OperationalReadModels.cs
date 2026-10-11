@@ -41,8 +41,8 @@ public sealed record OwnerSalesReport(Guid TenantId, Guid? BranchId, Operational
     public string CategoryBasis { get; init; } = "current_catalog_category";
     public string SalesBasis { get; init; } = "currently_confirmed_sales;later_voids_change_the_original_period_current_net";
     public string QuantityBasis { get; init; } = "per_product_historical_base_units;no_heterogeneous_quantity_totals";
-    public string AmountBasis => Dimension is OwnerSalesDimension.Branch or OwnerSalesDimension.Employee
-        ? "whole_sale_headers_matching_filters" : "matching_historical_sale_line_totals";
+    public string AmountBasis => OperationalSalesQueries.UsesWholeSaleHeaders(Dimension, BusinessProductId, CategoryId)
+        ? "whole_sale_headers" : "matching_sale_lines";
 }
 public interface IOwnerSalesReportReader
 {

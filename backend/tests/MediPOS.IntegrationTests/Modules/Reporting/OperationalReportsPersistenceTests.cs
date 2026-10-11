@@ -1,6 +1,7 @@
 using System.Globalization;
 using MediPOS.Application.Errors;
 using MediPOS.Application.Modules.Catalog.CreateCategory;
+using MediPOS.Application.Modules.Catalog.SetBusinessProductStatus;
 using MediPOS.Application.Modules.Reporting.Operational;
 using MediPOS.Domain.Modules.IdentityAccess;
 using MediPOS.Infrastructure.Persistence;
@@ -17,6 +18,18 @@ namespace MediPOS.IntegrationTests.Modules.Reporting;
 [Trait("Category", "PostgreSql")]
 public sealed class OperationalReportsPersistenceTests(PostgreSqlFixture fixture)
 {
+    [Fact]
+    public async Task InactiveConfiguredProductRetainsVisiblePhysicalRiskWithZeroSellableStock()
+    {
+        var (tenant, _) = await TenantIsolationTestData.CreatePairAsync(fixture); var clock = new OwnerOverviewTestData.Clock();
+        await using var services = OwnerOverviewTestData.CreateServices(fixture, clock); await using var scope = services.CreateAsyncScope(); var source = scope.ServiceProvider;
+        var data = await OperationalReportTestData.SeedAsync(source, tenant, clock);
+        await source.GetRequiredService<SetBusinessProductStatusHandler>().HandleAsync(new(tenant.TenantId, data.MedicineA, false, data.Owner.UserId), OperationalReportTestData.Token);
+        var report = await source.GetRequiredService<GetOwnerStockRiskReportHandler>().HandleAsync(new(tenant.TenantId, tenant.Identity.BranchId, data.MedicineA, true), OperationalReportTestData.Token);
+        var row = Assert.Single(report.Rows);
+        Assert.False(row.IsProductActive); Assert.Equal(8m, row.PhysicalStockBase); Assert.Equal(0m, row.SellableStockBase);
+        Assert.True(row.IsCritical); Assert.Equal("configured", row.ThresholdStatus);
+    }
     [Fact]
     public async Task OldSalesFollowCurrentCatalogCategoryWithoutChangingHistoricalAmountsOrQuantities()
     {
@@ -97,6 +110,7 @@ public sealed class OperationalReportsPersistenceTests(PostgreSqlFixture fixture
         var data = await OperationalReportTestData.SeedAsync(source, tenant, clock);
         var report = await OperationalReportTestData.SalesAsync(source, tenant.TenantId, dimension);
         Assert.Equal(9m, report.Totals.SalesAmount); Assert.Equal(1, report.Totals.DistinctSaleCount);
+        Assert.Equal(dimension is OwnerSalesDimension.Branch or OwnerSalesDimension.Employee ? "whole_sale_headers" : "matching_sale_lines", report.AmountBasis);
         Assert.Equal(dimension == OwnerSalesDimension.Product ? 2 : 1, report.Totals.GroupCount);
         Assert.All(report.Rows, row => Assert.Equal(1, row.SaleCount));
         if (dimension == OwnerSalesDimension.Product)
@@ -111,7 +125,9 @@ public sealed class OperationalReportsPersistenceTests(PostgreSqlFixture fixture
         Assert.Empty((await OperationalReportTestData.SalesAsync(source, tenant.TenantId, dimension, tenant.SpareBranchId)).Rows);
         var filtered = await source.GetRequiredService<GetOwnerSalesReportHandler>().HandleAsync(new(tenant.TenantId, null,
             OperationalReportTestData.SalePeriod, dimension, data.Owner.MembershipId, data.MedicineA, tenant.CategoryId), OperationalReportTestData.Token);
-        Assert.Equal(dimension is OwnerSalesDimension.Branch or OwnerSalesDimension.Employee ? 9m : 4m, filtered.Totals.SalesAmount);
+        Assert.Equal(4m, filtered.Totals.SalesAmount);
+        Assert.Equal(4m, Assert.Single(filtered.Rows).SalesAmount);
+        Assert.Equal("matching_sale_lines", filtered.AmountBasis);
         var second = await OperationalReportTestData.SalesAsync(source, tenant.TenantId, dimension);
         Assert.Equal(report.Rows.Select(row => row.GroupId), second.Rows.Select(row => row.GroupId));
     }
