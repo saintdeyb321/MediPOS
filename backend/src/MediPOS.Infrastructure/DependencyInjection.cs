@@ -39,6 +39,7 @@ using MediPOS.Application.Modules.Inventory.AdjustStock;
 using MediPOS.Application.Modules.Inventory.GetExpiringLots;
 using MediPOS.Application.Modules.Inventory.PlanFefoAllocation;
 using MediPOS.Application.Modules.Inventory.SetBranchProductStockThreshold;
+using MediPOS.Application.Modules.Notifications;
 using MediPOS.Application.Modules.Purchasing;
 using MediPOS.Application.Modules.Purchasing.ConfirmPurchase;
 using MediPOS.Application.Modules.Purchasing.CreatePurchase;
@@ -77,6 +78,8 @@ using MediPOS.Infrastructure.Modules.Catalog.ProductImport;
 using MediPOS.Infrastructure.Modules.Commissions.Persistence;
 using MediPOS.Infrastructure.Modules.IdentityAccess.Persistence;
 using MediPOS.Infrastructure.Modules.Inventory.Persistence;
+using MediPOS.Infrastructure.Modules.Notifications;
+using MediPOS.Infrastructure.Modules.Notifications.Persistence;
 using MediPOS.Infrastructure.Modules.Purchasing.Persistence;
 using MediPOS.Infrastructure.Modules.Reporting.Export;
 using MediPOS.Infrastructure.Modules.Reporting.Persistence;
@@ -108,6 +111,19 @@ public static class DependencyInjection
         services.AddDbContext<MediPosDbContext>(options => options.UseNpgsql(connectionString));
         services.AddScoped<ITenantDataContext, TenantDataContext>();
         services.TryAddSingleton(TimeProvider.System);
+        services.AddLogging();
+        services.AddScoped<NotificationStore>();
+        services.AddScoped<INotificationReader>(provider => provider.GetRequiredService<NotificationStore>());
+        services.AddScoped<INotificationReadWriter>(provider => provider.GetRequiredService<NotificationStore>());
+        services.AddScoped<IExpirationAlertsStore, ExpirationAlertsStore>();
+        services.AddScoped<GenerateTenantExpirationAlerts>();
+        services.AddSingleton<IExpirationAlertsSystem, ExpirationAlertsSystem>();
+        services.AddSingleton<RunExpirationAlertsJob>();
+        var expirationScheduler = configuration["Notifications:ExpirationAlerts:Enabled"];
+        if (expirationScheduler is not null && !bool.TryParse(expirationScheduler, out _))
+            throw new InvalidOperationException("Notifications:ExpirationAlerts:Enabled must be true or false.");
+        if (string.Equals(expirationScheduler, "true", StringComparison.OrdinalIgnoreCase))
+            services.AddHostedService<ExpirationAlertsScheduler>();
         services.AddScoped<ITenancyLicensingStore, TenancyLicensingStore>();
         services.AddScoped<CreateTenantHandler>();
         services.AddScoped<RenewLicenseHandler>();
@@ -197,6 +213,9 @@ public static class DependencyInjection
         services.AddScoped<IAuthenticatedMediPosUser, TAuthenticatedUser>();
         services.AddScoped<UpsertGoogleUserHandler>();
         services.AddScoped<ResolveAccessContextHandler>();
+        services.AddScoped<GetNotificationsHandler>();
+        services.AddScoped<GetUnreadNotificationCountHandler>();
+        services.AddScoped<MarkNotificationReadHandler>();
         services.AddScoped<OpenCashSessionHandler>();
         services.AddScoped<GetActiveCashSessionsHandler>();
         services.AddScoped<CloseCashSessionHandler>();

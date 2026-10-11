@@ -1,3 +1,4 @@
+using MediPOS.Application.Modules.Inventory;
 using MediPOS.Domain.Modules.Branches;
 using MediPOS.Domain.Modules.Catalog;
 using MediPOS.Domain.Modules.Inventory;
@@ -81,19 +82,16 @@ public static class OperationalInventoryQueries
     public static IQueryable<OwnerExpirationRow> Expirations(IQueryable<InventoryLot> lots, IQueryable<BusinessProduct> products, ExpirationReadRequest request)
     {
         var scope = request.Scope; var horizon = scope.TodayLocal.AddDays(30);
-        return from lot in lots
-               where lot.TenantId == scope.TenantId && (!scope.BranchId.HasValue || lot.BranchId == scope.BranchId) &&
-                   lot.QuantityAvailableBase > 0 && lot.ExpirationDate >= request.FromExpirationDate && lot.ExpirationDate <= request.ToExpirationDate
-               join product in products.Where(product => product.TenantId == scope.TenantId && product.ProductType == ProductType.Medicine)
-                   on new { lot.TenantId, Id = lot.BusinessProductId } equals new { product.TenantId, product.Id }
+        return from lot in InventoryExpirationQueries.InRange(lots, products, scope.TenantId, scope.BranchId,
+                   request.FromExpirationDate, request.ToExpirationDate)
                select new OwnerExpirationRow
                {
-                   InventoryLotId = lot.Id,
-                   BusinessProductId = product.Id,
-                   ProductName = product.Name,
+                   InventoryLotId = lot.InventoryLotId,
+                   BusinessProductId = lot.BusinessProductId,
+                   ProductName = lot.ProductName,
                    BranchId = lot.BranchId,
                    BatchNumber = lot.BatchNumber,
-                   ExpirationDate = lot.ExpirationDate!.Value,
+                   ExpirationDate = lot.ExpirationDate,
                    QuantityAvailableBase = lot.QuantityAvailableBase,
                    State = lot.ExpirationDate < scope.TodayLocal ? OwnerExpirationState.Expired : lot.ExpirationDate <= horizon ? OwnerExpirationState.Expiring : OwnerExpirationState.Later,
                };

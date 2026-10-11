@@ -4,9 +4,9 @@ This is the single execution roadmap for the backend. Prompts are given in chat 
 
 ## Working state
 - **Current milestone:** M4 — Commissions, reporting & alerts
-- **Current sprint:** B4.3 — Excel/PDF report exports
+- **Current sprint:** B4.4 — Persistent notifications & expiration alerts
 - **Status:** IN_PROGRESS
-- **Next gate:** B4.3 implementation audit; local gate passed, PostgreSQL integration validation pending externally
+- **Next gate:** B4.4 implementation audit; local gate passed, PostgreSQL integration validation pending externally
 
 Local policy: this machine has no Docker and will not install it. Do not check/start Docker or run PostgreSQL/Testcontainers here. B0.1 is complete locally. Keep real PostgreSQL integration tests for another environment; they are not part of the local gate and must not be reported as passed without execution.
 
@@ -183,11 +183,12 @@ Goal: owner control and operational visibility.
 **Scope:** period/branch/employee/product/category reporting; critical stock, expiration capital, rotation.
 
 ### B4.3 — Exports
-**Status:** IN_PROGRESS — implementation and local gate complete; audit and real PostgreSQL validation pending externally.
+**Status:** DONE / audited locally — implemented in commit titled B4.4; real PostgreSQL validation pending externally.
 **Requirements:** FR-RPT-005.
 **Scope:** Excel/PDF export of selected reports with applied filters.
 
 ### B4.4 — Notifications & expiration alerts
+**Status:** IN_PROGRESS — implementation and local gate complete; audit and real PostgreSQL integration validation pending externally.
 **Requirements:** FR-INV-003, FR-RPT-007; later FR-RPT-008.
 **Scope:** persistent Notification center, 30-day job, read state; Web Push only after internal center is stable.
 

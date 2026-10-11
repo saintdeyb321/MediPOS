@@ -8,6 +8,7 @@ using MediPOS.Domain.Modules.Catalog.ProductImport;
 using MediPOS.Domain.Modules.Commissions;
 using MediPOS.Domain.Modules.IdentityAccess;
 using MediPOS.Domain.Modules.Inventory;
+using MediPOS.Domain.Modules.Notifications;
 using MediPOS.Domain.Modules.Purchasing;
 using MediPOS.Domain.Modules.SalesPos;
 using MediPOS.Domain.Modules.TenancyLicensing;
@@ -20,6 +21,7 @@ using MediPOS.Infrastructure.Modules.Commissions.Persistence;
 using MediPOS.Infrastructure.Modules.IdentityAccess.Persistence.Configurations;
 using MediPOS.Infrastructure.Modules.Inventory.Persistence;
 using MediPOS.Infrastructure.Modules.Inventory.Persistence.Configurations;
+using MediPOS.Infrastructure.Modules.Notifications.Persistence;
 using MediPOS.Infrastructure.Modules.Purchasing.Persistence.Configurations;
 using MediPOS.Infrastructure.Modules.SalesPos.Persistence;
 using MediPOS.Infrastructure.Modules.TenancyLicensing.Persistence.Configurations;
@@ -40,6 +42,8 @@ public sealed partial class MediPosDbContext(DbContextOptions<MediPosDbContext> 
     }
 
     public DbSet<Tenant> Tenants => Set<Tenant>();
+    public DbSet<Notification> Notifications => Set<Notification>();
+    public DbSet<NotificationReadState> NotificationReadStates => Set<NotificationReadState>();
     public DbSet<License> Licenses => Set<License>();
     public DbSet<LicenseChange> LicenseChanges => Set<LicenseChange>();
     public DbSet<LegalEntity> LegalEntities => Set<LegalEntity>();
@@ -89,6 +93,8 @@ public sealed partial class MediPosDbContext(DbContextOptions<MediPosDbContext> 
         modelBuilder.HasDbFunction(typeof(OperationalReportMoney).GetMethod(nameof(OperationalReportMoney.LotCapital))!)
             .HasName("report_lot_capital4").HasSchema("public");
         modelBuilder.ApplyConfiguration(new TenantConfiguration());
+        modelBuilder.ApplyConfiguration(new NotificationConfiguration());
+        modelBuilder.ApplyConfiguration(new NotificationReadStateConfiguration());
         modelBuilder.ApplyConfiguration(new LicenseConfiguration());
         modelBuilder.ApplyConfiguration(new LicenseChangeConfiguration());
         modelBuilder.ApplyConfiguration(new LegalEntityConfiguration());
@@ -131,6 +137,8 @@ public sealed partial class MediPosDbContext(DbContextOptions<MediPosDbContext> 
         modelBuilder.ApplyConfiguration(new TransferLotAllocationConfiguration());
 
         // Context properties are evaluated per query, rather than captured into the cached EF model.
+        modelBuilder.Entity<Notification>().HasQueryFilter(value => SelectedTenantId.HasValue && value.TenantId == SelectedTenantId);
+        modelBuilder.Entity<NotificationReadState>().HasQueryFilter(value => SelectedTenantId.HasValue && value.TenantId == SelectedTenantId);
         // User is global. Tenant is a platform root; its administration requires a separate authorized boundary.
         modelBuilder.Entity<License>().HasQueryFilter(value => SelectedTenantId.HasValue && value.TenantId == SelectedTenantId);
         modelBuilder.Entity<LicenseChange>().HasQueryFilter(value => SelectedTenantId.HasValue && value.TenantId == SelectedTenantId);
@@ -168,6 +176,7 @@ public sealed partial class MediPosDbContext(DbContextOptions<MediPosDbContext> 
     public override int SaveChanges(bool acceptAllChangesOnSuccess)
     {
         ValidateLicenseHistory();
+        ValidateNotificationHistory();
         ValidateAuditHistory();
         ValidateStockHistory();
         ValidateImportHistory();
@@ -187,6 +196,7 @@ public sealed partial class MediPosDbContext(DbContextOptions<MediPosDbContext> 
     public override Task<int> SaveChangesAsync(bool acceptAllChangesOnSuccess, CancellationToken cancellationToken = default)
     {
         ValidateLicenseHistory();
+        ValidateNotificationHistory();
         ValidateAuditHistory();
         ValidateStockHistory();
         ValidateImportHistory();
@@ -209,6 +219,13 @@ public sealed partial class MediPosDbContext(DbContextOptions<MediPosDbContext> 
         {
             throw new InvalidOperationException("License change history is append-only.");
         }
+    }
+
+    private void ValidateNotificationHistory()
+    {
+        if (ChangeTracker.Entries<Notification>().Any(entry => entry.State is EntityState.Modified or EntityState.Deleted) ||
+            ChangeTracker.Entries<NotificationReadState>().Any(entry => entry.State is EntityState.Modified or EntityState.Deleted))
+            throw new InvalidOperationException("Notifications and membership read history are append-only.");
     }
 
     private void ValidateAuditHistory()
@@ -448,6 +465,8 @@ public sealed partial class MediPosDbContext(DbContextOptions<MediPosDbContext> 
             Guid? tenantId = entry.Entity switch
             {
                 License value => value.TenantId,
+                Notification value => value.TenantId,
+                NotificationReadState value => value.TenantId,
                 LicenseChange value => value.TenantId,
                 LegalEntity value => value.TenantId,
                 Branch value => value.TenantId,

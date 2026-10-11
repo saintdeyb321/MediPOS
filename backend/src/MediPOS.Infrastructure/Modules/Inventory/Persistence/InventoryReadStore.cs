@@ -27,18 +27,15 @@ internal sealed class InventoryReadStore(MediPosDbContext context) : IInventoryR
     {
         context.SelectTenant(tenantId);
         return await (
-            from lot in context.InventoryLots.AsNoTracking()
-            where lot.QuantityAvailableBase > 0 && lot.ExpirationDate >= today && lot.ExpirationDate <= through &&
-                (!branchId.HasValue || lot.BranchId == branchId)
-            join product in context.BusinessProducts.AsNoTracking()
-                on new { lot.TenantId, Id = lot.BusinessProductId } equals new { product.TenantId, product.Id }
+            from lot in InventoryExpirationQueries.InRange(context.InventoryLots.AsNoTracking(), context.BusinessProducts.AsNoTracking(),
+                tenantId, branchId, today, through)
             join original in context.PurchaseLines.AsNoTracking()
                 on new { lot.TenantId, Id = lot.SourcePurchaseLineId } equals new { original.TenantId, original.Id } into sources
             from source in sources.DefaultIfEmpty()
-            orderby lot.ExpirationDate, lot.CreatedAt, lot.Id
-            select new ExpiringLotSource(lot.TenantId, lot.Id, lot.BranchId, product.Id, product.Name, lot.QuantityAvailableBase,
-                lot.ExpirationDate!.Value, source == null ? null : source.UnitCost,
-                source == null ? null : source.ConversionToBaseSnapshot, product.RetailPrice))
+            orderby lot.ExpirationDate, lot.CreatedAt, lot.InventoryLotId
+            select new ExpiringLotSource(lot.TenantId, lot.InventoryLotId, lot.BranchId, lot.BusinessProductId, lot.ProductName, lot.QuantityAvailableBase,
+                lot.ExpirationDate, source == null ? null : source.UnitCost,
+                source == null ? null : source.ConversionToBaseSnapshot, lot.RetailPrice))
             .ToListAsync(cancellationToken).ConfigureAwait(false);
     }
 }
