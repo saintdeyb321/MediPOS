@@ -134,7 +134,16 @@ External integrations must sit behind explicit adapters/contracts. Electronic ta
 
 Persistent queues are required where restart must not lose work (e.g. CPE, sync-related server jobs).
 
-## 12. Offline backend contract
+## 12. Catalog ingestion and offline backend contracts
+### Official catalog staging boundary (B6.1)
+- Platform administration requires a trusted server authorization adapter, an approved source registry and a dedicated `medipos_catalog_importer` credential in the same operational database. Tenant roles do not grant this capability. No public endpoint or production identity/source adapter is enabled by B6.1.
+- `csv_utf8_v1` is a provisional input adapter, tested with synthetic fixtures, not a DIGEMID schema. Its required headers are `SourceRecordId,Name,Laboratory,Registration,Presentation,Ingredients,Strength,DosageForm,Route`; extra columns are preserved within the 32-column envelope. Row numbers are CSV record ordinals, including header record 1.
+- Defaults: 16 MiB/file, 100000 data rows, 200 rows/write transaction, two-minute renewable processing lease; administrative pages cap at 100. Fields cap at 8192 characters and records at 32768; narrower field checks produce row errors without truncating original text. Invalid UTF-8, NUL and malformed CSV are structural failures.
+- SHA-256 covers exact input bytes. Source/version selects one immutable checksum; a changed checksum requires administrative review. Same-file retries reuse committed rows, with at most five attempts and retained failure diagnostics. A live lease prevents concurrent processing; expired leases can be reclaimed. `staged` requires all rows; failed-batch counts describe its committed prefix. Duplicate counts overlap valid/invalid counts.
+- Source text, raw fields and identity/presentation distinctions remain intact. Text fingerprints only flag candidates; strength shape checks infer no concentrations or equivalences. No source row is merged or published. The temporary spool is removed on close; the original binary is not archived or stored in PostgreSQL. Preserve authorized source files externally if archival is required.
+- Before using real data, verify issuer/reference, reuse permission, coverage, publication/version semantics, identifier stability, CSV encoding/delimiter/header mapping and pharmaceutical field semantics against the authorized source. No real DIGEMID integration has been validated.
+
+### Offline synchronization
 Offline is a later milestone and a contingency mode.
 - Each local event has UUID `event_id`, `device_id`, tenant/branch context, local timestamp and versioned payload.
 - Server registers idempotency before applying event.

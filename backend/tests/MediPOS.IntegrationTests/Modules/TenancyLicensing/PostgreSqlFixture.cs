@@ -13,8 +13,11 @@ public sealed class PostgreSqlFixture : IAsyncLifetime
 {
     private PostgreSqlContainer? _container;
     private string? _runtimeConnectionString;
+    private string? _officialCatalogConnectionString;
 
     public string ConnectionString => _runtimeConnectionString
+        ?? throw new InvalidOperationException("The PostgreSQL fixture has not started.");
+    public string OfficialCatalogConnectionString => _officialCatalogConnectionString
         ?? throw new InvalidOperationException("The PostgreSQL fixture has not started.");
 
     public MediPosDbContext CreateContext(Guid? tenantId = null) => CreateScopedContext(ConnectionString, tenantId);
@@ -95,6 +98,13 @@ public sealed class PostgreSqlFixture : IAsyncLifetime
             Username = "medipos_test_runtime",
             Password = password,
         }.ConnectionString;
+        var catalogPassword = Guid.NewGuid().ToString("N");
+        command.CommandText = $"CREATE ROLE medipos_test_catalog_platform LOGIN NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE PASSWORD '{catalogPassword}'";
+        await command.ExecuteNonQueryAsync(timeout.Token);
+        command.CommandText = "GRANT medipos_catalog_importer TO medipos_test_catalog_platform";
+        await command.ExecuteNonQueryAsync(timeout.Token);
+        _officialCatalogConnectionString = new NpgsqlConnectionStringBuilder(_container.GetConnectionString())
+        { Username = "medipos_test_catalog_platform", Password = catalogPassword }.ConnectionString;
     }
 
     public async ValueTask DisposeAsync()

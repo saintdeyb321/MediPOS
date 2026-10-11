@@ -4,6 +4,7 @@ using MediPOS.Domain.Modules.AuditSupport;
 using MediPOS.Domain.Modules.Branches;
 using MediPOS.Domain.Modules.Cash;
 using MediPOS.Domain.Modules.Catalog;
+using MediPOS.Domain.Modules.Catalog.OfficialImport;
 using MediPOS.Domain.Modules.Catalog.ProductImport;
 using MediPOS.Domain.Modules.Commissions;
 using MediPOS.Domain.Modules.IdentityAccess;
@@ -17,6 +18,7 @@ using MediPOS.Domain.Modules.Transfers;
 using MediPOS.Infrastructure.Modules.AuditSupport.Persistence;
 using MediPOS.Infrastructure.Modules.Branches.Persistence.Configurations;
 using MediPOS.Infrastructure.Modules.Cash.Persistence;
+using MediPOS.Infrastructure.Modules.Catalog.OfficialImport;
 using MediPOS.Infrastructure.Modules.Catalog.Persistence.Configurations;
 using MediPOS.Infrastructure.Modules.Commissions.Persistence;
 using MediPOS.Infrastructure.Modules.IdentityAccess.Persistence.Configurations;
@@ -34,6 +36,8 @@ namespace MediPOS.Infrastructure.Persistence;
 
 public sealed partial class MediPosDbContext(DbContextOptions<MediPosDbContext> options, ITenantDataContext tenantContext) : DbContext(options)
 {
+    private bool _officialCatalogWrites;
+    internal void AllowOfficialCatalogWrites() => _officialCatalogWrites = true;
     public Guid? SelectedTenantId => tenantContext.TenantId;
     public void SelectTenant(Guid tenantId) => tenantContext.SelectTenant(tenantId);
 
@@ -68,6 +72,8 @@ public sealed partial class MediPosDbContext(DbContextOptions<MediPosDbContext> 
     public DbSet<CommissionRule> CommissionRules => Set<CommissionRule>();
     public DbSet<CommissionEntry> CommissionEntries => Set<CommissionEntry>();
     public DbSet<Category> Categories => Set<Category>();
+    public DbSet<OfficialCatalogImportBatch> OfficialCatalogImportBatches => Set<OfficialCatalogImportBatch>();
+    public DbSet<OfficialCatalogStagingRow> OfficialCatalogStagingRows => Set<OfficialCatalogStagingRow>();
     public DbSet<GlobalProduct> GlobalProducts => Set<GlobalProduct>();
     public DbSet<MedicineProfile> MedicineProfiles => Set<MedicineProfile>();
     public DbSet<BusinessProduct> BusinessProducts => Set<BusinessProduct>();
@@ -125,6 +131,8 @@ public sealed partial class MediPosDbContext(DbContextOptions<MediPosDbContext> 
         modelBuilder.ApplyConfiguration(new CommissionEntryConfiguration());
         modelBuilder.ApplyConfiguration(new BranchProductStockThresholdConfiguration());
         modelBuilder.ApplyConfiguration(new CategoryConfiguration());
+        modelBuilder.ApplyConfiguration(new OfficialCatalogBatchConfiguration());
+        modelBuilder.ApplyConfiguration(new OfficialCatalogStagingConfiguration());
         modelBuilder.ApplyConfiguration(new GlobalProductConfiguration());
         modelBuilder.ApplyConfiguration(new MedicineProfileConfiguration());
         modelBuilder.ApplyConfiguration(new BusinessProductConfiguration());
@@ -483,6 +491,12 @@ public sealed partial class MediPosDbContext(DbContextOptions<MediPosDbContext> 
     {
         foreach (var entry in ChangeTracker.Entries().Where(value => value.State is EntityState.Added or EntityState.Modified or EntityState.Deleted))
         {
+            if (entry.Entity is OfficialCatalogImportBatch or OfficialCatalogStagingRow)
+            {
+                if (!_officialCatalogWrites || entry.State == EntityState.Deleted || entry.Entity is OfficialCatalogStagingRow && entry.State == EntityState.Modified)
+                    throw new InvalidOperationException("Official staging writes require the dedicated platform import boundary; source history is immutable.");
+            }
+            else if (_officialCatalogWrites) throw new InvalidOperationException("The staging boundary cannot modify commercial or published catalog data.");
             Guid? tenantId = entry.Entity switch
             {
                 License value => value.TenantId,

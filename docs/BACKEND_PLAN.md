@@ -3,10 +3,10 @@
 This is the single execution roadmap for the backend. Prompts are given in chat and are **not** stored in the repository.
 
 ## Working state
-- **Current milestone:** M5 — Offline synchronization backend
-- **Current sprint:** B5.4 — Incremental branch catalog sync
+- **Current milestone:** M6 — Official pharmaceutical catalog pipeline
+- **Current sprint:** B6.1 — Staging/import pipeline
 - **Status:** DONE
-- **Next gate:** B5.4 implementation audit; local gate passed, real PostgreSQL integration validation pending externally (M0–M4 and B5.1–B5.4 included). Public HTTP activation requires a production server authentication adapter.
+- **Next gate:** B6.1 implementation audit; local gate passed, real PostgreSQL integration validation for M0–M5 and B6.1 remains pending externally. Platform authentication and an authorized source contract are required before activation.
 
 Local policy: this machine has no Docker and will not install it. Do not check/start Docker or run PostgreSQL/Testcontainers here. B0.1 is complete locally. Keep real PostgreSQL integration tests for another environment; they are not part of the local gate and must not be reported as passed without execution.
 
@@ -221,11 +221,11 @@ Goal: safe limited contingency sync.
 **Scope:** safe offline-sale subset, explicit stock conflicts/reconciliation queue; no silent overwrite.
 
 ### B5.4 — Incremental branch catalog sync
-**Status:** DONE — completed locally; implementation audit and real PostgreSQL integration validation pending externally. Public HTTP activation requires production server authentication.
+**Status:** DONE / audited locally — real PostgreSQL integration validation pending externally. Public HTTP activation requires production server authentication.
 **Requirements:** FR-OFF-001.
 **Scope:** version/cursor-based downloads rather than full dataset each reconnect.
 
-**M5 gate:** duplicate event cannot duplicate sale; conflicts are visible and recoverable.
+**M5 gate:** implementation complete / audited locally; real PostgreSQL integration validation pending externally. Duplicate event cannot duplicate sale; conflicts are visible and recoverable.
 
 ---
 
@@ -233,6 +233,7 @@ Goal: safe limited contingency sync.
 Goal: controlled ingestion without fragile runtime dependency.
 
 ### B6.1 — Staging/import pipeline
+**Status:** DONE — completed locally; implementation audit and real PostgreSQL integration validation pending externally. Only synthetic CSV fixtures have been processed; production platform authentication and an authorized source adapter are required before activation.
 **Scope:** import official/versioned source into staging; preserve original text.
 
 ### B6.2 — Normalize, deduplicate, curate, publish
