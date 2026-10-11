@@ -50,6 +50,7 @@ using MediPOS.Application.Modules.Reporting.ExportOwnerReport;
 using MediPOS.Application.Modules.Reporting.GetOwnerBranchOverview;
 using MediPOS.Application.Modules.Reporting.GetOwnerCommissionsReport;
 using MediPOS.Application.Modules.Reporting.Operational;
+using MediPOS.Application.Modules.Reporting.Replenishment;
 using MediPOS.Application.Modules.SalesPos;
 using MediPOS.Application.Modules.SalesPos.ConfirmSale;
 using MediPOS.Application.Modules.SalesPos.CreateSaleDraft;
@@ -155,6 +156,7 @@ public static class DependencyInjection
         services.AddScoped<IOwnerSalesReportReader, OwnerSalesReportReader>();
         services.AddScoped<IOwnerInventoryRiskReader, OwnerInventoryRiskReader>();
         services.AddScoped<IOwnerProductRotationReader, OwnerProductRotationReader>();
+        services.AddScoped<IOwnerReplenishmentReader, OwnerReplenishmentReader>();
         services.AddScoped<IBranchStockThresholdTransaction, BranchStockThresholdTransaction>();
         services.AddScoped<ICommissionConfigurationStore, CommissionConfigurationStore>();
         services.AddScoped<ICashTransferTransaction, CashTransferTransaction>();
@@ -233,6 +235,7 @@ public static class DependencyInjection
         services.AddScoped<GetOwnerExpirationReportHandler>();
         services.AddScoped<GetOwnerInventoryCapitalReportHandler>();
         services.AddScoped<GetOwnerProductRotationReportHandler>();
+        services.AddScoped<GetOwnerReplenishmentSuggestionsHandler>();
         services.AddScoped<SetBranchProductStockThresholdHandler>();
         services.AddScoped<SetTenantCommissionsEnabledHandler>();
         services.AddScoped<SetCommissionRuleHandler>();
