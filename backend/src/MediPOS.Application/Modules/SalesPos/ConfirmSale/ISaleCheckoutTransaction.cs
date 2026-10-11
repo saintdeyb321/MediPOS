@@ -8,6 +8,12 @@ using MediPOS.Domain.Modules.SalesPos;
 
 namespace MediPOS.Application.Modules.SalesPos.ConfirmSale;
 
+// Enlists in the already locked sync receipt transaction. Completion saves without committing it.
+public interface IOfflineSaleCheckoutTransaction
+{
+    Task<ISaleCheckoutScope> BeginAsync(Sale draft, CancellationToken cancellationToken);
+}
+
 // Infrastructure owns one transaction and the CashSession -> Sale -> ordered InventoryLots locks.
 // All identifiers except the requested sale/branch come from authenticated access and the server draft.
 public interface ISaleCheckoutTransaction

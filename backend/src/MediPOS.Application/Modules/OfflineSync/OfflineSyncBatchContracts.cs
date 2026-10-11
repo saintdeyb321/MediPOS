@@ -5,12 +5,18 @@ namespace MediPOS.Application.Modules.OfflineSync;
 public sealed record OfflineSyncBatchCommand(Guid TenantId, Guid DeviceId, int ProtocolVersion,
     IReadOnlyList<SyncEventEnvelope>? Events, Guid? BatchRequestId = null);
 
-// pending acknowledges durable reception only; accepted means a previously confirmed business operation.
+// pending acknowledges durable reception only; accepted means a confirmed commercial operation.
 // rejected with ReceiptId == null is input validation, not a terminal SyncEvent in the inbox.
 // IsReplay is true only for an identical persisted identity; incompatible identities disclose no receipt metadata.
 // Retryable means the same immutable event may be polled/retried (pending); terminal outcomes are immutable.
 public sealed record OfflineSyncEventResult(Guid EventId, string Status, string ResultCode, Guid? ReceiptId,
-    Guid? ResultReferenceId, DateTimeOffset? ReceivedAtUtc, DateTimeOffset? ProcessedAtUtc, bool IsReplay, bool Retryable);
+    Guid? ResultReferenceId, DateTimeOffset? ReceivedAtUtc, DateTimeOffset? ProcessedAtUtc, bool IsReplay, bool Retryable)
+{
+    // Declared occurrence is distinct from server reception/acceptance. Identity conflicts expose none of these.
+    public DateTimeOffset? ClientOccurredAtUtc { get; init; }
+    public DateOnly? ClientLocalDate { get; init; }
+    public string? ClientTimeZoneId { get; init; }
+}
 
 // Results retain outbox order, including repeated EventId values. Counters count results, not distinct identities.
 // There is no incremental reception cursor: UUIDv7 does not order commits. Retry using original EventId values.

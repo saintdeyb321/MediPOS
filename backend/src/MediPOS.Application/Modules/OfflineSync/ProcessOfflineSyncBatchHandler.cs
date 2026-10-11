@@ -4,7 +4,7 @@ using MediPOS.Application.Modules.IdentityAccess.OperationalAccess;
 namespace MediPOS.Application.Modules.OfflineSync;
 
 public sealed class ProcessOfflineSyncBatchHandler(ResolveAccessContextHandler resolver, ISyncDeviceStore devices,
-    ReserveSyncEventReceiptHandler receipts, TimeProvider clock)
+    ReserveSyncEventReceiptHandler receipts, TimeProvider clock, OfflineSaleProcessor? sales = null)
 {
     public async Task<OfflineSyncBatchResult> HandleAsync(OfflineSyncBatchCommand command, CancellationToken token)
     {
@@ -44,11 +44,11 @@ public sealed class ProcessOfflineSyncBatchHandler(ResolveAccessContextHandler r
 
     private async Task<OfflineSyncEventResult> ReceiveAsync(Guid tenantId, SyncEventEnvelope envelope, CancellationToken token)
     {
-        // Small typed B5.3 boundary: its future offline-sale application must run while this reservation is open,
-        // lock CashSession -> Sale -> ordered InventoryLots, then finalize and commit using this same reservation.
-        // B5.2 only receives: always pass null to keep new events pending and leave existing terminal results intact.
+        // Receipt-only composition remains available for intake; production authenticated composition processes pending sales.
+        // Each commercial result and its receipt transition commit through the same reservation.
         await using var reservation = await receipts.HandleAsync(new(tenantId, envelope), token).ConfigureAwait(false);
         OfflineSyncEventResult result;
+        var completed = false;
         if (reservation.IsIdentityConflict)
             result = new(envelope.EventId, "conflict", "sync.identity_conflict", null, null, null, null, false, false);
         else
@@ -57,11 +57,18 @@ public sealed class ProcessOfflineSyncBatchHandler(ResolveAccessContextHandler r
             if (receipt.ProcessingStatus is not ("pending" or "accepted" or "conflict" or "rejected") ||
                 (receipt.ProcessingStatus != "pending" && (receipt.ResultCode is null || receipt.ProcessedAtUtc is null)))
                 throw new InvalidOperationException("Invalid persisted sync receipt state.");
+            if (receipt.ProcessingStatus == "pending" && sales is not null)
+            {
+                var outcome = await sales.ProcessAsync(reservation, token).ConfigureAwait(false);
+                await reservation.CompleteAsync(outcome.Status, outcome.Code, outcome.ReferenceId, token).ConfigureAwait(false);
+                completed = true;
+            }
             result = new(envelope.EventId, receipt.ProcessingStatus, receipt.ResultCode ?? "sync.pending", receipt.Id,
-                receipt.ResultReferenceId, receipt.ReceivedAtUtc, receipt.ProcessedAtUtc, !reservation.IsNew, receipt.ProcessingStatus == "pending");
+                receipt.ResultReferenceId, receipt.ReceivedAtUtc, receipt.ProcessedAtUtc, !reservation.IsNew, receipt.ProcessingStatus == "pending")
+            { ClientOccurredAtUtc = receipt.ClientOccurredAtUtc, ClientLocalDate = receipt.ClientLocalDate, ClientTimeZoneId = receipt.ClientTimeZoneId };
         }
         // Produce the acknowledgment only after successful commit and scope disposal.
-        await reservation.CompleteAsync(null, null, null, token).ConfigureAwait(false);
+        if (!completed) await reservation.CompleteAsync(null, null, null, token).ConfigureAwait(false);
         return result;
     }
 

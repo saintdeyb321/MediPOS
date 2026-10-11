@@ -63,6 +63,8 @@ public sealed class PostgreSqlFixture : IAsyncLifetime
             GRANT SELECT, INSERT ON sync_devices, sync_events TO medipos_test_runtime;
             GRANT UPDATE (status, revoked_at_utc, revoked_by_membership_id) ON sync_devices TO medipos_test_runtime;
             GRANT UPDATE (processing_status, processed_at_utc, result_code, result_reference_id) ON sync_events TO medipos_test_runtime;
+            GRANT SELECT, INSERT ON offline_sale_conflicts TO medipos_test_runtime;
+            GRANT UPDATE (status, resolved_at_utc, resolved_by_membership_id, resolution_code, resolution_note) ON offline_sale_conflicts TO medipos_test_runtime;
             GRANT SELECT, INSERT ON categories, global_products, medicine_profiles TO medipos_test_runtime;
             GRANT SELECT, INSERT, UPDATE, DELETE ON business_products TO medipos_test_runtime;
             GRANT SELECT, INSERT, UPDATE, DELETE ON product_units TO medipos_test_runtime;

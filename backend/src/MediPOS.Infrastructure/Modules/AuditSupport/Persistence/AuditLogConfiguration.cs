@@ -30,7 +30,8 @@ internal sealed class AuditLogConfiguration : IEntityTypeConfiguration<AuditLog>
                 (entity_type = 'tenant_commission_settings' AND action = 'commissions.settings_changed') OR
                 (entity_type = 'commission_rule' AND action IN ('commission_rule.created', 'commission_rule.deactivated')) OR
                 (entity_type = 'branch_stock_threshold' AND action = 'stock_threshold.changed') OR
-                (entity_type = 'sync_device' AND action IN ('sync_device.registered', 'sync_device.revoked'))
+                (entity_type = 'sync_device' AND action IN ('sync_device.registered', 'sync_device.revoked')) OR
+                (entity_type = 'offline_sale_conflict' AND action = 'offline_sale_conflict.resolved')
                 """);
             table.HasCheckConstraint("ck_audit_logs_correlation",
                 "correlation_id ~ '^[0-9a-f]{32}$' AND correlation_id <> repeat('0', 32)");

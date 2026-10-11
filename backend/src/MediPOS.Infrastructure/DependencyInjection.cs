@@ -118,6 +118,8 @@ public static class DependencyInjection
         services.AddScoped<NotificationStore>();
         services.AddScoped<ISyncDeviceStore, SyncDeviceStore>();
         services.AddScoped<ISyncEventInbox, SyncEventInbox>();
+        services.AddScoped<IOfflineSaleConflictStore, OfflineSaleConflictStore>();
+        services.AddScoped<IOfflineSaleCheckoutTransaction, SaleCheckoutTransaction>();
         services.AddScoped<INotificationReader>(provider => provider.GetRequiredService<NotificationStore>());
         services.AddScoped<INotificationReadWriter>(provider => provider.GetRequiredService<NotificationStore>());
         services.AddScoped<IExpirationAlertsStore, ExpirationAlertsStore>();
@@ -223,6 +225,10 @@ public static class DependencyInjection
         services.AddScoped<RevokeSyncDeviceHandler>();
         services.AddScoped<ReserveSyncEventReceiptHandler>();
         services.AddScoped<ProcessOfflineSyncBatchHandler>();
+        services.AddScoped<OfflineSaleProcessor>();
+        services.AddScoped<SaleConfirmationPosting>();
+        services.AddScoped<GetOfflineSaleConflictsHandler>();
+        services.AddScoped<ResolveOfflineSaleConflictHandler>();
         services.AddScoped<GetNotificationsHandler>();
         services.AddScoped<GetUnreadNotificationCountHandler>();
         services.AddScoped<MarkNotificationReadHandler>();

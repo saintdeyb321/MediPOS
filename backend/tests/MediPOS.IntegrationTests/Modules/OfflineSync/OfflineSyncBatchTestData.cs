@@ -1,3 +1,4 @@
+using MediPOS.Application.Modules.IdentityAccess.OperationalAccess;
 using MediPOS.Application.Modules.OfflineSync;
 using MediPOS.Domain.Modules.OfflineSync;
 using MediPOS.Infrastructure;
@@ -17,13 +18,16 @@ namespace MediPOS.IntegrationTests.Modules.OfflineSync;
 internal static class OfflineSyncBatchTestData
 {
     internal static ServiceProvider CreateServices(PostgreSqlFixture fixture, IInterceptor? observer = null,
-        string? connectionString = null, OwnerOverviewTestData.Clock? clock = null)
+        string? connectionString = null, OwnerOverviewTestData.Clock? clock = null, bool processSales = false)
     {
         var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
         { ["ConnectionStrings:MediPosDatabase"] = connectionString ?? fixture.ConnectionString }).Build();
         var services = new ServiceCollection(); services.AddSingleton<TimeProvider>(clock ?? new OwnerOverviewTestData.Clock());
         services.AddInfrastructure(configuration);
         services.AddIdentityAuthentication<IdentityAccessTestSetup.TestGoogleIdentitySource, IdentityAccessTestSetup.TestServerSession>();
+        // B5.2 tests exercise receipt-only intake deliberately; B5.3 tests opt into the production processor.
+        if (!processSales) services.AddScoped(provider => new ProcessOfflineSyncBatchHandler(provider.GetRequiredService<ResolveAccessContextHandler>(),
+            provider.GetRequiredService<ISyncDeviceStore>(), provider.GetRequiredService<ReserveSyncEventReceiptHandler>(), provider.GetRequiredService<TimeProvider>()));
         if (observer is not null) services.AddDbContext<MediPosDbContext>(options => options.AddInterceptors(observer));
         return services.BuildServiceProvider(new ServiceProviderOptions { ValidateOnBuild = true, ValidateScopes = true });
     }

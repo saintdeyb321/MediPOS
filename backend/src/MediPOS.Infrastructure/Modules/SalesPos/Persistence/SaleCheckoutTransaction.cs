@@ -17,8 +17,42 @@ using Npgsql;
 
 namespace MediPOS.Infrastructure.Modules.SalesPos.Persistence;
 
-internal sealed class SaleCheckoutTransaction(MediPosDbContext context) : ISaleCheckoutTransaction
+internal sealed class SaleCheckoutTransaction(MediPosDbContext context) : ISaleCheckoutTransaction, IOfflineSaleCheckoutTransaction
 {
+    public async Task<ISaleCheckoutScope> BeginAsync(Sale draft, CancellationToken cancellationToken)
+    {
+        context.SelectTenant(draft.TenantId);
+        var transaction = context.Database.CurrentTransaction ?? throw new InvalidOperationException("Offline checkout requires its sync transaction.");
+        if (!draft.OfflineSyncEventId.HasValue || !context.ChangeTracker.Entries<Domain.Modules.OfflineSync.SyncEvent>().Any(entry =>
+            entry.Entity.Id == draft.OfflineSyncEventId && entry.Entity.TenantId == draft.TenantId && entry.Entity.ProcessingStatus == "pending"))
+            throw new InvalidOperationException("Offline checkout requires its reserved pending receipt.");
+        await transaction.CreateSavepointAsync("offline_checkout", cancellationToken).ConfigureAwait(false);
+        var retained = context.ChangeTracker.Entries().Select(entry => entry.Entity).ToHashSet(ReferenceEqualityComparer.Instance);
+        try
+        {
+            var cash = await context.CashSessions.FromSqlInterpolated($"""
+                SELECT c.* FROM cash_sessions c WHERE c.tenant_id = {draft.TenantId} AND c.branch_id = {draft.BranchId}
+                    AND c.membership_id = {draft.SellerMembershipId} AND c.id = {draft.CashSessionId} FOR UPDATE OF c
+                """).AsNoTracking().SingleOrDefaultAsync(cancellationToken).ConfigureAwait(false)
+                ?? throw new ApplicationErrorException(SalesPosErrors.CashSessionRequired);
+            if (cash.Status != CashSessionStatus.Open) throw new ApplicationErrorException(SalesPosErrors.CashSessionRequired);
+            // Insert draft and lines inside the ambient transaction, respecting existing draft-only line policies.
+            context.Sales.Add(draft);
+            await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+            return new CheckoutScope(context, transaction, cash, draft, context.Entry(draft).Property<uint>("Version").CurrentValue, false, retained);
+        }
+        catch
+        {
+            await transaction.RollbackToSavepointAsync("offline_checkout", cancellationToken).ConfigureAwait(false);
+            DetachNew(context, retained);
+            throw;
+        }
+    }
+
+    private static void DetachNew(MediPosDbContext context, HashSet<object> retained)
+    {
+        foreach (var entry in context.ChangeTracker.Entries().Where(entry => !retained.Contains(entry.Entity)).ToArray()) entry.State = EntityState.Detached;
+    }
     public async Task<ISaleCheckoutScope> BeginAsync(Guid tenantId, Guid branchId, Guid membershipId,
         Guid cashSessionId, Guid saleId, CancellationToken cancellationToken)
     {
@@ -66,7 +100,7 @@ internal sealed class SaleCheckoutTransaction(MediPosDbContext context) : ISaleC
     }
 
     private sealed class CheckoutScope(MediPosDbContext context, IDbContextTransaction transaction,
-        CashSession cash, Sale sale, uint version) : ISaleCheckoutScope
+        CashSession cash, Sale sale, uint version, bool ownsTransaction = true, HashSet<object>? retained = null) : ISaleCheckoutScope
     {
         private bool _committed;
         private CommissionConfigurationSnapshot? _commissionConfiguration;
@@ -121,6 +155,12 @@ internal sealed class SaleCheckoutTransaction(MediPosDbContext context) : ISaleC
                 lots.Add(lot);
                 remaining = StockQuantity.Add(remaining, -Math.Min(remaining, lot.QuantityAvailableBase));
             }
+            // Describe the shortage while its sellable rows remain locked. An unrelated expired product cannot
+            // misclassify this product's insufficient stock; expired balances are never offered for allocation.
+            if (!ownsTransaction && remaining > 0 && productType == ProductType.Medicine &&
+                await context.InventoryLots.AnyAsync(lot => lot.TenantId == sale.TenantId && lot.BranchId == sale.BranchId &&
+                    lot.BusinessProductId == productId && lot.QuantityAvailableBase > 0 && lot.ExpirationDate < today, cancellationToken).ConfigureAwait(false))
+                throw new ApplicationErrorException(new("inventory.expired_stock", ErrorCategory.Conflict, "Stock for this medication includes expired, unsellable lots."));
             return lots;
         }
 
@@ -162,7 +202,7 @@ internal sealed class SaleCheckoutTransaction(MediPosDbContext context) : ISaleC
             {
                 await context.SaveAuditedChangesAsync(cancellationToken).ConfigureAwait(false);
                 var currentVersion = context.Entry(sale).Property<uint>(nameof(Version)).CurrentValue;
-                await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+                if (ownsTransaction) await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
                 _committed = true;
                 return currentVersion;
             }
@@ -179,6 +219,15 @@ internal sealed class SaleCheckoutTransaction(MediPosDbContext context) : ISaleC
 
         public async ValueTask DisposeAsync()
         {
+            if (!ownsTransaction)
+            {
+                if (!_committed)
+                {
+                    await transaction.RollbackToSavepointAsync("offline_checkout").ConfigureAwait(false);
+                    DetachNew(context, retained!);
+                }
+                return;
+            }
             try { await transaction.DisposeAsync().ConfigureAwait(false); }
             finally { if (!_committed) context.ChangeTracker.Clear(); }
         }

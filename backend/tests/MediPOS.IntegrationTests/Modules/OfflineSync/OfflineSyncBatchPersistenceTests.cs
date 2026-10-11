@@ -19,7 +19,7 @@ public sealed class OfflineSyncBatchPersistenceTests(PostgreSqlFixture fixture)
     [Fact]
     public async Task FiftyEventsAndWholeBatchReplayKeepOneIdentityPerUuidAndExistingStockUnchanged()
     {
-        var pair = await TenantIsolationTestData.CreatePairAsync(fixture); await using var services = OwnerOverviewTestData.CreateServices(fixture);
+        var pair = await TenantIsolationTestData.CreatePairAsync(fixture); await using var services = OfflineSyncBatchTestData.CreateServices(fixture);
         await using var scope = services.CreateAsyncScope(); var source = scope.ServiceProvider; var device = await Register(source, pair.A);
         await OwnerOverviewTestData.ReceiveRetailAsync(source, pair.A, 20m);
         var context = source.GetRequiredService<MediPosDbContext>(); var stock = await context.InventoryLots.AsNoTracking().Select(lot => new { lot.Id, lot.QuantityAvailableBase }).ToArrayAsync(Token);
@@ -39,7 +39,7 @@ public sealed class OfflineSyncBatchPersistenceTests(PostgreSqlFixture fixture)
     [Fact]
     public async Task MixedBatchKeepsOrdinaryInputErrorsIndependentAndDoesNotDiscardDuplicates()
     {
-        var pair = await TenantIsolationTestData.CreatePairAsync(fixture); await using var services = OwnerOverviewTestData.CreateServices(fixture); await using var scope = services.CreateAsyncScope();
+        var pair = await TenantIsolationTestData.CreatePairAsync(fixture); await using var services = OfflineSyncBatchTestData.CreateServices(fixture); await using var scope = services.CreateAsyncScope();
         var source = scope.ServiceProvider; var device = await Register(source, pair.A); var first = Envelope(device); var last = Envelope(device);
         var invalid = Envelope(device) with { Payload = "invalid-json" }; var identical = first with { Payload = " { \"quantity\":1.00 }" }; var incompatible = Envelope(device, first.EventId, "{\"quantity\":2}");
         var result = await Run(source, pair.A, device, [first, invalid, identical, incompatible, last]);
@@ -57,11 +57,11 @@ public sealed class OfflineSyncBatchPersistenceTests(PostgreSqlFixture fixture)
     {
         var pair = await TenantIsolationTestData.CreatePairAsync(fixture); Guid device; var events = new List<SyncEventEnvelope>();
         var saved = new List<(Guid Receipt, Guid? Reference, string? Code, DateTimeOffset Received, DateTimeOffset? Processed)>();
-        await using (var services = OwnerOverviewTestData.CreateServices(fixture))
+        await using (var services = OfflineSyncBatchTestData.CreateServices(fixture))
         {
             await using var scope = services.CreateAsyncScope(); var source = scope.ServiceProvider; device = await Register(source, pair.A);
-            // Seed B5.1 ledger states representing future commercial results; B5.2 never creates these terminal states.
-            foreach (var status in new string?[] { null, "accepted", "conflict", "rejected" })
+            // Receipt-only states. Accepted replays now require actual sales and are covered by B5.3 posting tests.
+            foreach (var status in new string?[] { null, "rejected", "conflict", "rejected" })
             {
                 var envelope = Envelope(device); events.Add(envelope);
                 await using var reservation = await source.GetRequiredService<ReserveSyncEventReceiptHandler>().HandleAsync(new(pair.A.TenantId, envelope), Token);
@@ -70,9 +70,9 @@ public sealed class OfflineSyncBatchPersistenceTests(PostgreSqlFixture fixture)
             }
             _ = await Run(source, pair.A, device, events); // Response lost; all receipts were committed.
         }
-        await using var restarted = OwnerOverviewTestData.CreateServices(fixture); await using var fresh = restarted.CreateAsyncScope();
+        await using var restarted = OfflineSyncBatchTestData.CreateServices(fixture); await using var fresh = restarted.CreateAsyncScope();
         var replay = await Run(fresh.ServiceProvider, pair.A, device, events);
-        Assert.Equal(1, replay.PendingCount); Assert.Equal(1, replay.AcceptedCount); Assert.Equal(1, replay.ConflictCount); Assert.Equal(1, replay.RejectedCount);
+        Assert.Equal(1, replay.PendingCount); Assert.Equal(0, replay.AcceptedCount); Assert.Equal(1, replay.ConflictCount); Assert.Equal(2, replay.RejectedCount);
         for (var index = 0; index < saved.Count; index++)
         {
             var result = replay.Results[index]; Assert.True(result.IsReplay); Assert.Equal(saved[index].Receipt, result.ReceiptId);
@@ -86,7 +86,7 @@ public sealed class OfflineSyncBatchPersistenceTests(PostgreSqlFixture fixture)
     [Fact]
     public async Task ConcurrentBatchesOnSeparateContextsShareDurableIdentityAndDetectAlteredPayload()
     {
-        var pair = await TenantIsolationTestData.CreatePairAsync(fixture); await using var services = OwnerOverviewTestData.CreateServices(fixture); Guid device;
+        var pair = await TenantIsolationTestData.CreatePairAsync(fixture); await using var services = OfflineSyncBatchTestData.CreateServices(fixture); Guid device;
         await using (var seed = services.CreateAsyncScope()) device = await Register(seed.ServiceProvider, pair.A);
         var common = Envelope(device); var changed = Envelope(device, common.EventId, "{\"quantity\":2}");
         var suffix = Enumerable.Range(0, 7).Select(_ => Envelope(device)).ToArray();
@@ -104,7 +104,7 @@ public sealed class OfflineSyncBatchPersistenceTests(PostgreSqlFixture fixture)
     [Fact]
     public async Task TwoDevicesAndTwoTenantsCannotExposeOrReplaceAnIncompatibleIdentity()
     {
-        var pair = await TenantIsolationTestData.CreatePairAsync(fixture); await using var services = OwnerOverviewTestData.CreateServices(fixture);
+        var pair = await TenantIsolationTestData.CreatePairAsync(fixture); await using var services = OfflineSyncBatchTestData.CreateServices(fixture);
         await using var a = services.CreateAsyncScope(); await using var b = services.CreateAsyncScope();
         var da = await Register(a.ServiceProvider, pair.A); var anotherA = await Register(a.ServiceProvider, pair.A); var db = await Register(b.ServiceProvider, pair.B); var id = Guid.NewGuid();
         var first = await Run(a.ServiceProvider, pair.A, da, [Envelope(da, id)]);
@@ -125,7 +125,7 @@ public sealed class OfflineSyncBatchPersistenceTests(PostgreSqlFixture fixture)
     {
         var pair = await TenantIsolationTestData.CreatePairAsync(fixture);
         var connection = new NpgsqlConnectionStringBuilder(fixture.ConnectionString) { MaxPoolSize = 1, NoResetOnClose = true, ApplicationName = Guid.NewGuid().ToString("N") }.ConnectionString;
-        await using var services = OwnerOverviewTestData.CreateServices(fixture, connectionString: connection); int? pid = null;
+        await using var services = OfflineSyncBatchTestData.CreateServices(fixture, connectionString: connection); int? pid = null;
         foreach (var tenant in new[] { pair.A, pair.B })
         {
             await using var scope = services.CreateAsyncScope(); var source = scope.ServiceProvider; var context = source.GetRequiredService<MediPosDbContext>();

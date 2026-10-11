@@ -10,10 +10,10 @@ public enum AuditAction
     TransferRequested, TransferApproved, TransferDispatched, TransferReceived, TransferCancelled,
     CashTransferDispatched, CashTransferReceived,
     CommissionSettingsChanged, CommissionRuleCreated, CommissionRuleDeactivated, StockThresholdChanged,
-    SyncDeviceRegistered, SyncDeviceRevoked,
+    SyncDeviceRegistered, SyncDeviceRevoked, OfflineSaleConflictResolved,
 }
 
-public enum AuditEntityType { Tenant, License, LegalEntity, Branch, Membership, BusinessProduct, Purchase, InventoryLot, ImportJob, CashSession, Sale, Transfer, CashTransfer, TenantCommissionSettings, CommissionRule, BranchStockThreshold, SyncDevice }
+public enum AuditEntityType { Tenant, License, LegalEntity, Branch, Membership, BusinessProduct, Purchase, InventoryLot, ImportJob, CashSession, Sale, Transfer, CashTransfer, TenantCommissionSettings, CommissionRule, BranchStockThreshold, SyncDevice, OfflineSaleConflict }
 
 public static class AuditCodes
 {
@@ -53,6 +53,7 @@ public static class AuditCodes
         AuditAction.CommissionRuleCreated => "commission_rule.created",
         AuditAction.CommissionRuleDeactivated => "commission_rule.deactivated",
         AuditAction.StockThresholdChanged => "stock_threshold.changed",
+        AuditAction.OfflineSaleConflictResolved => "offline_sale_conflict.resolved",
         AuditAction.SyncDeviceRegistered => "sync_device.registered",
         AuditAction.SyncDeviceRevoked => "sync_device.revoked",
         _ => throw new ArgumentOutOfRangeException(nameof(action)),
@@ -94,6 +95,7 @@ public static class AuditCodes
         "commission_rule.created" => AuditAction.CommissionRuleCreated,
         "commission_rule.deactivated" => AuditAction.CommissionRuleDeactivated,
         "stock_threshold.changed" => AuditAction.StockThresholdChanged,
+        "offline_sale_conflict.resolved" => AuditAction.OfflineSaleConflictResolved,
         "sync_device.registered" => AuditAction.SyncDeviceRegistered,
         "sync_device.revoked" => AuditAction.SyncDeviceRevoked,
         _ => throw new InvalidOperationException("Unknown persisted audit action."),
@@ -119,6 +121,7 @@ public static class AuditCodes
         AuditAction.CommissionSettingsChanged => AuditEntityType.TenantCommissionSettings,
         AuditAction.CommissionRuleCreated or AuditAction.CommissionRuleDeactivated => AuditEntityType.CommissionRule,
         AuditAction.StockThresholdChanged => AuditEntityType.BranchStockThreshold,
+        AuditAction.OfflineSaleConflictResolved => AuditEntityType.OfflineSaleConflict,
         AuditAction.SyncDeviceRegistered or AuditAction.SyncDeviceRevoked => AuditEntityType.SyncDevice,
         _ => throw new ArgumentOutOfRangeException(nameof(action)),
     };
@@ -141,6 +144,7 @@ public static class AuditCodes
         AuditEntityType.TenantCommissionSettings => "tenant_commission_settings",
         AuditEntityType.CommissionRule => "commission_rule",
         AuditEntityType.BranchStockThreshold => "branch_stock_threshold",
+        AuditEntityType.OfflineSaleConflict => "offline_sale_conflict",
         AuditEntityType.SyncDevice => "sync_device",
         _ => throw new ArgumentOutOfRangeException(nameof(entityType)),
     };
@@ -163,6 +167,7 @@ public static class AuditCodes
         "tenant_commission_settings" => AuditEntityType.TenantCommissionSettings,
         "commission_rule" => AuditEntityType.CommissionRule,
         "branch_stock_threshold" => AuditEntityType.BranchStockThreshold,
+        "offline_sale_conflict" => AuditEntityType.OfflineSaleConflict,
         "sync_device" => AuditEntityType.SyncDevice,
         _ => throw new InvalidOperationException("Unknown persisted audit entity type."),
     };

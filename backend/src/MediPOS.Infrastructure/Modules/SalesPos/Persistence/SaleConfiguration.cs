@@ -1,6 +1,7 @@
 using MediPOS.Domain.Modules.Branches;
 using MediPOS.Domain.Modules.Cash;
 using MediPOS.Domain.Modules.IdentityAccess;
+using MediPOS.Domain.Modules.OfflineSync;
 using MediPOS.Domain.Modules.SalesPos;
 using MediPOS.Domain.Modules.TenancyLicensing;
 using Microsoft.EntityFrameworkCore;
@@ -41,6 +42,10 @@ internal sealed class SaleConfiguration : IEntityTypeConfiguration<Sale>
         builder.Property(value => value.SellerMembershipId).HasColumnName("seller_membership_id");
         builder.Property(value => value.CashSessionId).HasColumnName("cash_session_id");
         builder.Property(value => value.TotalAmount).HasColumnName("total_amount").HasPrecision(18, 4);
+        builder.Property(value => value.OfflineSyncEventId).HasColumnName("offline_sync_event_id");
+        builder.HasOne<SyncEvent>().WithMany().HasForeignKey(value => new { value.TenantId, value.OfflineSyncEventId })
+            .HasPrincipalKey(value => new { value.TenantId, value.Id }).OnDelete(DeleteBehavior.Restrict);
+        builder.HasIndex(value => new { value.TenantId, value.OfflineSyncEventId }).IsUnique().HasFilter("offline_sync_event_id IS NOT NULL");
         builder.Property(value => value.CommissionEntryCount).HasColumnName("commission_entry_count");
         builder.Property(value => value.CreatedAt).HasColumnName("created_at").HasColumnType("timestamp with time zone");
         builder.Property(value => value.UpdatedAt).HasColumnName("updated_at").HasColumnType("timestamp with time zone");

@@ -32,6 +32,14 @@ public sealed class Sale
     public Guid BranchId { get; private set; }
     public Guid SellerMembershipId { get; private set; }
     public Guid CashSessionId { get; private set; }
+    public Guid? OfflineSyncEventId { get; private set; }
+
+    public void LinkOfflineEvent(Guid receiptId)
+    {
+        EnsureDraft();
+        if (receiptId == Guid.Empty || OfflineSyncEventId.HasValue) throw new ArgumentException("An offline origin is recorded once.");
+        OfflineSyncEventId = receiptId;
+    }
     public SaleStatus Status { get; private set; }
     public decimal TotalAmount { get; private set; }
     public DateTimeOffset CreatedAt { get; private set; }

@@ -114,13 +114,13 @@ public sealed class OfflineSyncPersistenceTests(PostgreSqlFixture fixture)
         {
             await using var scope = services.CreateAsyncScope(); await using var reservation = await Reserve(scope.ServiceProvider, pair.A, envelope);
             var isNew = reservation.IsNew;
-            if (reservation.Receipt.ProcessingStatus == "pending") await reservation.CompleteAsync("accepted", "sync.test_accepted", resultReference, Token);
+            if (reservation.Receipt.ProcessingStatus == "pending") await reservation.CompleteAsync("rejected", "sync.test_rejected", resultReference, Token);
             else { Assert.Equal(resultReference, reservation.Receipt.ResultReferenceId); await reservation.CompleteAsync(null, null, null, Token); }
             return isNew;
         });
         Assert.Equal(1, (await Task.WhenAll(tasks)).Count(value => value));
         await using var context = fixture.CreateContext(pair.A.TenantId); var entry = Assert.Single(await context.SyncEvents.ToArrayAsync(Token));
-        Assert.Equal("accepted", entry.ProcessingStatus); Assert.Equal(resultReference, entry.ResultReferenceId);
+        Assert.Equal("rejected", entry.ProcessingStatus); Assert.Equal(resultReference, entry.ResultReferenceId);
         Assert.Empty(await context.Sales.ToArrayAsync(Token)); Assert.Empty(await context.SalePayments.ToArrayAsync(Token));
         Assert.Empty(await context.StockMovements.ToArrayAsync(Token)); Assert.Empty(await context.InventoryLots.ToArrayAsync(Token));
     }
@@ -157,11 +157,11 @@ public sealed class OfflineSyncPersistenceTests(PostgreSqlFixture fixture)
         await using (var recovered = OwnerOverviewTestData.CreateServices(fixture))
         {
             await using var scope = recovered.CreateAsyncScope(); await using var reservation = await Reserve(scope.ServiceProvider, pair.A, envelope);
-            Assert.False(reservation.IsNew); Assert.Equal(record, reservation.Receipt.Id); await reservation.CompleteAsync("accepted", "sync.recovered", reference, Token);
+            Assert.False(reservation.IsNew); Assert.Equal(record, reservation.Receipt.Id); await reservation.CompleteAsync("rejected", "sync.recovered", reference, Token);
         }
         await using var restarted = OwnerOverviewTestData.CreateServices(fixture); await using var fresh = restarted.CreateAsyncScope();
         await using var retry = await Reserve(fresh.ServiceProvider, pair.A, envelope with { Payload = "{ \"quantity\": 1.0 }" });
-        Assert.Equal(record, retry.Receipt.Id); Assert.Equal(reference, retry.Receipt.ResultReferenceId); Assert.Equal("accepted", retry.Receipt.ProcessingStatus);
+        Assert.Equal(record, retry.Receipt.Id); Assert.Equal(reference, retry.Receipt.ResultReferenceId); Assert.Equal("rejected", retry.Receipt.ProcessingStatus);
         await retry.CompleteAsync(null, null, null, Token);
     }
 
@@ -246,7 +246,6 @@ public sealed class OfflineSyncPersistenceTests(PostgreSqlFixture fixture)
     }
 
     [Theory]
-    [InlineData("accepted")]
     [InlineData("conflict")]
     [InlineData("rejected")]
     public async Task TerminalTransitionIsPhysicallySingleAndCannotReturnToPending(string status)

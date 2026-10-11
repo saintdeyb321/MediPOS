@@ -84,7 +84,7 @@ namespace MediPOS.Infrastructure.Modules.TenancyLicensing.Persistence.Migrations
 
                             t.HasCheckConstraint("ck_audit_logs_before", "before_json IS NULL OR jsonb_typeof(before_json) = 'object'");
 
-                            t.HasCheckConstraint("ck_audit_logs_codes", "(entity_type = 'tenant' AND action IN ('tenant.created', 'tenant.purge_requested')) OR\n(entity_type = 'license' AND action IN ('license.renewed', 'license.suspended', 'license.reactivated')) OR\n(entity_type = 'legal_entity' AND action = 'legal_entity.created') OR\n(entity_type = 'branch' AND action IN ('branch.created', 'branch.main_hub_changed')) OR\n(entity_type = 'membership' AND action IN ('membership.created', 'membership.branches_replaced', 'membership.schedule_replaced', 'membership.deactivated')) OR\n(entity_type = 'business_product' AND action IN ('business_product.created', 'business_product.price_changed', 'business_product.status_changed', 'business_product.units_changed')) OR\n(entity_type = 'purchase' AND action = 'purchase.confirmed') OR\n(entity_type = 'inventory_lot' AND action = 'inventory.adjusted') OR\n(entity_type = 'import_job' AND action = 'catalog.products_imported') OR\n(entity_type = 'cash_session' AND action IN ('cash_session.opened', 'cash_session.closed')) OR\n(entity_type = 'sale' AND action IN ('sale.confirmed', 'sale.voided')) OR\n(entity_type = 'transfer' AND action IN ('transfer.requested', 'transfer.approved', 'transfer.dispatched', 'transfer.received', 'transfer.cancelled')) OR\n(entity_type = 'cash_transfer' AND action IN ('cash_transfer.dispatched', 'cash_transfer.received')) OR\n(entity_type = 'tenant_commission_settings' AND action = 'commissions.settings_changed') OR\n(entity_type = 'commission_rule' AND action IN ('commission_rule.created', 'commission_rule.deactivated')) OR\n(entity_type = 'branch_stock_threshold' AND action = 'stock_threshold.changed') OR\n(entity_type = 'sync_device' AND action IN ('sync_device.registered', 'sync_device.revoked'))");
+                            t.HasCheckConstraint("ck_audit_logs_codes", "(entity_type = 'tenant' AND action IN ('tenant.created', 'tenant.purge_requested')) OR\r\n(entity_type = 'license' AND action IN ('license.renewed', 'license.suspended', 'license.reactivated')) OR\r\n(entity_type = 'legal_entity' AND action = 'legal_entity.created') OR\r\n(entity_type = 'branch' AND action IN ('branch.created', 'branch.main_hub_changed')) OR\r\n(entity_type = 'membership' AND action IN ('membership.created', 'membership.branches_replaced', 'membership.schedule_replaced', 'membership.deactivated')) OR\r\n(entity_type = 'business_product' AND action IN ('business_product.created', 'business_product.price_changed', 'business_product.status_changed', 'business_product.units_changed')) OR\r\n(entity_type = 'purchase' AND action = 'purchase.confirmed') OR\r\n(entity_type = 'inventory_lot' AND action = 'inventory.adjusted') OR\r\n(entity_type = 'import_job' AND action = 'catalog.products_imported') OR\r\n(entity_type = 'cash_session' AND action IN ('cash_session.opened', 'cash_session.closed')) OR\r\n(entity_type = 'sale' AND action IN ('sale.confirmed', 'sale.voided')) OR\r\n(entity_type = 'transfer' AND action IN ('transfer.requested', 'transfer.approved', 'transfer.dispatched', 'transfer.received', 'transfer.cancelled')) OR\r\n(entity_type = 'cash_transfer' AND action IN ('cash_transfer.dispatched', 'cash_transfer.received')) OR\r\n(entity_type = 'tenant_commission_settings' AND action = 'commissions.settings_changed') OR\r\n(entity_type = 'commission_rule' AND action IN ('commission_rule.created', 'commission_rule.deactivated')) OR\r\n(entity_type = 'branch_stock_threshold' AND action = 'stock_threshold.changed') OR\r\n(entity_type = 'sync_device' AND action IN ('sync_device.registered', 'sync_device.revoked')) OR\r\n(entity_type = 'offline_sale_conflict' AND action = 'offline_sale_conflict.resolved')");
 
                             t.HasCheckConstraint("ck_audit_logs_correlation", "correlation_id ~ '^[0-9a-f]{32}$' AND correlation_id <> repeat('0', 32)");
 
@@ -1500,6 +1500,93 @@ namespace MediPOS.Infrastructure.Modules.TenancyLicensing.Persistence.Migrations
                     b.ToTable("notification_read_states", (string)null);
                 });
 
+            modelBuilder.Entity("MediPOS.Domain.Modules.OfflineSync.OfflineSaleConflict", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid>("BranchId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("branch_id");
+
+                    b.Property<string>("ConflictCode")
+                        .IsRequired()
+                        .HasMaxLength(80)
+                        .HasColumnType("character varying(80)")
+                        .HasColumnName("conflict_code");
+
+                    b.Property<string>("ConflictType")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasColumnName("conflict_type");
+
+                    b.Property<DateTimeOffset>("DetectedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("detected_at_utc");
+
+                    b.Property<Guid>("DeviceId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("device_id");
+
+                    b.Property<string>("ResolutionCode")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasColumnName("resolution_code");
+
+                    b.Property<string>("ResolutionNote")
+                        .HasMaxLength(512)
+                        .HasColumnType("character varying(512)")
+                        .HasColumnName("resolution_note");
+
+                    b.Property<DateTimeOffset?>("ResolvedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("resolved_at_utc");
+
+                    b.Property<Guid?>("ResolvedByMembershipId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("resolved_by_membership_id");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)")
+                        .HasColumnName("status");
+
+                    b.Property<Guid>("SyncEventId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("sync_event_id");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("tenant_id");
+
+                    b.HasKey("Id");
+
+                    b.HasAlternateKey("TenantId", "Id");
+
+                    b.HasIndex("TenantId", "DeviceId");
+
+                    b.HasIndex("TenantId", "ResolvedByMembershipId");
+
+                    b.HasIndex("TenantId", "SyncEventId")
+                        .IsUnique();
+
+                    b.HasIndex("TenantId", "BranchId", "Status", "DetectedAtUtc", "Id");
+
+                    b.ToTable("offline_sale_conflicts", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_offline_conflicts_identifier", "id <> '00000000-0000-0000-0000-000000000000'::uuid");
+
+                            t.HasCheckConstraint("ck_offline_conflicts_reason", "conflict_type IN ('insufficient_stock','expired_stock','cash_session_unavailable','product_unavailable','unit_or_price_changed','access_requires_review','inconsistent_payload') AND conflict_code = 'sync.sale_' || conflict_type");
+
+                            t.HasCheckConstraint("ck_offline_conflicts_resolution", "(status = 'open' AND resolved_at_utc IS NULL AND resolved_by_membership_id IS NULL AND resolution_code IS NULL AND resolution_note IS NULL) OR\n(status = 'resolved' AND resolved_at_utc IS NOT NULL AND isfinite(resolved_at_utc) AND resolved_at_utc >= detected_at_utc\n  AND resolved_by_membership_id IS NOT NULL AND resolved_by_membership_id <> '00000000-0000-0000-0000-000000000000'::uuid\n  AND resolution_code IS NOT NULL AND resolution_code IN ('cancelled','reviewed_no_posting') AND resolution_note IS NOT NULL\n  AND resolution_note = btrim(resolution_note) AND resolution_note ~ '[^[:space:]]' AND length(resolution_note) <= 512 AND resolution_note !~ '[[:cntrl:]]')");
+
+                            t.HasCheckConstraint("ck_offline_conflicts_time", "isfinite(detected_at_utc)");
+                        });
+                });
+
             modelBuilder.Entity("MediPOS.Domain.Modules.OfflineSync.SyncDevice", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1643,8 +1730,6 @@ namespace MediPOS.Infrastructure.Modules.TenancyLicensing.Persistence.Migrations
                         .HasColumnName("tenant_id");
 
                     b.HasKey("Id");
-
-                    b.HasAlternateKey("TenantId", "Id");
 
                     b.HasIndex("TenantId", "EventId")
                         .IsUnique()
@@ -1873,6 +1958,10 @@ namespace MediPOS.Infrastructure.Modules.TenancyLicensing.Persistence.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at");
 
+                    b.Property<Guid?>("OfflineSyncEventId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("offline_sync_event_id");
+
                     b.Property<Guid>("SellerMembershipId")
                         .HasColumnType("uuid")
                         .HasColumnName("seller_membership_id");
@@ -1917,6 +2006,10 @@ namespace MediPOS.Infrastructure.Modules.TenancyLicensing.Persistence.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("TenantId", "OfflineSyncEventId")
+                        .IsUnique()
+                        .HasFilter("offline_sync_event_id IS NOT NULL");
+
                     b.HasIndex("TenantId", "BranchId", "CreatedAt");
 
                     b.HasIndex("TenantId", "CashSessionId", "Status");
@@ -1931,7 +2024,7 @@ namespace MediPOS.Infrastructure.Modules.TenancyLicensing.Persistence.Migrations
 
                             t.HasCheckConstraint("ck_sales_confirmation", "(status = 'draft' AND confirmed_at IS NULL) OR (status IN ('confirmed', 'voided') AND confirmed_at IS NOT NULL AND confirmed_at >= created_at AND confirmed_at <= updated_at)");
 
-                            t.HasCheckConstraint("ck_sales_identifiers", "id <> '00000000-0000-0000-0000-000000000000'::uuid AND\ntenant_id <> '00000000-0000-0000-0000-000000000000'::uuid AND\nbranch_id <> '00000000-0000-0000-0000-000000000000'::uuid AND\nseller_membership_id <> '00000000-0000-0000-0000-000000000000'::uuid AND\ncash_session_id <> '00000000-0000-0000-0000-000000000000'::uuid");
+                            t.HasCheckConstraint("ck_sales_identifiers", "id <> '00000000-0000-0000-0000-000000000000'::uuid AND\r\ntenant_id <> '00000000-0000-0000-0000-000000000000'::uuid AND\r\nbranch_id <> '00000000-0000-0000-0000-000000000000'::uuid AND\r\nseller_membership_id <> '00000000-0000-0000-0000-000000000000'::uuid AND\r\ncash_session_id <> '00000000-0000-0000-0000-000000000000'::uuid");
 
                             t.HasCheckConstraint("ck_sales_status", "status IN ('draft', 'confirmed', 'voided')");
 
@@ -1939,7 +2032,7 @@ namespace MediPOS.Infrastructure.Modules.TenancyLicensing.Persistence.Migrations
 
                             t.HasCheckConstraint("ck_sales_total", "total_amount >= 0 AND total_amount <= 99999999999999.9999");
 
-                            t.HasCheckConstraint("ck_sales_void", "(status IN ('draft', 'confirmed') AND voided_at IS NULL AND voided_by_actor_id IS NULL AND void_reason IS NULL) OR\n(status = 'voided' AND voided_at IS NOT NULL AND voided_at >= confirmed_at AND voided_at <= updated_at\n    AND voided_by_actor_id IS NOT NULL AND voided_by_actor_id <> '00000000-0000-0000-0000-000000000000'::uuid\n    AND void_reason IS NOT NULL AND void_reason ~ '[^[:space:]]' AND void_reason = btrim(void_reason) AND length(void_reason) <= 512)");
+                            t.HasCheckConstraint("ck_sales_void", "(status IN ('draft', 'confirmed') AND voided_at IS NULL AND voided_by_actor_id IS NULL AND void_reason IS NULL) OR\r\n(status = 'voided' AND voided_at IS NOT NULL AND voided_at >= confirmed_at AND voided_at <= updated_at\r\n    AND voided_by_actor_id IS NOT NULL AND voided_by_actor_id <> '00000000-0000-0000-0000-000000000000'::uuid\r\n    AND void_reason IS NOT NULL AND void_reason ~ '[^[:space:]]' AND void_reason = btrim(void_reason) AND length(void_reason) <= 512)");
                         });
                 });
 
@@ -3089,6 +3182,36 @@ namespace MediPOS.Infrastructure.Modules.TenancyLicensing.Persistence.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("MediPOS.Domain.Modules.OfflineSync.OfflineSaleConflict", b =>
+                {
+                    b.HasOne("MediPOS.Domain.Modules.Branches.Branch", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId", "BranchId")
+                        .HasPrincipalKey("TenantId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("MediPOS.Domain.Modules.OfflineSync.SyncDevice", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId", "DeviceId")
+                        .HasPrincipalKey("TenantId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("MediPOS.Domain.Modules.IdentityAccess.Membership", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId", "ResolvedByMembershipId")
+                        .HasPrincipalKey("TenantId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("MediPOS.Domain.Modules.OfflineSync.SyncEvent", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId", "SyncEventId")
+                        .HasPrincipalKey("TenantId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("MediPOS.Domain.Modules.OfflineSync.SyncDevice", b =>
                 {
                     b.HasOne("MediPOS.Domain.Modules.TenancyLicensing.Tenant", null)
@@ -3184,6 +3307,12 @@ namespace MediPOS.Infrastructure.Modules.TenancyLicensing.Persistence.Migrations
                         .HasPrincipalKey("TenantId", "Id")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
+
+                    b.HasOne("MediPOS.Domain.Modules.OfflineSync.SyncEvent", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId", "OfflineSyncEventId")
+                        .HasPrincipalKey("TenantId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict);
 
                     b.HasOne("MediPOS.Domain.Modules.IdentityAccess.Membership", null)
                         .WithMany()

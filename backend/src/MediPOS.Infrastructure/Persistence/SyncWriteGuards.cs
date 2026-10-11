@@ -8,6 +8,23 @@ public sealed partial class MediPosDbContext
 {
     private void ValidateSyncWrites()
     {
+        foreach (var entry in ChangeTracker.Entries<OfflineSaleConflict>().Where(entry => entry.State is EntityState.Added or EntityState.Modified or EntityState.Deleted))
+        {
+            if (Database.CurrentTransaction is null || entry.State == EntityState.Deleted) throw new InvalidOperationException("Conflict history requires a transaction and cannot be deleted.");
+            var conflict = entry.Entity;
+            if (entry.State == EntityState.Added && conflict.Status != "open") throw new InvalidOperationException("Conflicts start open.");
+            if (entry.State == EntityState.Modified)
+            {
+                if (entry.Property(value => value.Status).OriginalValue != "open" || conflict.Status != "resolved" || entry.Properties.Any(property => property.IsModified && property.Metadata.Name is not
+                    (nameof(OfflineSaleConflict.Status) or nameof(OfflineSaleConflict.ResolvedAtUtc) or nameof(OfflineSaleConflict.ResolvedByMembershipId) or nameof(OfflineSaleConflict.ResolutionCode) or nameof(OfflineSaleConflict.ResolutionNote))))
+                    throw new InvalidOperationException("Resolve once without changing conflict history.");
+                var audits = ChangeTracker.Entries<AuditLog>().Where(audit => audit.State == EntityState.Added && audit.Entity.Action == AuditAction.OfflineSaleConflictResolved &&
+                    audit.Entity.TenantId == conflict.TenantId && audit.Entity.EntityId == conflict.Id).ToArray();
+                if (audits.Length != 1 || audits[0].Entity.OccurredAt != conflict.ResolvedAtUtc) throw new InvalidOperationException("Resolution requires its atomic audit.");
+            }
+        }
+        foreach (var entry in ChangeTracker.Entries<Domain.Modules.SalesPos.Sale>().Where(entry => entry.State == EntityState.Modified))
+            if (entry.Property(value => value.OfflineSyncEventId).IsModified) throw new InvalidOperationException("Offline sale origin is immutable.");
         foreach (var entry in ChangeTracker.Entries<SyncDevice>().Where(entry => entry.State is EntityState.Added or EntityState.Modified or EntityState.Deleted))
         {
             if (entry.State == EntityState.Deleted) throw new InvalidOperationException("Sync devices preserve history.");

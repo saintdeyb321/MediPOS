@@ -47,6 +47,7 @@ public sealed partial class MediPosDbContext(DbContextOptions<MediPosDbContext> 
     public DbSet<Notification> Notifications => Set<Notification>();
     public DbSet<SyncDevice> SyncDevices => Set<SyncDevice>();
     public DbSet<SyncEvent> SyncEvents => Set<SyncEvent>();
+    public DbSet<OfflineSaleConflict> OfflineSaleConflicts => Set<OfflineSaleConflict>();
     public DbSet<NotificationReadState> NotificationReadStates => Set<NotificationReadState>();
     public DbSet<License> Licenses => Set<License>();
     public DbSet<LicenseChange> LicenseChanges => Set<LicenseChange>();
@@ -100,6 +101,7 @@ public sealed partial class MediPosDbContext(DbContextOptions<MediPosDbContext> 
         modelBuilder.ApplyConfiguration(new NotificationConfiguration());
         modelBuilder.ApplyConfiguration(new SyncDeviceConfiguration());
         modelBuilder.ApplyConfiguration(new SyncEventConfiguration());
+        modelBuilder.ApplyConfiguration(new OfflineSaleConflictConfiguration());
         modelBuilder.ApplyConfiguration(new NotificationReadStateConfiguration());
         modelBuilder.ApplyConfiguration(new LicenseConfiguration());
         modelBuilder.ApplyConfiguration(new LicenseChangeConfiguration());
@@ -145,6 +147,7 @@ public sealed partial class MediPosDbContext(DbContextOptions<MediPosDbContext> 
         // Context properties are evaluated per query, rather than captured into the cached EF model.
         modelBuilder.Entity<Notification>().HasQueryFilter(value => SelectedTenantId.HasValue && value.TenantId == SelectedTenantId);
         modelBuilder.Entity<SyncDevice>().HasQueryFilter(value => SelectedTenantId.HasValue && value.TenantId == SelectedTenantId);
+        modelBuilder.Entity<OfflineSaleConflict>().HasQueryFilter(value => SelectedTenantId.HasValue && value.TenantId == SelectedTenantId);
         modelBuilder.Entity<SyncEvent>().HasQueryFilter(value => SelectedTenantId.HasValue && value.TenantId == SelectedTenantId);
         modelBuilder.Entity<NotificationReadState>().HasQueryFilter(value => SelectedTenantId.HasValue && value.TenantId == SelectedTenantId);
         // User is global. Tenant is a platform root; its administration requires a separate authorized boundary.
@@ -478,6 +481,7 @@ public sealed partial class MediPosDbContext(DbContextOptions<MediPosDbContext> 
                 Notification value => value.TenantId,
                 SyncDevice value => value.TenantId,
                 SyncEvent value => value.TenantId,
+                OfflineSaleConflict value => value.TenantId,
                 NotificationReadState value => value.TenantId,
                 LicenseChange value => value.TenantId,
                 LegalEntity value => value.TenantId,
