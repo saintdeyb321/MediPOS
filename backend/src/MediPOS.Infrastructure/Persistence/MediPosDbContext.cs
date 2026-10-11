@@ -9,6 +9,7 @@ using MediPOS.Domain.Modules.Commissions;
 using MediPOS.Domain.Modules.IdentityAccess;
 using MediPOS.Domain.Modules.Inventory;
 using MediPOS.Domain.Modules.Notifications;
+using MediPOS.Domain.Modules.OfflineSync;
 using MediPOS.Domain.Modules.Purchasing;
 using MediPOS.Domain.Modules.SalesPos;
 using MediPOS.Domain.Modules.TenancyLicensing;
@@ -22,6 +23,7 @@ using MediPOS.Infrastructure.Modules.IdentityAccess.Persistence.Configurations;
 using MediPOS.Infrastructure.Modules.Inventory.Persistence;
 using MediPOS.Infrastructure.Modules.Inventory.Persistence.Configurations;
 using MediPOS.Infrastructure.Modules.Notifications.Persistence;
+using MediPOS.Infrastructure.Modules.OfflineSync.Persistence;
 using MediPOS.Infrastructure.Modules.Purchasing.Persistence.Configurations;
 using MediPOS.Infrastructure.Modules.SalesPos.Persistence;
 using MediPOS.Infrastructure.Modules.TenancyLicensing.Persistence.Configurations;
@@ -43,6 +45,8 @@ public sealed partial class MediPosDbContext(DbContextOptions<MediPosDbContext> 
 
     public DbSet<Tenant> Tenants => Set<Tenant>();
     public DbSet<Notification> Notifications => Set<Notification>();
+    public DbSet<SyncDevice> SyncDevices => Set<SyncDevice>();
+    public DbSet<SyncEvent> SyncEvents => Set<SyncEvent>();
     public DbSet<NotificationReadState> NotificationReadStates => Set<NotificationReadState>();
     public DbSet<License> Licenses => Set<License>();
     public DbSet<LicenseChange> LicenseChanges => Set<LicenseChange>();
@@ -94,6 +98,8 @@ public sealed partial class MediPosDbContext(DbContextOptions<MediPosDbContext> 
             .HasName("report_lot_capital4").HasSchema("public");
         modelBuilder.ApplyConfiguration(new TenantConfiguration());
         modelBuilder.ApplyConfiguration(new NotificationConfiguration());
+        modelBuilder.ApplyConfiguration(new SyncDeviceConfiguration());
+        modelBuilder.ApplyConfiguration(new SyncEventConfiguration());
         modelBuilder.ApplyConfiguration(new NotificationReadStateConfiguration());
         modelBuilder.ApplyConfiguration(new LicenseConfiguration());
         modelBuilder.ApplyConfiguration(new LicenseChangeConfiguration());
@@ -138,6 +144,8 @@ public sealed partial class MediPosDbContext(DbContextOptions<MediPosDbContext> 
 
         // Context properties are evaluated per query, rather than captured into the cached EF model.
         modelBuilder.Entity<Notification>().HasQueryFilter(value => SelectedTenantId.HasValue && value.TenantId == SelectedTenantId);
+        modelBuilder.Entity<SyncDevice>().HasQueryFilter(value => SelectedTenantId.HasValue && value.TenantId == SelectedTenantId);
+        modelBuilder.Entity<SyncEvent>().HasQueryFilter(value => SelectedTenantId.HasValue && value.TenantId == SelectedTenantId);
         modelBuilder.Entity<NotificationReadState>().HasQueryFilter(value => SelectedTenantId.HasValue && value.TenantId == SelectedTenantId);
         // User is global. Tenant is a platform root; its administration requires a separate authorized boundary.
         modelBuilder.Entity<License>().HasQueryFilter(value => SelectedTenantId.HasValue && value.TenantId == SelectedTenantId);
@@ -176,6 +184,7 @@ public sealed partial class MediPosDbContext(DbContextOptions<MediPosDbContext> 
     public override int SaveChanges(bool acceptAllChangesOnSuccess)
     {
         ValidateLicenseHistory();
+        ValidateSyncWrites();
         ValidateNotificationHistory();
         ValidateAuditHistory();
         ValidateStockHistory();
@@ -196,6 +205,7 @@ public sealed partial class MediPosDbContext(DbContextOptions<MediPosDbContext> 
     public override Task<int> SaveChangesAsync(bool acceptAllChangesOnSuccess, CancellationToken cancellationToken = default)
     {
         ValidateLicenseHistory();
+        ValidateSyncWrites();
         ValidateNotificationHistory();
         ValidateAuditHistory();
         ValidateStockHistory();
@@ -466,6 +476,8 @@ public sealed partial class MediPosDbContext(DbContextOptions<MediPosDbContext> 
             {
                 License value => value.TenantId,
                 Notification value => value.TenantId,
+                SyncDevice value => value.TenantId,
+                SyncEvent value => value.TenantId,
                 NotificationReadState value => value.TenantId,
                 LicenseChange value => value.TenantId,
                 LegalEntity value => value.TenantId,

@@ -84,7 +84,7 @@ namespace MediPOS.Infrastructure.Modules.TenancyLicensing.Persistence.Migrations
 
                             t.HasCheckConstraint("ck_audit_logs_before", "before_json IS NULL OR jsonb_typeof(before_json) = 'object'");
 
-                            t.HasCheckConstraint("ck_audit_logs_codes", "(entity_type = 'tenant' AND action IN ('tenant.created', 'tenant.purge_requested')) OR\n(entity_type = 'license' AND action IN ('license.renewed', 'license.suspended', 'license.reactivated')) OR\n(entity_type = 'legal_entity' AND action = 'legal_entity.created') OR\n(entity_type = 'branch' AND action IN ('branch.created', 'branch.main_hub_changed')) OR\n(entity_type = 'membership' AND action IN ('membership.created', 'membership.branches_replaced', 'membership.schedule_replaced', 'membership.deactivated')) OR\n(entity_type = 'business_product' AND action IN ('business_product.created', 'business_product.price_changed', 'business_product.status_changed', 'business_product.units_changed')) OR\n(entity_type = 'purchase' AND action = 'purchase.confirmed') OR\n(entity_type = 'inventory_lot' AND action = 'inventory.adjusted') OR\n(entity_type = 'import_job' AND action = 'catalog.products_imported') OR\n(entity_type = 'cash_session' AND action IN ('cash_session.opened', 'cash_session.closed')) OR\n(entity_type = 'sale' AND action IN ('sale.confirmed', 'sale.voided')) OR\n(entity_type = 'transfer' AND action IN ('transfer.requested', 'transfer.approved', 'transfer.dispatched', 'transfer.received', 'transfer.cancelled')) OR\n(entity_type = 'cash_transfer' AND action IN ('cash_transfer.dispatched', 'cash_transfer.received')) OR\n(entity_type = 'tenant_commission_settings' AND action = 'commissions.settings_changed') OR\n(entity_type = 'commission_rule' AND action IN ('commission_rule.created', 'commission_rule.deactivated')) OR\n(entity_type = 'branch_stock_threshold' AND action = 'stock_threshold.changed')");
+                            t.HasCheckConstraint("ck_audit_logs_codes", "(entity_type = 'tenant' AND action IN ('tenant.created', 'tenant.purge_requested')) OR\n(entity_type = 'license' AND action IN ('license.renewed', 'license.suspended', 'license.reactivated')) OR\n(entity_type = 'legal_entity' AND action = 'legal_entity.created') OR\n(entity_type = 'branch' AND action IN ('branch.created', 'branch.main_hub_changed')) OR\n(entity_type = 'membership' AND action IN ('membership.created', 'membership.branches_replaced', 'membership.schedule_replaced', 'membership.deactivated')) OR\n(entity_type = 'business_product' AND action IN ('business_product.created', 'business_product.price_changed', 'business_product.status_changed', 'business_product.units_changed')) OR\n(entity_type = 'purchase' AND action = 'purchase.confirmed') OR\n(entity_type = 'inventory_lot' AND action = 'inventory.adjusted') OR\n(entity_type = 'import_job' AND action = 'catalog.products_imported') OR\n(entity_type = 'cash_session' AND action IN ('cash_session.opened', 'cash_session.closed')) OR\n(entity_type = 'sale' AND action IN ('sale.confirmed', 'sale.voided')) OR\n(entity_type = 'transfer' AND action IN ('transfer.requested', 'transfer.approved', 'transfer.dispatched', 'transfer.received', 'transfer.cancelled')) OR\n(entity_type = 'cash_transfer' AND action IN ('cash_transfer.dispatched', 'cash_transfer.received')) OR\n(entity_type = 'tenant_commission_settings' AND action = 'commissions.settings_changed') OR\n(entity_type = 'commission_rule' AND action IN ('commission_rule.created', 'commission_rule.deactivated')) OR\n(entity_type = 'branch_stock_threshold' AND action = 'stock_threshold.changed') OR\n(entity_type = 'sync_device' AND action IN ('sync_device.registered', 'sync_device.revoked'))");
 
                             t.HasCheckConstraint("ck_audit_logs_correlation", "correlation_id ~ '^[0-9a-f]{32}$' AND correlation_id <> repeat('0', 32)");
 
@@ -1498,6 +1498,176 @@ namespace MediPOS.Infrastructure.Modules.TenancyLicensing.Persistence.Migrations
                         .HasDatabaseName("ux_notification_read_membership");
 
                     b.ToTable("notification_read_states", (string)null);
+                });
+
+            modelBuilder.Entity("MediPOS.Domain.Modules.OfflineSync.SyncDevice", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid>("BranchId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("branch_id");
+
+                    b.Property<string>("DeviceLabel")
+                        .IsRequired()
+                        .HasMaxLength(120)
+                        .HasColumnType("character varying(120)")
+                        .HasColumnName("device_label");
+
+                    b.Property<DateTimeOffset?>("LastSeenAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("last_seen_at_utc");
+
+                    b.Property<DateTimeOffset>("RegisteredAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("registered_at_utc");
+
+                    b.Property<Guid>("RegisteredByMembershipId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("registered_by_membership_id");
+
+                    b.Property<DateTimeOffset?>("RevokedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("revoked_at_utc");
+
+                    b.Property<Guid?>("RevokedByMembershipId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("revoked_by_membership_id");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)")
+                        .HasColumnName("status");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("tenant_id");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TenantId", "RevokedByMembershipId");
+
+                    b.HasIndex("TenantId", "BranchId", "Status");
+
+                    b.HasIndex("TenantId", "RegisteredByMembershipId", "RegisteredAtUtc");
+
+                    b.ToTable("sync_devices", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_sync_devices_ids", "id <> '00000000-0000-0000-0000-000000000000'::uuid AND tenant_id <> '00000000-0000-0000-0000-000000000000'::uuid");
+
+                            t.HasCheckConstraint("ck_sync_devices_label", "device_label ~ '[^[:space:]]' AND device_label !~ '[[:cntrl:]]'");
+
+                            t.HasCheckConstraint("ck_sync_devices_status", "(status = 'active' AND revoked_at_utc IS NULL AND revoked_by_membership_id IS NULL) OR (status = 'revoked' AND revoked_at_utc IS NOT NULL AND revoked_at_utc >= registered_at_utc AND revoked_by_membership_id IS NOT NULL)");
+
+                            t.HasCheckConstraint("ck_sync_devices_time", "isfinite(registered_at_utc) AND (last_seen_at_utc IS NULL OR (isfinite(last_seen_at_utc) AND last_seen_at_utc >= registered_at_utc)) AND (revoked_at_utc IS NULL OR isfinite(revoked_at_utc))");
+                        });
+                });
+
+            modelBuilder.Entity("MediPOS.Domain.Modules.OfflineSync.SyncEvent", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateOnly>("ClientLocalDate")
+                        .HasColumnType("date")
+                        .HasColumnName("client_local_date");
+
+                    b.Property<DateTimeOffset>("ClientOccurredAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("client_occurred_at_utc");
+
+                    b.Property<string>("ClientTimeZoneId")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("client_time_zone_id");
+
+                    b.Property<Guid>("DeviceId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("device_id");
+
+                    b.Property<Guid>("EventId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("event_id");
+
+                    b.Property<string>("EventType")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasColumnName("event_type");
+
+                    b.Property<string>("Payload")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("payload");
+
+                    b.Property<string>("PayloadHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("payload_hash");
+
+                    b.Property<DateTimeOffset?>("ProcessedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("processed_at_utc");
+
+                    b.Property<string>("ProcessingStatus")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)")
+                        .HasColumnName("processing_status");
+
+                    b.Property<DateTimeOffset>("ReceivedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("received_at_utc");
+
+                    b.Property<string>("ResultCode")
+                        .HasMaxLength(80)
+                        .HasColumnType("character varying(80)")
+                        .HasColumnName("result_code");
+
+                    b.Property<Guid?>("ResultReferenceId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("result_reference_id");
+
+                    b.Property<int>("SchemaVersion")
+                        .HasColumnType("integer")
+                        .HasColumnName("schema_version");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("tenant_id");
+
+                    b.HasKey("Id");
+
+                    b.HasAlternateKey("TenantId", "Id");
+
+                    b.HasIndex("TenantId", "EventId")
+                        .IsUnique()
+                        .HasDatabaseName("ux_sync_events_tenant_event");
+
+                    b.HasIndex("TenantId", "DeviceId", "ReceivedAtUtc");
+
+                    b.HasIndex("TenantId", "ProcessingStatus", "ReceivedAtUtc", "Id");
+
+                    b.ToTable("sync_events", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_sync_events_hash", "payload_hash ~ '^[0-9a-f]{64}$' AND payload_hash = encode(sha256(convert_to(payload, 'UTF8')), 'hex')");
+
+                            t.HasCheckConstraint("ck_sync_events_ids", "id <> '00000000-0000-0000-0000-000000000000'::uuid AND event_id <> '00000000-0000-0000-0000-000000000000'::uuid");
+
+                            t.HasCheckConstraint("ck_sync_events_payload", "octet_length(payload) BETWEEN 2 AND 65536 AND jsonb_typeof(payload::jsonb) = 'object' AND payload::jsonb <> '{}'::jsonb");
+
+                            t.HasCheckConstraint("ck_sync_events_result", "(processing_status = 'pending' AND processed_at_utc IS NULL AND result_code IS NULL AND result_reference_id IS NULL) OR (processing_status IN ('accepted', 'conflict', 'rejected') AND processed_at_utc IS NOT NULL AND result_code IS NOT NULL AND result_code ~ '^[a-z0-9_.]{1,80}$' AND (result_reference_id IS NULL OR result_reference_id <> '00000000-0000-0000-0000-000000000000'::uuid))");
+
+                            t.HasCheckConstraint("ck_sync_events_time", "isfinite(client_occurred_at_utc) AND isfinite(received_at_utc) AND isfinite(client_local_date) AND client_local_date <> '0001-01-01'::date AND length(client_time_zone_id) BETWEEN 1 AND 100 AND (processed_at_utc IS NULL OR (isfinite(processed_at_utc) AND processed_at_utc >= received_at_utc))");
+
+                            t.HasCheckConstraint("ck_sync_events_version", "event_type = 'offline_sale.v1' AND schema_version = 1");
+                        });
                 });
 
             modelBuilder.Entity("MediPOS.Domain.Modules.Purchasing.Purchase", b =>
@@ -2914,6 +3084,45 @@ namespace MediPOS.Infrastructure.Modules.TenancyLicensing.Persistence.Migrations
                     b.HasOne("MediPOS.Domain.Modules.Notifications.Notification", null)
                         .WithMany()
                         .HasForeignKey("TenantId", "NotificationId")
+                        .HasPrincipalKey("TenantId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("MediPOS.Domain.Modules.OfflineSync.SyncDevice", b =>
+                {
+                    b.HasOne("MediPOS.Domain.Modules.TenancyLicensing.Tenant", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("MediPOS.Domain.Modules.Branches.Branch", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId", "BranchId")
+                        .HasPrincipalKey("TenantId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("MediPOS.Domain.Modules.IdentityAccess.Membership", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId", "RegisteredByMembershipId")
+                        .HasPrincipalKey("TenantId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("MediPOS.Domain.Modules.IdentityAccess.Membership", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId", "RevokedByMembershipId")
+                        .HasPrincipalKey("TenantId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict);
+                });
+
+            modelBuilder.Entity("MediPOS.Domain.Modules.OfflineSync.SyncEvent", b =>
+                {
+                    b.HasOne("MediPOS.Domain.Modules.OfflineSync.SyncDevice", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId", "DeviceId")
                         .HasPrincipalKey("TenantId", "Id")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();

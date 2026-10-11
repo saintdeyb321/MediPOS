@@ -3,10 +3,10 @@
 This is the single execution roadmap for the backend. Prompts are given in chat and are **not** stored in the repository.
 
 ## Working state
-- **Current milestone:** M4 — Commissions, reporting & alerts
-- **Current sprint:** B4.5 — Explainable replenishment suggestions
+- **Current milestone:** M5 — Offline synchronization backend
+- **Current sprint:** B5.1 — Devices, event contract & idempotency
 - **Status:** DONE
-- **Next gate:** B4.5 implementation audit; local gate passed, PostgreSQL integration validation pending externally
+- **Next gate:** B5.1 implementation audit; local gate passed, real PostgreSQL integration validation pending externally (M0–M4 and B5.1 included)
 
 Local policy: this machine has no Docker and will not install it. Do not check/start Docker or run PostgreSQL/Testcontainers here. B0.1 is complete locally. Keep real PostgreSQL integration tests for another environment; they are not part of the local gate and must not be reported as passed without execution.
 
@@ -193,11 +193,12 @@ Goal: owner control and operational visibility.
 **Scope:** persistent Notification center, 30-day job, read state; Web Push only after internal center is stable.
 
 ### B4.5 — Replenishment suggestion
-**Status:** DONE — implementation and local gate complete; audit and real PostgreSQL integration validation pending externally.
+**Status:** DONE / audited locally — real PostgreSQL integration validation pending externally.
 **Requirements:** FR-INV-008, FR-RPT-006 P1.
 **Scope:** explainable historical-consumption suggestion; never auto-purchase.
 
 **M4 gate:** owner can understand sales, stock risk, commissions and alerts without SQL.
+**M4 status:** implementation and static review completed; real PostgreSQL integration validation pending externally.
 
 ---
 
@@ -205,6 +206,7 @@ Goal: owner control and operational visibility.
 Goal: safe limited contingency sync.
 
 ### B5.1 — Devices, event contract & idempotency
+**Status:** DONE — implementation and local gate complete; implementation audit and real PostgreSQL integration validation pending externally.
 **Requirements:** FR-OFF-002, BR-018.
 **Scope:** SyncDevice/SyncEvent, event versioning, idempotency storage.
 
