@@ -40,6 +40,8 @@ public sealed class ProjectDependencyTests
             || dependency.StartsWith("Npgsql", StringComparison.OrdinalIgnoreCase)
             || dependency.StartsWith("ClosedXML", StringComparison.OrdinalIgnoreCase)
             || dependency.StartsWith("DocumentFormat.OpenXml", StringComparison.OrdinalIgnoreCase)
+            || dependency.StartsWith("PDFsharp", StringComparison.OrdinalIgnoreCase)
+            || dependency.StartsWith("PdfPig", StringComparison.OrdinalIgnoreCase)
             || dependency.StartsWith("Microsoft.AspNetCore", StringComparison.OrdinalIgnoreCase));
         Assert.Empty(project.Descendants("FrameworkReference"));
     }
