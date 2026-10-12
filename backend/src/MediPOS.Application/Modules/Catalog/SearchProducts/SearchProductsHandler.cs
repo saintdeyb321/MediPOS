@@ -1,6 +1,6 @@
-using MediPOS.Application.Modules.IdentityAccess.OperationalAccess;
 using MediPOS.Application.Errors;
 using MediPOS.Application.Modules.Branches;
+using MediPOS.Application.Modules.IdentityAccess.OperationalAccess;
 using MediPOS.Application.Modules.Inventory;
 
 namespace MediPOS.Application.Modules.Catalog.SearchProducts;

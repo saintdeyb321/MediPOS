@@ -1,6 +1,6 @@
+using MediPOS.Application.Modules.IdentityAccess;
 using MediPOS.Application.Modules.IdentityAccess.Authentication;
 using MediPOS.Application.Modules.IdentityAccess.CreateMembership;
-using MediPOS.Application.Modules.IdentityAccess;
 using MediPOS.Application.Modules.IdentityAccess.OperationalAccess;
 using MediPOS.Application.Modules.TenancyLicensing;
 using Microsoft.Extensions.DependencyInjection;

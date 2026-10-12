@@ -80,6 +80,7 @@ public sealed class AdjustStockTests
 
     private sealed class Transactions : IStockAdjustmentTransaction
     {
+        public Task<Guid?> FindLotBranchAsync(Guid tenantId, Guid inventoryLotId, CancellationToken token) => Task.FromResult(Exists ? (Guid?)Lot.BranchId : null);
         public InventoryLot Lot { get; } = InventoryDomainTests.Lot(10m, InventoryDomainTests.Today);
         public Scope? Scope { get; private set; }
         public bool Allowed { get; set; } = true;

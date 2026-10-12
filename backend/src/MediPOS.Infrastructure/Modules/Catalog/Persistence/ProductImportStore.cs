@@ -60,8 +60,9 @@ internal sealed class ProductImportStore(MediPosDbContext context, TimeProvider 
     }
 
     public async Task<ImportRowResult> ImportRowAsync(ImportJob job, int rowNumber, BusinessProduct product, ProductUnit baseUnit,
-        CancellationToken cancellationToken)
+        Func<CancellationToken, Task> reauthorize, CancellationToken cancellationToken)
     {
+        ArgumentNullException.ThrowIfNull(reauthorize);
         PrepareWrite(job.TenantId);
         if (product.TenantId != job.TenantId || baseUnit.TenantId != job.TenantId || baseUnit.BusinessProductId != product.Id ||
             !baseUnit.IsBaseUnit || !baseUnit.IsActive || baseUnit.ConversionToBase != 1m || product.GlobalProductId is not null)
@@ -84,6 +85,8 @@ internal sealed class ProductImportStore(MediPosDbContext context, TimeProvider 
             }
             context.ImportRowResults.Add(result);
             await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+            // Save may wait on constraints/row locks. An obsolete caller must not commit this row.
+            await reauthorize(cancellationToken).ConfigureAwait(false);
             await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
             return result;
         }
@@ -99,14 +102,16 @@ internal sealed class ProductImportStore(MediPosDbContext context, TimeProvider 
         finally { context.ChangeTracker.Clear(); }
     }
 
-    public async Task CompleteAsync(ImportJob job, AuditLog summary, CancellationToken cancellationToken)
+    public async Task CompleteAsync(ImportJob job, AuditLog summary, Func<CancellationToken, Task> reauthorize, CancellationToken cancellationToken)
     {
+        ArgumentNullException.ThrowIfNull(reauthorize);
         PrepareWrite(job.TenantId);
         try
         {
             await using var transaction = await context.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
             var persisted = await LockJobAsync(job.TenantId, job.Id, cancellationToken).ConfigureAwait(false)
                 ?? throw new ApplicationErrorException(ProductImportErrors.JobNotFound);
+            await reauthorize(cancellationToken).ConfigureAwait(false);
             var counts = await CountsAsync(job.Id, cancellationToken).ConfigureAwait(false);
             if (job.Status != ImportJobStatus.Completed || job.TotalRows != persisted.TotalRows || job.ActorId != persisted.ActorId ||
                 job.ImportedRows != counts.Imported || job.InvalidRows != counts.Invalid || summary.ActorId != persisted.ActorId ||
@@ -120,6 +125,7 @@ internal sealed class ProductImportStore(MediPosDbContext context, TimeProvider 
             persisted.Complete(counts.Imported, counts.Invalid, job.CompletedAt.Value);
             context.AddAudit(summary, persisted.TenantId, AuditAction.CatalogProductsImported, persisted.Id);
             await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+            await reauthorize(cancellationToken).ConfigureAwait(false);
             await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
         }
         finally { context.ChangeTracker.Clear(); }

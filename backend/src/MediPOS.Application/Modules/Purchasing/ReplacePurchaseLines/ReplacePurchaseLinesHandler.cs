@@ -1,8 +1,8 @@
-using MediPOS.Application.Modules.IdentityAccess.OperationalAccess;
 using MediPOS.Application.Errors;
 using MediPOS.Application.Modules.AuditSupport;
 using MediPOS.Application.Modules.Catalog;
 using MediPOS.Application.Modules.Catalog.ReplaceProductUnits;
+using MediPOS.Application.Modules.IdentityAccess.OperationalAccess;
 using MediPOS.Application.Modules.TenancyLicensing;
 using MediPOS.Domain.Modules.Purchasing;
 
@@ -26,10 +26,15 @@ public sealed class ReplacePurchaseLinesHandler(IPurchasingStore store, IBusines
         ArgumentNullException.ThrowIfNull(command);
         AuditTrail.RequireActor(command.ActorId);
         await authorization.IdentifyForBranchLookupAsync(command.TenantId, command.ActorId, TenantOperation.Purchasing, cancellationToken).ConfigureAwait(false);
-        if (command.Lines is null) throw new ApplicationErrorException(ApplicationErrors.InvalidRequest);
+        if (command.PurchaseId == Guid.Empty || command.Lines is null) throw new ApplicationErrorException(ApplicationErrors.InvalidRequest);
+        var branchId = await store.FindPurchaseBranchAsync(command.TenantId, command.PurchaseId, cancellationToken).ConfigureAwait(false)
+            ?? throw new ApplicationErrorException(PurchasingErrors.PurchaseNotFound);
+        await authorization.RequireAsync(command.TenantId, branchId, command.ActorId, TenantOperation.Purchasing, cancellationToken).ConfigureAwait(false);
         await using var scope = await PurchasingValidation.BeginAsync(command.TenantId, provisioning, clock, cancellationToken).ConfigureAwait(false);
-        var purchase = await PurchasingValidation.LockAsync(command.TenantId, command.PurchaseId, store, cancellationToken).ConfigureAwait(false);
+        await authorization.RequireAsync(command.TenantId, branchId, command.ActorId, TenantOperation.Purchasing, cancellationToken).ConfigureAwait(false);
+        var purchase = await PurchasingValidation.LockAsync(command.TenantId, command.PurchaseId, branchId, store, cancellationToken).ConfigureAwait(false);
         await authorization.RequireAsync(command.TenantId, purchase.BranchId, command.ActorId, TenantOperation.Purchasing, cancellationToken).ConfigureAwait(false);
+        PurchasingValidation.RequireDraft(purchase);
         var lines = new List<PurchaseLine>(command.Lines.Count);
         foreach (var input in command.Lines)
         {

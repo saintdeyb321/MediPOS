@@ -3,10 +3,11 @@ using MediPOS.Domain.Modules.Inventory;
 
 namespace MediPOS.Application.Modules.Inventory;
 
-// Internal commands use the authenticated server tenant/actor; callers enforce role, branch and schedule.
+// The handler resolves only the lot's branch, authorizes it, then locks the lot and revalidates access.
 // This boundary owns the explicit transaction and the lock of this single lot, never a tenant/license lock.
 public interface IStockAdjustmentTransaction
 {
+    Task<Guid?> FindLotBranchAsync(Guid tenantId, Guid inventoryLotId, CancellationToken cancellationToken);
     Task<IStockAdjustmentScope?> BeginAsync(Guid tenantId, Guid inventoryLotId, CancellationToken cancellationToken);
 }
 

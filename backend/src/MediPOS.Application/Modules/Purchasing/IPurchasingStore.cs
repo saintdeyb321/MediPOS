@@ -3,18 +3,20 @@ using MediPOS.Domain.Modules.Purchasing;
 
 namespace MediPOS.Application.Modules.Purchasing;
 
-// Commands and queries use the authenticated server tenant. Callers enforce membership/role,
-// branch and schedule authorization before invoking these internal use cases.
+// Handlers authorize the server identity and branch before accessing documentary/financial data.
 public interface IPurchasingStore
 {
     Task<Supplier?> FindSupplierAsync(Guid tenantId, Guid supplierId, CancellationToken cancellationToken);
     Task AddSupplierAsync(Supplier supplier, CancellationToken cancellationToken);
     Task AddPurchaseAsync(Purchase purchase, CancellationToken cancellationToken);
     Task<Purchase?> LockPurchaseAsync(Guid tenantId, Guid purchaseId, CancellationToken cancellationToken);
+    Task<Guid?> FindPurchaseBranchAsync(Guid tenantId, Guid purchaseId, CancellationToken cancellationToken);
+    Task<Purchase?> LockPurchaseAsync(Guid tenantId, Guid purchaseId, Guid branchId, CancellationToken cancellationToken);
     Task<IReadOnlyList<PurchaseLine>> FindLinesAsync(Guid tenantId, Guid purchaseId, CancellationToken cancellationToken);
     Task ReplaceLinesAsync(Purchase purchase, IReadOnlyList<PurchaseLine> lines, CancellationToken cancellationToken);
     Task SaveConfirmationAsync(Purchase purchase, AuditLog audit, CancellationToken cancellationToken);
     Task<IReadOnlyList<Purchase>> FindByDocumentReferenceAsync(Guid tenantId, string reference, CancellationToken cancellationToken);
+    Task<IReadOnlyList<Purchase>> FindByDocumentReferenceAsync(Guid tenantId, string reference, Guid? branchId, int offset, int limit, CancellationToken cancellationToken);
 }
 
 public sealed record PurchaseDetails(Guid Id, Guid BranchId, Guid? SupplierId, string? DocumentReference,

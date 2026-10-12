@@ -1,6 +1,6 @@
-using MediPOS.Application.Modules.IdentityAccess.OperationalAccess;
 using MediPOS.Application.Errors;
 using MediPOS.Application.Modules.AuditSupport;
+using MediPOS.Application.Modules.IdentityAccess.OperationalAccess;
 using MediPOS.Application.Modules.TenancyLicensing;
 using MediPOS.Domain.Modules.AuditSupport;
 using MediPOS.Domain.Modules.Branches;
@@ -18,6 +18,7 @@ public sealed class CreateBranchHandler(IBranchesStore store, ITenantLicenseProv
             throw new ApplicationErrorException(ApplicationErrors.TenantNotFound);
         await using var scope = await licenseProvisioning.BeginAsync(command.TenantId, cancellationToken).ConfigureAwait(false)
             ?? throw new ApplicationErrorException(ApplicationErrors.LicenseNotFound);
+        await authorization.RequireAsync(command.TenantId, null, command.ActorId, TenantOperation.Administration, cancellationToken).ConfigureAwait(false);
         var now = timeProvider.GetUtcNow();
         if (scope.TenantId != command.TenantId)
             throw new ApplicationErrorException(ApplicationErrors.TenantScopeConflict);

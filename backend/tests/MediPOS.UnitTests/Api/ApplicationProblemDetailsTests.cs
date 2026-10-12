@@ -4,8 +4,8 @@ using MediPOS.Api.Errors;
 using MediPOS.Application.Errors;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace MediPOS.UnitTests.Api;
 

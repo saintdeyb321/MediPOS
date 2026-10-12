@@ -1,7 +1,7 @@
-using MediPOS.Application.Modules.IdentityAccess.OperationalAccess;
 using System.Text.Json;
 using MediPOS.Application.Errors;
 using MediPOS.Application.Modules.AuditSupport;
+using MediPOS.Application.Modules.IdentityAccess.OperationalAccess;
 using MediPOS.Domain.Modules.AuditSupport;
 using MediPOS.Domain.Modules.Inventory;
 
@@ -21,6 +21,9 @@ public sealed class AdjustStockHandler(IStockAdjustmentTransaction transactions,
         if (command.TenantId == Guid.Empty || command.InventoryLotId == Guid.Empty || command.QuantityDeltaBase == 0 ||
             string.IsNullOrWhiteSpace(command.Reason) || command.Reason.Trim().Length > StockMovement.MaximumReasonLength)
             throw new ApplicationErrorException(ApplicationErrors.InvalidRequest);
+        var branchId = await transactions.FindLotBranchAsync(command.TenantId, command.InventoryLotId, cancellationToken).ConfigureAwait(false)
+            ?? throw new ApplicationErrorException(InventoryErrors.LotNotFound);
+        await authorization.RequireAsync(command.TenantId, branchId, command.ActorId, TenantOperation.Inventory, cancellationToken).ConfigureAwait(false);
         await using var scope = await transactions.BeginAsync(command.TenantId, command.InventoryLotId, cancellationToken).ConfigureAwait(false)
             ?? throw new ApplicationErrorException(InventoryErrors.LotNotFound);
         if (scope.Lot.TenantId != command.TenantId) throw new ApplicationErrorException(ApplicationErrors.TenantScopeConflict);

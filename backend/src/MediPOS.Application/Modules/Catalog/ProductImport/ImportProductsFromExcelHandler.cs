@@ -1,7 +1,7 @@
-using MediPOS.Application.Modules.IdentityAccess.OperationalAccess;
 using System.Text.Json;
 using MediPOS.Application.Errors;
 using MediPOS.Application.Modules.AuditSupport;
+using MediPOS.Application.Modules.IdentityAccess.OperationalAccess;
 using MediPOS.Domain.Modules.AuditSupport;
 using MediPOS.Domain.Modules.Catalog.ProductImport;
 
@@ -56,17 +56,17 @@ public sealed class ImportProductsFromExcelHandler(IProductImportWorkbookReader 
             foreach (var row in rows.Where(value => value.Error is null))
             {
                 cancellationToken.ThrowIfCancellationRequested();
-        await authorization.RequireAsync(command.TenantId, null, command.ActorId, TenantOperation.Administration, cancellationToken).ConfigureAwait(false);
-                results.Add(await store.ImportRowAsync(job, row.RowNumber, row.Product!, row.BaseUnit!, cancellationToken).ConfigureAwait(false));
+                await authorization.RequireAsync(command.TenantId, null, command.ActorId, TenantOperation.Administration, cancellationToken).ConfigureAwait(false);
+                results.Add(await store.ImportRowAsync(job, row.RowNumber, row.Product!, row.BaseUnit!, ReauthorizeAsync, cancellationToken).ConfigureAwait(false));
             }
             var imported = results.Count(value => value.Status == ImportRowStatus.Imported);
             var invalid = results.Count - imported;
             now = clock.GetUtcNow();
-        await authorization.RequireAsync(command.TenantId, null, command.ActorId, TenantOperation.Administration, cancellationToken).ConfigureAwait(false);
+            await authorization.RequireAsync(command.TenantId, null, command.ActorId, TenantOperation.Administration, cancellationToken).ConfigureAwait(false);
             job.Complete(imported, invalid, now);
             var summary = AuditTrail.Record(command.TenantId, command.ActorId, AuditAction.CatalogProductsImported, job.Id, now, null,
                 JsonSerializer.Serialize(new { totalRows = job.TotalRows, importedRows = imported, invalidRows = invalid }, JsonOptions));
-            await store.CompleteAsync(job, summary, cancellationToken).ConfigureAwait(false);
+            await store.CompleteAsync(job, summary, ReauthorizeAsync, cancellationToken).ConfigureAwait(false);
         }
         catch (ApplicationErrorException error) when (error.Error.Category == ErrorCategory.Forbidden)
         {
@@ -85,6 +85,9 @@ public sealed class ImportProductsFromExcelHandler(IProductImportWorkbookReader 
         }
         // The synchronous result is the first bounded page; all outcomes remain recoverable through GetImportJobResult.
         return await new GetImportJobResultHandler(store, authorization).HandleAsync(new(command.TenantId, job.Id), cancellationToken).ConfigureAwait(false);
+
+        Task ReauthorizeAsync(CancellationToken token) => authorization.RequireAsync(command.TenantId, null,
+            command.ActorId, TenantOperation.Administration, token);
     }
 
     private async Task<bool> TryFailAsync(Guid tenantId, Guid jobId)

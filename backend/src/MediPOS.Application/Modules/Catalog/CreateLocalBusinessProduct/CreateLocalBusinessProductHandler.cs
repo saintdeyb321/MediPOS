@@ -1,6 +1,6 @@
-using MediPOS.Application.Modules.IdentityAccess.OperationalAccess;
 using MediPOS.Application.Errors;
 using MediPOS.Application.Modules.AuditSupport;
+using MediPOS.Application.Modules.IdentityAccess.OperationalAccess;
 using MediPOS.Application.Modules.TenancyLicensing;
 using MediPOS.Domain.Modules.AuditSupport;
 using MediPOS.Domain.Modules.Catalog;
@@ -24,6 +24,7 @@ public sealed class CreateLocalBusinessProductHandler(
             throw new ApplicationErrorException(ApplicationErrors.InvalidRequest);
         await using var scope = await provisioning.BeginAsync(command.TenantId, cancellationToken).ConfigureAwait(false)
             ?? throw new ApplicationErrorException(ApplicationErrors.LicenseNotFound);
+        await authorization.RequireAsync(command.TenantId, null, command.ActorId, TenantOperation.Administration, cancellationToken).ConfigureAwait(false);
         if (scope.TenantId != command.TenantId)
             throw new ApplicationErrorException(ApplicationErrors.TenantScopeConflict);
         var now = timeProvider.GetUtcNow();

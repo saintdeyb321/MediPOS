@@ -5,8 +5,8 @@ This is the single execution roadmap for the backend. Prompts are given in chat 
 ## Working state
 - **Current milestone:** M8 — Backend hardening for real pilot
 - **Current sprint:** B8.1 — Security review
-- **Status:** IN_PROGRESS. B7.3/B7.4 are voluntarily deferred and excluded from the initial MVP; M7 PostgreSQL validation remains pending.
-- **Next gate:** Complete the security review and local gate; validate PostgreSQL externally and activate trusted production authentication/session and least-privilege runtime configuration before a commercial pilot.
+- **Status:** DONE for B8.1's local security review and hardening. M8 remains incomplete; B7.3/B7.4 are voluntarily deferred and excluded from the initial MVP, and M7 PostgreSQL validation remains pending.
+- **Next gate:** Validate PostgreSQL externally and activate trusted production authentication/session and least-privilege runtime configuration before a commercial pilot. B8.2 has not started.
 
 Local policy: this machine has no Docker and will not install it. Do not check/start Docker or run PostgreSQL/Testcontainers here. B0.1 is complete locally. Keep real PostgreSQL integration tests for another environment; they are not part of the local gate and must not be reported as passed without execution.
 
@@ -295,10 +295,15 @@ Goal: production-quality MVP backend.
 
 ### B8.1 — Security review
 Tenant isolation, authz matrix, file validation, rate limits, CSRF/CORS/session review, secret/log audit.
-**Status:** IN_PROGRESS. Review actual published/internal surfaces without activating production authentication, tax delivery or new operational endpoints. PostgreSQL validation and production authentication remain pilot activation conditions.
+**Status:** DONE for the local review and hardening; no known unresolved P0/P1 within the reviewed scope. Foundational handlers fail closed without trusted identity, apply the Owner/Pharmacist/Cashier policy and revalidate after waits/before commit. Initial Owner provisioning requires independent platform authority and serialized history checks; shared supplier creation is Owner-only. Restricted purchase queries filter and paginate in SQL, record lookups expose only the branch before authorization, and Excel row/completion transactions reauthorize before commit. Commercial connections reject privileged database roles and multiplexing; migrations and restricted catalog hosts retain separate composition.
+
+**Validation:** local restore/build (zero warnings/errors), 1914 unit tests, 8 architecture tests, full format verification and offline EF model check passed. 17 new real PostgreSQL security cases are prepared and compiled, NO EJECUTADAS: restricted/privileged roles, FORCE RLS, pooling/reopening, tenant/branch query scope, revocation during waits, concurrent/historical Owner bootstrap and import rollback. Existing commercial regression suites remain prepared for external PostgreSQL execution; no migration or schema change was introduced.
+
+**Pilot activation conditions:** execute real PostgreSQL security/transaction/concurrency regression; integrate trusted production OIDC/session and independent platform administration; provision least-privilege runtime credentials and secret management; configure hosting/origins, session-dependent CORS/CSRF and rate limits for the endpoints actually activated. File-input, error/log and current HTTP surface reviews are complete; the API still exposes only health and Development-only OpenAPI. No operational endpoint, production authentication or external tax delivery was enabled. These conditions are pending, not validated production readiness.
 
 ### B8.2 — Performance/load targets
 Validate catalog search p95 target (<500 ms target from baseline) and online sale confirmation target (<1 s excluding external integrations) on representative data/hardware; optimize measured bottlenecks only.
+**Status:** NOT_STARTED.
 
 ### B8.3 — Backup/recovery & migration rehearsal
 Daily external backup process, destructive-migration backup policy, isolated restore rehearsal and documented recovery checks.

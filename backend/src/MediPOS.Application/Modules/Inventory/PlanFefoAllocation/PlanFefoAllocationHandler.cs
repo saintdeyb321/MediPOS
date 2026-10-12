@@ -1,7 +1,7 @@
-using MediPOS.Application.Modules.IdentityAccess.OperationalAccess;
 using MediPOS.Application.Errors;
 using MediPOS.Application.Modules.Branches;
 using MediPOS.Application.Modules.Catalog;
+using MediPOS.Application.Modules.IdentityAccess.OperationalAccess;
 using MediPOS.Domain.Modules.Catalog;
 using MediPOS.Domain.Modules.Inventory;
 

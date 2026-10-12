@@ -1,6 +1,6 @@
-using MediPOS.Application.Modules.IdentityAccess.Authentication;
 using MediPOS.Application.Errors;
 using MediPOS.Application.Modules.AuditSupport;
+using MediPOS.Application.Modules.IdentityAccess.Authentication;
 using MediPOS.Domain.Modules.AuditSupport;
 
 namespace MediPOS.Application.Modules.TenancyLicensing.ReactivateLicense;
@@ -23,7 +23,7 @@ public sealed class ReactivateLicenseHandler(ITenancyLicensingStore store, TimeP
         if (license.Changes.Count != count)
         {
             var audit = AuditTrail.Record(command.TenantId, command.ActorId, AuditAction.LicenseReactivated, license.Id, now, before, AuditTrail.LicenseState(license));
-        await PlatformAdministrationAccess.RequireAsync(administration, command.ActorId, cancellationToken).ConfigureAwait(false);
+            await PlatformAdministrationAccess.RequireAsync(administration, command.ActorId, cancellationToken).ConfigureAwait(false);
             await store.SaveLicenseAsync(license, audit, cancellationToken).ConfigureAwait(false);
         }
         return LicenseDetails.From(license);

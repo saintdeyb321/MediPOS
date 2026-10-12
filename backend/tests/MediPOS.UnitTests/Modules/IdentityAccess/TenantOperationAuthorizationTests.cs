@@ -101,7 +101,7 @@ public sealed class TenantOperationAuthorizationTests
             new PlatformAdministrationStub(Guid.NewGuid()), owner.User.UserId, TestContext.Current.CancellationToken))).Error.Code);
     }
 
-    private sealed class Setup
+    internal sealed class Setup
     {
         public Tenant Tenant { get; } = Tenant.Create("Synthetic pharmacy", Now.AddDays(-1), Now.AddMonths(1), 3, LicenseStatus.Active, Guid.NewGuid(), Now);
         public Guid Branch { get; } = Guid.NewGuid();
@@ -119,13 +119,13 @@ public sealed class TenantOperationAuthorizationTests
             Policy = new(new(User, Reader, new TenantDataContext()), Clock);
         }
     }
-    private sealed class Clock : TimeProvider
+    internal sealed class Clock : TimeProvider
     {
         public DateTimeOffset Instant { get; set; } = Now;
         public override DateTimeOffset GetUtcNow() => Instant;
     }
-    private sealed class Session : IAuthenticatedMediPosUser { public Guid? UserId { get; set; } }
-    private sealed class Reader(OperationalAccessSnapshot snapshot) : IOperationalAccessReader
+    internal sealed class Session : IAuthenticatedMediPosUser { public Guid? UserId { get; set; } }
+    internal sealed class Reader(OperationalAccessSnapshot snapshot) : IOperationalAccessReader
     {
         public OperationalAccessSnapshot Snapshot { get; set; } = snapshot;
         public Task<OperationalAccessSnapshot> ReadAsync(Guid userId, Guid tenantId, Guid? branchId, CancellationToken cancellationToken) => Task.FromResult(Snapshot);

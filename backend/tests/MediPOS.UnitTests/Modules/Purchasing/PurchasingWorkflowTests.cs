@@ -174,6 +174,9 @@ public sealed class PurchasingWorkflowTests
         public bool FailSave { get; set; }
         public int Replacements { get; private set; }
         public Action? AfterLock { get; set; }
+        public Task<Guid?> FindPurchaseBranchAsync(Guid tenantId, Guid purchaseId, CancellationToken token) => Task.FromResult<Guid?>(purchase.BranchId);
+        public Task<Purchase?> LockPurchaseAsync(Guid tenantId, Guid purchaseId, Guid branchId, CancellationToken token) => LockPurchaseAsync(tenantId, purchaseId, token);
+        public Task<IReadOnlyList<Purchase>> FindByDocumentReferenceAsync(Guid tenantId, string reference, Guid? branchId, int offset, int limit, CancellationToken token) => throw new NotSupportedException();
         public Task<Purchase?> LockPurchaseAsync(Guid tenantId, Guid purchaseId, CancellationToken cancellationToken)
         { AfterLock?.Invoke(); return Task.FromResult<Purchase?>(purchase); }
         public Task<IReadOnlyList<PurchaseLine>> FindLinesAsync(Guid tenantId, Guid purchaseId, CancellationToken cancellationToken) => Task.FromResult(Lines);

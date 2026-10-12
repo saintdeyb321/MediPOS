@@ -93,6 +93,7 @@ Administration of memberships, assignments and schedules requires an authenticat
 - **FR-PUR-003 P0** Catalog-assisted product entry during purchase.
 - **FR-PUR-004 P0** Purchase document/reference searchable.
 Manual purchasing operations require Owner, or Pharmacist with a valid license, active membership, assigned branch and permitted schedule. Reference queries by Pharmacist are confined to that authorized branch.
+Supplier creation affects the shared tenant catalog and requires Owner; branch purchasing permission alone does not grant supplier administration.
 - **FR-PUR-005 P1** Import supplier UBL XML into reviewable pre-purchase.
 - **FR-PUR-006 P2** Evaluate SIRE/SUNAT purchase prefill only after real technical validation.
 

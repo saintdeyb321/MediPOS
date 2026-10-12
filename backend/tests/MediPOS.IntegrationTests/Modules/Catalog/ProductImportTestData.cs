@@ -59,9 +59,9 @@ internal static class ProductImportTestData
         public Task StartAsync(ImportJob job, CancellationToken cancellationToken) => inner.StartAsync(job, cancellationToken);
         public Task SaveInvalidRowsAsync(ImportJob job, IReadOnlyList<ImportRowResult> rows, CancellationToken cancellationToken) =>
             inner.SaveInvalidRowsAsync(job, rows, cancellationToken);
-        public Task<ImportRowResult> ImportRowAsync(ImportJob job, int rowNumber, BusinessProduct product, ProductUnit baseUnit, CancellationToken cancellationToken) =>
-            inner.ImportRowAsync(job, rowNumber, product, baseUnit, cancellationToken);
-        public Task CompleteAsync(ImportJob job, AuditLog summary, CancellationToken cancellationToken) => inner.CompleteAsync(job, summary, cancellationToken);
+        public Task<ImportRowResult> ImportRowAsync(ImportJob job, int rowNumber, BusinessProduct product, ProductUnit baseUnit, Func<CancellationToken, Task> reauthorize, CancellationToken cancellationToken) =>
+            inner.ImportRowAsync(job, rowNumber, product, baseUnit, reauthorize, cancellationToken);
+        public Task CompleteAsync(ImportJob job, AuditLog summary, Func<CancellationToken, Task> reauthorize, CancellationToken cancellationToken) => inner.CompleteAsync(job, summary, reauthorize, cancellationToken);
         public Task FailAsync(Guid tenantId, Guid jobId, DateTimeOffset at, CancellationToken cancellationToken) => inner.FailAsync(tenantId, jobId, at, cancellationToken);
         public Task<ImportJobPage?> FindAsync(Guid tenantId, Guid jobId, int afterRowNumber, int limit, CancellationToken cancellationToken) =>
             inner.FindAsync(tenantId, jobId, afterRowNumber, limit, cancellationToken);

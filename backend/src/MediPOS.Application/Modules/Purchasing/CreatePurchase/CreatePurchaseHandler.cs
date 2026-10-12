@@ -1,7 +1,7 @@
-using MediPOS.Application.Modules.IdentityAccess.OperationalAccess;
 using MediPOS.Application.Errors;
 using MediPOS.Application.Modules.AuditSupport;
 using MediPOS.Application.Modules.Branches;
+using MediPOS.Application.Modules.IdentityAccess.OperationalAccess;
 using MediPOS.Application.Modules.TenancyLicensing;
 using MediPOS.Domain.Modules.Purchasing;
 
@@ -20,6 +20,7 @@ public sealed class CreatePurchaseHandler(IPurchasingStore store, IBranchesStore
         if (command.BranchId == Guid.Empty || command.SupplierId == Guid.Empty)
             throw new ApplicationErrorException(ApplicationErrors.InvalidRequest);
         await using var scope = await PurchasingValidation.BeginAsync(command.TenantId, provisioning, clock, cancellationToken).ConfigureAwait(false);
+        await authorization.RequireAsync(command.TenantId, command.BranchId, command.ActorId, TenantOperation.Purchasing, cancellationToken).ConfigureAwait(false);
         var purchase = await PurchasingValidation.CreateDraftAsync(command.TenantId, command.BranchId, command.SupplierId,
             command.DocumentReference, command.ActorId, branches, store, clock.GetUtcNow(), cancellationToken).ConfigureAwait(false);
         await store.AddPurchaseAsync(purchase, cancellationToken).ConfigureAwait(false);

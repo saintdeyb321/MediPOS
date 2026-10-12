@@ -5,7 +5,7 @@ using MediPOS.Domain.Modules.TenancyLicensing;
 
 namespace MediPOS.Application.Modules.Catalog.ProductImport;
 
-// Server-selected tenant/actor only; the caller authorizes catalog administration.
+// Server-selected tenant/actor only; the handler supplies its reauthorization inside each transaction.
 // Each accepted row commits product + base unit + row result together, without a tenant/license serialization lock.
 public interface IProductImportStore
 {
@@ -15,8 +15,8 @@ public interface IProductImportStore
     Task StartAsync(ImportJob job, CancellationToken cancellationToken);
     Task SaveInvalidRowsAsync(ImportJob job, IReadOnlyList<ImportRowResult> rows, CancellationToken cancellationToken);
     Task<ImportRowResult> ImportRowAsync(ImportJob job, int rowNumber, BusinessProduct product, ProductUnit baseUnit,
-        CancellationToken cancellationToken);
-    Task CompleteAsync(ImportJob job, AuditLog summary, CancellationToken cancellationToken);
+        Func<CancellationToken, Task> reauthorize, CancellationToken cancellationToken);
+    Task CompleteAsync(ImportJob job, AuditLog summary, Func<CancellationToken, Task> reauthorize, CancellationToken cancellationToken);
     Task FailAsync(Guid tenantId, Guid jobId, DateTimeOffset at, CancellationToken cancellationToken);
     Task<ImportJobPage?> FindAsync(Guid tenantId, Guid jobId, int afterRowNumber, int limit, CancellationToken cancellationToken);
 }

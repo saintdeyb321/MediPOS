@@ -25,12 +25,24 @@ internal sealed class PurchasingStore(MediPosDbContext context) : IPurchasingSto
         context.Purchases.Add(purchase);
         await context.SaveAuditedChangesAsync(cancellationToken).ConfigureAwait(false);
     }
-    public async Task<Purchase?> LockPurchaseAsync(Guid tenantId, Guid purchaseId, CancellationToken cancellationToken)
+    public Task<Guid?> FindPurchaseBranchAsync(Guid tenantId, Guid purchaseId, CancellationToken cancellationToken)
+    {
+        context.SelectTenant(tenantId);
+        return context.Purchases.AsNoTracking().Where(value => value.TenantId == tenantId && value.Id == purchaseId)
+            .Select(value => (Guid?)value.BranchId).SingleOrDefaultAsync(cancellationToken);
+    }
+    public Task<Purchase?> LockPurchaseAsync(Guid tenantId, Guid purchaseId, CancellationToken cancellationToken) =>
+        LockAsync(tenantId, purchaseId, null, cancellationToken);
+    public Task<Purchase?> LockPurchaseAsync(Guid tenantId, Guid purchaseId, Guid branchId, CancellationToken cancellationToken) =>
+        LockAsync(tenantId, purchaseId, branchId, cancellationToken);
+    private async Task<Purchase?> LockAsync(Guid tenantId, Guid purchaseId, Guid? branchId, CancellationToken cancellationToken)
     {
         RequireTransaction(tenantId);
         // Never let the identity map replace the freshly locked database state.
-        var purchase = await context.Purchases.FromSqlInterpolated(
-            $"SELECT p.* FROM purchases AS p WHERE p.tenant_id = {tenantId} AND p.id = {purchaseId} FOR UPDATE")
+        var query = branchId.HasValue ? context.Purchases.FromSqlInterpolated(
+            $"SELECT p.* FROM purchases AS p WHERE p.tenant_id = {tenantId} AND p.id = {purchaseId} AND p.branch_id = {branchId.Value} FOR UPDATE") : context.Purchases.FromSqlInterpolated(
+            $"SELECT p.* FROM purchases AS p WHERE p.tenant_id = {tenantId} AND p.id = {purchaseId} FOR UPDATE");
+        var purchase = await query
             .AsNoTracking().SingleOrDefaultAsync(cancellationToken).ConfigureAwait(false);
         if (purchase is null) return null;
         foreach (var entry in context.ChangeTracker.Entries<Purchase>().Where(value => value.Entity.Id == purchaseId).ToArray())
@@ -68,6 +80,14 @@ internal sealed class PurchasingStore(MediPosDbContext context) : IPurchasingSto
         context.SelectTenant(tenantId);
         return await context.Purchases.AsNoTracking().Where(value => value.DocumentReference == reference)
             .OrderByDescending(value => value.CreatedAt).ThenBy(value => value.Id).ToListAsync(cancellationToken).ConfigureAwait(false);
+    }
+    public async Task<IReadOnlyList<Purchase>> FindByDocumentReferenceAsync(Guid tenantId, string reference, Guid? branchId, int offset, int limit, CancellationToken cancellationToken)
+    {
+        context.SelectTenant(tenantId);
+        var query = context.Purchases.AsNoTracking().Where(value => value.TenantId == tenantId && value.DocumentReference == reference);
+        if (branchId.HasValue) query = query.Where(value => value.BranchId == branchId.Value);
+        return await query.OrderByDescending(value => value.CreatedAt).ThenBy(value => value.Id)
+            .Skip(offset).Take(limit).ToListAsync(cancellationToken).ConfigureAwait(false);
     }
     private void RequireTransaction(Guid tenantId)
     {

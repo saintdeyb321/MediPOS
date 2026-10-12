@@ -1,6 +1,6 @@
-using MediPOS.Application.Modules.IdentityAccess.Authentication;
 using MediPOS.Application.Errors;
 using MediPOS.Application.Modules.AuditSupport;
+using MediPOS.Application.Modules.IdentityAccess.Authentication;
 using MediPOS.Domain.Modules.AuditSupport;
 using MediPOS.Domain.Modules.TenancyLicensing;
 

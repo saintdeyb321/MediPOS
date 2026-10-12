@@ -1,5 +1,5 @@
-using MediPOS.Application.Modules.IdentityAccess.Authentication;
 using MediPOS.Application.Errors;
+using MediPOS.Application.Modules.IdentityAccess.Authentication;
 using MediPOS.Domain.Modules.Catalog;
 
 namespace MediPOS.Application.Modules.Catalog.CreateGlobalProduct;

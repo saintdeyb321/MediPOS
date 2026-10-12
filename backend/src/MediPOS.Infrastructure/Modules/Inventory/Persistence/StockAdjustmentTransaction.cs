@@ -12,6 +12,12 @@ namespace MediPOS.Infrastructure.Modules.Inventory.Persistence;
 
 internal sealed class StockAdjustmentTransaction(MediPosDbContext context) : IStockAdjustmentTransaction
 {
+    public Task<Guid?> FindLotBranchAsync(Guid tenantId, Guid inventoryLotId, CancellationToken cancellationToken)
+    {
+        context.SelectTenant(tenantId);
+        return context.InventoryLots.AsNoTracking().Where(value => value.TenantId == tenantId && value.Id == inventoryLotId)
+            .Select(value => (Guid?)value.BranchId).SingleOrDefaultAsync(cancellationToken);
+    }
     public async Task<IStockAdjustmentScope?> BeginAsync(Guid tenantId, Guid inventoryLotId, CancellationToken cancellationToken)
     {
         context.SelectTenant(tenantId);

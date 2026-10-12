@@ -78,4 +78,13 @@ internal static class PurchasingValidation
         RequireDraft(purchase);
         return purchase;
     }
+
+    public static async Task<Purchase> LockAsync(Guid tenantId, Guid purchaseId, Guid branchId, IPurchasingStore store, CancellationToken cancellationToken)
+    {
+        var purchase = await store.LockPurchaseAsync(tenantId, purchaseId, branchId, cancellationToken).ConfigureAwait(false)
+            ?? throw new ApplicationErrorException(PurchasingErrors.PurchaseNotFound);
+        if (purchase.TenantId != tenantId || purchase.BranchId != branchId)
+            throw new ApplicationErrorException(ApplicationErrors.TenantScopeConflict);
+        return purchase;
+    }
 }

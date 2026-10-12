@@ -1,8 +1,8 @@
-using MediPOS.Application.Modules.IdentityAccess.OperationalAccess;
 using System.Globalization;
 using System.Text.Json;
 using MediPOS.Application.Errors;
 using MediPOS.Application.Modules.AuditSupport;
+using MediPOS.Application.Modules.IdentityAccess.OperationalAccess;
 using MediPOS.Application.Modules.TenancyLicensing;
 using MediPOS.Domain.Modules.AuditSupport;
 using MediPOS.Domain.Modules.Catalog;
@@ -51,6 +51,7 @@ public sealed class ReplaceProductUnitsHandler(
             throw new ApplicationErrorException(ApplicationErrors.InvalidRequest);
         await using var scope = await provisioning.BeginAsync(command.TenantId, cancellationToken).ConfigureAwait(false)
             ?? throw new ApplicationErrorException(ApplicationErrors.LicenseNotFound);
+        await authorization.RequireAsync(command.TenantId, null, command.ActorId, TenantOperation.Administration, cancellationToken).ConfigureAwait(false);
         if (scope.TenantId != command.TenantId)
             throw new ApplicationErrorException(ApplicationErrors.TenantScopeConflict);
         var now = timeProvider.GetUtcNow();
@@ -69,7 +70,7 @@ public sealed class ReplaceProductUnitsHandler(
         if (string.Equals(before, after, StringComparison.Ordinal))
         {
             await authorization.RequireAsync(command.TenantId, null, command.ActorId, TenantOperation.Administration, cancellationToken).ConfigureAwait(false);
-        await scope.CompleteAsync(cancellationToken).ConfigureAwait(false);
+            await scope.CompleteAsync(cancellationToken).ConfigureAwait(false);
             return previous.Select(ProductUnitDetails.From).ToArray();
         }
         var audit = AuditTrail.Record(command.TenantId, command.ActorId, AuditAction.BusinessProductUnitsChanged,

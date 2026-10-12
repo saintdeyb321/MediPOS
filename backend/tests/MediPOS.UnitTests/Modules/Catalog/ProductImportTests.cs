@@ -4,7 +4,9 @@ using MediPOS.Application.Modules.Catalog.ProductImport;
 using MediPOS.Domain.Modules.AuditSupport;
 using MediPOS.Domain.Modules.Catalog;
 using MediPOS.Domain.Modules.Catalog.ProductImport;
+using MediPOS.Domain.Modules.IdentityAccess;
 using MediPOS.Domain.Modules.TenancyLicensing;
+using MediPOS.UnitTests.Modules.IdentityAccess;
 
 namespace MediPOS.UnitTests.Modules.Catalog;
 
@@ -237,6 +239,25 @@ public sealed class ProductImportTests
         Assert.Throws<ArgumentException>(() => ImportRowResult.Invalid(job, 4, "import.invalid", "Invalid"));
     }
 
+    [Fact]
+    public async Task AuthorityRevokedInsideRowTransactionIsNotSwallowedOrCommitted()
+    {
+        var access = new TenantOperationAuthorizationTests.Setup(TenantRole.Owner);
+        var store = new Store(access.Tenant.Id, access.User.UserId!.Value)
+        {
+            BeforeRowCommit = () => access.Membership.Deactivate(Now),
+        };
+        var handler = new ImportProductsFromExcelHandler(new Reader([Row(4)]), store, access.Clock, access.Policy);
+        using var input = new MemoryStream([1]);
+        var error = await Assert.ThrowsAsync<ApplicationErrorException>(() => handler.HandleAsync(
+            new(access.Tenant.Id, "synthetic.xlsx", input, access.User.UserId.Value), TestContext.Current.CancellationToken));
+        Assert.Equal("access.membership_inactive", error.Error.Code);
+        Assert.Empty(store.Writes);
+        Assert.Empty(store.Rows);
+        Assert.Empty(store.Audits);
+        Assert.Equal(ImportJobStatus.Failed, store.Job!.Status);
+    }
+
     private static async Task<ImportJobResult> RunAsync(Setup setup)
     {
         using var input = new MemoryStream([1]);
@@ -281,6 +302,7 @@ public sealed class ProductImportTests
         internal List<AuditLog> Audits { get; } = [];
         internal int? ConflictRow { get; set; }
         internal int? ThrowRow { get; set; }
+        internal Action? BeforeRowCommit { get; set; }
         public Task<License?> FindLicenseAsync(Guid tenantId, CancellationToken cancellationToken) => Task.FromResult(License);
         public Task<IReadOnlySet<Guid>> FindActiveCategoriesAsync(IReadOnlyCollection<Guid> ids, CancellationToken cancellationToken) =>
             Task.FromResult<IReadOnlySet<Guid>>(new HashSet<Guid> { Category });
@@ -289,18 +311,20 @@ public sealed class ProductImportTests
         public Task StartAsync(ImportJob job, CancellationToken cancellationToken) { Job = job; return Task.CompletedTask; }
         public Task SaveInvalidRowsAsync(ImportJob job, IReadOnlyList<ImportRowResult> rows, CancellationToken cancellationToken)
         { Rows.AddRange(rows); return Task.CompletedTask; }
-        public Task<ImportRowResult> ImportRowAsync(ImportJob job, int rowNumber, BusinessProduct product, ProductUnit baseUnit, CancellationToken cancellationToken)
+        public async Task<ImportRowResult> ImportRowAsync(ImportJob job, int rowNumber, BusinessProduct product, ProductUnit baseUnit, Func<CancellationToken, Task> reauthorize, CancellationToken cancellationToken)
         {
             if (rowNumber == ThrowRow) throw new IOException("internal infrastructure failure");
             var result = rowNumber == ConflictRow
                 ? ImportRowResult.Invalid(job, rowNumber, ProductImportErrors.DuplicateCode.Code, ProductImportErrors.DuplicateCode.Message)
                 : ImportRowResult.Imported(job, rowNumber, product);
+            BeforeRowCommit?.Invoke();
+            await reauthorize(cancellationToken);
             if (result.Status == ImportRowStatus.Imported) Writes.Add((product, baseUnit));
             Rows.Add(result);
-            return Task.FromResult(result);
+            return result;
         }
-        public Task CompleteAsync(ImportJob job, AuditLog summary, CancellationToken cancellationToken)
-        { Audits.Add(summary); return Task.CompletedTask; }
+        public async Task CompleteAsync(ImportJob job, AuditLog summary, Func<CancellationToken, Task> reauthorize, CancellationToken cancellationToken)
+        { await reauthorize(cancellationToken); Audits.Add(summary); }
         public Task FailAsync(Guid tenantId, Guid jobId, DateTimeOffset at, CancellationToken cancellationToken)
         {
             Job!.Fail(Rows.Count(value => value.Status == ImportRowStatus.Imported), Rows.Count(value => value.Status == ImportRowStatus.Invalid), at);
