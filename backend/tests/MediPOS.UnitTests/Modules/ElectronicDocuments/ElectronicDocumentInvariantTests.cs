@@ -92,7 +92,8 @@ public sealed class ElectronicDocumentInvariantTests
         Assert.Equal(expected, doc.Status); Assert.Equal("reserved", start.Outcome); Assert.Equal("started", start.Phase); Assert.Null(start.FinishedAtUtc);
         Assert.Equal(expected, completion.Outcome); Assert.Equal(start.IdempotencyKey, completion.IdempotencyKey); Assert.Equal(start.Number, completion.Number);
         Assert.Null(doc.ClaimToken); Assert.Null(doc.LeaseExpiresAtUtc);
-        if (outcome is DeliveryOutcome.Received or DeliveryOutcome.AuthorityAccepted or DeliveryOutcome.Simulated) Assert.Null(doc.LastErrorCode);
+        if (outcome is DeliveryOutcome.Received or DeliveryOutcome.AuthorityAccepted) Assert.Null(doc.LastErrorCode);
+        if (outcome == DeliveryOutcome.Simulated) Assert.Equal("test_result", doc.LastErrorCode);
         if (expected == ElectronicDocumentStates.Retry) Assert.Equal(Now.AddSeconds(30), doc.NextAttemptAtUtc); else Assert.Null(doc.NextAttemptAtUtc);
         Assert.Throws<ElectronicDocumentException>(() => doc.Complete(claim, outcome, "REF", "test", null, Now));
     }

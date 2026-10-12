@@ -21,15 +21,16 @@ public sealed class RunElectronicDocumentDelivery(IElectronicDeliveryWorkStore q
             if (claim is null) break;
             if (!await queue.BeginDispatchAsync(identity, claim, clock.GetUtcNow(), token).ConfigureAwait(false)) continue;
             ElectronicProviderResult result;
+            var verified = false;
             try
             {
                 result = await provider.SubmitAsync(claim, token).ConfigureAwait(false);
-                var verified = !provider.Capabilities.Simulation && result?.Outcome == DeliveryOutcome.AuthorityAccepted && result.Evidence is not null &&
+                verified = !provider.Capabilities.Simulation && result?.Outcome == DeliveryOutcome.AuthorityAccepted && result.Evidence is not null &&
                     await evidenceVerifier.VerifyAsync(result.Evidence, token).ConfigureAwait(false);
-                result = ElectronicProviderContract.Normalize(result, provider.Capabilities.Simulation, verified);
             }
             catch (Exception error) when (error is HttpRequestException or IOException or TimeoutException or OperationCanceledException)
             { result = ElectronicProviderContract.Unknown("delivery_transport_unknown"); }
+            result = ElectronicProviderContract.Normalize(result, provider.Capabilities.Simulation, verified);
             // A cancelled caller cannot erase a committed dispatch intent. Late responses are fenced by the queue.
             using var diagnostic = new CancellationTokenSource(TimeSpan.FromSeconds(5));
             await queue.CompleteAsync(identity, claim, result, clock.GetUtcNow(), diagnostic.Token).ConfigureAwait(false);

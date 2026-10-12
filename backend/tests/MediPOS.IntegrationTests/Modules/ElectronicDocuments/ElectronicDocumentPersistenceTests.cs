@@ -121,9 +121,10 @@ public sealed class ElectronicDocumentPersistenceTests(PostgreSqlFixture fixture
     }
     [Theory]
     [InlineData(DeliveryOutcome.Received, "simulated")]
-    [InlineData(DeliveryOutcome.Rejected, "rejected")]
-    [InlineData(DeliveryOutcome.TemporaryNotReceived, "retry_wait")]
-    [InlineData(DeliveryOutcome.Indeterminate, "uncertain")]
+    [InlineData(DeliveryOutcome.AuthorityAccepted, "simulated")]
+    [InlineData(DeliveryOutcome.Rejected, "simulated")]
+    [InlineData(DeliveryOutcome.TemporaryNotReceived, "simulated")]
+    [InlineData(DeliveryOutcome.Indeterminate, "simulated")]
     public async Task TypedProviderResultPersistsAcrossNewWorkerScopeWithoutCommercialWrites(DeliveryOutcome outcome, string expected)
     {
         var provider = new ElectronicDocumentTestData.Provider(new(outcome, "result", "R")); await using var services = Services(provider: provider);
@@ -131,6 +132,10 @@ public sealed class ElectronicDocumentPersistenceTests(PostgreSqlFixture fixture
         await using (var scope = services.CreateAsyncScope()) Assert.Equal(1, await scope.ServiceProvider.GetRequiredService<RunElectronicDocumentDelivery>().HandleAsync(setup.Command.TenantId, 10, Token));
         await using var context = fixture.CreateContext(setup.Command.TenantId); var doc = await context.ElectronicDocuments.SingleAsync(Token);
         Assert.Equal(expected, doc.Status); Assert.Equal(2, await context.ElectronicDocumentAttempts.CountAsync(Token)); Assert.Equal(before, await CommercialAsync(setup.Command.TenantId));
+        Assert.Equal("simulation", doc.ProviderStatus); Assert.Null(doc.EvidenceSha256); Assert.Null(doc.NextAttemptAtUtc);
+        Assert.StartsWith("simulation.", doc.LastErrorCode!, StringComparison.Ordinal);
+        var completion = await context.ElectronicDocumentAttempts.SingleAsync(v => v.Phase == "completed", Token);
+        Assert.Equal("simulated", completion.Outcome); Assert.Equal(doc.LastErrorCode, completion.ErrorCode);
         await using (var restart = services.CreateAsyncScope()) Assert.Equal(0, await restart.ServiceProvider.GetRequiredService<RunElectronicDocumentDelivery>().HandleAsync(setup.Command.TenantId, 10, Token));
         Assert.Equal(1, provider.Calls);
     }

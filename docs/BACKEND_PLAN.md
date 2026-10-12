@@ -4,9 +4,9 @@ This is the single execution roadmap for the backend. Prompts are given in chat 
 
 ## Working state
 - **Current milestone:** M7 — Tax & purchase-document integrations
-- **Current sprint:** B7.2 — Electronic documents core & durable delivery
-- **Status:** DONE locally; B7.1/B7.2 PostgreSQL validation and production authentication activation remain pending.
-- **Next gate:** Execute B7.1/B7.2 PostgreSQL tests externally and audit the electronic document core before production activation. Production authentication, a validated issuance profile, provider contract and technical delivery identity are pending. B7.3 remains NOT_STARTED.
+- **Current sprint:** B7.3 — Provider/sandbox pilot
+- **Status:** BLOCKED; no selected provider or verifiable contract is available locally. The simulation prerequisite is corrected and validated locally.
+- **Next gate:** Select the provider/modality and supply its official contract, authorized sandbox access through secure credential references, and approved fiscal profile. Execute PostgreSQL tests externally; production authentication and technical delivery identity remain pending.
 
 Local policy: this machine has no Docker and will not install it. Do not check/start Docker or run PostgreSQL/Testcontainers here. B0.1 is complete locally. Keep real PostgreSQL integration tests for another environment; they are not part of the local gate and must not be reported as passed without execution.
 
@@ -272,10 +272,14 @@ Goal: optional integrations without coupling the core.
 
 **Delivery:** bounded explicit processing with SKIP LOCKED, leases and claim tokens; a committed dispatch intent precedes the provider call outside all database transactions. Expired unsent claims can retry with bounded backoff; expired dispatched claims and transport uncertainty require manual reconciliation without automatic resend. Reception, authenticated authority evidence, rejection and simulation are distinct. A commercial void before dispatch blocks delivery; later voids preserve provider facts and surface a correction-review flag. Production provider, technical principal and evidence verification default to disabled; the deterministic fake exists only in test assemblies. No public endpoints or automatic external delivery. Financial history cannot be removed through automatic migration rollback.
 
-**Validation:** local restore/build (zero warnings), 1831 unit tests (72 B7.2), 8 architecture tests, full format verification, offline EF model check and SQL inspection passed. 21 real PostgreSQL cases are prepared and compiled for migration/RLS/FKs, concurrent requests/numbers/claims, recovery, fencing, rollback/audit, pooling, voids and commercial integrity; NO EJECUTADAS locally. Self-audit corrected mutation-before-validation, time overflow, stable snapshot enum codes and authorization/lease expiry during lock waits. B7.3 remains NOT_STARTED.
+**Validation:** local restore/build (zero warnings), 1831 unit tests (72 B7.2), 8 architecture tests, full format verification, offline EF model check and SQL inspection passed. 21 real PostgreSQL cases are prepared and compiled for migration/RLS/FKs, concurrent requests/numbers/claims, recovery, fencing, rollback/audit, pooling, voids and commercial integrity; NO EJECUTADAS locally. Self-audit corrected mutation-before-validation, time overflow, stable snapshot enum codes and authorization/lease expiry during lock waits. B7.3 was NOT_STARTED at B7.2 delivery.
 
 ### B7.3 — Provider/sandbox pilot
 **Scope:** integrate selected PSE/OSE/direct sandbox only after credentials/contract are known; resilient retries/observability.
+
+**Status:** BLOCKED. Local configuration/documentation contains no selected provider or verifiable contract. Only the mandatory simulation correction is integrated: every simulated result is terminal `simulated`, preserves a bounded sanitized diagnostic, and discards authority evidence. No historical records are rewritten; external delivery stays disabled.
+
+**Validation:** local restore/build (zero warnings), 1841 unit tests, 8 architecture tests, full format verification and offline EF model check passed. The 22 PostgreSQL cases are prepared and compiled, NO EJECUTADAS; sandbox validation is NO EJECUTADA. Provider selection, official sandbox/authentication and secure credential references, request/response/evidence/idempotency contracts and an approved fiscal issuance profile are required before implementing an external adapter. B7.4 remains NOT_STARTED.
 
 ### B7.4 — SIRE feasibility spike
 **Requirements:** FR-PUR-006 P2.

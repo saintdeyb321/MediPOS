@@ -17,7 +17,8 @@ public sealed class ElectronicDeliveryContractTests
     [InlineData(DeliveryOutcome.AuthorityAccepted, false, true, DeliveryOutcome.AuthorityAccepted)]
     [InlineData(DeliveryOutcome.AuthorityAccepted, true, true, DeliveryOutcome.Simulated)]
     [InlineData(DeliveryOutcome.Received, true, false, DeliveryOutcome.Simulated)]
-    [InlineData(DeliveryOutcome.Rejected, true, false, DeliveryOutcome.Rejected)]
+    [InlineData(DeliveryOutcome.Rejected, true, false, DeliveryOutcome.Simulated)]
+    [InlineData(DeliveryOutcome.Rejected, false, false, DeliveryOutcome.Rejected)]
     [InlineData(DeliveryOutcome.TemporaryNotReceived, false, false, DeliveryOutcome.TemporaryNotReceived)]
     [InlineData(DeliveryOutcome.Indeterminate, false, false, DeliveryOutcome.Indeterminate)]
     [InlineData(DeliveryOutcome.Simulated, false, false, DeliveryOutcome.Indeterminate)]
@@ -25,6 +26,54 @@ public sealed class ElectronicDeliveryContractTests
     {
         var result = new ElectronicProviderResult(outcome, "ok", "R1", new("SUNAT", new string('a', 64), "verification_reference"));
         Assert.Equal(expected, ElectronicProviderContract.Normalize(result, simulation, verified).Outcome);
+    }
+    [Theory]
+    [InlineData(DeliveryOutcome.Received, "received")]
+    [InlineData(DeliveryOutcome.AuthorityAccepted, "accepted")]
+    [InlineData(DeliveryOutcome.Rejected, "rejected")]
+    [InlineData(DeliveryOutcome.TemporaryNotReceived, "temporary_not_received")]
+    [InlineData(DeliveryOutcome.Indeterminate, "indeterminate")]
+    public async Task EverySimulatedOutcomeRemainsDiagnosticTestEvidenceThroughoutDelivery(DeliveryOutcome outcome, string label)
+    {
+        var source = new ElectronicProviderResult(outcome, "TEST_CODE_42", "TEST_REF", new("SUNAT", new string('a', 64), "synthetic_evidence"));
+        var normalized = ElectronicProviderContract.Normalize(source, simulation: true, verifiedEvidence: true);
+        var diagnostic = "simulation." + label + ".TEST_CODE_42";
+        Assert.Equal(DeliveryOutcome.Simulated, normalized.Outcome); Assert.Equal(diagnostic, normalized.Code);
+        Assert.Equal("TEST_REF", normalized.Reference); Assert.Null(normalized.Evidence);
+        var setup = new Setup(source);
+        Assert.Equal(1, await setup.Run.HandleAsync(setup.Data.Tenant, 1, Token));
+        Assert.Equal("simulated", setup.Document.Status); Assert.Equal("simulation", setup.Document.ProviderStatus);
+        Assert.Equal(diagnostic, setup.Document.LastErrorCode); Assert.Null(setup.Document.EvidenceSha256); Assert.Null(setup.Document.NextAttemptAtUtc);
+        var finished = Assert.Single(setup.Work.Events, v => v.Phase == "completed");
+        Assert.Equal("simulated", finished.Outcome); Assert.Equal(diagnostic, finished.ErrorCode); Assert.Equal("TEST_REF", finished.ProviderReference);
+        setup.Clock.NowUtc = setup.Clock.NowUtc.AddDays(1);
+        Assert.Equal(0, await setup.Run.HandleAsync(setup.Data.Tenant, 1, Token)); Assert.Equal(1, setup.Provider.Calls);
+    }
+    [Fact]
+    public void SimulatedRejectionDiagnosticsRespectPersistentLimitWithoutCopyingEvidence()
+    {
+        var result = ElectronicProviderContract.Normalize(new(DeliveryOutcome.Rejected, new string('E', 64), "TEST_REF", new("SUNAT", new string('a', 64), "synthetic")), true, true);
+        Assert.Equal(DeliveryOutcome.Simulated, result.Outcome); Assert.Equal(64, result.Code.Length);
+        Assert.StartsWith("simulation.rejected.", result.Code, StringComparison.Ordinal); Assert.EndsWith(new string('E', 44), result.Code, StringComparison.Ordinal);
+        Assert.Null(result.Evidence);
+    }
+    [Theory]
+    [InlineData("token=secret")]
+    [InlineData("bad\nresponse")]
+    public void InvalidSimulatedMetadataIsSanitizedAndStillCannotClaimRealOutcome(string unsafeText)
+    {
+        var result = ElectronicProviderContract.Normalize(new(DeliveryOutcome.Rejected, unsafeText, unsafeText), true, true);
+        Assert.Equal(DeliveryOutcome.Simulated, result.Outcome); Assert.Equal("simulation.indeterminate.provider_metadata_invalid", result.Code);
+        Assert.Null(result.Reference); Assert.Null(result.Evidence); Assert.DoesNotContain(unsafeText, result.Code, StringComparison.Ordinal);
+    }
+    [Fact]
+    public async Task SimulatedTransportTimeoutIsLabelledAsSimulationRatherThanTaxRejection()
+    {
+        var setup = new Setup(new(DeliveryOutcome.Rejected, "TEST_REJECTION")); setup.Provider.Failure = new TimeoutException("sensitive transport detail");
+        await setup.Run.HandleAsync(setup.Data.Tenant, 1, Token);
+        Assert.Equal("simulated", setup.Document.Status); Assert.Equal("simulation.indeterminate.delivery_transport_unknown", setup.Document.LastErrorCode);
+        Assert.Null(setup.Document.EvidenceSha256); Assert.Null(setup.Document.NextAttemptAtUtc);
+        Assert.Equal(setup.Document.LastErrorCode, Assert.Single(setup.Work.Events, v => v.Phase == "completed").ErrorCode);
     }
     [Theory]
     [InlineData("token=secret")]
@@ -66,7 +115,7 @@ public sealed class ElectronicDeliveryContractTests
     [InlineData("cancelled")]
     public async Task TransportFailuresAfterDispatchBecomeUncertainAndAreNeverResent(string failure)
     {
-        var setup = new Setup(new(DeliveryOutcome.Received, "received", "R"));
+        var setup = new Setup(new(DeliveryOutcome.Received, "received", "R"), simulation: false);
         setup.Provider.Failure = failure switch { "timeout" => new TimeoutException("sensitive"), "network" => new HttpRequestException("sensitive"), "io" => new IOException("sensitive"), _ => new OperationCanceledException() };
         await setup.Run.HandleAsync(setup.Data.Tenant, 1, Token); Assert.Equal("uncertain", setup.Document.Status);
         setup.Clock.NowUtc = setup.Clock.NowUtc.AddDays(1); Assert.Equal(0, await setup.Run.HandleAsync(setup.Data.Tenant, 1, Token));
@@ -75,7 +124,7 @@ public sealed class ElectronicDeliveryContractTests
     [Fact]
     public async Task TemporaryUnequivocallyNotReceivedHonorsPersistedBackoffAndMaximum()
     {
-        var setup = new Setup(new(DeliveryOutcome.TemporaryNotReceived, "not_received"));
+        var setup = new Setup(new(DeliveryOutcome.TemporaryNotReceived, "not_received"), simulation: false);
         for (var i = 1; i <= 5; i++)
         {
             Assert.Equal(1, await setup.Run.HandleAsync(setup.Data.Tenant, 100, Token)); Assert.Equal(i, setup.Provider.Calls);
@@ -118,9 +167,9 @@ public sealed class ElectronicDeliveryContractTests
         internal ElectronicDocumentTestData.Identity Identity { get; }
         internal Work Work { get; }
         internal RunElectronicDocumentDelivery Run { get; }
-        internal Setup(ElectronicProviderResult result)
+        internal Setup(ElectronicProviderResult result, bool simulation = true)
         {
-            Document = Data.Create(); Provider = new(result); Identity = new(Data.Tenant); Work = new(Document);
+            Document = Data.Create(); Provider = new(result, simulation); Identity = new(Data.Tenant); Work = new(Document);
             Run = new(Work, Provider, Identity, new ElectronicDocumentTestData.EvidenceVerifier(), Clock);
         }
     }

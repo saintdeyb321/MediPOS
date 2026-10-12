@@ -115,7 +115,8 @@ public sealed class ElectronicDocument
         };
         var next = state == ElectronicDocumentStates.Retry ? Add(now, DeliveryPolicy.Backoff(AttemptCount)) : (DateTimeOffset?)null;
         ProviderReference = reference; ProviderStatus = outcome switch { DeliveryOutcome.Received => "received", DeliveryOutcome.AuthorityAccepted => "authority_accepted", DeliveryOutcome.Rejected => "rejected", DeliveryOutcome.TemporaryNotReceived => "not_received", DeliveryOutcome.Simulated => "simulation", _ => "indeterminate" }; EvidenceSha256 = outcome == DeliveryOutcome.AuthorityAccepted ? evidence : null;
-        Finish(state, outcome is DeliveryOutcome.Received or DeliveryOutcome.AuthorityAccepted or DeliveryOutcome.Simulated ? null : code, now);
+        // Simulated diagnostic codes identify the tested outcome without claiming an authority decision.
+        Finish(state, outcome is DeliveryOutcome.Received or DeliveryOutcome.AuthorityAccepted ? null : code, now);
         NextAttemptAtUtc = next;
     }
     public void RecoverExpired(DateTimeOffset now)
