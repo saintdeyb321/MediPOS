@@ -23,6 +23,7 @@
   <ItemGroup>
     <ProjectReference Include="../../src/MediPOS.Infrastructure/MediPOS.Infrastructure.csproj" />
     <ProjectReference Include="../MediPOS.Performance/MediPOS.Performance.csproj" />
+    <ProjectReference Include="../../tools/MediPOS.Recovery/MediPOS.Recovery.csproj" />
   </ItemGroup>
   <ItemGroup>
     <Compile Include="..\Fixtures\ElectronicDocumentTestData.cs" Link="Fixtures\ElectronicDocumentTestData.cs" />

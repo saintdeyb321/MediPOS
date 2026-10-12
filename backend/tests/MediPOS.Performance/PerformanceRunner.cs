@@ -147,13 +147,15 @@ public sealed class PerformanceRunner(PerformanceOptions options, PerformanceDat
         }
         var execution = dataset.Scope(employee.UserId);
         var confirmation = execution.ServiceProvider.GetRequiredService<ConfirmSaleHandler>();
+        var confirmed = false;
         return new(employee.TenantId, execution, async t =>
         {
             if (scenario.FullWorkflow) draft = await DraftAsync(employee, scenario, execution.ServiceProvider, productIndex, t).ConfigureAwait(false);
             var sale = draft ?? throw new InvalidOperationException("Draft preparation failed.");
             await confirmation.HandleAsync(
                 new(employee.TenantId, employee.BranchId, sale.SaleId, sale.Version, Payments(sale, scenario.Mixed)), t).ConfigureAwait(false);
-        }, t => draft is null ? Task.CompletedTask : VerifySaleAsync(employee.TenantId, draft.SaleId, scenario, t));
+            confirmed = true;
+        }, t => draft is null ? Task.CompletedTask : VerifySaleAsync(employee.TenantId, draft.SaleId, scenario, confirmed, existing is not null, t));
     }
 
     private async Task ScenarioAsync(string name, int concurrency, double? target, IReadOnlySet<string> expected,
@@ -272,11 +274,18 @@ public sealed class PerformanceRunner(PerformanceOptions options, PerformanceDat
         return new(PerformanceMetrics.ElapsedMilliseconds(start), outcome, code, trace.Phases, trace.SqlCommands, trace.ConnectionOpens, observation.Peak);
     }
 
-    private async Task VerifySaleAsync(Guid tenantId, Guid saleId, SaleScenario scenario, CancellationToken token)
+    public static void ValidateSaleOutcome(SaleStatus status, bool successful, bool sharedRetry = false)
+    {
+        if (successful ? status != SaleStatus.Confirmed : status != SaleStatus.Draft && !(sharedRetry && status == SaleStatus.Confirmed))
+            throw new InvalidOperationException("Confirmation outcome disagrees with persisted sale status.");
+    }
+
+    private async Task VerifySaleAsync(Guid tenantId, Guid saleId, SaleScenario scenario, bool successful, bool sharedRetry, CancellationToken token)
     {
         await using var scope = dataset.Scope();
         var context = scope.ServiceProvider.GetRequiredService<MediPosDbContext>(); context.SelectTenant(tenantId);
         var sale = await context.Sales.AsNoTracking().Include(value => value.Lines).SingleAsync(value => value.Id == saleId, token).ConfigureAwait(false);
+        ValidateSaleOutcome(sale.Status, successful, sharedRetry);
         var payments = await context.SalePayments.AsNoTracking().Where(value => value.SaleId == saleId).ToListAsync(token).ConfigureAwait(false);
         var commissions = await context.CommissionEntries.AsNoTracking().Where(value => value.SaleId == saleId).ToListAsync(token).ConfigureAwait(false);
         var lines = sale.Lines.Select(line => line.Id).ToArray();

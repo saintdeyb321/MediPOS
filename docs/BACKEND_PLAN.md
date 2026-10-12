@@ -4,9 +4,9 @@ This is the single execution roadmap for the backend. Prompts are given in chat 
 
 ## Working state
 - **Current milestone:** M8 — Backend hardening for real pilot
-- **Current sprint:** B8.2 — Performance/load targets
-- **Status:** IN_PROGRESS. B8.1's local security hardening is complete; B8.2 harness implementation and local gate are complete, but real PostgreSQL performance is NOT_MEASURED. M8 remains incomplete; B7.3/B7.4 stay voluntarily deferred outside the initial MVP.
-- **Next gate:** Measure B8.2 search/confirmation externally on representative PostgreSQL 18 hardware. Real PostgreSQL security/transaction regression, trusted production authentication/session and least-privilege runtime configuration remain pilot prerequisites. B8.3 has not started.
+- **Current sprint:** B8.3 — Backup/recovery & migration rehearsal
+- **Status:** IN_PROGRESS. B8.3: implementación local completa; restore rehearsal externo pendiente. B8.2 search/confirmation targets remain NOT_MEASURED. M8 remains incomplete; B7.3/B7.4 stay voluntarily deferred outside the initial MVP.
+- **Next gate:** Execute B8.3's two-cluster PostgreSQL 18 backup/restore and migration rehearsal, approve operational storage/authentication and RPO/RTO, and run real PostgreSQL regressions. B8.2 measurements, trusted production authentication/session and least-privilege runtime configuration remain pilot prerequisites. B8.4 has not started.
 
 Local policy: this machine has no Docker and will not install it. Do not check/start Docker or run PostgreSQL/Testcontainers here. B0.1 is complete locally. Keep real PostgreSQL integration tests for another environment; they are not part of the local gate and must not be reported as passed without execution.
 
@@ -303,7 +303,7 @@ Tenant isolation, authz matrix, file validation, rate limits, CSRF/CORS/session 
 
 ### B8.2 — Performance/load targets
 Validate catalog search p95 target (<500 ms target from baseline) and online sale confirmation target (<1 s excluding external integrations) on representative data/hardware; optimize measured bottlenecks only.
-**Status:** IN_PROGRESS — harness implementation and local validation complete. The opt-in executable `backend/tests/MediPOS.Performance` implements synthetic generation, search/confirmation/full-workflow/mixed-load scenarios, separate contention/retry workloads and structured results. Real PostgreSQL execution, latency baseline and before/after optimization evidence are pending; both p95 targets are NOT_MEASURED. No SQL/index/lock/isolation optimization or migration is introduced without measurements. B8.3 remains NOT_STARTED.
+**Status:** IN_PROGRESS — harness implementation and local validation complete. The opt-in executable `backend/tests/MediPOS.Performance` implements synthetic generation, search/confirmation/full-workflow/mixed-load scenarios, separate contention/retry workloads and structured results. Real PostgreSQL execution, latency baseline and before/after optimization evidence are pending; both p95 targets are NOT_MEASURED. No SQL/index/lock/isolation optimization or migration is introduced without measurements. B8.3's bounded correction requires successful confirmations to have persisted Confirmed status; rejected drafts require no partial effects, while a shared retry validates the single winner's complete posting separately. No benchmark was executed.
 
 **Local validation:** restore/build passed with zero warnings/errors; 1937 unit tests (23 new deterministic harness cases) and 8 architecture tests passed, as did full format verification and the offline EF model check (no pending model changes). Three new real PostgreSQL regressions compile for guarded disposable generation/non-reuse, tenant/branch/ranking/equivalence/EXPLAIN and mixed-payment/FEFO/commission/last-lot integrity; NO EJECUTADAS. Benchmarks and both latency targets are NOT_MEASURED. Self-audit preserved core business algorithms/security, corrected expected retry classification and incomplete-run approval/validation reporting, confined generation to verified new `template0` databases and separated actual runtime role-check timing/effective session settings from administrative setup.
 
@@ -334,6 +334,12 @@ Databases are removed by default on normal completion/failure, after verifying e
 
 ### B8.3 — Backup/recovery & migration rehearsal
 Daily external backup process, destructive-migration backup policy, isolated restore rehearsal and documented recovery checks.
+
+**Status:** IN_PROGRESS — B8.3: implementación local completa; restore rehearsal externo pendiente. See [the operational runbook](BACKUP_RECOVERY_RUNBOOK.md) for proposed policy, hosting prerequisites, commands, adversarial rehearsal and controlled production recovery. Proposed RPO 24 hours/RTO 4 hours are not approved guarantees; WAL/PITR and tenant-selective recovery are not implemented.
+
+`backend/tools/MediPOS.Recovery` is a standalone administrative executable, never registered in the commercial host. Full custom dumps and read-only schema/data fingerprints share an exported PostgreSQL snapshot; manifests distinguish CREATED/ARCHIVE_CHECKED from a real restore result. Explicit environment, approved source/target cluster identities, TLS/passfile, protected paths, unique reservations, operator confirmation, restricted roles, target marker/empty database/no other sessions and disabled workers/effects fail closed. Restores preserve ACL/data/history and require matching encoding/collation; migration rehearsal requires approval of the exact offline SQL plan hash. Runtime-role/RLS, constraints/functions/triggers, stock/financial/audit invariants and pending-operation states are checked without repairing restored data.
+
+**Local validation (2026-10-12):** `dotnet restore`, `dotnet build` (0 warnings/errors), UnitTests (1986 passed, including 49 recovery/benchmark cases), ArchitectureTests (8 passed), `dotnet format --verify-no-changes`, and offline EF `has-pending-model-changes` (none) passed. Seven new PostgreSQL regression cases compiled but were **NOT EXECUTED**. Real pg_dump/pg_restore, two-cluster isolation/TLS/ACL, older-backup migration, fault rehearsals and commercial PostgreSQL regressions remain external. No historical migrations, schema or commercial queries changed; no local PostgreSQL/container or version-control operation was performed. M8 is not DONE; B8.4 remains NOT_STARTED.
 
 ### B8.4 — Observability/operability
 Structured logs, correlation ids, health/readiness as needed, core resource/job/CPE/sync metrics and minimal alerts.
