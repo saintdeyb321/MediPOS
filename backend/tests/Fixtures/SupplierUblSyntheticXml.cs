@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Security;
+using System.Xml.Linq;
 
 namespace MediPOS.TestFixtures;
 
@@ -8,6 +9,44 @@ internal static class SupplierUblSyntheticXml
 {
     internal const string SupplierRuc = "20100000001";
     internal const string BuyerRuc = "20999999999";
+    internal static readonly string[] RequiredElementPaths =
+    [
+        "cbc:UBLVersionID", "cbc:CustomizationID", "cbc:InvoiceTypeCode", "cbc:ID", "cbc:IssueDate", "cbc:DocumentCurrencyCode",
+        "cac:AccountingSupplierParty", "cac:AccountingSupplierParty/cac:Party", "cac:AccountingSupplierParty/cac:Party/cac:PartyIdentification",
+        "cac:AccountingSupplierParty/cac:Party/cac:PartyIdentification/cbc:ID", "cac:AccountingSupplierParty/cac:Party/cac:PartyLegalEntity",
+        "cac:AccountingSupplierParty/cac:Party/cac:PartyLegalEntity/cbc:RegistrationName",
+        "cac:AccountingCustomerParty", "cac:AccountingCustomerParty/cac:Party", "cac:AccountingCustomerParty/cac:Party/cac:PartyIdentification",
+        "cac:AccountingCustomerParty/cac:Party/cac:PartyIdentification/cbc:ID", "cac:AccountingCustomerParty/cac:Party/cac:PartyLegalEntity",
+        "cac:AccountingCustomerParty/cac:Party/cac:PartyLegalEntity/cbc:RegistrationName",
+        "cac:TaxTotal", "cac:TaxTotal/cbc:TaxAmount", "cac:TaxTotal/cac:TaxSubtotal/cbc:TaxAmount",
+        "cac:TaxTotal/cac:TaxSubtotal/cac:TaxCategory", "cac:TaxTotal/cac:TaxSubtotal/cac:TaxCategory/cac:TaxScheme",
+        "cac:TaxTotal/cac:TaxSubtotal/cac:TaxCategory/cac:TaxScheme/cbc:ID",
+        "cac:LegalMonetaryTotal", "cac:LegalMonetaryTotal/cbc:LineExtensionAmount", "cac:LegalMonetaryTotal/cbc:TaxInclusiveAmount", "cac:LegalMonetaryTotal/cbc:PayableAmount",
+        "cac:InvoiceLine/cbc:ID", "cac:InvoiceLine/cbc:InvoicedQuantity", "cac:InvoiceLine/cbc:LineExtensionAmount", "cac:InvoiceLine/cac:Price",
+        "cac:InvoiceLine/cac:Price/cbc:PriceAmount", "cac:InvoiceLine/cac:Item", "cac:InvoiceLine/cac:Item/cbc:Description",
+        "cac:InvoiceLine/cac:Item/cac:SellersItemIdentification/cbc:ID", "cac:InvoiceLine/cac:Item/cac:BuyersItemIdentification/cbc:ID",
+        "cac:InvoiceLine/cac:TaxTotal", "cac:InvoiceLine/cac:TaxTotal/cbc:TaxAmount", "cac:InvoiceLine/cac:TaxTotal/cac:TaxSubtotal/cbc:TaxAmount",
+        "cac:InvoiceLine/cac:TaxTotal/cac:TaxSubtotal/cac:TaxCategory", "cac:InvoiceLine/cac:TaxTotal/cac:TaxSubtotal/cac:TaxCategory/cac:TaxScheme",
+        "cac:InvoiceLine/cac:TaxTotal/cac:TaxSubtotal/cac:TaxCategory/cac:TaxScheme/cbc:ID",
+    ];
+    internal static string ChangeElement(string xml, string path, Action<XElement> change)
+    {
+        var document = XDocument.Parse(xml, LoadOptions.PreserveWhitespace);
+        var element = document.Root ?? throw new InvalidOperationException("Synthetic Invoice root is missing.");
+        foreach (var part in path.Split('/'))
+        {
+            var code = part.Split(':');
+            XNamespace ns = code[0] switch
+            {
+                "cbc" => "urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2",
+                "cac" => "urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2",
+                _ => throw new ArgumentException("Unknown synthetic namespace.", nameof(path)),
+            };
+            element = element.Elements(ns + code[1]).Single();
+        }
+        change(element);
+        return document.ToString(SaveOptions.DisableFormatting);
+    }
     internal static string Create(string document = "F001-1", string buyer = BuyerRuc, int count = 1,
         decimal quantity = 2m, decimal unitPrice = 10m, string currency = "PEN", string unit = "BX", string? buyerCode = "SKU-1", string? barcode = null)
     {
