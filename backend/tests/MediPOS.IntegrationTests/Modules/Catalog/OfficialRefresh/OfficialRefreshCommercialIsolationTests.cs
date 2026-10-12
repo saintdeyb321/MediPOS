@@ -74,6 +74,10 @@ public sealed class OfficialRefreshCommercialIsolationTests(PostgreSqlFixture fi
         Assert.Equal("clinically_significant_change", corrected.ChangeClassification);
         await Assert.ThrowsAsync<ApplicationErrorException>(() => source.GetRequiredService<ReviewOfficialCatalogRefreshHandler>().HandleAsync(new(corrected.Id, corrected.Version, "approve", "Clinical replacement is blocked."), Token));
         Assert.Equal(before, await Snapshot());
+        var stale = await StageVersion(source, original, [original.Curation.Proposal], publishedAtUtc: SourceEpoch.AddHours(1));
+        Assert.Equal("official_catalog.refresh_source_version_stale", (await Assert.ThrowsAsync<ApplicationErrorException>(() =>
+            Prepare(source, original, stale.Batch, stale.Candidates[0]))).Error.Code);
+        Assert.Equal(before, await Snapshot());
         await using var verification = fixture.CreateContext(tenant.TenantId); var unchangedLocal = await verification.BusinessProducts.SingleAsync(value => value.Id == local.Id, Token);
         Assert.Equal(globalId, unchangedLocal.GlobalProductId); Assert.Equal(original.Curation.Proposal.Name, unchangedLocal.Name);
         Assert.Equal(2.125m, unchangedLocal.RetailPrice); Assert.Equal(1.75m, unchangedLocal.WholesalePrice);

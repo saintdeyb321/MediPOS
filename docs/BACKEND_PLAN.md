@@ -4,9 +4,9 @@ This is the single execution roadmap for the backend. Prompts are given in chat 
 
 ## Working state
 - **Current milestone:** M6 — Official pharmaceutical catalog pipeline
-- **Current sprint:** B6.3 — Versioned refresh/history
-- **Status:** DONE
-- **Next gate:** B6.3 implementation audit and real PostgreSQL validation externally (22 prepared B6.3 cases). Local gate passed: 1525 unit / 8 architecture tests, format, no pending model changes and offline migration SQL inspection. B6.1 and B6.2 are audited locally; B6.2.1 is integrated. Production platform authentication and an authorized source contract remain prerequisites for activation.
+- **Current sprint:** B6.3.1 — Official source chronology correction
+- **Status:** DONE locally
+- **Next gate:** B6.3.1 corrective audit and real PostgreSQL validation externally (22 original B6.3 cases plus 16 corrective cases prepared). Local gate passed: 1542 unit / 8 architecture tests, restore, build, format, no pending model changes and offline corrective migration SQL inspection. B6.3 is statically audited; B6.3.1 is integrated locally. Production platform authentication and an authorized source contract remain prerequisites for activation.
 
 Local policy: this machine has no Docker and will not install it. Do not check/start Docker or run PostgreSQL/Testcontainers here. B0.1 is complete locally. Keep real PostgreSQL integration tests for another environment; they are not part of the local gate and must not be reported as passed without execution.
 
@@ -242,7 +242,7 @@ Goal: controlled ingestion without fragile runtime dependency.
 **Scope:** normalization and superadmin review; only validated records become global.
 
 ### B6.3 — Versioned refresh/history
-**Status:** DONE locally — controlled refresh, administrative review, compatible metadata application and immutable version history implemented; local gate and offline model/script checks passed. Implementation audit and 22 prepared PostgreSQL cases remain pending externally. No production authorization/source adapter or M7 work is enabled.
+**Status:** DONE locally / statically audited — B6.3.1 chronology correction integrated. Preparation, active review and application compare official publication dates against the last applied history for the exact source and official identity, falling back to the original publication only before any refresh is applied. Earlier dates are stale, equal dates or reused versions conflict, and missing dates leave order unverified; opaque version labels are never sorted. Applied retries are read-only. The corrective migration replaces guards without changing historical data or the EF model. Local gate and offline model/script checks passed; corrective audit and 38 prepared PostgreSQL cases remain pending externally. No production authorization/source adapter, implicit administrative override or M7 work is enabled.
 **Scope:** refresh by verified source and official identity; compare changes, preserve the global product identity and apply only approved administrative metadata with complete history.
 
 **M6 gate:** tenant operations never depend on live scraping; global catalog publication is curated.

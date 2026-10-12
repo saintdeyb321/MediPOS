@@ -60,7 +60,9 @@ public sealed class OfficialRefreshConcurrencyTests(PostgreSqlFixture fixture)
         async Task<Exception?> ApplyResult(IServiceProvider provider, Domain.Modules.Catalog.OfficialRefresh.OfficialCatalogRefresh refresh)
         { try { await Apply(provider, refresh); return null; } catch (ApplicationErrorException error) { return error; } }
         var results = await Task.WhenAll(ApplyResult(first.ServiceProvider, one), ApplyResult(second.ServiceProvider, two));
-        Assert.Single(results, value => value is null); Assert.Equal("official_catalog.refresh_stale_product", Assert.IsType<ApplicationErrorException>(Assert.Single(results, value => value is not null)).Error.Code);
+        Assert.Single(results, value => value is null);
+        var failureCode = Assert.IsType<ApplicationErrorException>(Assert.Single(results, value => value is not null)).Error.Code;
+        Assert.True(failureCode is "official_catalog.refresh_stale_product" or "official_catalog.refresh_source_version_stale");
         await using var admin = fixture.CreateConstraintContext();
         Assert.Equal(1, await admin.OfficialCatalogRefreshes.CountAsync(value => value.GlobalProductId == original.Publication!.GlobalProductId && value.Status == "applied", Token));
     }

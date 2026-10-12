@@ -50,6 +50,15 @@ internal sealed class OfficialCatalogRefreshStore(MediPosDbContext context, IOff
     private async Task<long> ProductVersionAsync(Guid id, CancellationToken token) =>
         await context.OfficialCatalogRefreshes.Where(value => value.GlobalProductId == id && value.AppliedProductVersion != null)
             .MaxAsync(value => value.AppliedProductVersion, token).ConfigureAwait(false) ?? 0;
+    private async Task RequireSourceAdvanceAsync(OfficialCatalogPublication origin, OfficialCatalogImportBatch batch, CancellationToken token)
+    {
+        var latest = await OfficialCatalogRefreshQueries.LatestAppliedBatch(context.OfficialCatalogVersionHistories.AsNoTracking(),
+            context.OfficialCatalogImportBatches.AsNoTracking(), origin.SourceCode, origin.OfficialIdentity)
+            .FirstOrDefaultAsync(token).ConfigureAwait(false) ??
+            await context.OfficialCatalogImportBatches.AsNoTracking().SingleAsync(value => value.Id == origin.ImportBatchId, token).ConfigureAwait(false);
+        try { OfficialCatalogSourceOrder.RequireAdvance(batch, latest); }
+        catch (InvalidOperationException error) { throw DomainError(error); }
+    }
     private async Task<OfficialCatalogRefresh> RefreshAsync(Guid id, CancellationToken token) =>
         await context.OfficialCatalogRefreshes.FromSqlInterpolated($"SELECT * FROM official_catalog_refreshes WHERE id = {id} FOR UPDATE")
             .SingleOrDefaultAsync(token).ConfigureAwait(false) ?? throw OfficialCatalogErrors.Error("refresh_not_found", ErrorCategory.NotFound);
@@ -66,9 +75,7 @@ internal sealed class OfficialCatalogRefreshStore(MediPosDbContext context, IOff
         await LocksAsync(origin, token).ConfigureAwait(false);
         var batch = await context.OfficialCatalogImportBatches.AsNoTracking().SingleOrDefaultAsync(value => value.Id == command.ImportBatchId, token).ConfigureAwait(false) ??
             throw OfficialCatalogErrors.Error("refresh_batch_not_found", ErrorCategory.NotFound);
-        var originalBatch = await context.OfficialCatalogImportBatches.AsNoTracking().SingleAsync(value => value.Id == origin.ImportBatchId, token).ConfigureAwait(false);
-        if (batch.SourceCode != origin.SourceCode || batch.SourceVersion == originalBatch.SourceVersion || batch.Status != OfficialCatalogStates.Staged ||
-            batch.SourcePublishedAtUtc.HasValue && originalBatch.SourcePublishedAtUtc.HasValue && batch.SourcePublishedAtUtc <= originalBatch.SourcePublishedAtUtc)
+        if (batch.SourceCode != origin.SourceCode || batch.Status != OfficialCatalogStates.Staged)
             throw OfficialCatalogErrors.Error("refresh_batch_invalid", ErrorCategory.Conflict);
         OfficialCatalogCuration? candidate = null; OfficialCatalogStagingRow? row = null;
         if (command.CurationId.HasValue)
@@ -87,8 +94,11 @@ internal sealed class OfficialCatalogRefreshStore(MediPosDbContext context, IOff
         {
             try { existing.RequireSameInput(batch, row); }
             catch (InvalidOperationException error) { throw DomainError(error); }
+            // An applied retry returns history without reapplying older metadata or asserting chronological order.
+            if (existing.Status != "applied") await RequireSourceAdvanceAsync(origin, batch, token).ConfigureAwait(false);
             await ReauthorizeAsync(actor, token).ConfigureAwait(false); await transaction.CommitAsync(token).ConfigureAwait(false); return existing;
         }
+        await RequireSourceAdvanceAsync(origin, batch, token).ConfigureAwait(false);
         var product = await ProductAsync(origin.GlobalProductId, false, token).ConfigureAwait(false);
         OfficialCatalogRefresh refresh;
         try
@@ -109,6 +119,9 @@ internal sealed class OfficialCatalogRefreshStore(MediPosDbContext context, IOff
         await using var transaction = await context.Database.BeginTransactionAsync(token).ConfigureAwait(false);
         var refresh = await RefreshAsync(command.RefreshId, token).ConfigureAwait(false);
         var origin = await OriginAsync(refresh.PublicationId, token).ConfigureAwait(false); await LocksAsync(origin, token).ConfigureAwait(false);
+        if (command.Action is "save_correction" or "approve" or "request_review")
+            await RequireSourceAdvanceAsync(origin, await context.OfficialCatalogImportBatches.AsNoTracking()
+                .SingleAsync(value => value.Id == refresh.ImportBatchId, token).ConfigureAwait(false), token).ConfigureAwait(false);
         var product = await ProductAsync(refresh.GlobalProductId, false, token).ConfigureAwait(false);
         try
         {
@@ -139,6 +152,8 @@ internal sealed class OfficialCatalogRefreshStore(MediPosDbContext context, IOff
         }
         catch (InvalidOperationException error) { throw DomainError(error); }
         var origin = await OriginAsync(refresh.PublicationId, token).ConfigureAwait(false); await LocksAsync(origin, token).ConfigureAwait(false);
+        await RequireSourceAdvanceAsync(origin, await context.OfficialCatalogImportBatches.AsNoTracking()
+            .SingleAsync(value => value.Id == refresh.ImportBatchId, token).ConfigureAwait(false), token).ConfigureAwait(false);
         var product = await ProductAsync(refresh.GlobalProductId, true, token).ConfigureAwait(false);
         var current = OfficialCatalogProductSnapshot.Capture(product, await OriginalAsync(origin, token).ConfigureAwait(false));
         var version = await ProductVersionAsync(product.Id, token).ConfigureAwait(false);

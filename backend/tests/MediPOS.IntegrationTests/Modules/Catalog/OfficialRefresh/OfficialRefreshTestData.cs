@@ -13,15 +13,25 @@ namespace MediPOS.IntegrationTests.Modules.Catalog.OfficialRefresh;
 
 internal static class OfficialRefreshTestData
 {
-    internal static async Task<OfficialCatalogCandidateResult> Original(PostgreSqlFixture fixture, IServiceProvider source)
+    internal static readonly DateTimeOffset SourceEpoch = new(2026, 10, 1, 0, 0, 0, TimeSpan.Zero);
+    private static long _syntheticPublicationTick;
+    internal static async Task<OfficialCatalogCandidateResult> Original(PostgreSqlFixture fixture, IServiceProvider source, bool withoutDate = false)
     {
-        var candidate = Assert.Single(await Stage(source, Guid.NewGuid().ToString("N"), strength: "25 \u00b5g/mL"));
+        var label = Guid.NewGuid().ToString("N");
+        var csv = string.Join(',', OfficialCatalogInput.RequiredColumns) + "\n" +
+            $"{label},Producto {label},Laboratorio,REG-{label},Frasco 60 mL,Ingrediente fixture {label},25 \u00b5g/mL,Soluci\u00f3n,Oral\n";
+        using var input = new MemoryStream(Encoding.UTF8.GetBytes(csv));
+        var batch = await source.GetRequiredService<StageOfficialCatalogImportHandler>().HandleAsync(new("synthetic_cur_a",
+            Guid.NewGuid().ToString("N"), withoutDate ? null : SourceEpoch, "synthetic-refresh-original.csv", OfficialCatalogInput.Format, input), Token);
+        var rows = await source.GetRequiredService<GetOfficialCatalogStagingRowsHandler>().HandleAsync(new(batch.Id), Token);
+        var candidate = await source.GetRequiredService<PrepareOfficialCatalogCandidateHandler>().HandleAsync(new(Assert.Single(rows.Rows).Id), Token);
         candidate = await Approve(source, candidate, await Category(fixture), "25 \u00b5g/mL");
         await Publish(source, candidate);
         return await source.GetRequiredService<GetOfficialCatalogCandidateHandler>().HandleAsync(new(candidate.Id), Token);
     }
     internal static async Task<(OfficialCatalogBatchResult Batch, OfficialCatalogCuration[] Candidates)> StageVersion(IServiceProvider source,
-        OfficialCatalogCandidateResult original, IReadOnlyList<OfficialCatalogProposal> proposals, bool absent = false)
+        OfficialCatalogCandidateResult original, IReadOnlyList<OfficialCatalogProposal> proposals, bool absent = false,
+        DateTimeOffset? publishedAtUtc = null, bool withoutDate = false, string? version = null, string? sourceCode = null)
     {
         string Quote(string value) => "\"" + value.Replace("\"", "\"\"", StringComparison.Ordinal) + "\"";
         var lines = proposals.Select(proposal => string.Join(',', new[]
@@ -33,8 +43,10 @@ internal static class OfficialRefreshTestData
         }.Select(Quote)));
         var csv = string.Join(',', OfficialCatalogInput.RequiredColumns) + "\r\n" + string.Join("\r\n", lines) + "\r\n";
         using var input = new MemoryStream(Encoding.UTF8.GetBytes(csv));
-        var batch = await source.GetRequiredService<StageOfficialCatalogImportHandler>().HandleAsync(new(original.Batch.SourceCode,
-            Guid.NewGuid().ToString("N"), null, "synthetic-refresh.csv", OfficialCatalogInput.Format, input), Token);
+        var batch = await source.GetRequiredService<StageOfficialCatalogImportHandler>().HandleAsync(new(sourceCode ?? original.Batch.SourceCode,
+            version is null ? Guid.NewGuid().ToString("N") : version + "-" + original.Publication!.Id.ToString("N"),
+            withoutDate ? null : publishedAtUtc ?? SourceEpoch.AddDays(1).AddTicks(10 * Interlocked.Increment(ref _syntheticPublicationTick)),
+            "synthetic-refresh.csv", OfficialCatalogInput.Format, input), Token);
         Assert.Equal("staged", batch.Status);
         var rows = await source.GetRequiredService<GetOfficialCatalogStagingRowsHandler>().HandleAsync(new(batch.Id), Token);
         var candidates = new List<OfficialCatalogCuration>();

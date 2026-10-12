@@ -14,9 +14,11 @@ internal sealed class OfficialRefreshTestData
     internal const string Trace = "123456789abcdef0123456789abcdef0";
     internal static OfficialCatalogProposal Complete() => new(ProductType.Medicine, "Producto sint\u00e9tico", "Laboratorio Pe\u00f1a",
         "REG-A", "Frasco 60 mL", [new("Ingrediente sint\u00e9tico", "25 \u00b5g/mL")], "Soluci\u00f3n", "Oral", CategoryId, "0001", true, true);
-    internal static (OfficialCatalogImportBatch Batch, OfficialCatalogStagingRow Row) Import(string version, char checksum = 'a', Dictionary<string, string>? fields = null)
+    internal static (OfficialCatalogImportBatch Batch, OfficialCatalogStagingRow Row) Import(string version, char checksum = 'a', Dictionary<string, string>? fields = null,
+        DateTimeOffset? publishedAtUtc = null, string? sourceCode = null)
     {
-        var batch = OfficialCatalogImportBatch.Create(new(OfficialCatalogTestSetup.Source, version, "synthetic.csv", new string(checksum, 64), null, OfficialCatalogInput.Format, Actor, Trace), Now);
+        var source = sourceCode is null ? OfficialCatalogTestSetup.Source : OfficialCatalogTestSetup.Source with { Code = sourceCode };
+        var batch = OfficialCatalogImportBatch.Create(new(source, version, "synthetic.csv", new string(checksum, 64), publishedAtUtc, OfficialCatalogInput.Format, Actor, Trace), Now);
         var lease = Guid.NewGuid(); batch.Start(lease, Actor, Trace, Now, Now.AddMinutes(2));
         var supplied = fields ?? OfficialCatalogTestSetup.Fields(name: Complete().Name);
         if (fields is null) { supplied["Strength"] = "25 \u00b5g/mL"; supplied["Laboratory"] = Complete().Laboratory; supplied["Ingredients"] = "Ingrediente sint\u00e9tico"; }

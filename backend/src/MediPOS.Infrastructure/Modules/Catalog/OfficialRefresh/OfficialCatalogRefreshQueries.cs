@@ -1,10 +1,19 @@
 using MediPOS.Application.Modules.Catalog.OfficialRefresh;
+using MediPOS.Domain.Modules.Catalog.OfficialImport;
 using MediPOS.Domain.Modules.Catalog.OfficialRefresh;
 
 namespace MediPOS.Infrastructure.Modules.Catalog.OfficialRefresh;
 
 public static class OfficialCatalogRefreshQueries
 {
+    public static IQueryable<OfficialCatalogImportBatch> LatestAppliedBatch(IQueryable<OfficialCatalogVersionHistory> history,
+        IQueryable<OfficialCatalogImportBatch> batches, string sourceCode, string officialIdentity) =>
+        from entry in history
+        join batch in batches on entry.ImportBatchId equals batch.Id
+        where entry.SourceCode == sourceCode && entry.OfficialIdentity == officialIdentity && entry.Action == "applied"
+        orderby entry.AppliedProductVersion descending
+        select batch;
+
     public static IQueryable<OfficialCatalogRefresh> Queue(IQueryable<OfficialCatalogRefresh> query, GetOfficialCatalogRefreshQueueCommand command)
     {
         if (command.SourceCode is not null) query = query.Where(value => value.SourceCode == command.SourceCode);
