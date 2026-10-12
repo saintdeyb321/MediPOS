@@ -23,6 +23,7 @@
     <ProjectReference Include="../../src/MediPOS.Infrastructure/MediPOS.Infrastructure.csproj" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="..\Fixtures\ElectronicDocumentTestData.cs" Link="Fixtures\ElectronicDocumentTestData.cs" />
     <Compile Include="..\Fixtures\SupplierUblSyntheticXml.cs" Link="Fixtures\SupplierUblSyntheticXml.cs" />
   </ItemGroup>
 </Project>

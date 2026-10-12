@@ -14,6 +14,8 @@ internal sealed class AuditLogConfiguration : IEntityTypeConfiguration<AuditLog>
             table.HasCheckConstraint("ck_audit_logs_identifiers",
                 "actor_id <> '00000000-0000-0000-0000-000000000000'::uuid AND entity_id <> '00000000-0000-0000-0000-000000000000'::uuid");
             table.HasCheckConstraint("ck_audit_logs_codes", """
+                (entity_type = 'electronic_series' AND action = 'cpe.series_configured') OR
+                (entity_type = 'electronic_document' AND action IN ('cpe.requested','cpe.reviewed','cpe.delivery_changed')) OR
                 (entity_type = 'supplier_ubl_import' AND action IN ('supplier_ubl.imported','supplier_ubl.reviewed','supplier_ubl.rejected','supplier_ubl.converted','supplier_ubl.file_rejected')) OR
                 (entity_type = 'tenant' AND action IN ('tenant.created', 'tenant.purge_requested')) OR
                 (entity_type = 'license' AND action IN ('license.renewed', 'license.suspended', 'license.reactivated')) OR

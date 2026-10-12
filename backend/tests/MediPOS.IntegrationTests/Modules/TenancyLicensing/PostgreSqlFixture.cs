@@ -81,6 +81,8 @@ public sealed class PostgreSqlFixture : IAsyncLifetime
             GRANT SELECT, INSERT, UPDATE, DELETE ON product_units TO medipos_test_runtime;
             GRANT SELECT, INSERT, UPDATE, DELETE ON suppliers, purchases, purchase_lines, inventory_lots TO medipos_test_runtime;
             GRANT SELECT, INSERT ON stock_movements TO medipos_test_runtime;
+            GRANT SELECT, INSERT, UPDATE ON electronic_documents, electronic_document_series TO medipos_test_runtime;
+            GRANT SELECT, INSERT ON electronic_document_attempts TO medipos_test_runtime;
             GRANT SELECT, INSERT, UPDATE ON supplier_ubl_imports, supplier_ubl_import_lines TO medipos_test_runtime;
             GRANT SELECT, INSERT ON supplier_ubl_purchase_line_links TO medipos_test_runtime;
             GRANT SELECT, INSERT, UPDATE ON import_jobs TO medipos_test_runtime;

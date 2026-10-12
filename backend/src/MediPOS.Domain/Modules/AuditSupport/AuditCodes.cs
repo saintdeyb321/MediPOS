@@ -2,6 +2,7 @@ namespace MediPOS.Domain.Modules.AuditSupport;
 
 public enum AuditAction
 {
+    ElectronicSeriesConfigured, ElectronicDocumentRequested, ElectronicDocumentReviewed, ElectronicDeliveryChanged,
     TenantCreated, LicenseRenewed, LicenseSuspended, LicenseReactivated, TenantPurgeRequested,
     LegalEntityCreated, BranchCreated, BranchMainHubChanged,
     MembershipCreated, MembershipBranchesReplaced, MembershipScheduleReplaced, MembershipDeactivated,
@@ -14,12 +15,17 @@ public enum AuditAction
     SupplierUblImported, SupplierUblReviewed, SupplierUblRejected, SupplierUblConverted, SupplierUblFileRejected,
 }
 
-public enum AuditEntityType { Tenant, License, LegalEntity, Branch, Membership, BusinessProduct, Purchase, InventoryLot, ImportJob, CashSession, Sale, Transfer, CashTransfer, TenantCommissionSettings, CommissionRule, BranchStockThreshold, SyncDevice, OfflineSaleConflict, SupplierUblImport }
+public enum AuditEntityType { ElectronicSeries, ElectronicDocument, Tenant, License, LegalEntity, Branch, Membership, BusinessProduct, Purchase, InventoryLot, ImportJob, CashSession, Sale, Transfer, CashTransfer, TenantCommissionSettings, CommissionRule, BranchStockThreshold, SyncDevice, OfflineSaleConflict, SupplierUblImport }
 
 public static class AuditCodes
 {
     public static string ActionToCode(AuditAction action) => action switch
     {
+        AuditAction.ElectronicSeriesConfigured => "cpe.series_configured",
+        AuditAction.ElectronicDocumentRequested => "cpe.requested",
+        AuditAction.ElectronicDocumentReviewed => "cpe.reviewed",
+        AuditAction.ElectronicDeliveryChanged => "cpe.delivery_changed",
+
         AuditAction.SupplierUblImported => "supplier_ubl.imported",
         AuditAction.SupplierUblReviewed => "supplier_ubl.reviewed",
         AuditAction.SupplierUblRejected => "supplier_ubl.rejected",
@@ -67,6 +73,11 @@ public static class AuditCodes
 
     public static AuditAction ActionFromCode(string code) => code switch
     {
+        "cpe.series_configured" => AuditAction.ElectronicSeriesConfigured,
+        "cpe.requested" => AuditAction.ElectronicDocumentRequested,
+        "cpe.reviewed" => AuditAction.ElectronicDocumentReviewed,
+        "cpe.delivery_changed" => AuditAction.ElectronicDeliveryChanged,
+
         "supplier_ubl.imported" => AuditAction.SupplierUblImported,
         "supplier_ubl.reviewed" => AuditAction.SupplierUblReviewed,
         "supplier_ubl.rejected" => AuditAction.SupplierUblRejected,
@@ -114,6 +125,9 @@ public static class AuditCodes
 
     public static AuditEntityType EntityFor(AuditAction action) => action switch
     {
+        AuditAction.ElectronicSeriesConfigured => AuditEntityType.ElectronicSeries,
+        AuditAction.ElectronicDocumentRequested or AuditAction.ElectronicDocumentReviewed or AuditAction.ElectronicDeliveryChanged => AuditEntityType.ElectronicDocument,
+
         AuditAction.SupplierUblImported or AuditAction.SupplierUblReviewed or AuditAction.SupplierUblRejected or AuditAction.SupplierUblConverted or AuditAction.SupplierUblFileRejected => AuditEntityType.SupplierUblImport,
         AuditAction.TenantCreated or AuditAction.TenantPurgeRequested => AuditEntityType.Tenant,
         AuditAction.LicenseRenewed or AuditAction.LicenseSuspended or AuditAction.LicenseReactivated => AuditEntityType.License,
@@ -140,6 +154,9 @@ public static class AuditCodes
 
     public static string EntityToCode(AuditEntityType entityType) => entityType switch
     {
+        AuditEntityType.ElectronicSeries => "electronic_series",
+        AuditEntityType.ElectronicDocument => "electronic_document",
+
         AuditEntityType.SupplierUblImport => "supplier_ubl_import",
         AuditEntityType.Tenant => "tenant",
         AuditEntityType.License => "license",
@@ -164,6 +181,9 @@ public static class AuditCodes
 
     public static AuditEntityType EntityFromCode(string code) => code switch
     {
+        "electronic_series" => AuditEntityType.ElectronicSeries,
+        "electronic_document" => AuditEntityType.ElectronicDocument,
+
         "supplier_ubl_import" => AuditEntityType.SupplierUblImport,
         "tenant" => AuditEntityType.Tenant,
         "license" => AuditEntityType.License,

@@ -9,6 +9,7 @@ using MediPOS.Domain.Modules.Catalog.OfficialImport;
 using MediPOS.Domain.Modules.Catalog.OfficialRefresh;
 using MediPOS.Domain.Modules.Catalog.ProductImport;
 using MediPOS.Domain.Modules.Commissions;
+using MediPOS.Domain.Modules.ElectronicDocuments;
 using MediPOS.Domain.Modules.IdentityAccess;
 using MediPOS.Domain.Modules.Inventory;
 using MediPOS.Domain.Modules.Notifications;
@@ -26,6 +27,7 @@ using MediPOS.Infrastructure.Modules.Catalog.OfficialImport;
 using MediPOS.Infrastructure.Modules.Catalog.OfficialRefresh;
 using MediPOS.Infrastructure.Modules.Catalog.Persistence.Configurations;
 using MediPOS.Infrastructure.Modules.Commissions.Persistence;
+using MediPOS.Infrastructure.Modules.ElectronicDocuments;
 using MediPOS.Infrastructure.Modules.IdentityAccess.Persistence.Configurations;
 using MediPOS.Infrastructure.Modules.Inventory.Persistence;
 using MediPOS.Infrastructure.Modules.Inventory.Persistence.Configurations;
@@ -60,6 +62,9 @@ public sealed partial class MediPosDbContext(DbContextOptions<MediPosDbContext> 
     public DbSet<SupplierUblImport> SupplierUblImports => Set<SupplierUblImport>();
     public DbSet<SupplierUblImportLine> SupplierUblImportLines => Set<SupplierUblImportLine>();
     public DbSet<SupplierUblPurchaseLineLink> SupplierUblPurchaseLineLinks => Set<SupplierUblPurchaseLineLink>();
+    public DbSet<ElectronicDocument> ElectronicDocuments => Set<ElectronicDocument>();
+    public DbSet<ElectronicDocumentSeries> ElectronicDocumentSeries => Set<ElectronicDocumentSeries>();
+    public DbSet<ElectronicDocumentAttempt> ElectronicDocumentAttempts => Set<ElectronicDocumentAttempt>();
     public DbSet<Tenant> Tenants => Set<Tenant>();
     public DbSet<Notification> Notifications => Set<Notification>();
     public DbSet<SyncDevice> SyncDevices => Set<SyncDevice>();
@@ -122,6 +127,9 @@ public sealed partial class MediPosDbContext(DbContextOptions<MediPosDbContext> 
         modelBuilder.HasPostgresExtension("public", "unaccent");
         modelBuilder.HasDbFunction(typeof(OperationalReportMoney).GetMethod(nameof(OperationalReportMoney.LotCapital))!)
             .HasName("report_lot_capital4").HasSchema("public");
+        modelBuilder.ApplyConfiguration(new ElectronicDocumentConfiguration());
+        modelBuilder.ApplyConfiguration(new ElectronicDocumentSeriesConfiguration());
+        modelBuilder.ApplyConfiguration(new ElectronicDocumentAttemptConfiguration());
         modelBuilder.ApplyConfiguration(new TenantConfiguration());
         modelBuilder.ApplyConfiguration(new NotificationConfiguration());
         modelBuilder.ApplyConfiguration(new SyncDeviceConfiguration());
@@ -182,6 +190,9 @@ public sealed partial class MediPosDbContext(DbContextOptions<MediPosDbContext> 
         modelBuilder.ApplyConfiguration(new TransferEventConfiguration());
         modelBuilder.ApplyConfiguration(new TransferLotAllocationConfiguration());
 
+        modelBuilder.Entity<ElectronicDocument>().HasQueryFilter(v => SelectedTenantId.HasValue && v.TenantId == SelectedTenantId);
+        modelBuilder.Entity<ElectronicDocumentSeries>().HasQueryFilter(v => SelectedTenantId.HasValue && v.TenantId == SelectedTenantId);
+        modelBuilder.Entity<ElectronicDocumentAttempt>().HasQueryFilter(v => SelectedTenantId.HasValue && v.TenantId == SelectedTenantId);
         // Context properties are evaluated per query, rather than captured into the cached EF model.
         modelBuilder.Entity<Notification>().HasQueryFilter(value => SelectedTenantId.HasValue && value.TenantId == SelectedTenantId);
         modelBuilder.Entity<SyncDevice>().HasQueryFilter(value => SelectedTenantId.HasValue && value.TenantId == SelectedTenantId);
@@ -246,6 +257,7 @@ public sealed partial class MediPosDbContext(DbContextOptions<MediPosDbContext> 
         ValidateCashTransferWrites();
         ValidateCommissionWrites();
         ValidateStockThresholdWrites();
+        ValidateElectronicDocumentWrites();
         ValidateSupplierUblWrites();
         ValidateTenantWrites();
         return base.SaveChanges(acceptAllChangesOnSuccess);
@@ -270,6 +282,7 @@ public sealed partial class MediPosDbContext(DbContextOptions<MediPosDbContext> 
         ValidateCashTransferWrites();
         ValidateCommissionWrites();
         ValidateStockThresholdWrites();
+        ValidateElectronicDocumentWrites();
         ValidateSupplierUblWrites();
         ValidateTenantWrites();
         return base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken);
@@ -598,6 +611,9 @@ public sealed partial class MediPosDbContext(DbContextOptions<MediPosDbContext> 
                 TransferLotAllocation value => value.TenantId,
                 ProductUnit value => value.TenantId,
                 ImportJob value => value.TenantId,
+                ElectronicDocument value => value.TenantId,
+                ElectronicDocumentSeries value => value.TenantId,
+                ElectronicDocumentAttempt value => value.TenantId,
                 ImportRowResult value => value.TenantId,
                 _ => null,
             };
