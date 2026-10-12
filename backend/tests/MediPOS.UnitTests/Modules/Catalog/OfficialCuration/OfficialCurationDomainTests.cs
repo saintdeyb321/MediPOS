@@ -13,8 +13,8 @@ public sealed class OfficialCurationDomainTests
     private static readonly DateTimeOffset Now = new(2026, 10, 12, 14, 0, 0, TimeSpan.Zero);
     private static readonly Guid Actor = Guid.NewGuid(), CategoryId = Guid.NewGuid();
     private const string Trace = "123456789abcdef0123456789abcdef0";
-    private static OfficialCatalogProposal Complete(string id = "0001") => new(ProductType.Medicine, "Producto sintÃƒÆ’Ã‚Â©tico", "Laboratorio sintÃƒÆ’Ã‚Â©tico",
-        "REG-FIXTURE", "Frasco 60 mL", [new("Ingrediente sintÃƒÆ’Ã‚Â©tico", "500 mg/5 mL")], "SoluciÃƒÆ’Ã‚Â³n", "Oral", CategoryId, id, true, true);
+    private static OfficialCatalogProposal Complete(string id = "0001") => new(ProductType.Medicine, "Producto sintético", "Laboratorio sintético",
+        "REG-FIXTURE", "Frasco 60 mL", [new("Ingrediente sintético", "500 mg/5 mL")], "Solución", "Oral", CategoryId, id, true, true);
     private static (OfficialCatalogCuration Candidate, OfficialCatalogStagingRow Row) Draft(OfficialCatalogProposal? proposal = null)
     {
         var batch = OfficialCatalogImportBatch.Create(new(OfficialCatalogTestSetup.Source, "synthetic-v1", "synthetic.csv", new string('a', 64), null,
@@ -76,7 +76,7 @@ public sealed class OfficialCurationDomainTests
             "presentation" => Complete() with { Presentation = "?" },
             "ingredient" => Complete() with { Components = [] },
             "unknown" => Complete() with { Components = [new("desconocido", "500 mg")] },
-            "strength" => Complete() with { Components = [new("Ingrediente sintÃƒÆ’Ã‚Â©tico", "500 unidades aproximadas")] },
+            "strength" => Complete() with { Components = [new("Ingrediente sintético", "500 unidades aproximadas")] },
             "form" => Complete() with { DosageForm = "" },
             "category" => Complete() with { CategoryId = null },
             "identity" => Complete() with { IdentityVerified = false },
@@ -93,7 +93,7 @@ public sealed class OfficialCurationDomainTests
     [InlineData("500,25 mg/mL", "500,25 MG/ML")]
     public void ExplicitConcentrationRetainsMagnitudeAndDenominatorWithoutUnitConversion(string supplied, string expected)
     {
-        var data = Complete() with { Components = [new("Ingrediente sintÃƒÆ’Ã‚Â©tico", supplied)] };
+        var data = Complete() with { Components = [new("Ingrediente sintético", supplied)] };
         Assert.Empty(data.Errors()); Assert.Equal(expected, Assert.Single(data.Medicine()!.Components).StrengthNormalized);
     }
     [Fact]
@@ -104,7 +104,7 @@ public sealed class OfficialCurationDomainTests
         var other = Complete("0002") with { Presentation = "Frasco 120 mL" };
         Assert.Equal("potential", OfficialCatalogDuplicateClassifier.Classify(other, "synthetic", product, origin)!.Kind);
         Assert.NotEqual(other.Fingerprint(), Complete().Fingerprint());
-        var strength = other with { Components = [new("Ingrediente sintÃƒÆ’Ã‚Â©tico", "1000 mg/5 mL")] };
+        var strength = other with { Components = [new("Ingrediente sintético", "1000 mg/5 mL")] };
         Assert.NotEqual(strength.EquivalenceKey, Complete().EquivalenceKey);
         Assert.Equal("potential", OfficialCatalogDuplicateClassifier.Classify(strength, "synthetic", product, origin)!.Kind);
     }
@@ -126,7 +126,7 @@ public sealed class OfficialCurationDomainTests
     {
         var (original, _) = Draft(Complete()); Review(original, "approve"); var product = original.Proposal.CreateGlobalProduct(Now);
         var origin = OfficialCatalogPublication.Create(original, product.Id, Actor, Now);
-        var data = Complete() with { Name = "Otro nombre", Components = [new("Otro ingrediente sintÃƒÆ’Ã‚Â©tico", "20 mg")] };
+        var data = Complete() with { Name = "Otro nombre", Components = [new("Otro ingrediente sintético", "20 mg")] };
         var match = OfficialCatalogDuplicateClassifier.Classify(data, "synthetic", product, origin)!;
         Assert.Equal("official_identity", match.Kind);
         var (candidate, _) = Draft(data); Assert.Throws<InvalidOperationException>(() => Review(candidate, "approve", matches: [match], resolution: "distinct"));
@@ -173,7 +173,7 @@ public sealed class OfficialCurationDomainTests
     public void SavingAnApprovalWithUnseenCorrectedDataIsForbidden()
     {
         var (candidate, _) = Draft(Complete()); Assert.Throws<ArgumentException>(() => Review(candidate, "approve", Complete() with { Name = "Unseen" }));
-        Assert.Equal(1, candidate.Version); Assert.Equal("Producto sintÃƒÆ’Ã‚Â©tico", candidate.Proposal.Name);
+        Assert.Equal(1, candidate.Version); Assert.Equal("Producto sintético", candidate.Proposal.Name);
     }
     [Fact]
     public void RetailNeedsNoMedicineProfileAndGlobalContractsContainNoCommercialMoneyOrStock()
@@ -186,7 +186,7 @@ public sealed class OfficialCurationDomainTests
     [Fact]
     public void ProposalArraysCannotMutateThePersistedRevision()
     {
-        var values = new[] { new OfficialMedicineComponent("Ingrediente sintÃƒÆ’Ã‚Â©tico", "500 mg") };
+        var values = new[] { new OfficialMedicineComponent("Ingrediente sintético", "500 mg") };
         var (candidate, _) = Draft(Complete() with { Components = values }); var snapshot = candidate.NormalizedCandidateJson;
         values[0] = new("Otro", "1000 mg"); Assert.Equal(snapshot, candidate.NormalizedCandidateJson); Assert.Equal("500 mg", Assert.Single(candidate.Proposal.Components).Strength);
     }

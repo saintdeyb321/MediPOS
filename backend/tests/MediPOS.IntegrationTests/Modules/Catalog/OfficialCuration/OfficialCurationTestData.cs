@@ -33,7 +33,7 @@ internal static class OfficialCurationTestData
     {
         var version = Guid.NewGuid().ToString("N"); var id = identity ?? label;
         var csv = string.Join(',', OfficialCatalogInput.RequiredColumns) + "\n" + string.Join('\n', Enumerable.Range(1, count).Select(index =>
-            $"{id}{(count == 1 ? "" : "-" + index.ToString(System.Globalization.CultureInfo.InvariantCulture))},Producto {label},Laboratorio,REG-{label},Frasco 60 mL,Ingrediente fixture {label},{strength},SoluciÃ³n,Oral")) + "\n";
+            $"{id}{(count == 1 ? "" : "-" + index.ToString(System.Globalization.CultureInfo.InvariantCulture))},Producto {label},Laboratorio,REG-{label},Frasco 60 mL,Ingrediente fixture {label},{strength},Solución,Oral")) + "\n";
         using var input = new MemoryStream(Encoding.UTF8.GetBytes(csv));
         var batch = await source.GetRequiredService<StageOfficialCatalogImportHandler>().HandleAsync(new(sourceCode, version, null, "synthetic-curation.csv", OfficialCatalogInput.Format, input), Token);
         Assert.Equal("staged", batch.Status);

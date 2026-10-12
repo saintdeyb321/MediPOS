@@ -17,7 +17,8 @@ public static class OfficialCatalogInput
     // CSV header is record 1; data RowNumber is a record ordinal, not a physical multiline CSV line number.
     public static IReadOnlyList<string> RequiredColumns { get; } = Array.AsReadOnly(new[]
     { "SourceRecordId", "Name", "Laboratory", "Registration", "Presentation", "Ingredients", "Strength", "DosageForm", "Route" });
-    private static readonly Regex StrengthShape = new(@"^\s*\d+(?:[.,]\d+)?\s*(?:mcg|µg|mg|g|mL|L|IU|UI|%)(?:\s*/\s*\d*(?:[.,]\d+)?\s*(?:mcg|µg|mg|g|mL|L))?(?:\s*\+\s*\d+(?:[.,]\d+)?\s*(?:mcg|µg|mg|g|mL|L|IU|UI|%)(?:\s*/\s*\d*(?:[.,]\d+)?\s*(?:mcg|µg|mg|g|mL|L))?)*\s*$",
+    // Same lexical microgram policy as curation: mcg, U+00B5 and U+03BC, without dose/unit conversion.
+    private static readonly Regex StrengthShape = new(@"^\s*\d+(?:[.,]\d+)?\s*(?:mcg|(?-i:[\u00B5\u03BC])g|mg|g|mL|L|IU|UI|%)(?:\s*/\s*\d*(?:[.,]\d+)?\s*(?:mcg|(?-i:[\u00B5\u03BC])g|mg|g|mL|L))?(?:\s*\+\s*\d+(?:[.,]\d+)?\s*(?:mcg|(?-i:[\u00B5\u03BC])g|mg|g|mL|L|IU|UI|%)(?:\s*/\s*\d*(?:[.,]\d+)?\s*(?:mcg|(?-i:[\u00B5\u03BC])g|mg|g|mL|L))?)*\s*$",
         RegexOptions.CultureInvariant | RegexOptions.IgnoreCase | RegexOptions.NonBacktracking, TimeSpan.FromSeconds(1));
     private static readonly Regex Whitespace = new(@"\s+", RegexOptions.CultureInvariant | RegexOptions.NonBacktracking, TimeSpan.FromSeconds(1));
     private static readonly string[] ClinicalColumns = ["Ingredients", "Strength", "DosageForm", "Presentation"];

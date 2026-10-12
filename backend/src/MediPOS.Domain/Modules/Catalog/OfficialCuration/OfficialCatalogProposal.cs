@@ -56,7 +56,8 @@ public sealed record OfficialCatalogProposal([property: JsonConverter(typeof(Off
         return errors.Distinct(StringComparer.Ordinal).ToArray();
     }
     // Shape validation only. No conversion of dose, unit, salt, package, denominator or numeric precision.
-    private static readonly Regex StrengthShape = new(@"^\s*[0-9]+(?:[.,][0-9]+)?\s*(?:mcg|Ã‚Âµg|mg|g|mL|L|IU|UI|%)(?:\s*/\s*(?:[0-9]+(?:[.,][0-9]+)?\s*)?(?:mL|L|g|mg))?\s*$",
+    // Accept mcg, U+00B5 micro sign and U+03BC Greek mu explicitly; other Unicode lookalikes are not units.
+    private static readonly Regex StrengthShape = new(@"^\s*[0-9]+(?:[.,][0-9]+)?\s*(?:mcg|(?-i:[\u00B5\u03BC])g|mg|g|mL|L|IU|UI|%)(?:\s*/\s*(?:[0-9]+(?:[.,][0-9]+)?\s*)?(?:mL|L|g|mg))?\s*$",
         RegexOptions.CultureInvariant | RegexOptions.IgnoreCase, TimeSpan.FromMilliseconds(100));
 
     public bool HasValidCategory(Category? category) => category is not null && category.Id == CategoryId && category.IsActive;
