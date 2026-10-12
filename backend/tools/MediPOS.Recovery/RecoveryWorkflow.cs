@@ -112,30 +112,41 @@ public static class RecoveryWorkflow
                 if (before.Tables.TryGetValue(table, out var digest) && (!after.Tables.TryGetValue(table, out var retained) || retained != digest))
                     throw new InvalidOperationException("Migration changed a protected append-only history; an explicit compatibility strategy is required.");
         }
-        await RuntimeRecoveryProbe.ValidateAsync(config, target, token).ConfigureAwait(false);
+        var runtime = await RuntimeRecoveryProbe.ValidateAsync(config, target, token).ConfigureAwait(false);
         var pending = new Dictionary<string, string>(StringComparer.Ordinal);
         foreach (var pair in RecoveryRules.PendingQueries.Where(pair => after.Tables.ContainsKey(pair.Key)))
         {
             await using var command = new NpgsqlCommand(pair.Value, target);
             pending.Add(pair.Key, (await command.ExecuteScalarAsync(token).ConfigureAwait(false)) as string ?? "{}");
         }
-        await RecoveryFiles.WriteNewAsync(Path.Combine(directory, "result.json"), new
+        await RecoveryFiles.WriteNewAsync(Path.Combine(directory, "result.json"),
+            CreateResult(rehearse, manifest, config.RunId, before.Migrations, after.Migrations, runtime, pending), token).ConfigureAwait(false);
+    }
+
+    public static object CreateResult(bool rehearse, BackupManifest manifest, string runId, string[] beforeMigrations,
+        string[] afterMigrations, RuntimeRecoveryEvidence runtime, Dictionary<string, string> pending) => new
         {
             State = rehearse ? "RESTORE_AND_MIGRATION_VERIFIED" : "RESTORE_VERIFIED",
             ProcedureVersion = BackupManifest.Version,
+            EvidenceVersion = 2,
+            RestoreIntegrity = "VERIFIED",
             Utc = DateTimeOffset.UtcNow,
             BackupRunId = manifest.RunId,
-            RehearsalRunId = config.RunId,
+            RehearsalRunId = runId,
             ArtifactSha256 = manifest.Sha256,
-            BeforeMigrations = before.Migrations,
-            AfterMigrations = after.Migrations,
-            RuntimeRole = "CHECKED",
-            TenantIsolation = "TWO_TENANTS_CHECKED",
+            BeforeMigrations = beforeMigrations,
+            AfterMigrations = afterMigrations,
+            runtime.RuntimeRole,
+            runtime.TenantIsolation,
+            runtime.TenantsAvailable,
+            runtime.TenantsExamined,
+            runtime.IsolationScope,
+            PrivateTableChecks = runtime.Tables,
+            runtime.PendingVerifications,
             PendingOperations = pending,
             RegressionSuite = "PENDING_EXTERNAL_EXECUTION",
             ProductionRecovery = "NOT_AUTHORIZED"
-        }, token).ConfigureAwait(false);
-    }
+        };
 
     public static async Task<RecoverySnapshot> InspectAsync(NpgsqlConnection connection, bool current, CancellationToken token)
     {

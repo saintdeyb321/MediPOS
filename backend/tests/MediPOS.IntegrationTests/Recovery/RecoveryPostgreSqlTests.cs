@@ -12,7 +12,7 @@ using Npgsql;
 namespace MediPOS.IntegrationTests.Recovery;
 
 // External PostgreSQL only. Utility/TLS/two-cluster backup and restore are a separate runbook rehearsal.
-// Every adversarial mutation below is rolled back on a fresh marked synthetic database.
+// Adversarial mutations use only fresh marked synthetic databases; cross-connection RLS faults are restored in finally.
 [Collection("PostgreSQL")]
 [Trait("Category", "PostgreSql")]
 public sealed class RecoveryPostgreSqlTests(PostgreSqlFixture fixture)
@@ -101,13 +101,110 @@ public sealed class RecoveryPostgreSqlTests(PostgreSqlFixture fixture)
         await Assert.ThrowsAsync<InvalidOperationException>(() => forbidden.Database.OpenConnectionAsync(Token));
     }
 
-    private async Task<Harness> CreateAsync()
+    [Theory]
+    [InlineData(0, "NOT_DEMONSTRATED_NO_TENANTS")]
+    [InlineData(1, "NOT_DEMONSTRATED_SINGLE_TENANT")]
+    [InlineData(2, "SELECTED_PAIR_READ_CHECKED_WITH_GAPS")]
+    [InlineData(3, "SELECTED_PAIR_READ_CHECKED_WITH_GAPS")]
+    public async Task RealRuntimeProbeClassifiesEvidenceWithoutChangingRestoredData(int tenants, string isolation)
+    {
+        await using var harness = await CreateAsync(tenants);
+        await GrantProbeReadsAsync(harness);
+        await using var owner = new NpgsqlConnection(harness.OwnerConnection); await owner.OpenAsync(Token);
+        var before = await RecoveryWorkflow.InspectAsync(owner, true, Token);
+        var evidence = await RuntimeRecoveryProbe.ValidateAsync(harness.Database.RuntimeConnection, owner, Token);
+        Assert.Equal(tenants, evidence.TenantsAvailable);
+        Assert.Equal(Math.Min(2, tenants), evidence.TenantsExamined);
+        Assert.Equal("CHECKED", evidence.RuntimeRole);
+        Assert.Equal(isolation, evidence.TenantIsolation);
+        var products = Assert.Single(evidence.Tables, table => table.Table == "business_products");
+        Assert.All(products.Checks, check => { Assert.Equal(tenants == 0 ? 0 : 128, check.VisibleRows); Assert.Equal(0, check.ForeignRows); });
+        if (tenants == 0) Assert.Null(Assert.Single(products.Checks).TenantOrdinal);
+        if (tenants >= 2)
+        {
+            Assert.Equal("SELECTED_PAIR_ROWS_PRESENT", products.CrossTenantCoverage);
+            Assert.Equal("SELECTED_PAIR_ROWS_INCOMPLETE", Assert.Single(evidence.Tables, table => table.Table == "sale_payments").CrossTenantCoverage);
+            Assert.Contains("PRIVATE_TABLE_ROW_COVERAGE", evidence.PendingVerifications);
+        }
+        if (tenants > 2) Assert.Contains("ADDITIONAL_TENANTS", evidence.PendingVerifications);
+        RecoveryInspection.Compare(before, await RecoveryWorkflow.InspectAsync(owner, true, Token));
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(1)]
+    public async Task MissingSecondTenantNeverSkipsPrivilegedRuntimeRejection(int tenants)
+    {
+        await using var harness = await CreateAsync(tenants);
+        await using var owner = new NpgsqlConnection(harness.OwnerConnection); await owner.OpenAsync(Token);
+        var before = await RecoveryWorkflow.InspectAsync(owner, true, Token);
+        await Assert.ThrowsAsync<InvalidOperationException>(() => RuntimeRecoveryProbe.ValidateAsync(harness.OwnerConnection, owner, Token));
+        RecoveryInspection.Compare(before, await RecoveryWorkflow.InspectAsync(owner, true, Token));
+    }
+
+    [Fact]
+    public async Task CrossTenantVisibilityFaultIsRejectedByTheActualProbe()
+    {
+        await using var harness = await CreateAsync();
+        await GrantProbeReadsAsync(harness);
+        await using var owner = new NpgsqlConnection(harness.OwnerConnection); await owner.OpenAsync(Token);
+        var before = await RecoveryWorkflow.InspectAsync(owner, true, Token);
+        try
+        {
+            // Commit DDL only inside this disposable database so the separate runtime connection can observe the fault.
+            await using (var fault = new NpgsqlCommand("ALTER TABLE business_products DISABLE ROW LEVEL SECURITY", owner))
+                await fault.ExecuteNonQueryAsync(Token);
+            await Assert.ThrowsAsync<InvalidOperationException>(() => RuntimeRecoveryProbe.ValidateAsync(harness.Database.RuntimeConnection, owner, Token));
+        }
+        finally
+        {
+            await using var restore = new NpgsqlCommand("ALTER TABLE business_products ENABLE ROW LEVEL SECURITY; ALTER TABLE business_products FORCE ROW LEVEL SECURITY", owner);
+            await restore.ExecuteNonQueryAsync(Token);
+        }
+        RecoveryInspection.Compare(before, await RecoveryWorkflow.InspectAsync(owner, true, Token));
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(1)]
+    public async Task IntegrityFaultRemainsFatalWithFewerThanTwoTenants(int tenants)
+    {
+        await using var harness = await CreateAsync(tenants);
+        await using var owner = new NpgsqlConnection(harness.OwnerConnection); await owner.OpenAsync(Token);
+        var before = await RecoveryWorkflow.InspectAsync(owner, true, Token);
+        await using (var transaction = await owner.BeginTransactionAsync(IsolationLevel.RepeatableRead, Token))
+        {
+            await RecoveryInspection.ExecuteAsync(owner, transaction, "ALTER TABLE inventory_lots DISABLE ROW LEVEL SECURITY", Token);
+            var damaged = await RecoveryInspection.CaptureAsync(owner, transaction, Token);
+            Assert.Throws<InvalidOperationException>(() => RecoveryInspection.Compare(before, damaged));
+            await Assert.ThrowsAsync<InvalidOperationException>(() => RecoveryInspection.ValidateAsync(owner, transaction, damaged, true, Token));
+            await transaction.RollbackAsync(Token);
+        }
+        RecoveryInspection.Compare(before, await RecoveryWorkflow.InspectAsync(owner, true, Token));
+    }
+
+    private static async Task GrantProbeReadsAsync(Harness harness)
+    {
+        // The performance harness grants only benchmark tables. Extend SELECT only on this newly created synthetic database.
+        await using var owner = new NpgsqlConnection(harness.OwnerConnection); await owner.OpenAsync(Token);
+        var tables = await RecoveryInspection.StringsAsync(owner, null, """
+            SELECT c.relname FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
+            WHERE n.nspname='public' AND c.relkind='r' AND EXISTS(SELECT 1 FROM pg_attribute a WHERE a.attrelid=c.oid AND a.attname='tenant_id' AND NOT a.attisdropped)
+            ORDER BY c.relname
+            """, Token);
+        var role = RecoveryInspection.Quote(new NpgsqlConnectionStringBuilder(harness.Database.RuntimeConnection).Username!);
+        await using var grant = new NpgsqlCommand("GRANT SELECT ON " +
+            string.Join(",", tables.Select(table => "public." + RecoveryInspection.Quote(table))) + " TO " + role, owner);
+        await grant.ExecuteNonQueryAsync(Token);
+    }
+
+    private async Task<Harness> CreateAsync(int tenants = 2)
     {
         var options = new PerformanceOptions
         {
             Products = 128,
             StockedProducts = 128,
-            Tenants = 2,
+            Tenants = Math.Max(1, tenants),
             Branches = 1,
             OperatorsPerBranch = 2,
             Samples = 100,
@@ -135,7 +232,9 @@ public sealed class RecoveryPostgreSqlTests(PostgreSqlFixture fixture)
         var observation = new PerformanceObservation(); var dataset = new PerformanceDataset(options, database, observation);
         try
         {
-            await dataset.GenerateAsync(Token); administrator.Database = options.DatabaseName;
+            // A zero-tenant case uses the fresh migrated database without seeding, never deletes preserved tenants.
+            if (tenants > 0) await dataset.GenerateAsync(Token);
+            administrator.Database = options.DatabaseName;
             return new(options, database, observation, dataset, administrator.ConnectionString);
         }
         catch { await dataset.DisposeAsync(); observation.Dispose(); await database.DisposeAsync(); throw; }
