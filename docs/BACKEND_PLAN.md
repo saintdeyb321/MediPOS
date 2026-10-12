@@ -3,10 +3,10 @@
 This is the single execution roadmap for the backend. Prompts are given in chat and are **not** stored in the repository.
 
 ## Working state
-- **Current milestone:** M6 — Official pharmaceutical catalog pipeline
-- **Current sprint:** B6.3.1 — Official source chronology correction
-- **Status:** DONE locally
-- **Next gate:** B6.3.1 corrective audit and real PostgreSQL validation externally (22 original B6.3 cases plus 16 corrective cases prepared). Local gate passed: 1542 unit / 8 architecture tests, restore, build, format, no pending model changes and offline corrective migration SQL inspection. B6.3 is statically audited; B6.3.1 is integrated locally. Production platform authentication and an authorized source contract remain prerequisites for activation.
+- **Current milestone:** M7 — Tax & purchase-document integrations
+- **Current sprint:** B7.1 — Supplier UBL XML import
+- **Status:** DONE locally; B7.1 PostgreSQL validation and production authentication activation remain pending.
+- **Next gate:** Execute B7.1 PostgreSQL tests externally and review production authentication before exposing the internal use cases. B6.3.1 is DONE / statically audited. M6 implementation is complete; PostgreSQL validation and production activation remain pending. B7.2 has not started.
 
 Local policy: this machine has no Docker and will not install it. Do not check/start Docker or run PostgreSQL/Testcontainers here. B0.1 is complete locally. Keep real PostgreSQL integration tests for another environment; they are not part of the local gate and must not be reported as passed without execution.
 
@@ -230,6 +230,7 @@ Goal: safe limited contingency sync.
 ---
 
 # M6 — Official pharmaceutical catalog pipeline
+**Status:** Implementation complete; PostgreSQL validation and production activation pending.
 Goal: controlled ingestion without fragile runtime dependency.
 
 ### B6.1 — Staging/import pipeline
@@ -242,7 +243,7 @@ Goal: controlled ingestion without fragile runtime dependency.
 **Scope:** normalization and superadmin review; only validated records become global.
 
 ### B6.3 — Versioned refresh/history
-**Status:** DONE locally / statically audited — B6.3.1 chronology correction integrated. Preparation, active review and application compare official publication dates against the last applied history for the exact source and official identity, falling back to the original publication only before any refresh is applied. Earlier dates are stale, equal dates or reused versions conflict, and missing dates leave order unverified; opaque version labels are never sorted. Applied retries are read-only. The corrective migration replaces guards without changing historical data or the EF model. Local gate and offline model/script checks passed; corrective audit and 38 prepared PostgreSQL cases remain pending externally. No production authorization/source adapter, implicit administrative override or M7 work is enabled.
+**Status:** DONE locally / statically audited — B6.3.1 chronology correction integrated. Preparation, active review and application compare official publication dates against the last applied history for the exact source and official identity, falling back to the original publication only before any refresh is applied. Earlier dates are stale, equal dates or reused versions conflict, and missing dates leave order unverified; opaque version labels are never sorted. Applied retries are read-only. The corrective migration replaces guards without changing historical data or the EF model. Local gate and offline model/script checks passed; 38 prepared PostgreSQL cases remain pending externally. No production authorization/source adapter, implicit administrative override or M7 work is enabled.
 **Scope:** refresh by verified source and official identity; compare changes, preserve the global product identity and apply only approved administrative metadata with complete history.
 
 **M6 gate:** tenant operations never depend on live scraping; global catalog publication is curated.
@@ -253,8 +254,10 @@ Goal: controlled ingestion without fragile runtime dependency.
 Goal: optional integrations without coupling the core.
 
 ### B7.1 — Supplier UBL XML import
+**Status:** DONE — implementation and local gate complete; real PostgreSQL validation and production HTTP authentication remain pending.
 **Requirements:** FR-PUR-005.
 **Scope:** parse/map into reviewable pre-purchase; no automatic stock increase before human confirmation.
+**Implemented:** bounded, namespace-aware Invoice UBL 2.1/Customization 2.0/type 01 parser; immutable XML/checksum and documentary evidence; legal receiver RUC validation; conservative suggestions and explicit product/presentation/quantity/cost/lot review; Owner/Pharmacist server authorization; tenant-safe idempotency, audit, FORCE RLS and draft provenance. Conversion uses existing Purchasing invariants and never receives stock. `AddSupplierUblImports` adds three private tables, composite FKs and guarded transitions without changing historical migrations or stock schema. Local restore/build, 1604 unit tests (62 B7.1), 8 architecture tests, format verification, EF pending-model check and offline migration SQL inspection passed. 36 real PostgreSQL cases are prepared and compiled, including concurrent retries, rollback, pooling, tenant isolation and the three-medicine workflow; none ran locally. The provisional profile and protected referenced presentation/receipt rows are documented in ARCHITECTURE.md. B7.2 is untouched.
 
 ### B7.2 — Electronic document provider abstraction
 **Requirements:** FR-CPE-001..005.

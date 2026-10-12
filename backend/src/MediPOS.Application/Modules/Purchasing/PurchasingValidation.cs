@@ -1,6 +1,9 @@
 using MediPOS.Application.Errors;
+using MediPOS.Application.Modules.AuditSupport;
 using MediPOS.Application.Modules.Branches;
+using MediPOS.Application.Modules.Purchasing.ReplacePurchaseLines;
 using MediPOS.Application.Modules.TenancyLicensing;
+using MediPOS.Domain.Modules.Catalog;
 using MediPOS.Domain.Modules.Purchasing;
 
 namespace MediPOS.Application.Modules.Purchasing;
@@ -14,6 +17,24 @@ public static class PurchasingErrors
 
 internal static class PurchasingValidation
 {
+    public static async Task<Purchase> CreateDraftAsync(Guid tenantId, Guid branchId, Guid? supplierId, string? reference,
+        Guid actorId, IBranchesStore branches, IPurchasingStore store, DateTimeOffset now, CancellationToken token)
+    {
+        AuditTrail.RequireActor(actorId);
+        if (branchId == Guid.Empty || supplierId == Guid.Empty) throw new ApplicationErrorException(ApplicationErrors.InvalidRequest);
+        await ReferencesAsync(tenantId, branchId, supplierId, branches, store, token).ConfigureAwait(false);
+        try { return Purchase.Create(tenantId, branchId, supplierId, reference, actorId, now); }
+        catch (ArgumentException) { throw new ApplicationErrorException(ApplicationErrors.InvalidRequest); }
+    }
+    public static PurchaseLine CreateLine(Purchase purchase, BusinessProduct product, ProductUnit unit, PurchaseLineInput input)
+    {
+        if (input.BusinessProductId == Guid.Empty || input.ProductUnitId == Guid.Empty || input.BusinessProductId != product.Id || input.ProductUnitId != unit.Id)
+            throw new ApplicationErrorException(ApplicationErrors.InvalidRequest);
+        try { return PurchaseLine.Create(purchase, product, unit, input.Quantity, input.UnitCost, input.BatchNumber, input.ExpirationDate); }
+        catch (Exception error) when (error is ArgumentException or ArithmeticException or InvalidOperationException)
+        { throw new ApplicationErrorException(ApplicationErrors.InvalidRequest); }
+    }
+
     public static async Task<ITenantLicenseProvisioningScope> BeginAsync(
         Guid tenantId, ITenantLicenseProvisioning provisioning, TimeProvider clock, CancellationToken cancellationToken)
     {

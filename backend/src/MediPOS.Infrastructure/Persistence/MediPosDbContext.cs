@@ -14,6 +14,7 @@ using MediPOS.Domain.Modules.Inventory;
 using MediPOS.Domain.Modules.Notifications;
 using MediPOS.Domain.Modules.OfflineSync;
 using MediPOS.Domain.Modules.Purchasing;
+using MediPOS.Domain.Modules.Purchasing.Ubl;
 using MediPOS.Domain.Modules.SalesPos;
 using MediPOS.Domain.Modules.TenancyLicensing;
 using MediPOS.Domain.Modules.Transfers;
@@ -31,6 +32,7 @@ using MediPOS.Infrastructure.Modules.Inventory.Persistence.Configurations;
 using MediPOS.Infrastructure.Modules.Notifications.Persistence;
 using MediPOS.Infrastructure.Modules.OfflineSync.Persistence;
 using MediPOS.Infrastructure.Modules.Purchasing.Persistence.Configurations;
+using MediPOS.Infrastructure.Modules.Purchasing.Ubl;
 using MediPOS.Infrastructure.Modules.SalesPos.Persistence;
 using MediPOS.Infrastructure.Modules.TenancyLicensing.Persistence.Configurations;
 using MediPOS.Infrastructure.Modules.Transfers.Persistence;
@@ -55,6 +57,9 @@ public sealed partial class MediPosDbContext(DbContextOptions<MediPosDbContext> 
         optionsBuilder.AddInterceptors(new TenantConnectionInterceptor(tenantContext), new TenantCommandInterceptor(tenantContext));
     }
 
+    public DbSet<SupplierUblImport> SupplierUblImports => Set<SupplierUblImport>();
+    public DbSet<SupplierUblImportLine> SupplierUblImportLines => Set<SupplierUblImportLine>();
+    public DbSet<SupplierUblPurchaseLineLink> SupplierUblPurchaseLineLinks => Set<SupplierUblPurchaseLineLink>();
     public DbSet<Tenant> Tenants => Set<Tenant>();
     public DbSet<Notification> Notifications => Set<Notification>();
     public DbSet<SyncDevice> SyncDevices => Set<SyncDevice>();
@@ -160,6 +165,9 @@ public sealed partial class MediPosDbContext(DbContextOptions<MediPosDbContext> 
         modelBuilder.ApplyConfiguration(new ImportJobConfiguration());
         modelBuilder.ApplyConfiguration(new ImportRowResultConfiguration());
 
+        modelBuilder.ApplyConfiguration(new SupplierUblImportConfiguration());
+        modelBuilder.ApplyConfiguration(new SupplierUblImportLineConfiguration());
+        modelBuilder.ApplyConfiguration(new SupplierUblPurchaseLineLinkConfiguration());
         modelBuilder.ApplyConfiguration(new SupplierConfiguration());
 
         modelBuilder.ApplyConfiguration(new PurchaseConfiguration());
@@ -200,6 +208,9 @@ public sealed partial class MediPosDbContext(DbContextOptions<MediPosDbContext> 
         modelBuilder.Entity<CommissionRule>().HasQueryFilter(value => SelectedTenantId.HasValue && value.TenantId == SelectedTenantId);
         modelBuilder.Entity<CommissionEntry>().HasQueryFilter(value => SelectedTenantId.HasValue && value.TenantId == SelectedTenantId);
         modelBuilder.Entity<BusinessProduct>().HasQueryFilter(value => SelectedTenantId.HasValue && value.TenantId == SelectedTenantId);
+        modelBuilder.Entity<SupplierUblImport>().HasQueryFilter(v => SelectedTenantId.HasValue && v.TenantId == SelectedTenantId);
+        modelBuilder.Entity<SupplierUblImportLine>().HasQueryFilter(v => SelectedTenantId.HasValue && v.TenantId == SelectedTenantId);
+        modelBuilder.Entity<SupplierUblPurchaseLineLink>().HasQueryFilter(v => SelectedTenantId.HasValue && v.TenantId == SelectedTenantId);
         modelBuilder.Entity<Supplier>().HasQueryFilter(value => SelectedTenantId.HasValue && value.TenantId == SelectedTenantId);
         modelBuilder.Entity<Purchase>().HasQueryFilter(value => SelectedTenantId.HasValue && value.TenantId == SelectedTenantId);
         modelBuilder.Entity<PurchaseLine>().HasQueryFilter(value => SelectedTenantId.HasValue && value.TenantId == SelectedTenantId);
@@ -235,6 +246,7 @@ public sealed partial class MediPosDbContext(DbContextOptions<MediPosDbContext> 
         ValidateCashTransferWrites();
         ValidateCommissionWrites();
         ValidateStockThresholdWrites();
+        ValidateSupplierUblWrites();
         ValidateTenantWrites();
         return base.SaveChanges(acceptAllChangesOnSuccess);
     }
@@ -258,6 +270,7 @@ public sealed partial class MediPosDbContext(DbContextOptions<MediPosDbContext> 
         ValidateCashTransferWrites();
         ValidateCommissionWrites();
         ValidateStockThresholdWrites();
+        ValidateSupplierUblWrites();
         ValidateTenantWrites();
         return base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken);
     }
@@ -570,6 +583,9 @@ public sealed partial class MediPosDbContext(DbContextOptions<MediPosDbContext> 
                 CommissionRule value => value.TenantId,
                 CommissionEntry value => value.TenantId,
                 BusinessProduct value => value.TenantId,
+                SupplierUblImport value => value.TenantId,
+                SupplierUblImportLine value => value.TenantId,
+                SupplierUblPurchaseLineLink value => value.TenantId,
                 Supplier value => value.TenantId,
                 Purchase value => value.TenantId,
                 PurchaseLine value => value.TenantId,

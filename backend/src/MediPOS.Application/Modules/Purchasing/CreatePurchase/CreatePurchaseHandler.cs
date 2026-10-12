@@ -18,10 +18,8 @@ public sealed class CreatePurchaseHandler(IPurchasingStore store, IBranchesStore
         if (command.BranchId == Guid.Empty || command.SupplierId == Guid.Empty)
             throw new ApplicationErrorException(ApplicationErrors.InvalidRequest);
         await using var scope = await PurchasingValidation.BeginAsync(command.TenantId, provisioning, clock, cancellationToken).ConfigureAwait(false);
-        await PurchasingValidation.ReferencesAsync(command.TenantId, command.BranchId, command.SupplierId, branches, store, cancellationToken).ConfigureAwait(false);
-        Purchase purchase;
-        try { purchase = Purchase.Create(command.TenantId, command.BranchId, command.SupplierId, command.DocumentReference, command.ActorId, clock.GetUtcNow()); }
-        catch (ArgumentException) { throw new ApplicationErrorException(ApplicationErrors.InvalidRequest); }
+        var purchase = await PurchasingValidation.CreateDraftAsync(command.TenantId, command.BranchId, command.SupplierId,
+            command.DocumentReference, command.ActorId, branches, store, clock.GetUtcNow(), cancellationToken).ConfigureAwait(false);
         await store.AddPurchaseAsync(purchase, cancellationToken).ConfigureAwait(false);
         await scope.CompleteAsync(cancellationToken).ConfigureAwait(false);
         return PurchaseDetails.From(purchase);

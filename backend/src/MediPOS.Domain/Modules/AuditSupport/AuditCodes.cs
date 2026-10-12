@@ -11,14 +11,20 @@ public enum AuditAction
     CashTransferDispatched, CashTransferReceived,
     CommissionSettingsChanged, CommissionRuleCreated, CommissionRuleDeactivated, StockThresholdChanged,
     SyncDeviceRegistered, SyncDeviceRevoked, OfflineSaleConflictResolved,
+    SupplierUblImported, SupplierUblReviewed, SupplierUblRejected, SupplierUblConverted, SupplierUblFileRejected,
 }
 
-public enum AuditEntityType { Tenant, License, LegalEntity, Branch, Membership, BusinessProduct, Purchase, InventoryLot, ImportJob, CashSession, Sale, Transfer, CashTransfer, TenantCommissionSettings, CommissionRule, BranchStockThreshold, SyncDevice, OfflineSaleConflict }
+public enum AuditEntityType { Tenant, License, LegalEntity, Branch, Membership, BusinessProduct, Purchase, InventoryLot, ImportJob, CashSession, Sale, Transfer, CashTransfer, TenantCommissionSettings, CommissionRule, BranchStockThreshold, SyncDevice, OfflineSaleConflict, SupplierUblImport }
 
 public static class AuditCodes
 {
     public static string ActionToCode(AuditAction action) => action switch
     {
+        AuditAction.SupplierUblImported => "supplier_ubl.imported",
+        AuditAction.SupplierUblReviewed => "supplier_ubl.reviewed",
+        AuditAction.SupplierUblRejected => "supplier_ubl.rejected",
+        AuditAction.SupplierUblConverted => "supplier_ubl.converted",
+        AuditAction.SupplierUblFileRejected => "supplier_ubl.file_rejected",
         AuditAction.TenantCreated => "tenant.created",
         AuditAction.LicenseRenewed => "license.renewed",
         AuditAction.LicenseSuspended => "license.suspended",
@@ -61,6 +67,11 @@ public static class AuditCodes
 
     public static AuditAction ActionFromCode(string code) => code switch
     {
+        "supplier_ubl.imported" => AuditAction.SupplierUblImported,
+        "supplier_ubl.reviewed" => AuditAction.SupplierUblReviewed,
+        "supplier_ubl.rejected" => AuditAction.SupplierUblRejected,
+        "supplier_ubl.converted" => AuditAction.SupplierUblConverted,
+        "supplier_ubl.file_rejected" => AuditAction.SupplierUblFileRejected,
         "tenant.created" => AuditAction.TenantCreated,
         "license.renewed" => AuditAction.LicenseRenewed,
         "license.suspended" => AuditAction.LicenseSuspended,
@@ -103,6 +114,7 @@ public static class AuditCodes
 
     public static AuditEntityType EntityFor(AuditAction action) => action switch
     {
+        AuditAction.SupplierUblImported or AuditAction.SupplierUblReviewed or AuditAction.SupplierUblRejected or AuditAction.SupplierUblConverted or AuditAction.SupplierUblFileRejected => AuditEntityType.SupplierUblImport,
         AuditAction.TenantCreated or AuditAction.TenantPurgeRequested => AuditEntityType.Tenant,
         AuditAction.LicenseRenewed or AuditAction.LicenseSuspended or AuditAction.LicenseReactivated => AuditEntityType.License,
         AuditAction.LegalEntityCreated => AuditEntityType.LegalEntity,
@@ -128,6 +140,7 @@ public static class AuditCodes
 
     public static string EntityToCode(AuditEntityType entityType) => entityType switch
     {
+        AuditEntityType.SupplierUblImport => "supplier_ubl_import",
         AuditEntityType.Tenant => "tenant",
         AuditEntityType.License => "license",
         AuditEntityType.LegalEntity => "legal_entity",
@@ -151,6 +164,7 @@ public static class AuditCodes
 
     public static AuditEntityType EntityFromCode(string code) => code switch
     {
+        "supplier_ubl_import" => AuditEntityType.SupplierUblImport,
         "tenant" => AuditEntityType.Tenant,
         "license" => AuditEntityType.License,
         "legal_entity" => AuditEntityType.LegalEntity,

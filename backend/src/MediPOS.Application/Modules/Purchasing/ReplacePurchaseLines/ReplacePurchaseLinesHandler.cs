@@ -37,9 +37,7 @@ public sealed class ReplacePurchaseLinesHandler(IPurchasingStore store, IBusines
             var presentations = await units.FindAsync(command.TenantId, product.Id, cancellationToken).ConfigureAwait(false);
             var unit = presentations.SingleOrDefault(value => value.Id == input.ProductUnitId)
                 ?? throw new ApplicationErrorException(ApplicationErrors.InvalidRequest);
-            try { lines.Add(PurchaseLine.Create(purchase, product, unit, input.Quantity, input.UnitCost, input.BatchNumber, input.ExpirationDate)); }
-            catch (Exception error) when (error is ArgumentException or ArithmeticException or InvalidOperationException)
-            { throw new ApplicationErrorException(ApplicationErrors.InvalidRequest); }
+            lines.Add(PurchasingValidation.CreateLine(purchase, product, unit, input));
         }
         // Nothing is changed until every input has resolved and validated.
         await store.ReplaceLinesAsync(purchase, lines, cancellationToken).ConfigureAwait(false);
