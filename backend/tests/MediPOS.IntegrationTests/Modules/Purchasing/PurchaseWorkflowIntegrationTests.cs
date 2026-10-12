@@ -246,6 +246,7 @@ public sealed class PurchaseWorkflowIntegrationTests(PostgreSqlFixture fixture)
         registrations.AddScoped(source => new MediPosDbContext(
             new DbContextOptionsBuilder<MediPosDbContext>().UseNpgsql(fixture.ConnectionString).AddInterceptors(interceptor).Options,
             source.GetRequiredService<ITenantDataContext>()));
+        registrations.AddPersistenceFixtureAuthorization();
         return registrations.BuildServiceProvider();
     }
 

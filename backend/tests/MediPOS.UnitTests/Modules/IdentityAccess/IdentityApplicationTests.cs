@@ -49,7 +49,7 @@ public sealed class IdentityApplicationTests
     {
         var store = new RecordingStore();
         var provisioning = new RecordingProvisioning(store);
-        var result = await new CreateMembershipHandler(store, provisioning, new Clock()).HandleAsync(
+        var result = await new CreateMembershipHandler(store, provisioning, new Clock(), new BusinessRuleAuthorizationStub(), new PlatformAdministrationStub(null)).HandleAsync(
             new(store.TenantId, store.UserId, TenantRole.Owner, Guid.NewGuid()), TestContext.Current.CancellationToken);
         Assert.Equal(CreationSteps, store.Steps);
         Assert.Equal(Now, result.CreatedAt);
@@ -105,7 +105,7 @@ public sealed class IdentityApplicationTests
     {
         var store = new RecordingStore { UserExists = missingTenant };
         var provisioning = new RecordingProvisioning(store) { Missing = missingTenant };
-        await Assert.ThrowsAsync<ApplicationErrorException>(() => new CreateMembershipHandler(store, provisioning, new Clock()).HandleAsync(
+        await Assert.ThrowsAsync<ApplicationErrorException>(() => new CreateMembershipHandler(store, provisioning, new Clock(), new BusinessRuleAuthorizationStub(), new PlatformAdministrationStub(null)).HandleAsync(
             new(store.TenantId, store.UserId, TenantRole.Owner, Guid.NewGuid()), TestContext.Current.CancellationToken));
         Assert.Empty(store.Memberships);
         Assert.DoesNotContain("commit", store.Steps);
@@ -119,7 +119,7 @@ public sealed class IdentityApplicationTests
         var branch = Branch.Create(store.TenantId, Guid.NewGuid(), store.TenantId, "Centro", Now);
         branches.Values.Add(branch);
         store.Assignments.Add(MembershipBranch.Create(store.TenantId, store.Memberships[0].Id, store.TenantId, branch.Id, store.TenantId));
-        var handler = new SetMembershipBranchesHandler(store, branches, new RecordingProvisioning(store), new Clock());
+        var handler = new SetMembershipBranchesHandler(store, branches, new RecordingProvisioning(store), new Clock(), new BusinessRuleAuthorizationStub());
         await Assert.ThrowsAsync<ApplicationErrorException>(() => handler.HandleAsync(
             new(store.TenantId, store.Memberships[0].Id, [branch.Id, Guid.NewGuid()], Guid.NewGuid()), TestContext.Current.CancellationToken));
         Assert.Single(store.Assignments);
@@ -134,7 +134,7 @@ public sealed class IdentityApplicationTests
         var branches = new BranchLookup();
         branches.Values.Add(Branch.Create(store.TenantId, Guid.NewGuid(), store.TenantId, "Centro", Now));
         branches.Values.Add(Branch.Create(store.TenantId, Guid.NewGuid(), store.TenantId, "Norte", Now));
-        var handler = new SetMembershipBranchesHandler(store, branches, new RecordingProvisioning(store), new Clock());
+        var handler = new SetMembershipBranchesHandler(store, branches, new RecordingProvisioning(store), new Clock(), new BusinessRuleAuthorizationStub());
         await handler.HandleAsync(new(store.TenantId, store.Memberships[0].Id, branches.Values.Select(value => value.Id).ToArray(), Guid.NewGuid()),
             TestContext.Current.CancellationToken);
         Assert.Equal(2, store.Assignments.Count);
@@ -150,11 +150,11 @@ public sealed class IdentityApplicationTests
         var membershipId = store.Memberships[0].Id;
         var branchId = Guid.NewGuid();
         await Assert.ThrowsAsync<ApplicationErrorException>(() =>
-            new SetMembershipBranchesHandler(store, new BranchLookup(), new RecordingProvisioning(store), new Clock()).HandleAsync(
+            new SetMembershipBranchesHandler(store, new BranchLookup(), new RecordingProvisioning(store), new Clock(), new BusinessRuleAuthorizationStub()).HandleAsync(
                 new(store.TenantId, membershipId, [branchId, branchId], Guid.NewGuid()), TestContext.Current.CancellationToken));
         var window = new WorkWindow(DayOfWeek.Tuesday, new(9, 0), new(18, 0));
         await Assert.ThrowsAsync<ApplicationErrorException>(() =>
-            new ReplaceWorkScheduleHandler(store, new RecordingProvisioning(store), new Clock()).HandleAsync(
+            new ReplaceWorkScheduleHandler(store, new RecordingProvisioning(store), new Clock(), new BusinessRuleAuthorizationStub()).HandleAsync(
                 new(store.TenantId, membershipId, [window, window], Guid.NewGuid()), TestContext.Current.CancellationToken));
         Assert.Empty(store.Steps);
     }
@@ -165,7 +165,7 @@ public sealed class IdentityApplicationTests
         var store = WithMembership();
         var membership = store.Memberships[0];
         store.Schedule.Add(WorkSchedule.Create(store.TenantId, membership.Id, store.TenantId, DayOfWeek.Tuesday, new(9, 0), new(18, 0)));
-        await Assert.ThrowsAsync<ApplicationErrorException>(() => new ReplaceWorkScheduleHandler(store, new RecordingProvisioning(store), new Clock())
+        await Assert.ThrowsAsync<ApplicationErrorException>(() => new ReplaceWorkScheduleHandler(store, new RecordingProvisioning(store), new Clock(), new BusinessRuleAuthorizationStub())
             .HandleAsync(new(store.TenantId, membership.Id,
                 [new(DayOfWeek.Monday, new(9, 0), new(18, 0)), new(DayOfWeek.Tuesday, new(18, 0), new(9, 0))], Guid.NewGuid()), TestContext.Current.CancellationToken));
         Assert.Single(store.Schedule);
@@ -176,7 +176,7 @@ public sealed class IdentityApplicationTests
     public async Task ScheduleReplacementAllowsMultipleDailyWindowsAndClearing()
     {
         var store = WithMembership();
-        var handler = new ReplaceWorkScheduleHandler(store, new RecordingProvisioning(store), new Clock());
+        var handler = new ReplaceWorkScheduleHandler(store, new RecordingProvisioning(store), new Clock(), new BusinessRuleAuthorizationStub());
         await handler.HandleAsync(new(store.TenantId, store.Memberships[0].Id,
             [new(DayOfWeek.Tuesday, new(9, 0), new(12, 0)), new(DayOfWeek.Tuesday, new(14, 0), new(18, 0)),
              new(DayOfWeek.Wednesday, new(9, 0), new(18, 0))], Guid.NewGuid()), TestContext.Current.CancellationToken);
@@ -194,7 +194,7 @@ public sealed class IdentityApplicationTests
         store.Assignments.Add(MembershipBranch.Create(store.TenantId, membership.Id, store.TenantId, Guid.NewGuid(), store.TenantId));
         store.Schedule.Add(WorkSchedule.Create(store.TenantId, membership.Id, store.TenantId, DayOfWeek.Tuesday, new(9, 0), new(18, 0)));
         var provisioning = new RecordingProvisioning(store);
-        var handler = new DeactivateMembershipHandler(store, provisioning, new Clock());
+        var handler = new DeactivateMembershipHandler(store, provisioning, new Clock(), new BusinessRuleAuthorizationStub());
         var result = await handler.HandleAsync(new(store.TenantId, membership.Id, Guid.NewGuid()), TestContext.Current.CancellationToken);
         Assert.False(result.IsActive);
         Assert.Equal(Now, result.DeactivatedAt);
@@ -203,10 +203,10 @@ public sealed class IdentityApplicationTests
         Assert.Single(store.Assignments);
         Assert.Single(store.Schedule);
         await Assert.ThrowsAsync<ApplicationErrorException>(() =>
-            new SetMembershipBranchesHandler(store, new BranchLookup(), provisioning, new Clock()).HandleAsync(
+            new SetMembershipBranchesHandler(store, new BranchLookup(), provisioning, new Clock(), new BusinessRuleAuthorizationStub()).HandleAsync(
                 new(store.TenantId, membership.Id, [], Guid.NewGuid()), TestContext.Current.CancellationToken));
         await Assert.ThrowsAsync<ApplicationErrorException>(() =>
-            new ReplaceWorkScheduleHandler(store, provisioning, new Clock()).HandleAsync(
+            new ReplaceWorkScheduleHandler(store, provisioning, new Clock(), new BusinessRuleAuthorizationStub()).HandleAsync(
                 new(store.TenantId, membership.Id, [], Guid.NewGuid()), TestContext.Current.CancellationToken));
     }
 
@@ -215,7 +215,7 @@ public sealed class IdentityApplicationTests
     {
         var store = WithMembership();
         await Assert.ThrowsAsync<ApplicationErrorException>(() =>
-            new DeactivateMembershipHandler(store, new RecordingProvisioning(store), new Clock()).HandleAsync(
+            new DeactivateMembershipHandler(store, new RecordingProvisioning(store), new Clock(), new BusinessRuleAuthorizationStub()).HandleAsync(
                 new(Guid.NewGuid(), store.Memberships[0].Id, Guid.NewGuid()), TestContext.Current.CancellationToken));
         Assert.True(store.Memberships[0].IsActive);
         Assert.DoesNotContain("commit", store.Steps);
@@ -227,16 +227,16 @@ public sealed class IdentityApplicationTests
         var store = new RecordingStore();
         var actor = Guid.NewGuid();
         var provisioning = new RecordingProvisioning(store);
-        var membership = await new CreateMembershipHandler(store, provisioning, new Clock()).HandleAsync(
+        var membership = await new CreateMembershipHandler(store, provisioning, new Clock(), new BusinessRuleAuthorizationStub(), new PlatformAdministrationStub(null)).HandleAsync(
             new(store.TenantId, store.UserId, TenantRole.Pharmacist, actor), TestContext.Current.CancellationToken);
         var branches = new BranchLookup();
         var branch = Branch.Create(store.TenantId, Guid.NewGuid(), store.TenantId, "Centro", Now);
         branches.Values.Add(branch);
-        await new SetMembershipBranchesHandler(store, branches, provisioning, new Clock()).HandleAsync(
+        await new SetMembershipBranchesHandler(store, branches, provisioning, new Clock(), new BusinessRuleAuthorizationStub()).HandleAsync(
             new(store.TenantId, membership.Id, [branch.Id], actor), TestContext.Current.CancellationToken);
-        await new ReplaceWorkScheduleHandler(store, provisioning, new Clock()).HandleAsync(
+        await new ReplaceWorkScheduleHandler(store, provisioning, new Clock(), new BusinessRuleAuthorizationStub()).HandleAsync(
             new(store.TenantId, membership.Id, [new(DayOfWeek.Tuesday, new(9, 0), new(18, 0))], actor), TestContext.Current.CancellationToken);
-        var deactivate = new DeactivateMembershipHandler(store, provisioning, new Clock());
+        var deactivate = new DeactivateMembershipHandler(store, provisioning, new Clock(), new BusinessRuleAuthorizationStub());
         await deactivate.HandleAsync(new(store.TenantId, membership.Id, actor), TestContext.Current.CancellationToken);
         await deactivate.HandleAsync(new(store.TenantId, membership.Id, actor), TestContext.Current.CancellationToken);
         Assert.Equal(4, store.Audits.Count);
@@ -269,7 +269,42 @@ public sealed class IdentityApplicationTests
         Assert.Empty(store.Memberships);
     }
 
-    private static CreateMembershipHandler CreateHandler(RecordingStore store) => new(store, new RecordingProvisioning(store), new Clock());
+    [Fact]
+    public async Task PlatformCanBootstrapOnlyTheFirstOwnerAndDoesNotReopenHistoricalBootstrap()
+    {
+        var store = new RecordingStore();
+        var actor = Guid.NewGuid();
+        var handler = new CreateMembershipHandler(store, new RecordingProvisioning(store), new Clock(),
+            new BusinessRuleAuthorizationStub(), new PlatformAdministrationStub(actor));
+        var result = await handler.HandleAsync(new(store.TenantId, store.UserId, TenantRole.Owner, actor), TestContext.Current.CancellationToken);
+        var membership = Assert.Single(store.Memberships);
+        Assert.Equal(result.Id, membership.Id);
+        Assert.Equal(actor, Assert.Single(store.Audits).ActorId);
+        membership.Deactivate(Now);
+        var error = await Assert.ThrowsAsync<ApplicationErrorException>(() => handler.HandleAsync(
+            new(store.TenantId, Guid.NewGuid(), TenantRole.Owner, actor), TestContext.Current.CancellationToken));
+        Assert.Equal("access.bootstrap_denied", error.Error.Code);
+        Assert.Single(store.Memberships);
+        Assert.Single(store.Audits);
+    }
+
+    [Theory]
+    [InlineData(TenantRole.Pharmacist)]
+    [InlineData(TenantRole.Cashier)]
+    public async Task PlatformBootstrapCannotProvisionAnEmployeeInsteadOfTheInitialOwner(TenantRole role)
+    {
+        var store = new RecordingStore();
+        var actor = Guid.NewGuid();
+        var handler = new CreateMembershipHandler(store, new RecordingProvisioning(store), new Clock(),
+            new BusinessRuleAuthorizationStub(), new PlatformAdministrationStub(actor));
+        var error = await Assert.ThrowsAsync<ApplicationErrorException>(() => handler.HandleAsync(
+            new(store.TenantId, store.UserId, role, actor), TestContext.Current.CancellationToken));
+        Assert.Equal("access.bootstrap_denied", error.Error.Code);
+        Assert.Empty(store.Memberships);
+        Assert.Empty(store.Audits);
+    }
+
+    private static CreateMembershipHandler CreateHandler(RecordingStore store) => new(store, new RecordingProvisioning(store), new Clock(), new BusinessRuleAuthorizationStub(), new PlatformAdministrationStub(null));
 
     private static RecordingStore WithMembership()
     {
@@ -291,6 +326,8 @@ public sealed class IdentityApplicationTests
     // Recording ports test application sequencing, not PostgreSQL concurrency or constraints.
     private sealed class RecordingStore : IIdentityAccessStore
     {
+        public Task<bool> HasOwnerHistoryAsync(Guid tenantId, CancellationToken token) =>
+            Task.FromResult(Memberships.Any(value => value.TenantId == tenantId && value.Role == TenantRole.Owner));
         public Guid TenantId { get; } = Guid.NewGuid();
         public Guid UserId { get; } = Guid.NewGuid();
         public bool UserExists { get; init; } = true;

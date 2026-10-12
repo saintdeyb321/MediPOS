@@ -1,3 +1,4 @@
+using MediPOS.Application.Modules.IdentityAccess.OperationalAccess;
 using System.Globalization;
 using System.Text.Json;
 using MediPOS.Application.Errors;
@@ -39,12 +40,13 @@ public static class ProductUnitsAudit
 }
 
 public sealed class ReplaceProductUnitsHandler(
-    IProductUnitStore store, IBusinessProductStore products, ITenantLicenseProvisioning provisioning, TimeProvider timeProvider)
+    IProductUnitStore store, IBusinessProductStore products, ITenantLicenseProvisioning provisioning, TimeProvider timeProvider, ITenantOperationAuthorizer authorization)
 {
     public async Task<IReadOnlyList<ProductUnitDetails>> HandleAsync(ReplaceProductUnitsCommand command, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(command);
         AuditTrail.RequireActor(command.ActorId);
+        await authorization.RequireAsync(command.TenantId, null, command.ActorId, TenantOperation.Administration, cancellationToken).ConfigureAwait(false);
         if (command.TenantId == Guid.Empty || command.BusinessProductId == Guid.Empty || command.Units is null)
             throw new ApplicationErrorException(ApplicationErrors.InvalidRequest);
         await using var scope = await provisioning.BeginAsync(command.TenantId, cancellationToken).ConfigureAwait(false)
@@ -66,12 +68,14 @@ public sealed class ReplaceProductUnitsHandler(
         var after = ProductUnitsAudit.Snapshot(units);
         if (string.Equals(before, after, StringComparison.Ordinal))
         {
-            await scope.CompleteAsync(cancellationToken).ConfigureAwait(false);
+            await authorization.RequireAsync(command.TenantId, null, command.ActorId, TenantOperation.Administration, cancellationToken).ConfigureAwait(false);
+        await scope.CompleteAsync(cancellationToken).ConfigureAwait(false);
             return previous.Select(ProductUnitDetails.From).ToArray();
         }
         var audit = AuditTrail.Record(command.TenantId, command.ActorId, AuditAction.BusinessProductUnitsChanged,
             product.Id, now, before, after);
         await store.ReplaceAsync(command.TenantId, product.Id, units, audit, cancellationToken).ConfigureAwait(false);
+        await authorization.RequireAsync(command.TenantId, null, command.ActorId, TenantOperation.Administration, cancellationToken).ConfigureAwait(false);
         await scope.CompleteAsync(cancellationToken).ConfigureAwait(false);
         return units.Select(ProductUnitDetails.From).ToArray();
     }

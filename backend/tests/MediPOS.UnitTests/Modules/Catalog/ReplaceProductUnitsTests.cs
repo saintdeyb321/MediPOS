@@ -133,7 +133,7 @@ public sealed class ReplaceProductUnitsTests
         public Licensing Licensing { get; } = new();
         public Clock Time { get; } = new();
         public Setup() => Products = new(Product);
-        public ReplaceProductUnitsHandler Handler => new(Units, Products, Licensing, Time);
+        public ReplaceProductUnitsHandler Handler => new ReplaceProductUnitsHandler(Units, Products, Licensing, Time, new BusinessRuleAuthorizationStub());
         public ReplaceProductUnitsCommand Command() => new(Product.TenantId, Product.Id, [new("Base", 1m, true), new("Blíster", 10m, false)], Actor);
     }
 

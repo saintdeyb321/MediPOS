@@ -1,3 +1,4 @@
+using MediPOS.Application.Modules.IdentityAccess.OperationalAccess;
 using MediPOS.Application.Errors;
 using MediPOS.Domain.Modules.Catalog.ProductImport;
 
@@ -6,11 +7,12 @@ namespace MediPOS.Application.Modules.Catalog.ProductImport;
 public sealed record GetImportJobResultQuery(Guid TenantId, Guid ImportJobId, int AfterRowNumber = 0,
     int Limit = ProductImportLimits.DefaultResultLimit);
 
-public sealed class GetImportJobResultHandler(IProductImportStore store)
+public sealed class GetImportJobResultHandler(IProductImportStore store, ITenantOperationAuthorizer authorization)
 {
     public async Task<ImportJobResult> HandleAsync(GetImportJobResultQuery query, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(query);
+        await authorization.RequireAsync(query.TenantId, null, null, TenantOperation.Administration, cancellationToken).ConfigureAwait(false);
         if (query.TenantId == Guid.Empty || query.ImportJobId == Guid.Empty || query.AfterRowNumber < 0 ||
             query.AfterRowNumber > ProductImportLimits.MaximumWorksheetRow || query.Limit < 1 || query.Limit > ProductImportLimits.MaximumResultLimit)
             throw new ApplicationErrorException(ApplicationErrors.InvalidRequest);
@@ -18,6 +20,7 @@ public sealed class GetImportJobResultHandler(IProductImportStore store)
             ?? throw new ApplicationErrorException(ProductImportErrors.JobNotFound);
         if (page.Job.TenantId != query.TenantId || page.Rows.Any(value => value.TenantId != query.TenantId || value.ImportJobId != page.Job.Id))
             throw new ApplicationErrorException(ApplicationErrors.TenantScopeConflict);
+        await authorization.RequireAsync(query.TenantId, null, null, TenantOperation.Administration, cancellationToken).ConfigureAwait(false);
         var job = page.Job;
         var rows = page.Rows.OrderBy(value => value.RowNumber).Take(query.Limit).Select(value =>
             new ImportRowDetails(value.RowNumber, ProductImportCodes.ToCode(value.Status), value.BusinessProductId, value.ErrorCode, value.ErrorMessage)).ToArray();

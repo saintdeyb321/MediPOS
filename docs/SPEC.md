@@ -66,6 +66,8 @@ Priority: P0 MVP mandatory, P1 immediately after/optional integration, P2 later.
 - **FR-AUT-004 P0** Maximum two owners per tenant.
 - **FR-AUT-005 P0** Deactivate employee without erasing historical references.
 
+Administration of memberships, assignments and schedules requires an authenticated Owner. The initial Owner may only be provisioned by an independently authenticated platform administrator; inactive historical Owners do not reopen that initial provisioning path.
+
 ### Catalog
 - **FR-CAT-001 P0** Global reference catalog + tenant-specific business products; price/cost/stock never global.
 - **FR-CAT-002 P0** Distinguish medicine vs retail product.
@@ -90,6 +92,7 @@ Priority: P0 MVP mandatory, P1 immediately after/optional integration, P2 later.
 - **FR-PUR-002 P0** Multi-line purchase; confirm creates batches/movements atomically.
 - **FR-PUR-003 P0** Catalog-assisted product entry during purchase.
 - **FR-PUR-004 P0** Purchase document/reference searchable.
+Manual purchasing operations require Owner, or Pharmacist with a valid license, active membership, assigned branch and permitted schedule. Reference queries by Pharmacist are confined to that authorized branch.
 - **FR-PUR-005 P1** Import supplier UBL XML into reviewable pre-purchase.
 - **FR-PUR-006 P2** Evaluate SIRE/SUNAT purchase prefill only after real technical validation.
 

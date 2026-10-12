@@ -1,3 +1,4 @@
+using MediPOS.Application.Modules.IdentityAccess.OperationalAccess;
 using System.Text.Json;
 using MediPOS.Application.Errors;
 using MediPOS.Application.Modules.AuditSupport;
@@ -9,19 +10,21 @@ namespace MediPOS.Application.Modules.Inventory.AdjustStock;
 public sealed record AdjustStockCommand(Guid TenantId, Guid InventoryLotId, decimal QuantityDeltaBase, string Reason, Guid ActorId);
 public sealed record AdjustStockResult(Guid InventoryLotId, Guid StockMovementId, decimal Before, decimal After);
 
-public sealed class AdjustStockHandler(IStockAdjustmentTransaction transactions, TimeProvider clock)
+public sealed class AdjustStockHandler(IStockAdjustmentTransaction transactions, TimeProvider clock, ITenantOperationAuthorizer authorization)
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
     public async Task<AdjustStockResult> HandleAsync(AdjustStockCommand command, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(command);
         AuditTrail.RequireActor(command.ActorId);
+        await authorization.IdentifyForBranchLookupAsync(command.TenantId, command.ActorId, TenantOperation.Inventory, cancellationToken).ConfigureAwait(false);
         if (command.TenantId == Guid.Empty || command.InventoryLotId == Guid.Empty || command.QuantityDeltaBase == 0 ||
             string.IsNullOrWhiteSpace(command.Reason) || command.Reason.Trim().Length > StockMovement.MaximumReasonLength)
             throw new ApplicationErrorException(ApplicationErrors.InvalidRequest);
         await using var scope = await transactions.BeginAsync(command.TenantId, command.InventoryLotId, cancellationToken).ConfigureAwait(false)
             ?? throw new ApplicationErrorException(InventoryErrors.LotNotFound);
         if (scope.Lot.TenantId != command.TenantId) throw new ApplicationErrorException(ApplicationErrors.TenantScopeConflict);
+        await authorization.RequireAsync(command.TenantId, scope.Lot.BranchId, command.ActorId, TenantOperation.Inventory, cancellationToken).ConfigureAwait(false);
         var now = clock.GetUtcNow();
         if (!scope.AllowsOperation(now)) throw new ApplicationErrorException(ApplicationErrors.LicenseDenied);
         StockMovement movement;
@@ -39,6 +42,7 @@ public sealed class AdjustStockHandler(IStockAdjustmentTransaction transactions,
             JsonSerializer.Serialize(new { quantityAvailableBase = before }, JsonOptions),
             JsonSerializer.Serialize(new { quantityAvailableBase = after, delta = movement.QuantityDeltaBase, reason = movement.Reason }, JsonOptions));
         // Only the transaction boundary applies the movement to the projection and commits all three records.
+        await authorization.RequireAsync(command.TenantId, scope.Lot.BranchId, command.ActorId, TenantOperation.Inventory, cancellationToken).ConfigureAwait(false);
         await scope.CompleteAsync(movement, audit, cancellationToken).ConfigureAwait(false);
         return new(scope.Lot.Id, movement.Id, before, after);
     }

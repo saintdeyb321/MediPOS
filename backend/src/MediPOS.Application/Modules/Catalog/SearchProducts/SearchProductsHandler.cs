@@ -1,3 +1,4 @@
+using MediPOS.Application.Modules.IdentityAccess.OperationalAccess;
 using MediPOS.Application.Errors;
 using MediPOS.Application.Modules.Branches;
 using MediPOS.Application.Modules.Inventory;
@@ -6,7 +7,7 @@ namespace MediPOS.Application.Modules.Catalog.SearchProducts;
 
 public sealed record SearchProductsQuery(Guid TenantId, Guid BranchId, string Query, int Limit);
 
-public sealed class SearchProductsHandler(IProductSearchStore store, IBranchesStore branches, TimeProvider clock)
+public sealed class SearchProductsHandler(IProductSearchStore store, IBranchesStore branches, TimeProvider clock, ITenantOperationAuthorizer authorization)
 {
     public const int MaximumQueryLength = 128;
     public const int MaximumLimit = 50; // Each of the three blocks is independently bounded by Limit.
@@ -14,6 +15,7 @@ public sealed class SearchProductsHandler(IProductSearchStore store, IBranchesSt
     public async Task<SearchProductsResult> HandleAsync(SearchProductsQuery query, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(query);
+        await authorization.RequireAsync(query.TenantId, query.BranchId, null, TenantOperation.ProductSearch, cancellationToken).ConfigureAwait(false);
         var text = query.Query?.Trim();
         if (query.TenantId == Guid.Empty || query.BranchId == Guid.Empty || string.IsNullOrEmpty(text) ||
             text.Length > MaximumQueryLength || query.Limit < 1 || query.Limit > MaximumLimit)
@@ -27,6 +29,7 @@ public sealed class SearchProductsHandler(IProductSearchStore store, IBranchesSt
         if (branch.TenantId != query.TenantId) throw new ApplicationErrorException(ApplicationErrors.TenantScopeConflict);
         var snapshot = await store.SearchAsync(query.TenantId, query.BranchId, text, query.Limit,
             InventoryCalendar.Today(clock), cancellationToken).ConfigureAwait(false);
+        await authorization.RequireAsync(query.TenantId, query.BranchId, null, TenantOperation.ProductSearch, cancellationToken).ConfigureAwait(false);
         return SearchProductsComposition.Compose(query.TenantId, query.BranchId, query.Limit, snapshot);
     }
 }

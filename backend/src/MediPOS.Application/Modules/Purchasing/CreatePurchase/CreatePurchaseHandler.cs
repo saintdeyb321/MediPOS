@@ -1,3 +1,4 @@
+using MediPOS.Application.Modules.IdentityAccess.OperationalAccess;
 using MediPOS.Application.Errors;
 using MediPOS.Application.Modules.AuditSupport;
 using MediPOS.Application.Modules.Branches;
@@ -9,18 +10,20 @@ namespace MediPOS.Application.Modules.Purchasing.CreatePurchase;
 public sealed record CreatePurchaseCommand(Guid TenantId, Guid BranchId, Guid? SupplierId, string? DocumentReference, Guid ActorId);
 
 public sealed class CreatePurchaseHandler(IPurchasingStore store, IBranchesStore branches,
-    ITenantLicenseProvisioning provisioning, TimeProvider clock)
+    ITenantLicenseProvisioning provisioning, TimeProvider clock, ITenantOperationAuthorizer authorization)
 {
     public async Task<PurchaseDetails> HandleAsync(CreatePurchaseCommand command, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(command);
         AuditTrail.RequireActor(command.ActorId);
+        await authorization.RequireAsync(command.TenantId, command.BranchId, command.ActorId, TenantOperation.Purchasing, cancellationToken).ConfigureAwait(false);
         if (command.BranchId == Guid.Empty || command.SupplierId == Guid.Empty)
             throw new ApplicationErrorException(ApplicationErrors.InvalidRequest);
         await using var scope = await PurchasingValidation.BeginAsync(command.TenantId, provisioning, clock, cancellationToken).ConfigureAwait(false);
         var purchase = await PurchasingValidation.CreateDraftAsync(command.TenantId, command.BranchId, command.SupplierId,
             command.DocumentReference, command.ActorId, branches, store, clock.GetUtcNow(), cancellationToken).ConfigureAwait(false);
         await store.AddPurchaseAsync(purchase, cancellationToken).ConfigureAwait(false);
+        await authorization.RequireAsync(command.TenantId, command.BranchId, command.ActorId, TenantOperation.Purchasing, cancellationToken).ConfigureAwait(false);
         await scope.CompleteAsync(cancellationToken).ConfigureAwait(false);
         return PurchaseDetails.From(purchase);
     }

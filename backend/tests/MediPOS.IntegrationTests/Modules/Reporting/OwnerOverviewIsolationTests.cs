@@ -112,7 +112,7 @@ public sealed class OwnerOverviewIsolationTests(PostgreSqlFixture fixture)
             await source.GetRequiredService<DeactivateMembershipHandler>().HandleAsync(
                 new(tenant.TenantId, owner.MembershipId, owner.UserId), OwnerOverviewTestData.Token);
         else
-            await source.GetRequiredService<SuspendLicenseHandler>().HandleAsync(
+            await source.WithPlatformActor(owner.UserId).GetRequiredService<SuspendLicenseHandler>().HandleAsync(
                 new(tenant.TenantId, tenant.Identity.LicenseId, owner.UserId), OwnerOverviewTestData.Token);
         var denied = await Assert.ThrowsAsync<ApplicationErrorException>(() => OwnerOverviewTestData.ReadAsync(source, tenant.TenantId));
         Assert.Equal(deactivateMembership ? "access.membership_inactive" : "access.license_denied", denied.Error.Code);

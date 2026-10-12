@@ -1,3 +1,4 @@
+using MediPOS.Application.Modules.IdentityAccess.OperationalAccess;
 using MediPOS.Application.Errors;
 using MediPOS.Application.Modules.AuditSupport;
 using MediPOS.Application.Modules.TenancyLicensing;
@@ -8,12 +9,13 @@ namespace MediPOS.Application.Modules.IdentityAccess.DeactivateMembership;
 // ActorId is supplied by the authenticated server caller, never a freely bound HTTP field.
 public sealed record DeactivateMembershipCommand(Guid TenantId, Guid MembershipId, Guid ActorId);
 
-public sealed class DeactivateMembershipHandler(IIdentityAccessStore store, ITenantLicenseProvisioning provisioning, TimeProvider timeProvider)
+public sealed class DeactivateMembershipHandler(IIdentityAccessStore store, ITenantLicenseProvisioning provisioning, TimeProvider timeProvider, ITenantOperationAuthorizer authorization)
 {
     public async Task<MembershipDetails> HandleAsync(DeactivateMembershipCommand command, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(command);
         AuditTrail.RequireActor(command.ActorId);
+        await authorization.RequireAsync(command.TenantId, null, command.ActorId, TenantOperation.Administration, cancellationToken).ConfigureAwait(false);
         await using var scope = await provisioning.BeginAsync(command.TenantId, cancellationToken).ConfigureAwait(false)
             ?? throw new ApplicationErrorException(ApplicationErrors.LicenseNotFound);
         if (scope.TenantId != command.TenantId)
@@ -22,6 +24,7 @@ public sealed class DeactivateMembershipHandler(IIdentityAccessStore store, ITen
             ?? throw new ApplicationErrorException(ApplicationErrors.MembershipNotFound);
         if (membership.IsActive)
         {
+            await authorization.RequireAsync(command.TenantId, null, command.ActorId, TenantOperation.Administration, cancellationToken).ConfigureAwait(false);
             var now = timeProvider.GetUtcNow();
             var before = AuditTrail.MembershipState(membership);
             membership.Deactivate(now);

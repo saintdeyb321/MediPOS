@@ -16,7 +16,7 @@ public sealed class ExpiringLotsTests
     {
         var store = new Store();
         var handler = new GetExpiringLotsHandler(store, new UnusedBranches(),
-            new InventoryDomainTests.Clock(new(2026, 10, 7, 4, 0, 0, TimeSpan.Zero)));
+            new InventoryDomainTests.Clock(new(2026, 10, 7, 4, 0, 0, TimeSpan.Zero)), new BusinessRuleAuthorizationStub());
         var result = await handler.HandleAsync(new(store.License.TenantId), TestContext.Current.CancellationToken);
         Assert.Equal(new DateOnly(2026, 10, 6), store.Today);
         Assert.Equal(new DateOnly(2026, 11, 5), store.Through);
@@ -34,7 +34,7 @@ public sealed class ExpiringLotsTests
     {
         var store = new Store { ReturnForeign = true };
         var error = await Assert.ThrowsAsync<ApplicationErrorException>(() => new GetExpiringLotsHandler(store, new UnusedBranches(),
-            new InventoryDomainTests.Clock(InventoryDomainTests.Now)).HandleAsync(new(store.License.TenantId), TestContext.Current.CancellationToken));
+            new InventoryDomainTests.Clock(InventoryDomainTests.Now), new BusinessRuleAuthorizationStub()).HandleAsync(new(store.License.TenantId), TestContext.Current.CancellationToken));
         Assert.Equal(ApplicationErrors.TenantScopeConflict, error.Error);
     }
 

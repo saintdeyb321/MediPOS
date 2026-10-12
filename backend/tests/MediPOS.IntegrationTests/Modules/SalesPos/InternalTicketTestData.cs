@@ -52,6 +52,7 @@ internal static class InternalTicketTestData
         services.AddInfrastructure(configuration);
         if (observer is not null) services.AddDbContext<MediPosDbContext>(options => options.AddInterceptors(observer));
         services.AddIdentityAuthentication<IdentityAccessTestSetup.TestGoogleIdentitySource, IdentityAccessTestSetup.TestServerSession>();
+        services.AddPersistenceFixtureAuthorization();
         return services.BuildServiceProvider(new ServiceProviderOptions { ValidateOnBuild = true, ValidateScopes = true });
     }
 

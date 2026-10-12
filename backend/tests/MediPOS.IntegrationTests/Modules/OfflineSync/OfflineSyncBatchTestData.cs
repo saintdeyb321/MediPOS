@@ -29,6 +29,7 @@ internal static class OfflineSyncBatchTestData
         if (!processSales) services.AddScoped(provider => new ProcessOfflineSyncBatchHandler(provider.GetRequiredService<ResolveAccessContextHandler>(),
             provider.GetRequiredService<ISyncDeviceStore>(), provider.GetRequiredService<ReserveSyncEventReceiptHandler>(), provider.GetRequiredService<TimeProvider>()));
         if (observer is not null) services.AddDbContext<MediPosDbContext>(options => options.AddInterceptors(observer));
+        services.AddPersistenceFixtureAuthorization();
         return services.BuildServiceProvider(new ServiceProviderOptions { ValidateOnBuild = true, ValidateScopes = true });
     }
     internal static CancellationToken Token => TestContext.Current.CancellationToken;

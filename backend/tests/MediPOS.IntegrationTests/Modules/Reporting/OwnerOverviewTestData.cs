@@ -37,6 +37,7 @@ internal static class OwnerOverviewTestData
         services.AddIdentityAuthentication<IdentityAccessTestSetup.TestGoogleIdentitySource, IdentityAccessTestSetup.TestServerSession>();
         if (observer is not null)
             services.AddDbContext<MediPosDbContext>(options => options.AddInterceptors(observer));
+        services.AddPersistenceFixtureAuthorization();
         return services.BuildServiceProvider(new ServiceProviderOptions { ValidateOnBuild = true, ValidateScopes = true });
     }
 

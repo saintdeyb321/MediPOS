@@ -1,3 +1,4 @@
+using MediPOS.Application.Modules.IdentityAccess.OperationalAccess;
 using MediPOS.Application.Errors;
 using MediPOS.Application.Modules.AuditSupport;
 using MediPOS.Application.Modules.TenancyLicensing;
@@ -12,12 +13,13 @@ public sealed record CreateLocalBusinessProductCommand(Guid TenantId, string Int
     decimal RetailPrice, decimal? WholesalePrice, Guid ActorId, bool IsActive = true);
 
 public sealed class CreateLocalBusinessProductHandler(
-    IGlobalCatalogStore globalStore, IBusinessProductStore store, ITenantLicenseProvisioning provisioning, TimeProvider timeProvider)
+    IGlobalCatalogStore globalStore, IBusinessProductStore store, ITenantLicenseProvisioning provisioning, TimeProvider timeProvider, ITenantOperationAuthorizer authorization)
 {
     public async Task<BusinessProductDetails> HandleAsync(CreateLocalBusinessProductCommand command, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(command);
         AuditTrail.RequireActor(command.ActorId);
+        await authorization.RequireAsync(command.TenantId, null, command.ActorId, TenantOperation.Administration, cancellationToken).ConfigureAwait(false);
         if (command.TenantId == Guid.Empty)
             throw new ApplicationErrorException(ApplicationErrors.InvalidRequest);
         await using var scope = await provisioning.BeginAsync(command.TenantId, cancellationToken).ConfigureAwait(false)
@@ -42,6 +44,7 @@ public sealed class CreateLocalBusinessProductHandler(
         var audit = AuditTrail.Record(command.TenantId, command.ActorId, AuditAction.BusinessProductCreated, product.Id, now,
             null, CatalogAudit.Created(product));
         await store.AddAsync(product, audit, cancellationToken).ConfigureAwait(false);
+        await authorization.RequireAsync(command.TenantId, null, command.ActorId, TenantOperation.Administration, cancellationToken).ConfigureAwait(false);
         await scope.CompleteAsync(cancellationToken).ConfigureAwait(false);
         return BusinessProductDetails.From(product);
     }

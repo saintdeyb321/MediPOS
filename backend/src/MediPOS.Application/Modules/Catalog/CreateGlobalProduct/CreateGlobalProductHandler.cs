@@ -1,3 +1,4 @@
+using MediPOS.Application.Modules.IdentityAccess.Authentication;
 using MediPOS.Application.Errors;
 using MediPOS.Domain.Modules.Catalog;
 
@@ -7,11 +8,12 @@ namespace MediPOS.Application.Modules.Catalog.CreateGlobalProduct;
 public sealed record CreateGlobalProductCommand(ProductType ProductType, string Name, Guid CategoryId,
     string BrandOrLaboratory, string? Barcode, MedicineInput? Medicine, bool IsActive = true);
 
-public sealed class CreateGlobalProductHandler(IGlobalCatalogStore store, TimeProvider timeProvider)
+public sealed class CreateGlobalProductHandler(IGlobalCatalogStore store, TimeProvider timeProvider, IPlatformAdministration administration)
 {
     public async Task<GlobalProductDetails> HandleAsync(CreateGlobalProductCommand command, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(command);
+        await PlatformAdministrationAccess.RequireAsync(administration, null, cancellationToken).ConfigureAwait(false);
         GlobalProduct product;
         try
         {
@@ -21,6 +23,7 @@ public sealed class CreateGlobalProductHandler(IGlobalCatalogStore store, TimePr
         catch (ArgumentException) { throw new ApplicationErrorException(ApplicationErrors.InvalidRequest); }
         if (await store.FindCategoryAsync(product.CategoryId, cancellationToken).ConfigureAwait(false) is null)
             throw new ApplicationErrorException(CatalogErrors.CategoryNotFound);
+        await PlatformAdministrationAccess.RequireAsync(administration, null, cancellationToken).ConfigureAwait(false);
         await store.AddProductAsync(product, cancellationToken).ConfigureAwait(false);
         return GlobalProductDetails.From(product);
     }

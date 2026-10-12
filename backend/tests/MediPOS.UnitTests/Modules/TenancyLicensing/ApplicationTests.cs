@@ -22,7 +22,7 @@ public sealed class ApplicationTests
         var actor = Guid.NewGuid();
         using var cancellation = new CancellationTokenSource();
 
-        var result = await new CreateTenantHandler(store, clock).HandleAsync(
+        var result = await new CreateTenantHandler(store, clock, new PlatformAdministrationStub(actor)).HandleAsync(
             new CreateTenantCommand("Botica", Now, Now.AddMonths(1), 2, LicenseStatus.Trial, actor), cancellation.Token);
 
         Assert.NotNull(store.CreatedTenant);
@@ -49,13 +49,13 @@ public sealed class ApplicationTests
         var clock = new TestTimeProvider(Now.AddHours(1));
         using var cancellation = new CancellationTokenSource();
 
-        await new RenewLicenseHandler(store, clock).HandleAsync(
+        await new RenewLicenseHandler(store, clock, new PlatformAdministrationStub(actor)).HandleAsync(
             new RenewLicenseCommand(tenant.Id, tenant.License.Id, Now.AddMonths(2), actor), cancellation.Token);
-        await new SuspendLicenseHandler(store, clock).HandleAsync(
+        await new SuspendLicenseHandler(store, clock, new PlatformAdministrationStub(actor)).HandleAsync(
             new SuspendLicenseCommand(tenant.Id, tenant.License.Id, actor), cancellation.Token);
-        await new ReactivateLicenseHandler(store, clock).HandleAsync(
+        await new ReactivateLicenseHandler(store, clock, new PlatformAdministrationStub(actor)).HandleAsync(
             new ReactivateLicenseCommand(tenant.Id, tenant.License.Id, LicenseStatus.Active, actor), cancellation.Token);
-        var result = await new RequestTenantPurgeHandler(store, clock).HandleAsync(
+        var result = await new RequestTenantPurgeHandler(store, clock, new PlatformAdministrationStub(actor)).HandleAsync(
             new RequestTenantPurgeCommand(tenant.Id, tenant.License.Id, actor), cancellation.Token);
 
         Assert.Equal(4, store.SaveCount);
@@ -96,10 +96,10 @@ public sealed class ApplicationTests
 
         await Assert.ThrowsAsync<ApplicationErrorException>(() => operation switch
         {
-            "renew" => new RenewLicenseHandler(store, clock).HandleAsync(new(wrongTenantId, tenant.License.Id, Now.AddMonths(2), actor), TestContext.Current.CancellationToken),
-            "suspend" => new SuspendLicenseHandler(store, clock).HandleAsync(new(wrongTenantId, tenant.License.Id, actor), TestContext.Current.CancellationToken),
-            "reactivate" => new ReactivateLicenseHandler(store, clock).HandleAsync(new(wrongTenantId, tenant.License.Id, LicenseStatus.Active, actor), TestContext.Current.CancellationToken),
-            "purge" => new RequestTenantPurgeHandler(store, clock).HandleAsync(new(wrongTenantId, tenant.License.Id, actor), TestContext.Current.CancellationToken),
+            "renew" => new RenewLicenseHandler(store, clock, new PlatformAdministrationStub(actor)).HandleAsync(new(wrongTenantId, tenant.License.Id, Now.AddMonths(2), actor), TestContext.Current.CancellationToken),
+            "suspend" => new SuspendLicenseHandler(store, clock, new PlatformAdministrationStub(actor)).HandleAsync(new(wrongTenantId, tenant.License.Id, actor), TestContext.Current.CancellationToken),
+            "reactivate" => new ReactivateLicenseHandler(store, clock, new PlatformAdministrationStub(actor)).HandleAsync(new(wrongTenantId, tenant.License.Id, LicenseStatus.Active, actor), TestContext.Current.CancellationToken),
+            "purge" => new RequestTenantPurgeHandler(store, clock, new PlatformAdministrationStub(actor)).HandleAsync(new(wrongTenantId, tenant.License.Id, actor), TestContext.Current.CancellationToken),
             _ => throw new ArgumentOutOfRangeException(nameof(operation)),
         });
 
@@ -113,11 +113,12 @@ public sealed class ApplicationTests
     [Fact]
     public async Task InvalidRenewalDoesNotCallSave()
     {
-        var tenant = Tenant.Create("Botica", Now, Now.AddMonths(1), 1, LicenseStatus.Active, Guid.NewGuid(), Now);
+        var actor = Guid.NewGuid();
+        var tenant = Tenant.Create("Botica", Now, Now.AddMonths(1), 1, LicenseStatus.Active, actor, Now);
         var store = new RecordingStore(tenant.License);
 
-        await Assert.ThrowsAsync<ApplicationErrorException>(() => new RenewLicenseHandler(store, new TestTimeProvider(Now)).HandleAsync(
-            new(tenant.Id, tenant.License.Id, Now, Guid.NewGuid()), TestContext.Current.CancellationToken));
+        await Assert.ThrowsAsync<ApplicationErrorException>(() => new RenewLicenseHandler(store, new TestTimeProvider(Now), new PlatformAdministrationStub(actor)).HandleAsync(
+            new(tenant.Id, tenant.License.Id, Now, actor), TestContext.Current.CancellationToken));
 
         Assert.Equal(0, store.SaveCount);
         Assert.Single(tenant.License.Changes);
@@ -127,12 +128,13 @@ public sealed class ApplicationTests
     [Fact]
     public async Task CancellationIsNotSwallowed()
     {
+        var actor = Guid.NewGuid();
         var store = new RecordingStore();
         using var cancellation = new CancellationTokenSource();
         cancellation.Cancel();
 
-        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => new CreateTenantHandler(store, new TestTimeProvider(Now)).HandleAsync(
-            new("Botica", Now, Now.AddMonths(1), 1, LicenseStatus.Active, Guid.NewGuid()), cancellation.Token));
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => new CreateTenantHandler(store, new TestTimeProvider(Now), new PlatformAdministrationStub(actor)).HandleAsync(
+            new("Botica", Now, Now.AddMonths(1), 1, LicenseStatus.Active, actor), cancellation.Token));
 
         Assert.Null(store.CreatedTenant);
         Assert.Empty(store.Audits);
@@ -144,7 +146,7 @@ public sealed class ApplicationTests
         var actor = Guid.NewGuid();
         var tenant = Tenant.Create("Botica", Now, Now.AddMonths(1), 1, LicenseStatus.Active, actor, Now);
         var store = new RecordingStore(tenant.License);
-        var handler = new SuspendLicenseHandler(store, new TestTimeProvider(Now));
+        var handler = new SuspendLicenseHandler(store, new TestTimeProvider(Now), new PlatformAdministrationStub(actor));
         await handler.HandleAsync(new(tenant.Id, tenant.License.Id, actor), TestContext.Current.CancellationToken);
         await handler.HandleAsync(new(tenant.Id, tenant.License.Id, actor), TestContext.Current.CancellationToken);
         Assert.Equal(AuditAction.LicenseSuspended, Assert.Single(store.Audits).Action);

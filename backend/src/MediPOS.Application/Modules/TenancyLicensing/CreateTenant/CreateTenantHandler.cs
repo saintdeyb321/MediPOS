@@ -1,3 +1,4 @@
+using MediPOS.Application.Modules.IdentityAccess.Authentication;
 using MediPOS.Application.Errors;
 using MediPOS.Application.Modules.AuditSupport;
 using MediPOS.Domain.Modules.AuditSupport;
@@ -5,12 +6,13 @@ using MediPOS.Domain.Modules.TenancyLicensing;
 
 namespace MediPOS.Application.Modules.TenancyLicensing.CreateTenant;
 
-public sealed class CreateTenantHandler(ITenancyLicensingStore store, TimeProvider timeProvider)
+public sealed class CreateTenantHandler(ITenancyLicensingStore store, TimeProvider timeProvider, IPlatformAdministration administration)
 {
     public async Task<LicenseDetails> HandleAsync(CreateTenantCommand command, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(command);
         AuditTrail.RequireActor(command.ActorId);
+        await PlatformAdministrationAccess.RequireAsync(administration, command.ActorId, cancellationToken).ConfigureAwait(false);
         var now = timeProvider.GetUtcNow();
         Tenant tenant;
         try

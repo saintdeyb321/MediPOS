@@ -1,3 +1,4 @@
+using MediPOS.Application.Modules.IdentityAccess.OperationalAccess;
 using MediPOS.Application.Errors;
 using MediPOS.Application.Modules.AuditSupport;
 using MediPOS.Application.Modules.TenancyLicensing;
@@ -6,12 +7,13 @@ using MediPOS.Domain.Modules.Branches;
 
 namespace MediPOS.Application.Modules.Branches.SetMainHubBranch;
 
-public sealed class SetMainHubBranchHandler(IBranchesStore store, ITenantLicenseProvisioning licenseProvisioning, TimeProvider timeProvider)
+public sealed class SetMainHubBranchHandler(IBranchesStore store, ITenantLicenseProvisioning licenseProvisioning, TimeProvider timeProvider, ITenantOperationAuthorizer authorization)
 {
     public async Task<BranchDetails> HandleAsync(SetMainHubBranchCommand command, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(command);
         AuditTrail.RequireActor(command.ActorId);
+        await authorization.RequireAsync(command.TenantId, null, command.ActorId, TenantOperation.Administration, cancellationToken).ConfigureAwait(false);
         await using var scope = await licenseProvisioning.BeginAsync(command.TenantId, cancellationToken).ConfigureAwait(false)
             ?? throw new ApplicationErrorException(ApplicationErrors.LicenseNotFound);
         if (scope.TenantId != command.TenantId)
@@ -29,6 +31,7 @@ public sealed class SetMainHubBranchHandler(IBranchesStore store, ITenantLicense
                 timeProvider.GetUtcNow(), before, AuditTrail.MainHub(branch.Id));
             await store.ReplaceMainHubAsync(branch, audit, cancellationToken).ConfigureAwait(false);
         }
+        await authorization.RequireAsync(command.TenantId, null, command.ActorId, TenantOperation.Administration, cancellationToken).ConfigureAwait(false);
         await scope.CompleteAsync(cancellationToken).ConfigureAwait(false);
         return BranchDetails.From(branch);
     }

@@ -191,7 +191,7 @@ public sealed class SearchProductsTests
         {
             Store = new(Tenant);
             Branches = new(Branch.Create(Tenant, Guid.NewGuid(), Tenant, "Principal", Now));
-            Handler = new(Store, Branches, new Clock());
+            Handler = new(Store, Branches, new Clock(), new BusinessRuleAuthorizationStub());
             Query = new(Tenant, Branches.Branch.Id, "Query", 10);
         }
     }

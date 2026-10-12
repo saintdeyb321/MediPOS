@@ -1,3 +1,4 @@
+using MediPOS.Application.Modules.IdentityAccess.OperationalAccess;
 using MediPOS.Application.Errors;
 using MediPOS.Application.Modules.AuditSupport;
 using MediPOS.Application.Modules.TenancyLicensing;
@@ -6,12 +7,13 @@ using MediPOS.Domain.Modules.Branches;
 
 namespace MediPOS.Application.Modules.Branches.CreateBranch;
 
-public sealed class CreateBranchHandler(IBranchesStore store, ITenantLicenseProvisioning licenseProvisioning, TimeProvider timeProvider)
+public sealed class CreateBranchHandler(IBranchesStore store, ITenantLicenseProvisioning licenseProvisioning, TimeProvider timeProvider, ITenantOperationAuthorizer authorization)
 {
     public async Task<BranchDetails> HandleAsync(CreateBranchCommand command, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(command);
         AuditTrail.RequireActor(command.ActorId);
+        await authorization.RequireAsync(command.TenantId, null, command.ActorId, TenantOperation.Administration, cancellationToken).ConfigureAwait(false);
         if (!await store.TenantExistsAsync(command.TenantId, cancellationToken).ConfigureAwait(false))
             throw new ApplicationErrorException(ApplicationErrors.TenantNotFound);
         await using var scope = await licenseProvisioning.BeginAsync(command.TenantId, cancellationToken).ConfigureAwait(false)
@@ -30,6 +32,7 @@ public sealed class CreateBranchHandler(IBranchesStore store, ITenantLicenseProv
         catch (ArgumentException) { throw new ApplicationErrorException(ApplicationErrors.InvalidRequest); }
         var audit = AuditTrail.Record(command.TenantId, command.ActorId, AuditAction.BranchCreated, branch.Id, now, null, AuditTrail.BranchCreated(branch));
         await store.AddBranchAsync(branch, audit, cancellationToken).ConfigureAwait(false);
+        await authorization.RequireAsync(command.TenantId, null, command.ActorId, TenantOperation.Administration, cancellationToken).ConfigureAwait(false);
         await scope.CompleteAsync(cancellationToken).ConfigureAwait(false);
         return BranchDetails.From(branch);
     }

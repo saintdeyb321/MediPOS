@@ -87,6 +87,7 @@ internal static class SaleCheckoutTestData
         services.AddSingleton<TimeProvider>(new IdentityAccessTestSetup.Clock());
         services.AddInfrastructure(configuration);
         services.AddIdentityAuthentication<IdentityAccessTestSetup.TestGoogleIdentitySource, IdentityAccessTestSetup.TestServerSession>();
+        services.AddPersistenceFixtureAuthorization();
         return services.BuildServiceProvider(new ServiceProviderOptions { ValidateOnBuild = true, ValidateScopes = true });
     }
 

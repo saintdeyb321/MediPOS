@@ -213,7 +213,7 @@ public sealed class ProductImportTests
         Assert.Equal(205, initial.ImportedRows);
         Assert.Equal(100, initial.Rows.Count);
         Assert.Equal(103, initial.NextAfterRowNumber);
-        var next = await new GetImportJobResultHandler(setup.Store).HandleAsync(new(setup.TenantId, initial.ImportJobId, 103, 200),
+        var next = await new GetImportJobResultHandler(setup.Store, new BusinessRuleAuthorizationStub()).HandleAsync(new(setup.TenantId, initial.ImportJobId, 103, 200),
             TestContext.Current.CancellationToken);
         Assert.Equal(105, next.Rows.Count);
         Assert.Equal(104, next.Rows[0].RowNumber);
@@ -256,7 +256,7 @@ public sealed class ProductImportTests
         {
             Reader = new(rows);
             Store = new(TenantId, ActorId);
-            Handler = new(Reader, Store, new Clock());
+            Handler = new(Reader, Store, new Clock(), new BusinessRuleAuthorizationStub());
         }
     }
     private sealed class Reader(ProductImportRow[] rows) : IProductImportWorkbookReader

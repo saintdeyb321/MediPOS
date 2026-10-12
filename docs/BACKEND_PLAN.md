@@ -3,10 +3,10 @@
 This is the single execution roadmap for the backend. Prompts are given in chat and are **not** stored in the repository.
 
 ## Working state
-- **Current milestone:** M7 — Tax & purchase-document integrations
-- **Current sprint:** B7.3 — Provider/sandbox pilot
-- **Status:** BLOCKED; no selected provider or verifiable contract is available locally. The simulation prerequisite is corrected and validated locally.
-- **Next gate:** Select the provider/modality and supply its official contract, authorized sandbox access through secure credential references, and approved fiscal profile. Execute PostgreSQL tests externally; production authentication and technical delivery identity remain pending.
+- **Current milestone:** M8 — Backend hardening for real pilot
+- **Current sprint:** B8.1 — Security review
+- **Status:** IN_PROGRESS. B7.3/B7.4 are voluntarily deferred and excluded from the initial MVP; M7 PostgreSQL validation remains pending.
+- **Next gate:** Complete the security review and local gate; validate PostgreSQL externally and activate trusted production authentication/session and least-privilege runtime configuration before a commercial pilot.
 
 Local policy: this machine has no Docker and will not install it. Do not check/start Docker or run PostgreSQL/Testcontainers here. B0.1 is complete locally. Keep real PostgreSQL integration tests for another environment; they are not part of the local gate and must not be reported as passed without execution.
 
@@ -277,13 +277,14 @@ Goal: optional integrations without coupling the core.
 ### B7.3 — Provider/sandbox pilot
 **Scope:** integrate selected PSE/OSE/direct sandbox only after credentials/contract are known; resilient retries/observability.
 
-**Status:** BLOCKED. Local configuration/documentation contains no selected provider or verifiable contract. Only the mandatory simulation correction is integrated: every simulated result is terminal `simulated`, preserves a bounded sanitized diagnostic, and discards authority evidence. No historical records are rewritten; external delivery stays disabled.
+**Status:** BLOCKED — voluntarily deferred by product decision, excluded from the initial MVP, per `SUNAT_INTEGRATION_PLAN.md`. Only the mandatory simulation correction is integrated: every simulated result is terminal `simulated`, preserves a bounded sanitized diagnostic, and discards authority evidence. No historical records are rewritten; external delivery stays disabled. Provider selection and contract verification are future prerequisites, not MVP launch requirements.
 
-**Validation:** local restore/build (zero warnings), 1841 unit tests, 8 architecture tests, full format verification and offline EF model check passed. The 22 PostgreSQL cases are prepared and compiled, NO EJECUTADAS; sandbox validation is NO EJECUTADA. Provider selection, official sandbox/authentication and secure credential references, request/response/evidence/idempotency contracts and an approved fiscal issuance profile are required before implementing an external adapter. B7.4 remains NOT_STARTED.
+**Validation:** local restore/build (zero warnings), 1841 unit tests, 8 architecture tests, full format verification and offline EF model check passed. The 22 PostgreSQL cases are prepared and compiled, NO EJECUTADAS; sandbox validation is NO EJECUTADA. Provider selection, official sandbox/authentication and secure credential references, request/response/evidence/idempotency contracts and an approved fiscal issuance profile are required if this future work is reopened.
 
 ### B7.4 — SIRE feasibility spike
 **Requirements:** FR-PUR-006 P2.
 **Scope:** technical validation with real allowed credentials/data; implement only if useful inventory detail is confirmed.
+**Status:** NOT_STARTED — voluntarily deferred and excluded from the initial MVP; not a launch dependency.
 
 **M7 gate:** tax failures never corrupt commercial sale/stock state; pending work survives restart.
 
@@ -294,6 +295,7 @@ Goal: production-quality MVP backend.
 
 ### B8.1 — Security review
 Tenant isolation, authz matrix, file validation, rate limits, CSRF/CORS/session review, secret/log audit.
+**Status:** IN_PROGRESS. Review actual published/internal surfaces without activating production authentication, tax delivery or new operational endpoints. PostgreSQL validation and production authentication remain pilot activation conditions.
 
 ### B8.2 — Performance/load targets
 Validate catalog search p95 target (<500 ms target from baseline) and online sale confirmation target (<1 s excluding external integrations) on representative data/hardware; optimize measured bottlenecks only.

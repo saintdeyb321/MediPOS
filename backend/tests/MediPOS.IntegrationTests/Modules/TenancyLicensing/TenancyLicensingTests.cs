@@ -77,28 +77,28 @@ public sealed class TenancyLicensingTests(PostgreSqlFixture fixture)
 
         await using (var scope = services.CreateAsyncScope())
         {
-            await scope.ServiceProvider.GetRequiredService<RenewLicenseHandler>().HandleAsync(
+            await scope.ServiceProvider.WithPlatformActor(actor).GetRequiredService<RenewLicenseHandler>().HandleAsync(
                 new(created.TenantId, created.LicenseId, Now.AddMonths(2), actor), TestContext.Current.CancellationToken);
         }
         await AssertStoredStatusAsync(created, LicenseStatus.Active, 2);
 
         await using (var scope = services.CreateAsyncScope())
         {
-            await scope.ServiceProvider.GetRequiredService<SuspendLicenseHandler>().HandleAsync(
+            await scope.ServiceProvider.WithPlatformActor(actor).GetRequiredService<SuspendLicenseHandler>().HandleAsync(
                 new(created.TenantId, created.LicenseId, actor), TestContext.Current.CancellationToken);
         }
         await AssertStoredStatusAsync(created, LicenseStatus.Suspended, 3);
 
         await using (var scope = services.CreateAsyncScope())
         {
-            await scope.ServiceProvider.GetRequiredService<ReactivateLicenseHandler>().HandleAsync(
+            await scope.ServiceProvider.WithPlatformActor(actor).GetRequiredService<ReactivateLicenseHandler>().HandleAsync(
                 new(created.TenantId, created.LicenseId, LicenseStatus.Active, actor), TestContext.Current.CancellationToken);
         }
         await AssertStoredStatusAsync(created, LicenseStatus.Active, 4);
 
         await using (var scope = services.CreateAsyncScope())
         {
-            await scope.ServiceProvider.GetRequiredService<RequestTenantPurgeHandler>().HandleAsync(
+            await scope.ServiceProvider.WithPlatformActor(actor).GetRequiredService<RequestTenantPurgeHandler>().HandleAsync(
                 new(created.TenantId, created.LicenseId, actor), TestContext.Current.CancellationToken);
         }
         await AssertStoredStatusAsync(created, LicenseStatus.PurgePending, 5);
@@ -125,7 +125,7 @@ public sealed class TenancyLicensingTests(PostgreSqlFixture fixture)
 
         var store = scope.ServiceProvider.GetRequiredService<ITenancyLicensingStore>();
         Assert.Null(await store.FindLicenseAsync(first.TenantId, second.LicenseId, TestContext.Current.CancellationToken));
-        await Assert.ThrowsAsync<ApplicationErrorException>(() => scope.ServiceProvider.GetRequiredService<SuspendLicenseHandler>().HandleAsync(
+        await Assert.ThrowsAsync<ApplicationErrorException>(() => scope.ServiceProvider.WithPlatformActor(actor).GetRequiredService<SuspendLicenseHandler>().HandleAsync(
             new(first.TenantId, second.LicenseId, actor), TestContext.Current.CancellationToken));
         await AssertStoredStatusAsync(second, LicenseStatus.Active, 1);
     }
@@ -273,11 +273,12 @@ public sealed class TenancyLicensingTests(PostgreSqlFixture fixture)
         var services = new ServiceCollection();
         services.AddSingleton<TimeProvider>(new FixedTimeProvider());
         services.AddInfrastructure(configuration);
+        services.AddPersistenceFixtureAuthorization();
         return services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true, ValidateOnBuild = true });
     }
 
     private static Task<LicenseDetails> CreateTenantAsync(IServiceProvider services, Guid actor) =>
-        services.GetRequiredService<CreateTenantHandler>().HandleAsync(
+        services.WithPlatformActor(actor).GetRequiredService<CreateTenantHandler>().HandleAsync(
             new("Botica", Now, Now.AddMonths(1), 1, LicenseStatus.Active, actor), TestContext.Current.CancellationToken);
 
     private async Task AssertStoredStatusAsync(LicenseDetails created, LicenseStatus status, int historyCount)

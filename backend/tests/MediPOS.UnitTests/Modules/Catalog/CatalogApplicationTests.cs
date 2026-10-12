@@ -23,8 +23,8 @@ public sealed class CatalogApplicationTests
     public async Task GlobalAdministrationCreatesCategoryAndMedicineWithoutPrivateWrites()
     {
         var setup = new Setup();
-        var category = await new CreateCategoryHandler(setup.Global, setup.Clock).HandleAsync(new(" Medicines "), TestContext.Current.CancellationToken);
-        var product = await new CreateGlobalProductHandler(setup.Global, setup.Clock).HandleAsync(
+        var category = await new CreateCategoryHandler(setup.Global, setup.Clock, new PlatformAdministrationStub(Guid.NewGuid())).HandleAsync(new(" Medicines "), TestContext.Current.CancellationToken);
+        var product = await new CreateGlobalProductHandler(setup.Global, setup.Clock, new PlatformAdministrationStub(Guid.NewGuid())).HandleAsync(
             new(ProductType.Medicine, " Tablet ", category.Id, " Lab ", null, new([new("A", "1 mg"), new("B", "2 mg")], "Tablet")),
             TestContext.Current.CancellationToken);
         Assert.Equal(category.Id, product.CategoryId);
@@ -149,7 +149,7 @@ public sealed class CatalogApplicationTests
         var error = await Assert.ThrowsAsync<ApplicationErrorException>(() => setup.Local.HandleAsync(
             setup.LocalCommand() with { CategoryId = Guid.NewGuid() }, TestContext.Current.CancellationToken));
         Assert.Equal(CatalogErrors.CategoryNotFound.Code, error.Error.Code);
-        await Assert.ThrowsAsync<ApplicationErrorException>(() => new CreateGlobalProductHandler(setup.Global, setup.Clock).HandleAsync(
+        await Assert.ThrowsAsync<ApplicationErrorException>(() => new CreateGlobalProductHandler(setup.Global, setup.Clock, new PlatformAdministrationStub(Guid.NewGuid())).HandleAsync(
             new(ProductType.Retail, "Retail", Guid.NewGuid(), "Brand", null, null), TestContext.Current.CancellationToken));
         Assert.Empty(setup.Business.Audits);
         Assert.Empty(setup.Business.Products);
@@ -248,10 +248,10 @@ public sealed class CatalogApplicationTests
         public GlobalStore Global { get; } = new();
         public BusinessStore Business { get; } = new();
         public Provisioning Provisioning { get; } = new();
-        public CreateLocalBusinessProductHandler Local => new(Global, Business, Provisioning, Clock);
-        public CreateBusinessProductFromGlobalHandler FromGlobal => new(Global, Business, Provisioning, Clock);
-        public UpdateBusinessProductPricesHandler Prices => new(Business, Provisioning, Clock);
-        public SetBusinessProductStatusHandler Status => new(Business, Provisioning, Clock);
+        public CreateLocalBusinessProductHandler Local => new CreateLocalBusinessProductHandler(Global, Business, Provisioning, Clock, new BusinessRuleAuthorizationStub());
+        public CreateBusinessProductFromGlobalHandler FromGlobal => new CreateBusinessProductFromGlobalHandler(Global, Business, Provisioning, Clock, new BusinessRuleAuthorizationStub());
+        public UpdateBusinessProductPricesHandler Prices => new UpdateBusinessProductPricesHandler(Business, Provisioning, Clock, new BusinessRuleAuthorizationStub());
+        public SetBusinessProductStatusHandler Status => new SetBusinessProductStatusHandler(Business, Provisioning, Clock, new BusinessRuleAuthorizationStub());
 
         public CreateLocalBusinessProductCommand LocalCommand(ProductType type = ProductType.Retail) =>
             new(TenantId, "R1", type, "Local", Global.Categories[0].Id, "Brand", null,

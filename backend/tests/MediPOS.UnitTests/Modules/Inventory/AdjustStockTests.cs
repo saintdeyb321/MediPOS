@@ -15,7 +15,7 @@ public sealed class AdjustStockTests
     public async Task AdjustmentCommitsProjectionMovementAndMinimalBeforeAfterAuditTogether(decimal delta, decimal after)
     {
         var transaction = new Transactions();
-        var handler = new AdjustStockHandler(transaction, new InventoryDomainTests.Clock(InventoryDomainTests.Now));
+        var handler = new AdjustStockHandler(transaction, new InventoryDomainTests.Clock(InventoryDomainTests.Now), new BusinessRuleAuthorizationStub());
         var actor = Guid.NewGuid();
         var result = await handler.HandleAsync(new(transaction.Lot.TenantId, transaction.Lot.Id, delta, " Conteo ", actor),
             TestContext.Current.CancellationToken);
@@ -60,7 +60,7 @@ public sealed class AdjustStockTests
         if (invalid == "license") transaction.Allowed = false;
         if (invalid == "missing") transaction.Exists = false;
         var error = await Assert.ThrowsAsync<ApplicationErrorException>(() =>
-            new AdjustStockHandler(transaction, new InventoryDomainTests.Clock(InventoryDomainTests.Now)).HandleAsync(command, TestContext.Current.CancellationToken));
+            new AdjustStockHandler(transaction, new InventoryDomainTests.Clock(InventoryDomainTests.Now), new BusinessRuleAuthorizationStub()).HandleAsync(command, TestContext.Current.CancellationToken));
         if (invalid == "shortage") Assert.Equal(InventoryErrors.InsufficientStock, error.Error);
         Assert.Equal(10m, transaction.Lot.QuantityAvailableBase);
         Assert.False(transaction.Scope?.Committed ?? false);
@@ -71,7 +71,7 @@ public sealed class AdjustStockTests
     {
         var transaction = new Transactions { Fail = true };
         await Assert.ThrowsAsync<InvalidOperationException>(() =>
-            new AdjustStockHandler(transaction, new InventoryDomainTests.Clock(InventoryDomainTests.Now)).HandleAsync(
+            new AdjustStockHandler(transaction, new InventoryDomainTests.Clock(InventoryDomainTests.Now), new BusinessRuleAuthorizationStub()).HandleAsync(
                 new(transaction.Lot.TenantId, transaction.Lot.Id, -1m, "Conteo", Guid.NewGuid()), TestContext.Current.CancellationToken));
         Assert.False(transaction.Scope!.Committed);
         Assert.True(transaction.Scope.Disposed);

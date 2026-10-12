@@ -1,3 +1,4 @@
+using MediPOS.Application.Modules.IdentityAccess.OperationalAccess;
 using MediPOS.Application.Errors;
 using MediPOS.Application.Modules.AuditSupport;
 using MediPOS.Application.Modules.TenancyLicensing;
@@ -8,12 +9,13 @@ namespace MediPOS.Application.Modules.Catalog.SetBusinessProductStatus;
 // TenantId and ActorId are supplied only by an authenticated server caller.
 public sealed record SetBusinessProductStatusCommand(Guid TenantId, Guid ProductId, bool IsActive, Guid ActorId);
 
-public sealed class SetBusinessProductStatusHandler(IBusinessProductStore store, ITenantLicenseProvisioning provisioning, TimeProvider timeProvider)
+public sealed class SetBusinessProductStatusHandler(IBusinessProductStore store, ITenantLicenseProvisioning provisioning, TimeProvider timeProvider, ITenantOperationAuthorizer authorization)
 {
     public async Task<BusinessProductDetails> HandleAsync(SetBusinessProductStatusCommand command, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(command);
         AuditTrail.RequireActor(command.ActorId);
+        await authorization.RequireAsync(command.TenantId, null, command.ActorId, TenantOperation.Administration, cancellationToken).ConfigureAwait(false);
         if (command.TenantId == Guid.Empty || command.ProductId == Guid.Empty)
             throw new ApplicationErrorException(ApplicationErrors.InvalidRequest);
         await using var scope = await provisioning.BeginAsync(command.TenantId, cancellationToken).ConfigureAwait(false)
@@ -34,6 +36,7 @@ public sealed class SetBusinessProductStatusHandler(IBusinessProductStore store,
                 before, CatalogAudit.Status(product));
             await store.SaveAsync(product, audit, cancellationToken).ConfigureAwait(false);
         }
+        await authorization.RequireAsync(command.TenantId, null, command.ActorId, TenantOperation.Administration, cancellationToken).ConfigureAwait(false);
         await scope.CompleteAsync(cancellationToken).ConfigureAwait(false);
         return BusinessProductDetails.From(product);
     }

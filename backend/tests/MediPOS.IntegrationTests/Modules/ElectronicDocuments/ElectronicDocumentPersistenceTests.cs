@@ -256,6 +256,7 @@ public sealed class ElectronicDocumentPersistenceTests(PostgreSqlFixture fixture
         services.AddIdentityAuthentication<IdentityAccessTestSetup.TestGoogleIdentitySource, IdentityAccessTestSetup.TestServerSession>();
         services.AddSingleton<IElectronicDeliveryIdentity, TechnicalIdentity>();
         if (provider is not null) services.AddSingleton(provider);
+        services.AddPersistenceFixtureAuthorization();
         return services.BuildServiceProvider(new ServiceProviderOptions { ValidateOnBuild = true, ValidateScopes = true });
     }
     private async Task<Setup> SetupAsync(ServiceProvider services)

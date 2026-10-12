@@ -1,15 +1,17 @@
+using MediPOS.Application.Modules.IdentityAccess.Authentication;
 using MediPOS.Application.Errors;
 using MediPOS.Application.Modules.AuditSupport;
 using MediPOS.Domain.Modules.AuditSupport;
 
 namespace MediPOS.Application.Modules.TenancyLicensing.RequestTenantPurge;
 
-public sealed class RequestTenantPurgeHandler(ITenancyLicensingStore store, TimeProvider timeProvider)
+public sealed class RequestTenantPurgeHandler(ITenancyLicensingStore store, TimeProvider timeProvider, IPlatformAdministration administration)
 {
     public async Task<LicenseDetails> HandleAsync(RequestTenantPurgeCommand command, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(command);
         AuditTrail.RequireActor(command.ActorId);
+        await PlatformAdministrationAccess.RequireAsync(administration, command.ActorId, cancellationToken).ConfigureAwait(false);
         var license = await store.FindLicenseAsync(command.TenantId, command.LicenseId, cancellationToken).ConfigureAwait(false)
             ?? throw new ApplicationErrorException(ApplicationErrors.LicenseNotFound);
         var now = timeProvider.GetUtcNow();
@@ -21,6 +23,7 @@ public sealed class RequestTenantPurgeHandler(ITenancyLicensingStore store, Time
         if (license.Changes.Count != count)
         {
             var audit = AuditTrail.Record(command.TenantId, command.ActorId, AuditAction.TenantPurgeRequested, command.TenantId, now, before, AuditTrail.LicenseState(license));
+        await PlatformAdministrationAccess.RequireAsync(administration, command.ActorId, cancellationToken).ConfigureAwait(false);
             await store.SaveLicenseAsync(license, audit, cancellationToken).ConfigureAwait(false);
         }
         return LicenseDetails.From(license);

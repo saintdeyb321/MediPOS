@@ -34,8 +34,8 @@ public sealed class OwnerConcurrencyTests(PostgreSqlFixture fixture)
         await using var secondScope = services.CreateAsyncScope();
         var firstLock = new ObservedProvisioning(firstScope.ServiceProvider.GetRequiredService<ITenantLicenseProvisioning>(), true);
         var secondLock = new ObservedProvisioning(secondScope.ServiceProvider.GetRequiredService<ITenantLicenseProvisioning>(), false);
-        var firstHandler = new CreateMembershipHandler(firstScope.ServiceProvider.GetRequiredService<IIdentityAccessStore>(), firstLock, new IdentityAccessTestSetup.Clock());
-        var secondHandler = new CreateMembershipHandler(secondScope.ServiceProvider.GetRequiredService<IIdentityAccessStore>(), secondLock, new IdentityAccessTestSetup.Clock());
+        var firstHandler = new CreateMembershipHandler(firstScope.ServiceProvider.GetRequiredService<IIdentityAccessStore>(), firstLock, new IdentityAccessTestSetup.Clock(), new BusinessRuleAuthorizationStub(), new PlatformAdministrationStub(null));
+        var secondHandler = new CreateMembershipHandler(secondScope.ServiceProvider.GetRequiredService<IIdentityAccessStore>(), secondLock, new IdentityAccessTestSetup.Clock(), new BusinessRuleAuthorizationStub(), new PlatformAdministrationStub(null));
         var firstTask = firstHandler.HandleAsync(new(setup.TenantId, firstUserId, TenantRole.Owner, Guid.NewGuid()), timeout.Token);
         Task<MembershipDetails>? secondTask = null;
         try

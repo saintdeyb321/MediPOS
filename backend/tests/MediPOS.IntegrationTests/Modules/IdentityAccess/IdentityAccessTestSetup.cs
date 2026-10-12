@@ -27,13 +27,14 @@ internal static class IdentityAccessTestSetup
         services.AddSingleton<TimeProvider>(new Clock());
         services.AddInfrastructure(configuration);
         services.AddIdentityAuthentication<TestGoogleIdentitySource, TestServerSession>();
+        services.AddPersistenceFixtureAuthorization();
         return services.BuildServiceProvider(new ServiceProviderOptions { ValidateOnBuild = true, ValidateScopes = true });
     }
 
     internal static async Task<Setup> CreateAsync(IServiceProvider services, TenantRole role = TenantRole.Cashier)
     {
         var actor = await CreateUserAsync(services);
-        var tenant = await services.GetRequiredService<CreateTenantHandler>().HandleAsync(
+        var tenant = await services.WithPlatformActor(actor.Id).GetRequiredService<CreateTenantHandler>().HandleAsync(
             new("Botica", Now.AddDays(-1), Now.AddMonths(1), 3, LicenseStatus.Active, actor.Id), TestContext.Current.CancellationToken);
         var legal = await services.GetRequiredService<CreateLegalEntityHandler>().HandleAsync(
             new(tenant.TenantId, "Botica SAC", "123", actor.Id), TestContext.Current.CancellationToken);

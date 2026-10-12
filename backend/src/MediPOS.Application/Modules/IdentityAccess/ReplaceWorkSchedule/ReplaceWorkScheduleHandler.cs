@@ -1,3 +1,4 @@
+using MediPOS.Application.Modules.IdentityAccess.OperationalAccess;
 using MediPOS.Application.Errors;
 using MediPOS.Application.Modules.AuditSupport;
 using MediPOS.Application.Modules.TenancyLicensing;
@@ -10,12 +11,13 @@ public sealed record WorkWindow(DayOfWeek DayOfWeek, TimeOnly StartTime, TimeOnl
 // ActorId is supplied by the authenticated server caller, never a freely bound HTTP field.
 public sealed record ReplaceWorkScheduleCommand(Guid TenantId, Guid MembershipId, IReadOnlyList<WorkWindow> Windows, Guid ActorId);
 
-public sealed class ReplaceWorkScheduleHandler(IIdentityAccessStore store, ITenantLicenseProvisioning provisioning, TimeProvider timeProvider)
+public sealed class ReplaceWorkScheduleHandler(IIdentityAccessStore store, ITenantLicenseProvisioning provisioning, TimeProvider timeProvider, ITenantOperationAuthorizer authorization)
 {
     public async Task HandleAsync(ReplaceWorkScheduleCommand command, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(command);
         AuditTrail.RequireActor(command.ActorId);
+        await authorization.RequireAsync(command.TenantId, null, command.ActorId, TenantOperation.Administration, cancellationToken).ConfigureAwait(false);
         ArgumentNullException.ThrowIfNull(command.Windows);
         var requested = command.Windows.ToArray();
         if (requested.Distinct().Count() != requested.Length)
@@ -44,6 +46,7 @@ public sealed class ReplaceWorkScheduleHandler(IIdentityAccessStore store, ITena
                 timeProvider.GetUtcNow(), before, after);
             await store.ReplaceScheduleAsync(command.TenantId, membership.Id, schedule, audit, cancellationToken).ConfigureAwait(false);
         }
+        await authorization.RequireAsync(command.TenantId, null, command.ActorId, TenantOperation.Administration, cancellationToken).ConfigureAwait(false);
         await scope.CompleteAsync(cancellationToken).ConfigureAwait(false);
     }
 }

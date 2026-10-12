@@ -38,6 +38,12 @@ internal sealed class IdentityAccessStore(MediPosDbContext context) : IIdentityA
         return context.Memberships.CountAsync(value => value.TenantId == tenantId && value.IsActive && value.Role == TenantRole.Owner, cancellationToken);
     }
 
+    public Task<bool> HasOwnerHistoryAsync(Guid tenantId, CancellationToken cancellationToken)
+    {
+        context.SelectTenant(tenantId);
+        return context.Memberships.AnyAsync(value => value.TenantId == tenantId && value.Role == TenantRole.Owner, cancellationToken);
+    }
+
     public Task<Membership?> FindMembershipAsync(Guid tenantId, Guid membershipId, CancellationToken cancellationToken)
     {
         context.SelectTenant(tenantId);

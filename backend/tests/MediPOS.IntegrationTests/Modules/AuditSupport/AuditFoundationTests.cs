@@ -78,11 +78,11 @@ public sealed class AuditFoundationTests(PostgreSqlFixture fixture)
         var provider = scope.ServiceProvider;
         using var activity = new Activity("postgres-audit-test").SetIdFormat(ActivityIdFormat.W3C).Start();
         var setup = await IdentityAccessTestSetup.CreateAsync(provider);
-        await provider.GetRequiredService<RenewLicenseHandler>().HandleAsync(
+        await provider.WithPlatformActor(setup.ActorId).GetRequiredService<RenewLicenseHandler>().HandleAsync(
             new(setup.TenantId, setup.LicenseId, Now.AddMonths(2), setup.ActorId), TestContext.Current.CancellationToken);
-        await provider.GetRequiredService<SuspendLicenseHandler>().HandleAsync(
+        await provider.WithPlatformActor(setup.ActorId).GetRequiredService<SuspendLicenseHandler>().HandleAsync(
             new(setup.TenantId, setup.LicenseId, setup.ActorId), TestContext.Current.CancellationToken);
-        await provider.GetRequiredService<ReactivateLicenseHandler>().HandleAsync(
+        await provider.WithPlatformActor(setup.ActorId).GetRequiredService<ReactivateLicenseHandler>().HandleAsync(
             new(setup.TenantId, setup.LicenseId, LicenseStatus.Active, setup.ActorId), TestContext.Current.CancellationToken);
         await provider.GetRequiredService<SetMainHubBranchHandler>().HandleAsync(
             new(setup.TenantId, setup.BranchId, setup.ActorId), TestContext.Current.CancellationToken);
@@ -92,7 +92,7 @@ public sealed class AuditFoundationTests(PostgreSqlFixture fixture)
             new(setup.TenantId, setup.MembershipId, [new(DayOfWeek.Tuesday, new(9, 0), new(18, 0))], setup.ActorId), TestContext.Current.CancellationToken);
         await provider.GetRequiredService<DeactivateMembershipHandler>().HandleAsync(
             new(setup.TenantId, setup.MembershipId, setup.ActorId), TestContext.Current.CancellationToken);
-        await provider.GetRequiredService<RequestTenantPurgeHandler>().HandleAsync(
+        await provider.WithPlatformActor(setup.ActorId).GetRequiredService<RequestTenantPurgeHandler>().HandleAsync(
             new(setup.TenantId, setup.LicenseId, setup.ActorId), TestContext.Current.CancellationToken);
 
         await using var verification = fixture.CreateContext(setup.TenantId);
@@ -310,6 +310,7 @@ public sealed class AuditFoundationTests(PostgreSqlFixture fixture)
                 .AddInterceptors(interceptor).Options;
             return new MediPosDbContext(options, tenantContext);
         });
+        services.AddPersistenceFixtureAuthorization();
         return services.BuildServiceProvider();
     }
 

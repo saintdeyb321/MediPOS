@@ -1,3 +1,4 @@
+using MediPOS.Application.Modules.IdentityAccess.OperationalAccess;
 using MediPOS.Application.Errors;
 using MediPOS.Application.Modules.Branches;
 using MediPOS.Application.Modules.Catalog;
@@ -8,11 +9,12 @@ namespace MediPOS.Application.Modules.Inventory.PlanFefoAllocation;
 
 public sealed record PlanFefoAllocationQuery(Guid TenantId, Guid BranchId, Guid BusinessProductId, decimal RequestedBaseQuantity);
 
-public sealed class PlanFefoAllocationHandler(IInventoryReadStore inventory, IBranchesStore branches, IBusinessProductStore products, TimeProvider clock)
+public sealed class PlanFefoAllocationHandler(IInventoryReadStore inventory, IBranchesStore branches, IBusinessProductStore products, TimeProvider clock, ITenantOperationAuthorizer authorization)
 {
     public async Task<IReadOnlyList<LotAllocation>> HandleAsync(PlanFefoAllocationQuery query, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(query);
+        await authorization.RequireAsync(query.TenantId, query.BranchId, null, TenantOperation.ProductSearch, cancellationToken).ConfigureAwait(false);
         if (query.BranchId == Guid.Empty || query.BusinessProductId == Guid.Empty || query.RequestedBaseQuantity <= 0)
             throw new ApplicationErrorException(ApplicationErrors.InvalidRequest);
         await InventoryAccess.RequireLicenseAsync(query.TenantId, inventory, clock, cancellationToken).ConfigureAwait(false);
@@ -27,6 +29,7 @@ public sealed class PlanFefoAllocationHandler(IInventoryReadStore inventory, IBr
         var lots = await inventory.FindAvailableMedicineLotsAsync(query.TenantId, query.BranchId, query.BusinessProductId, today, cancellationToken).ConfigureAwait(false);
         if (lots.Any(value => value.TenantId != query.TenantId || value.BranchId != query.BranchId || value.BusinessProductId != query.BusinessProductId))
             throw new ApplicationErrorException(ApplicationErrors.TenantScopeConflict);
+        await authorization.RequireAsync(query.TenantId, query.BranchId, null, TenantOperation.ProductSearch, cancellationToken).ConfigureAwait(false);
         try { return FefoAllocation.Plan(lots, query.RequestedBaseQuantity, today); }
         catch (InsufficientStockException) { throw new ApplicationErrorException(InventoryErrors.InsufficientStock); }
         catch (ArithmeticException) { throw new ApplicationErrorException(ApplicationErrors.InvalidRequest); }

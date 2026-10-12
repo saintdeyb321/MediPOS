@@ -1,3 +1,4 @@
+using MediPOS.Application.Modules.IdentityAccess.OperationalAccess;
 using MediPOS.Application.Errors;
 using MediPOS.Application.Modules.AuditSupport;
 using MediPOS.Application.Modules.TenancyLicensing;
@@ -8,12 +9,13 @@ namespace MediPOS.Application.Modules.Catalog.UpdateBusinessProductPrices;
 // TenantId and ActorId are authenticated server context, never freely trusted HTTP fields.
 public sealed record UpdateBusinessProductPricesCommand(Guid TenantId, Guid ProductId, decimal RetailPrice, decimal? WholesalePrice, Guid ActorId);
 
-public sealed class UpdateBusinessProductPricesHandler(IBusinessProductStore store, ITenantLicenseProvisioning provisioning, TimeProvider timeProvider)
+public sealed class UpdateBusinessProductPricesHandler(IBusinessProductStore store, ITenantLicenseProvisioning provisioning, TimeProvider timeProvider, ITenantOperationAuthorizer authorization)
 {
     public async Task<BusinessProductDetails> HandleAsync(UpdateBusinessProductPricesCommand command, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(command);
         AuditTrail.RequireActor(command.ActorId);
+        await authorization.RequireAsync(command.TenantId, null, command.ActorId, TenantOperation.Administration, cancellationToken).ConfigureAwait(false);
         if (command.TenantId == Guid.Empty || command.ProductId == Guid.Empty)
             throw new ApplicationErrorException(ApplicationErrors.InvalidRequest);
         await using var scope = await provisioning.BeginAsync(command.TenantId, cancellationToken).ConfigureAwait(false)
@@ -37,6 +39,7 @@ public sealed class UpdateBusinessProductPricesHandler(IBusinessProductStore sto
                 before, CatalogAudit.Prices(product));
             await store.SaveAsync(product, audit, cancellationToken).ConfigureAwait(false);
         }
+        await authorization.RequireAsync(command.TenantId, null, command.ActorId, TenantOperation.Administration, cancellationToken).ConfigureAwait(false);
         await scope.CompleteAsync(cancellationToken).ConfigureAwait(false);
         return BusinessProductDetails.From(product);
     }

@@ -14,6 +14,7 @@
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
     </PackageReference>
     <Using Include="Xunit" />
+    <Using Include="MediPOS.Tests.Fixtures" />
   </ItemGroup>
 
   <ItemGroup>
@@ -24,5 +25,8 @@
   <ItemGroup>
     <Compile Include="..\Fixtures\ElectronicDocumentTestData.cs" Link="Fixtures\ElectronicDocumentTestData.cs" />
     <Compile Include="..\Fixtures\SupplierUblSyntheticXml.cs" Link="Fixtures\SupplierUblSyntheticXml.cs" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="..\Fixtures\BusinessOperationAuthorizationStubs.cs" Link="Fixtures\BusinessOperationAuthorizationStubs.cs" />
   </ItemGroup>
 </Project>

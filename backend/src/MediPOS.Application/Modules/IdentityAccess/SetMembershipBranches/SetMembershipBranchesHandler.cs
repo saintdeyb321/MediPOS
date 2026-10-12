@@ -1,3 +1,4 @@
+using MediPOS.Application.Modules.IdentityAccess.OperationalAccess;
 using MediPOS.Application.Errors;
 using MediPOS.Application.Modules.AuditSupport;
 using MediPOS.Application.Modules.Branches;
@@ -11,12 +12,13 @@ namespace MediPOS.Application.Modules.IdentityAccess.SetMembershipBranches;
 public sealed record SetMembershipBranchesCommand(Guid TenantId, Guid MembershipId, IReadOnlyList<Guid> BranchIds, Guid ActorId);
 
 public sealed class SetMembershipBranchesHandler(
-    IIdentityAccessStore store, IBranchesStore branchesStore, ITenantLicenseProvisioning provisioning, TimeProvider timeProvider)
+    IIdentityAccessStore store, IBranchesStore branchesStore, ITenantLicenseProvisioning provisioning, TimeProvider timeProvider, ITenantOperationAuthorizer authorization)
 {
     public async Task HandleAsync(SetMembershipBranchesCommand command, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(command);
         AuditTrail.RequireActor(command.ActorId);
+        await authorization.RequireAsync(command.TenantId, null, command.ActorId, TenantOperation.Administration, cancellationToken).ConfigureAwait(false);
         ArgumentNullException.ThrowIfNull(command.BranchIds);
         var requested = command.BranchIds.ToArray();
         if (requested.Distinct().Count() != requested.Length || requested.Any(value => value == Guid.Empty))
@@ -45,6 +47,7 @@ public sealed class SetMembershipBranchesHandler(
                 timeProvider.GetUtcNow(), before, after);
             await store.ReplaceBranchesAsync(command.TenantId, membership.Id, assignments, audit, cancellationToken).ConfigureAwait(false);
         }
+        await authorization.RequireAsync(command.TenantId, null, command.ActorId, TenantOperation.Administration, cancellationToken).ConfigureAwait(false);
         await scope.CompleteAsync(cancellationToken).ConfigureAwait(false);
     }
 }

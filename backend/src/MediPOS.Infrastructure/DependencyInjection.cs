@@ -82,6 +82,7 @@ using MediPOS.Infrastructure.Modules.Catalog.ProductImport;
 using MediPOS.Infrastructure.Modules.Commissions.Persistence;
 using MediPOS.Infrastructure.Modules.ElectronicDocuments;
 using MediPOS.Infrastructure.Modules.IdentityAccess.Persistence;
+using MediPOS.Infrastructure.Modules.IdentityAccess;
 using MediPOS.Infrastructure.Modules.Inventory.Persistence;
 using MediPOS.Infrastructure.Modules.Notifications;
 using MediPOS.Infrastructure.Modules.Notifications.Persistence;
@@ -98,6 +99,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Npgsql;
 
 namespace MediPOS.Infrastructure;
 
@@ -115,8 +117,16 @@ public static class DependencyInjection
                 "Configure 'ConnectionStrings:MediPosDatabase' using environment variables or User Secrets.");
         }
 
-        services.AddDbContext<MediPosDbContext>(options => options.UseNpgsql(connectionString));
+        NpgsqlConnectionStringBuilder runtimeConnection;
+        try { runtimeConnection = new NpgsqlConnectionStringBuilder(connectionString); }
+        catch (ArgumentException) { throw new InvalidOperationException("The operational database configuration is invalid."); }
+        if (runtimeConnection.Multiplexing)
+            throw new InvalidOperationException("Multiplexing is incompatible with connection-scoped tenant isolation.");
+        services.AddDbContext<MediPosDbContext>(options => options.UseNpgsql(connectionString)
+            .AddInterceptors(new RuntimeDatabaseRoleInterceptor()));
         services.AddScoped<ITenantDataContext, TenantDataContext>();
+        services.TryAddScoped<IPlatformAdministration, DisabledPlatformAdministration>();
+        services.TryAddScoped<ITenantOperationAuthorizer, DisabledTenantOperationAuthorizer>();
         services.TryAddSingleton(TimeProvider.System);
         services.AddLogging();
         services.AddScoped<NotificationStore>();
@@ -234,6 +244,7 @@ public static class DependencyInjection
         services.AddScoped<IAuthenticatedMediPosUser, TAuthenticatedUser>();
         services.AddScoped<UpsertGoogleUserHandler>();
         services.AddScoped<ResolveAccessContextHandler>();
+        services.AddScoped<ITenantOperationAuthorizer, TenantOperationAuthorizer>();
         services.AddScoped<ConfigureElectronicSeriesHandler>();
         services.AddScoped<RequestElectronicDocumentHandler>();
         services.AddScoped<ReviewElectronicDocumentHandler>();

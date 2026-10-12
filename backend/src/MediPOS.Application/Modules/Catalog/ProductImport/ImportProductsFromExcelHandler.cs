@@ -1,3 +1,4 @@
+using MediPOS.Application.Modules.IdentityAccess.OperationalAccess;
 using System.Text.Json;
 using MediPOS.Application.Errors;
 using MediPOS.Application.Modules.AuditSupport;
@@ -9,7 +10,7 @@ namespace MediPOS.Application.Modules.Catalog.ProductImport;
 // Tenant/actor are derived by the authenticated server; workbook columns never supply either.
 public sealed record ImportProductsFromExcelCommand(Guid TenantId, string FileName, Stream File, Guid ActorId);
 
-public sealed class ImportProductsFromExcelHandler(IProductImportWorkbookReader reader, IProductImportStore store, TimeProvider clock)
+public sealed class ImportProductsFromExcelHandler(IProductImportWorkbookReader reader, IProductImportStore store, TimeProvider clock, ITenantOperationAuthorizer authorization)
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
@@ -17,6 +18,7 @@ public sealed class ImportProductsFromExcelHandler(IProductImportWorkbookReader 
     {
         ArgumentNullException.ThrowIfNull(command);
         AuditTrail.RequireActor(command.ActorId);
+        await authorization.RequireAsync(command.TenantId, null, command.ActorId, TenantOperation.Administration, cancellationToken).ConfigureAwait(false);
         if (command.TenantId == Guid.Empty || command.File is null || !command.File.CanRead || string.IsNullOrWhiteSpace(command.FileName))
             throw new ApplicationErrorException(ApplicationErrors.InvalidRequest);
         var fileName = command.FileName.Replace('\\', '/');
@@ -44,6 +46,7 @@ public sealed class ImportProductsFromExcelHandler(IProductImportWorkbookReader 
         var now = clock.GetUtcNow();
         var rows = workbook.Rows.Select(value => ProductImportRowValidation.Validate(value, command.TenantId, now, categories, conflicts)).ToArray();
         var job = ImportJob.Create(command.TenantId, command.ActorId, fileName, workbook.TemplateVersion, rows.Length, now);
+        await authorization.RequireAsync(command.TenantId, null, command.ActorId, TenantOperation.Administration, cancellationToken).ConfigureAwait(false);
         await store.StartAsync(job, cancellationToken).ConfigureAwait(false);
         try
         {
@@ -53,15 +56,22 @@ public sealed class ImportProductsFromExcelHandler(IProductImportWorkbookReader 
             foreach (var row in rows.Where(value => value.Error is null))
             {
                 cancellationToken.ThrowIfCancellationRequested();
+        await authorization.RequireAsync(command.TenantId, null, command.ActorId, TenantOperation.Administration, cancellationToken).ConfigureAwait(false);
                 results.Add(await store.ImportRowAsync(job, row.RowNumber, row.Product!, row.BaseUnit!, cancellationToken).ConfigureAwait(false));
             }
             var imported = results.Count(value => value.Status == ImportRowStatus.Imported);
             var invalid = results.Count - imported;
             now = clock.GetUtcNow();
+        await authorization.RequireAsync(command.TenantId, null, command.ActorId, TenantOperation.Administration, cancellationToken).ConfigureAwait(false);
             job.Complete(imported, invalid, now);
             var summary = AuditTrail.Record(command.TenantId, command.ActorId, AuditAction.CatalogProductsImported, job.Id, now, null,
                 JsonSerializer.Serialize(new { totalRows = job.TotalRows, importedRows = imported, invalidRows = invalid }, JsonOptions));
             await store.CompleteAsync(job, summary, cancellationToken).ConfigureAwait(false);
+        }
+        catch (ApplicationErrorException error) when (error.Error.Category == ErrorCategory.Forbidden)
+        {
+            await TryFailAsync(command.TenantId, job.Id).ConfigureAwait(false);
+            throw;
         }
         catch (OperationCanceledException)
         {
@@ -74,7 +84,7 @@ public sealed class ImportProductsFromExcelHandler(IProductImportWorkbookReader 
                 throw new ApplicationErrorException(ProductImportErrors.ProcessingFailed, exception);
         }
         // The synchronous result is the first bounded page; all outcomes remain recoverable through GetImportJobResult.
-        return await new GetImportJobResultHandler(store).HandleAsync(new(command.TenantId, job.Id), cancellationToken).ConfigureAwait(false);
+        return await new GetImportJobResultHandler(store, authorization).HandleAsync(new(command.TenantId, job.Id), cancellationToken).ConfigureAwait(false);
     }
 
     private async Task<bool> TryFailAsync(Guid tenantId, Guid jobId)

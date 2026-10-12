@@ -108,7 +108,7 @@ public sealed class ProductImportIntegrationTests(PostgreSqlFixture fixture)
             var store = new ProductImportTestData.CoordinatedStore(source.GetRequiredService<IProductImportStore>(), AfterReadAsync);
             using var input = new MemoryStream(bytes);
             return await new ImportProductsFromExcelHandler(source.GetRequiredService<IProductImportWorkbookReader>(), store,
-                source.GetRequiredService<TimeProvider>()).HandleAsync(new(tenant.TenantId, "race.xlsx", input, tenant.Identity.ActorId),
+                source.GetRequiredService<TimeProvider>(), new BusinessRuleAuthorizationStub()).HandleAsync(new(tenant.TenantId, "race.xlsx", input, tenant.Identity.ActorId),
                 TestContext.Current.CancellationToken);
         }
         var results = await Task.WhenAll(RunAsync(), RunAsync());
@@ -142,7 +142,7 @@ public sealed class ProductImportIntegrationTests(PostgreSqlFixture fixture)
         var coordinated = new ProductImportTestData.CoordinatedStore(source.GetRequiredService<IProductImportStore>(), WaitAsync);
         using var input = new MemoryStream(bytes);
         var pending = new ImportProductsFromExcelHandler(source.GetRequiredService<IProductImportWorkbookReader>(), coordinated,
-            source.GetRequiredService<TimeProvider>()).HandleAsync(new(tenant.TenantId, "race.xlsx", input, tenant.Identity.ActorId),
+            source.GetRequiredService<TimeProvider>(), new BusinessRuleAuthorizationStub()).HandleAsync(new(tenant.TenantId, "race.xlsx", input, tenant.Identity.ActorId),
             TestContext.Current.CancellationToken);
         await ready.Task.WaitAsync(TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken);
         await using (var manual = services.CreateAsyncScope())

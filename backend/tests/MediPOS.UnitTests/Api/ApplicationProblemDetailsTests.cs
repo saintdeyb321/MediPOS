@@ -5,6 +5,7 @@ using MediPOS.Application.Errors;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Logging;
 
 namespace MediPOS.UnitTests.Api;
 
@@ -55,6 +56,40 @@ public sealed class ApplicationProblemDetailsTests
         Assert.False(response.RootElement.TryGetProperty("exception", out _));
         Assert.False(response.RootElement.TryGetProperty("detail", out _));
         Assert.Equal(32, response.RootElement.GetProperty("traceId").GetString()!.Length);
+    }
+
+    [Fact]
+    public async Task UnexpectedLogsAndResponsesExcludeCredentialsPayloadAndMaliciousHeaders()
+    {
+        using var services = CreateServices();
+        var context = CreateContext(services);
+        context.Request.Headers.Authorization = "Bearer synthetic_private_token";
+        context.Request.Headers["X-Correlation-ID"] = "malicious\r\nsynthetic_private_token";
+        context.Request.Headers["X-User-ID"] = "synthetic_private_token";
+        var logger = new RecordingLogger();
+        var handler = new ApplicationExceptionHandler(services.GetRequiredService<IProblemDetailsService>(), logger);
+        var exception = new InvalidOperationException("Password=synthetic_private_token; <Invoice>private customer</Invoice>");
+        await handler.TryHandleAsync(context, exception, TestContext.Current.CancellationToken);
+        using var response = ReadBody(context);
+        Assert.DoesNotContain("synthetic_private_token", response.RootElement.GetRawText(), StringComparison.Ordinal);
+        Assert.DoesNotContain("private customer", response.RootElement.GetRawText(), StringComparison.Ordinal);
+        var log = Assert.Single(logger.Messages);
+        Assert.Contains("InvalidOperationException", log, StringComparison.Ordinal);
+        Assert.Contains(response.RootElement.GetProperty("traceId").GetString()!, log, StringComparison.Ordinal);
+        Assert.DoesNotContain("synthetic_private_token", log, StringComparison.Ordinal);
+        Assert.DoesNotContain("Invoice", log, StringComparison.Ordinal);
+    }
+
+    private sealed class RecordingLogger : ILogger<ApplicationExceptionHandler>
+    {
+        public List<string> Messages { get; } = [];
+        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+        public bool IsEnabled(LogLevel logLevel) => true;
+        public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter)
+        {
+            Assert.Null(exception);
+            Messages.Add(formatter(state, exception));
+        }
     }
 
     private static ServiceProvider CreateServices()

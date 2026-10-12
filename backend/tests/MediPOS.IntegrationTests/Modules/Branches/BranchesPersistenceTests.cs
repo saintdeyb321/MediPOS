@@ -187,8 +187,8 @@ public sealed class BranchesPersistenceTests(PostgreSqlFixture fixture)
         await using var secondScope = services.CreateAsyncScope();
         var firstProvisioning = new ObservedProvisioning(firstScope.ServiceProvider.GetRequiredService<ITenantLicenseProvisioning>(), pauseAfterAcquire: true);
         var secondProvisioning = new ObservedProvisioning(secondScope.ServiceProvider.GetRequiredService<ITenantLicenseProvisioning>(), pauseAfterAcquire: false);
-        var firstHandler = new CreateBranchHandler(firstScope.ServiceProvider.GetRequiredService<IBranchesStore>(), firstProvisioning, new FixedTimeProvider());
-        var secondHandler = new CreateBranchHandler(secondScope.ServiceProvider.GetRequiredService<IBranchesStore>(), secondProvisioning, new FixedTimeProvider());
+        var firstHandler = new CreateBranchHandler(firstScope.ServiceProvider.GetRequiredService<IBranchesStore>(), firstProvisioning, new FixedTimeProvider(), new BusinessRuleAuthorizationStub());
+        var secondHandler = new CreateBranchHandler(secondScope.ServiceProvider.GetRequiredService<IBranchesStore>(), secondProvisioning, new FixedTimeProvider(), new BusinessRuleAuthorizationStub());
         var firstTask = firstHandler.HandleAsync(new(setup.TenantId, setup.LegalEntityId, "Primera", Guid.NewGuid()), timeout.Token);
         Task<BranchDetails>? secondTask = null;
 
@@ -249,6 +249,7 @@ public sealed class BranchesPersistenceTests(PostgreSqlFixture fixture)
         var services = new ServiceCollection();
         services.AddSingleton<TimeProvider>(new FixedTimeProvider());
         services.AddInfrastructure(configuration);
+        services.AddPersistenceFixtureAuthorization();
         return services.BuildServiceProvider(new ServiceProviderOptions { ValidateOnBuild = true, ValidateScopes = true });
     }
 
@@ -258,8 +259,9 @@ public sealed class BranchesPersistenceTests(PostgreSqlFixture fixture)
         LicenseStatus status = LicenseStatus.Active,
         bool expired = false)
     {
-        var tenant = await services.GetRequiredService<CreateTenantHandler>().HandleAsync(
-            new("Botica", Now.AddDays(-1), expired ? Now : Now.AddMonths(1), maxBranches, status, Guid.NewGuid()), TestContext.Current.CancellationToken);
+        var actor = Guid.NewGuid();
+        var tenant = await services.WithPlatformActor(actor).GetRequiredService<CreateTenantHandler>().HandleAsync(
+            new("Botica", Now.AddDays(-1), expired ? Now : Now.AddMonths(1), maxBranches, status, actor), TestContext.Current.CancellationToken);
         var legalEntity = await services.GetRequiredService<CreateLegalEntityHandler>().HandleAsync(
             new(tenant.TenantId, "Botica SAC", "123", Guid.NewGuid()), TestContext.Current.CancellationToken);
         return (tenant.TenantId, legalEntity.Id);

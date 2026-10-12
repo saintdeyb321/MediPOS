@@ -111,7 +111,7 @@ public sealed class PurchasingWorkflowTests
     public async Task FullReplacementValidatesAllInputsBeforeWritingAndResolvesConversionOnServer()
     {
         var setup = new Setup();
-        var handler = new ReplacePurchaseLinesHandler(setup.Store, setup.Products, setup.Units, setup.Licensing, new Clock());
+        var handler = new ReplacePurchaseLinesHandler(setup.Store, setup.Products, setup.Units, setup.Licensing, new Clock(), new BusinessRuleAuthorizationStub());
         var original = setup.Store.Lines[0].Id;
         var valid = new PurchaseLineInput(setup.Product.Id, setup.Unit.Id, 2.5m, 3.125m, null, null);
         await Assert.ThrowsAsync<ApplicationErrorException>(() => handler.HandleAsync(
@@ -133,7 +133,7 @@ public sealed class PurchasingWorkflowTests
     {
         var setup = new Setup();
         await setup.Confirm.HandleAsync(setup.Command, TestContext.Current.CancellationToken);
-        var handler = new ReplacePurchaseLinesHandler(setup.Store, setup.Products, setup.Units, setup.Licensing, new Clock());
+        var handler = new ReplacePurchaseLinesHandler(setup.Store, setup.Products, setup.Units, setup.Licensing, new Clock(), new BusinessRuleAuthorizationStub());
         var error = await Assert.ThrowsAsync<ApplicationErrorException>(() => handler.HandleAsync(
             new(setup.Purchase.TenantId, setup.Purchase.Id, [], setup.Command.ActorId), TestContext.Current.CancellationToken));
         Assert.Equal(PurchasingErrors.DraftRequired, error.Error);
@@ -162,7 +162,7 @@ public sealed class PurchasingWorkflowTests
             Products = new(Product);
             Units = new(Unit);
             Branches = new(Branch.Create(Product.TenantId, Guid.NewGuid(), Product.TenantId, "Sucursal", Now));
-            Confirm = new(Store, Branches, Products, Receipts, Licensing, Clock);
+            Confirm = new(Store, Branches, Products, Receipts, Licensing, Clock, new BusinessRuleAuthorizationStub());
             Command = new(Purchase.TenantId, Purchase.Id, Guid.NewGuid());
         }
     }

@@ -1,3 +1,4 @@
+using MediPOS.Application.Modules.IdentityAccess.OperationalAccess;
 using System.Text.Json;
 using MediPOS.Application.Errors;
 using MediPOS.Application.Modules.AuditSupport;
@@ -14,15 +15,17 @@ namespace MediPOS.Application.Modules.Purchasing.ConfirmPurchase;
 public sealed record ConfirmPurchaseCommand(Guid TenantId, Guid PurchaseId, Guid ActorId);
 
 public sealed class ConfirmPurchaseHandler(IPurchasingStore store, IBranchesStore branches, IBusinessProductStore products,
-    IPurchaseReceiptWriter receipts, ITenantLicenseProvisioning provisioning, TimeProvider clock)
+    IPurchaseReceiptWriter receipts, ITenantLicenseProvisioning provisioning, TimeProvider clock, ITenantOperationAuthorizer authorization)
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
     public async Task<PurchaseDetails> HandleAsync(ConfirmPurchaseCommand command, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(command);
         AuditTrail.RequireActor(command.ActorId);
+        await authorization.IdentifyForBranchLookupAsync(command.TenantId, command.ActorId, TenantOperation.Purchasing, cancellationToken).ConfigureAwait(false);
         await using var scope = await PurchasingValidation.BeginAsync(command.TenantId, provisioning, clock, cancellationToken).ConfigureAwait(false);
         var purchase = await PurchasingValidation.LockAsync(command.TenantId, command.PurchaseId, store, cancellationToken).ConfigureAwait(false);
+        await authorization.RequireAsync(command.TenantId, purchase.BranchId, command.ActorId, TenantOperation.Purchasing, cancellationToken).ConfigureAwait(false);
         await PurchasingValidation.ReferencesAsync(command.TenantId, purchase.BranchId, purchase.SupplierId, branches, store, cancellationToken).ConfigureAwait(false);
         var lines = await store.FindLinesAsync(command.TenantId, purchase.Id, cancellationToken).ConfigureAwait(false);
         var catalog = new Dictionary<Guid, BusinessProduct>();
@@ -45,6 +48,7 @@ public sealed class ConfirmPurchaseHandler(IPurchasingStore store, IBranchesStor
         await receipts.StageAsync(lots, movements, cancellationToken).ConfigureAwait(false);
         purchase.Confirm(lines, catalog, command.ActorId, now);
         await store.SaveConfirmationAsync(purchase, audit, cancellationToken).ConfigureAwait(false);
+        await authorization.RequireAsync(command.TenantId, purchase.BranchId, command.ActorId, TenantOperation.Purchasing, cancellationToken).ConfigureAwait(false);
         await scope.CompleteAsync(cancellationToken).ConfigureAwait(false);
         return PurchaseDetails.From(purchase);
     }

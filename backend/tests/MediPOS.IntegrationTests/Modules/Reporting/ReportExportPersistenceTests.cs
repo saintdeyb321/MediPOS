@@ -282,6 +282,7 @@ public sealed class ReportExportPersistenceTests(PostgreSqlFixture fixture)
         services.AddInfrastructure(new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?> { ["ConnectionStrings:MediPosDatabase"] = fixture.ConnectionString }).Build());
         services.AddIdentityAuthentication<IdentityAccessTestSetup.TestGoogleIdentitySource, IdentityAccessTestSetup.TestServerSession>();
         services.AddDbContext<MediPosDbContext>(options => options.AddInterceptors(importer));
+        services.AddPersistenceFixtureAuthorization();
         return services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true, ValidateOnBuild = true });
     }
     private sealed class SnapshotImporter(string snapshot) : DbTransactionInterceptor

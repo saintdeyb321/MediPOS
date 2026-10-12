@@ -74,11 +74,11 @@ public sealed class OperationalAccessPersistenceTests(PostgreSqlFixture fixture)
         ((IdentityAccessTestSetup.TestServerSession)scope.ServiceProvider.GetRequiredService<IAuthenticatedMediPosUser>()).UserId = setup.UserId;
         var resolver = scope.ServiceProvider.GetRequiredService<ResolveAccessContextHandler>();
         Assert.True((await resolver.HandleAsync(setup.TenantId, null, IdentityAccessTestSetup.Now, TestContext.Current.CancellationToken)).IsAllowed);
-        await scope.ServiceProvider.GetRequiredService<SuspendLicenseHandler>().HandleAsync(
+        await scope.ServiceProvider.WithPlatformActor(setup.UserId).GetRequiredService<SuspendLicenseHandler>().HandleAsync(
             new(setup.TenantId, setup.LicenseId, setup.UserId), TestContext.Current.CancellationToken);
         Assert.Equal("access.license_denied",
             (await resolver.HandleAsync(setup.TenantId, null, IdentityAccessTestSetup.Now, TestContext.Current.CancellationToken)).Code);
-        await scope.ServiceProvider.GetRequiredService<ReactivateLicenseHandler>().HandleAsync(
+        await scope.ServiceProvider.WithPlatformActor(setup.UserId).GetRequiredService<ReactivateLicenseHandler>().HandleAsync(
             new(setup.TenantId, setup.LicenseId, LicenseStatus.Active, setup.UserId), TestContext.Current.CancellationToken);
         Assert.True((await resolver.HandleAsync(setup.TenantId, null, IdentityAccessTestSetup.Now, TestContext.Current.CancellationToken)).IsAllowed);
         await scope.ServiceProvider.GetRequiredService<DeactivateMembershipHandler>().HandleAsync(

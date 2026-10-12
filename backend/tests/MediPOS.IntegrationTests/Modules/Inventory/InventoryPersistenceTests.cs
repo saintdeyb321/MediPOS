@@ -271,6 +271,7 @@ public sealed class InventoryPersistenceTests(PostgreSqlFixture fixture)
         { ["ConnectionStrings:MediPosDatabase"] = fixture.ConnectionString }).Build());
         registrations.AddScoped(source => new MediPosDbContext(new DbContextOptionsBuilder<MediPosDbContext>()
             .UseNpgsql(fixture.ConnectionString).AddInterceptors(interceptor).Options, source.GetRequiredService<ITenantDataContext>()));
+        registrations.AddPersistenceFixtureAuthorization();
         return registrations.BuildServiceProvider();
     }
     private sealed class RejectAdjustment(string failure) : SaveChangesInterceptor
