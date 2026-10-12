@@ -786,15 +786,15 @@ namespace MediPOS.Infrastructure.Modules.TenancyLicensing.Persistence.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("CandidateId", "AtUtc", "Id");
-
                     b.HasIndex("CandidateId", "Version")
                         .IsUnique()
                         .HasFilter("failure_code IS NULL");
 
+                    b.HasIndex("CandidateId", "AtUtc", "Id");
+
                     b.ToTable("official_catalog_platform_audits", null, t =>
                         {
-                            t.HasCheckConstraint("ck_curation_audit", "actor_id <> '00000000-0000-0000-0000-000000000000'::uuid AND candidate_id <> '00000000-0000-0000-0000-000000000000'::uuid AND isfinite(at_utc) AND correlation_id ~ '^[0-9a-f]{32}$' AND correlation_id <> repeat('0',32) AND (version IS NULL OR version >= 1) AND action IN ('normalized','save_correction','approve','reject','request_correction','published','prepare_failed','review_failed','publish_failed') AND ((action LIKE '%_failed' AND failure_code IS NOT NULL) OR (action NOT LIKE '%_failed' AND failure_code IS NULL))");
+                            t.HasCheckConstraint("ck_curation_audit", "actor_id <> '00000000-0000-0000-0000-000000000000'::uuid AND candidate_id <> '00000000-0000-0000-0000-000000000000'::uuid AND isfinite(at_utc) AND correlation_id ~ '^[0-9a-f]{32}$' AND correlation_id <> repeat('0',32) AND (version IS NULL OR version >= 1) AND action IN ('normalized','save_correction','approve','reject','request_correction','published','prepare_failed','review_failed','publish_failed','refresh_prepared','refresh_save_correction','refresh_approve','refresh_reject','refresh_request_review','refresh_keep_previous','refresh_refer_new_identity','refresh_applied','refresh_prepare_failed','refresh_review_failed','refresh_apply_failed') AND ((action LIKE '%_failed' AND failure_code IS NOT NULL) OR (action NOT LIKE '%_failed' AND failure_code IS NULL))");
                         });
                 });
 
@@ -1274,6 +1274,343 @@ namespace MediPOS.Infrastructure.Modules.TenancyLicensing.Persistence.Migrations
                             t.HasCheckConstraint("ck_official_row_raw", "jsonb_typeof(raw_fields) = 'object' AND octet_length(raw_fields::text) <= 524288");
 
                             t.HasCheckConstraint("ck_official_row_status", "validation_status IN ('valid','invalid') AND cardinality(validation_error_codes) <= 16 AND array_position(validation_error_codes,NULL) IS NULL AND length(array_to_string(validation_error_codes,',')) <= 1551 AND ((validation_status = 'valid' AND cardinality(validation_error_codes) = 0) OR (validation_status = 'invalid' AND cardinality(validation_error_codes) > 0))");
+                        });
+                });
+
+            modelBuilder.Entity("MediPOS.Domain.Modules.Catalog.OfficialRefresh.OfficialCatalogRefresh", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTimeOffset?>("AppliedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("applied_at_utc");
+
+                    b.Property<Guid?>("AppliedByActorId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("applied_by_actor_id");
+
+                    b.Property<long?>("AppliedProductVersion")
+                        .HasColumnType("bigint")
+                        .HasColumnName("applied_product_version");
+
+                    b.Property<long?>("ApprovedVersion")
+                        .HasColumnType("bigint")
+                        .HasColumnName("approved_version");
+
+                    b.Property<long>("BaseProductVersion")
+                        .HasColumnType("bigint")
+                        .HasColumnName("base_product_version");
+
+                    b.Property<string>("ChangeClassification")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasColumnName("change_classification");
+
+                    b.Property<string>("ChangedFieldsJson")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("changed_fields");
+
+                    b.Property<DateTimeOffset>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at_utc");
+
+                    b.Property<Guid>("CreatedByActorId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("created_by_actor_id");
+
+                    b.Property<Guid?>("CurationId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("curation_id");
+
+                    b.Property<Guid>("GlobalProductId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("global_product_id");
+
+                    b.Property<Guid>("ImportBatchId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("import_batch_id");
+
+                    b.Property<string>("OfficialIdentity")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)")
+                        .HasColumnName("official_identity");
+
+                    b.Property<string>("PreviousSnapshotJson")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("previous_snapshot");
+
+                    b.Property<string>("ProductFingerprint")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("product_fingerprint");
+
+                    b.Property<string>("ProposedSnapshotJson")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("proposed_snapshot");
+
+                    b.Property<Guid>("PublicationId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("publication_id");
+
+                    b.Property<string>("Reason")
+                        .HasMaxLength(2048)
+                        .HasColumnType("character varying(2048)")
+                        .HasColumnName("reason");
+
+                    b.Property<string>("ReferredOfficialIdentity")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)")
+                        .HasColumnName("referred_official_identity");
+
+                    b.Property<DateTimeOffset?>("ReviewedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("reviewed_at_utc");
+
+                    b.Property<Guid?>("ReviewedByActorId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("reviewed_by_actor_id");
+
+                    b.Property<string>("RowChecksumSha256")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("row_checksum_sha256");
+
+                    b.Property<string>("SourceChecksumSha256")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("source_checksum_sha256");
+
+                    b.Property<string>("SourceCode")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("source_code");
+
+                    b.Property<string>("SourceVersion")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)")
+                        .HasColumnName("source_version");
+
+                    b.Property<Guid?>("StagingRowId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("staging_row_id");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasColumnName("status");
+
+                    b.Property<long>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("bigint")
+                        .HasColumnName("version");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CurationId")
+                        .IsUnique()
+                        .HasFilter("curation_id IS NOT NULL");
+
+                    b.HasIndex("ImportBatchId");
+
+                    b.HasIndex("PublicationId");
+
+                    b.HasIndex("StagingRowId");
+
+                    b.HasIndex("GlobalProductId", "AppliedProductVersion")
+                        .IsUnique()
+                        .HasFilter("applied_product_version IS NOT NULL");
+
+                    b.HasIndex("ChangeClassification", "CreatedAtUtc", "Id");
+
+                    b.HasIndex("GlobalProductId", "CreatedAtUtc", "Id");
+
+                    b.HasIndex("SourceCode", "SourceVersion", "OfficialIdentity")
+                        .IsUnique();
+
+                    b.HasIndex("SourceCode", "SourceVersion", "Status", "CreatedAtUtc", "Id");
+
+                    b.ToTable("official_catalog_refreshes", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_refresh_application", "(status = 'applied' AND applied_product_version = base_product_version + 1 AND applied_product_version IS NOT NULL AND applied_by_actor_id IS NOT NULL AND applied_by_actor_id <> '00000000-0000-0000-0000-000000000000'::uuid AND applied_at_utc IS NOT NULL AND isfinite(applied_at_utc) AND applied_at_utc >= reviewed_at_utc AND change_classification IN ('unchanged','metadata_changed')) OR (status <> 'applied' AND applied_product_version IS NULL AND applied_by_actor_id IS NULL AND applied_at_utc IS NULL)");
+
+                            t.HasCheckConstraint("ck_refresh_approval", "(status = 'approved' AND approved_version = version AND approved_version IS NOT NULL) OR (status = 'applied' AND approved_version = version - 1 AND approved_version IS NOT NULL) OR (status NOT IN ('approved','applied') AND approved_version IS NULL)");
+
+                            t.HasCheckConstraint("ck_refresh_data", "jsonb_typeof(previous_snapshot) = 'object' AND octet_length(previous_snapshot::text) <= 524288 AND (proposed_snapshot IS NULL OR (jsonb_typeof(proposed_snapshot) = 'object' AND octet_length(proposed_snapshot::text) <= 524288)) AND jsonb_typeof(changed_fields) = 'array' AND jsonb_array_length(changed_fields) <= 16");
+
+                            t.HasCheckConstraint("ck_refresh_identity", "length(btrim(source_code)) > 0 AND length(btrim(source_version)) > 0 AND length(btrim(official_identity)) > 0 AND source_checksum_sha256 ~ '^[0-9a-f]{64}$' AND product_fingerprint ~ '^[0-9a-f]{64}$' AND ((curation_id IS NULL AND staging_row_id IS NULL AND row_checksum_sha256 IS NULL AND proposed_snapshot IS NULL AND change_classification = 'missing_from_source') OR (curation_id IS NOT NULL AND staging_row_id IS NOT NULL AND row_checksum_sha256 ~ '^[0-9a-f]{64}$' AND proposed_snapshot IS NOT NULL))");
+
+                            t.HasCheckConstraint("ck_refresh_referral", "(status = 'referred' AND referred_official_identity IS NOT NULL AND length(btrim(referred_official_identity)) > 0 AND referred_official_identity <> official_identity AND change_classification IN ('clinically_significant_change','identity_conflict')) OR (status <> 'referred' AND referred_official_identity IS NULL)");
+
+                            t.HasCheckConstraint("ck_refresh_review", "(version = 1 AND reviewed_by_actor_id IS NULL AND reviewed_at_utc IS NULL AND reason IS NULL) OR (version > 1 AND reviewed_by_actor_id IS NOT NULL AND reviewed_by_actor_id <> '00000000-0000-0000-0000-000000000000'::uuid AND reviewed_at_utc IS NOT NULL AND isfinite(reviewed_at_utc) AND reviewed_at_utc >= created_at_utc AND reason IS NOT NULL AND length(btrim(reason)) > 0)");
+
+                            t.HasCheckConstraint("ck_refresh_status", "status IN ('pending_review','requires_review','approved','rejected','kept_previous','referred','applied') AND change_classification IN ('unchanged','metadata_changed','clinically_significant_change','identity_conflict','missing_from_source','requires_review') AND version >= 1 AND base_product_version >= 0 AND created_by_actor_id <> '00000000-0000-0000-0000-000000000000'::uuid AND isfinite(created_at_utc)");
+                        });
+                });
+
+            modelBuilder.Entity("MediPOS.Domain.Modules.Catalog.OfficialRefresh.OfficialCatalogVersionHistory", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("Action")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasColumnName("action");
+
+                    b.Property<Guid>("ActorId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("actor_id");
+
+                    b.Property<DateTimeOffset?>("AppliedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("applied_at_utc");
+
+                    b.Property<Guid?>("AppliedByActorId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("applied_by_actor_id");
+
+                    b.Property<long?>("AppliedProductVersion")
+                        .HasColumnType("bigint")
+                        .HasColumnName("applied_product_version");
+
+                    b.Property<string>("ApprovedSnapshotJson")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("approved_snapshot");
+
+                    b.Property<DateTimeOffset>("AtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("at_utc");
+
+                    b.Property<long>("BaseProductVersion")
+                        .HasColumnType("bigint")
+                        .HasColumnName("base_product_version");
+
+                    b.Property<string>("ChangeClassification")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasColumnName("change_classification");
+
+                    b.Property<string>("ChangedFieldsJson")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("changed_fields");
+
+                    b.Property<string>("CorrelationId")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasColumnName("correlation_id");
+
+                    b.Property<Guid?>("CurationId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("curation_id");
+
+                    b.Property<Guid>("GlobalProductId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("global_product_id");
+
+                    b.Property<Guid>("ImportBatchId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("import_batch_id");
+
+                    b.Property<string>("OfficialIdentity")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)")
+                        .HasColumnName("official_identity");
+
+                    b.Property<string>("PreviousSnapshotJson")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("previous_snapshot");
+
+                    b.Property<string>("ProposedSnapshotJson")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("proposed_snapshot");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasMaxLength(2048)
+                        .HasColumnType("character varying(2048)")
+                        .HasColumnName("reason");
+
+                    b.Property<string>("ReferredOfficialIdentity")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)")
+                        .HasColumnName("referred_official_identity");
+
+                    b.Property<Guid>("RefreshId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("refresh_id");
+
+                    b.Property<DateTimeOffset?>("ReviewedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("reviewed_at_utc");
+
+                    b.Property<Guid?>("ReviewedByActorId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("reviewed_by_actor_id");
+
+                    b.Property<string>("SourceCode")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("source_code");
+
+                    b.Property<string>("SourceVersion")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)")
+                        .HasColumnName("source_version");
+
+                    b.Property<Guid?>("StagingRowId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("staging_row_id");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasColumnName("status");
+
+                    b.Property<long>("Version")
+                        .HasColumnType("bigint")
+                        .HasColumnName("version");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CurationId");
+
+                    b.HasIndex("ImportBatchId");
+
+                    b.HasIndex("StagingRowId");
+
+                    b.HasIndex("RefreshId", "Version")
+                        .IsUnique();
+
+                    b.HasIndex("GlobalProductId", "AtUtc", "Id");
+
+                    b.HasIndex("SourceCode", "SourceVersion", "AtUtc", "Id");
+
+                    b.ToTable("official_catalog_version_history", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_refresh_history_data", "jsonb_typeof(previous_snapshot) = 'object' AND octet_length(previous_snapshot::text) <= 524288 AND (proposed_snapshot IS NULL OR (jsonb_typeof(proposed_snapshot) = 'object' AND octet_length(proposed_snapshot::text) <= 524288)) AND (approved_snapshot IS NULL OR (jsonb_typeof(approved_snapshot) = 'object' AND octet_length(approved_snapshot::text) <= 524288)) AND jsonb_typeof(changed_fields) = 'array' AND jsonb_array_length(changed_fields) <= 16");
+
+                            t.HasCheckConstraint("ck_refresh_history_event", "version >= 1 AND base_product_version >= 0 AND actor_id <> '00000000-0000-0000-0000-000000000000'::uuid AND isfinite(at_utc) AND length(btrim(reason)) > 0 AND correlation_id ~ '^[0-9a-f]{32}$' AND correlation_id <> repeat('0',32) AND action IN ('prepared','save_correction','approve','reject','request_review','keep_previous','refer_new_identity','applied')");
                         });
                 });
 
@@ -3745,6 +4082,68 @@ namespace MediPOS.Infrastructure.Modules.TenancyLicensing.Persistence.Migrations
                         .WithMany()
                         .HasForeignKey("ImportBatchId", "DuplicateOfRowNumber")
                         .HasPrincipalKey("ImportBatchId", "RowNumber")
+                        .OnDelete(DeleteBehavior.Restrict);
+                });
+
+            modelBuilder.Entity("MediPOS.Domain.Modules.Catalog.OfficialRefresh.OfficialCatalogRefresh", b =>
+                {
+                    b.HasOne("MediPOS.Domain.Modules.Catalog.OfficialCuration.OfficialCatalogCuration", null)
+                        .WithMany()
+                        .HasForeignKey("CurationId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("MediPOS.Domain.Modules.Catalog.GlobalProduct", null)
+                        .WithMany()
+                        .HasForeignKey("GlobalProductId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("MediPOS.Domain.Modules.Catalog.OfficialImport.OfficialCatalogImportBatch", null)
+                        .WithMany()
+                        .HasForeignKey("ImportBatchId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("MediPOS.Domain.Modules.Catalog.OfficialCuration.OfficialCatalogPublication", null)
+                        .WithMany()
+                        .HasForeignKey("PublicationId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("MediPOS.Domain.Modules.Catalog.OfficialImport.OfficialCatalogStagingRow", null)
+                        .WithMany()
+                        .HasForeignKey("StagingRowId")
+                        .OnDelete(DeleteBehavior.Restrict);
+                });
+
+            modelBuilder.Entity("MediPOS.Domain.Modules.Catalog.OfficialRefresh.OfficialCatalogVersionHistory", b =>
+                {
+                    b.HasOne("MediPOS.Domain.Modules.Catalog.OfficialCuration.OfficialCatalogCuration", null)
+                        .WithMany()
+                        .HasForeignKey("CurationId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("MediPOS.Domain.Modules.Catalog.GlobalProduct", null)
+                        .WithMany()
+                        .HasForeignKey("GlobalProductId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("MediPOS.Domain.Modules.Catalog.OfficialImport.OfficialCatalogImportBatch", null)
+                        .WithMany()
+                        .HasForeignKey("ImportBatchId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("MediPOS.Domain.Modules.Catalog.OfficialRefresh.OfficialCatalogRefresh", null)
+                        .WithMany()
+                        .HasForeignKey("RefreshId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("MediPOS.Domain.Modules.Catalog.OfficialImport.OfficialCatalogStagingRow", null)
+                        .WithMany()
+                        .HasForeignKey("StagingRowId")
                         .OnDelete(DeleteBehavior.Restrict);
                 });
 

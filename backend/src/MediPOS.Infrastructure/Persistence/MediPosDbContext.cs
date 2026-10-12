@@ -6,6 +6,7 @@ using MediPOS.Domain.Modules.Cash;
 using MediPOS.Domain.Modules.Catalog;
 using MediPOS.Domain.Modules.Catalog.OfficialCuration;
 using MediPOS.Domain.Modules.Catalog.OfficialImport;
+using MediPOS.Domain.Modules.Catalog.OfficialRefresh;
 using MediPOS.Domain.Modules.Catalog.ProductImport;
 using MediPOS.Domain.Modules.Commissions;
 using MediPOS.Domain.Modules.IdentityAccess;
@@ -21,6 +22,7 @@ using MediPOS.Infrastructure.Modules.Branches.Persistence.Configurations;
 using MediPOS.Infrastructure.Modules.Cash.Persistence;
 using MediPOS.Infrastructure.Modules.Catalog.OfficialCuration;
 using MediPOS.Infrastructure.Modules.Catalog.OfficialImport;
+using MediPOS.Infrastructure.Modules.Catalog.OfficialRefresh;
 using MediPOS.Infrastructure.Modules.Catalog.Persistence.Configurations;
 using MediPOS.Infrastructure.Modules.Commissions.Persistence;
 using MediPOS.Infrastructure.Modules.IdentityAccess.Persistence.Configurations;
@@ -40,6 +42,8 @@ public sealed partial class MediPosDbContext(DbContextOptions<MediPosDbContext> 
 {
     private bool _officialCatalogWrites;
     private int _officialCurationWrites;
+    private int _officialRefreshWrites;
+    internal void AllowOfficialCatalogRefreshWrites(bool publisher) => _officialRefreshWrites = publisher ? 2 : 1;
     internal void AllowOfficialCatalogCurationWrites(bool publisher) => _officialCurationWrites = publisher ? 2 : 1;
     internal void AllowOfficialCatalogWrites() => _officialCatalogWrites = true;
     public Guid? SelectedTenantId => tenantContext.TenantId;
@@ -82,6 +86,8 @@ public sealed partial class MediPosDbContext(DbContextOptions<MediPosDbContext> 
     public DbSet<OfficialCatalogRevision> OfficialCatalogRevisions => Set<OfficialCatalogRevision>();
     public DbSet<OfficialCatalogPublication> OfficialCatalogPublications => Set<OfficialCatalogPublication>();
     public DbSet<OfficialCatalogPlatformAudit> OfficialCatalogPlatformAudits => Set<OfficialCatalogPlatformAudit>();
+    public DbSet<OfficialCatalogRefresh> OfficialCatalogRefreshes => Set<OfficialCatalogRefresh>();
+    public DbSet<OfficialCatalogVersionHistory> OfficialCatalogVersionHistories => Set<OfficialCatalogVersionHistory>();
     public DbSet<GlobalProduct> GlobalProducts => Set<GlobalProduct>();
     public DbSet<MedicineProfile> MedicineProfiles => Set<MedicineProfile>();
     public DbSet<BusinessProduct> BusinessProducts => Set<BusinessProduct>();
@@ -145,6 +151,8 @@ public sealed partial class MediPosDbContext(DbContextOptions<MediPosDbContext> 
         modelBuilder.ApplyConfiguration(new OfficialCatalogRevisionConfiguration());
         modelBuilder.ApplyConfiguration(new OfficialCatalogPublicationConfiguration());
         modelBuilder.ApplyConfiguration(new OfficialCatalogPlatformAuditConfiguration());
+        modelBuilder.ApplyConfiguration(new OfficialCatalogRefreshConfiguration());
+        modelBuilder.ApplyConfiguration(new OfficialCatalogVersionHistoryConfiguration());
         modelBuilder.ApplyConfiguration(new GlobalProductConfiguration());
         modelBuilder.ApplyConfiguration(new MedicineProfileConfiguration());
         modelBuilder.ApplyConfiguration(new BusinessProductConfiguration());
@@ -503,6 +511,22 @@ public sealed partial class MediPosDbContext(DbContextOptions<MediPosDbContext> 
     {
         foreach (var entry in ChangeTracker.Entries().Where(value => value.State is EntityState.Added or EntityState.Modified or EntityState.Deleted))
         {
+            if (_officialRefreshWrites != 0)
+            {
+                var append = entry.State == EntityState.Added && entry.Entity is OfficialCatalogVersionHistory or OfficialCatalogPlatformAudit;
+                var review = _officialRefreshWrites == 1 && entry.Entity is OfficialCatalogRefresh && entry.State is EntityState.Added or EntityState.Modified;
+                var apply = _officialRefreshWrites == 2 && entry.Entity is OfficialCatalogRefresh && entry.State == EntityState.Modified &&
+                    entry.Properties.Where(property => property.IsModified).All(property => property.Metadata.Name is
+                        nameof(OfficialCatalogRefresh.Status) or nameof(OfficialCatalogRefresh.Version) or nameof(OfficialCatalogRefresh.AppliedProductVersion) or
+                        nameof(OfficialCatalogRefresh.AppliedByActorId) or nameof(OfficialCatalogRefresh.AppliedAtUtc));
+                var metadata = _officialRefreshWrites == 2 && entry.Entity is GlobalProduct && entry.State == EntityState.Modified &&
+                    entry.Properties.Where(property => property.IsModified).All(property => property.Metadata.Name is
+                        nameof(GlobalProduct.Name) or nameof(GlobalProduct.BrandOrLaboratory) or nameof(GlobalProduct.CategoryId));
+                if (!append && !review && !apply && !metadata) throw new InvalidOperationException("Official refresh cannot change staging, clinical data or commercial records.");
+                continue;
+            }
+            if (entry.Entity is OfficialCatalogRefresh or OfficialCatalogVersionHistory)
+                throw new InvalidOperationException("Official refresh writes require the dedicated platform boundary.");
             if (entry.Entity is OfficialCatalogImportBatch or OfficialCatalogStagingRow)
             {
                 if (!_officialCatalogWrites || entry.State == EntityState.Deleted || entry.Entity is OfficialCatalogStagingRow && entry.State == EntityState.Modified)

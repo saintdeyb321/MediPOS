@@ -4,9 +4,9 @@ This is the single execution roadmap for the backend. Prompts are given in chat 
 
 ## Working state
 - **Current milestone:** M6 — Official pharmaceutical catalog pipeline
-- **Current sprint:** B6.2 — Normalize, deduplicate, curate, publish
+- **Current sprint:** B6.3 — Versioned refresh/history
 - **Status:** DONE
-- **Next gate:** B6.2 implementation audit; B6.2.1 Unicode correction integrated and local gate passed (1492 unit / 8 architecture tests and format). B6.1 audited locally; real PostgreSQL validation, including 28 prepared B6.2 cases, remains pending externally. Platform authentication and an authorized source contract are required before activation.
+- **Next gate:** B6.3 implementation audit and real PostgreSQL validation externally (22 prepared B6.3 cases). Local gate passed: 1525 unit / 8 architecture tests, format, no pending model changes and offline migration SQL inspection. B6.1 and B6.2 are audited locally; B6.2.1 is integrated. Production platform authentication and an authorized source contract remain prerequisites for activation.
 
 Local policy: this machine has no Docker and will not install it. Do not check/start Docker or run PostgreSQL/Testcontainers here. B0.1 is complete locally. Keep real PostgreSQL integration tests for another environment; they are not part of the local gate and must not be reported as passed without execution.
 
@@ -237,12 +237,13 @@ Goal: controlled ingestion without fragile runtime dependency.
 **Scope:** import official/versioned source into staging; preserve original text.
 
 ### B6.2 — Normalize, deduplicate, curate, publish
-**Status:** DONE locally — implementation complete, B6.2.1 Unicode/unit validation correction integrated, local gate passed; implementation audit and real PostgreSQL integration validation remain pending externally (28 prepared cases). Staging is immutable, administrative proposals/revisions and platform audit are preserved, and individual publication uses a separate restricted capability. Real-source semantics and production platform authorization remain prerequisites for activation. B6.3 has not started.
+**Status:** DONE / audited locally — B6.2.1 Unicode/unit validation correction integrated; real PostgreSQL integration validation remains pending externally (28 prepared cases). Staging is immutable, administrative proposals/revisions and platform audit are preserved, and individual publication uses a separate restricted capability. Real-source semantics and production platform authorization remain prerequisites for activation.
 **Requirements:** FR-CAT-008.
 **Scope:** normalization and superadmin review; only validated records become global.
 
 ### B6.3 — Versioned refresh/history
-**Scope:** upsert by official identifier/registration and track relevant changes.
+**Status:** DONE locally — controlled refresh, administrative review, compatible metadata application and immutable version history implemented; local gate and offline model/script checks passed. Implementation audit and 22 prepared PostgreSQL cases remain pending externally. No production authorization/source adapter or M7 work is enabled.
+**Scope:** refresh by verified source and official identity; compare changes, preserve the global product identity and apply only approved administrative metadata with complete history.
 
 **M6 gate:** tenant operations never depend on live scraping; global catalog publication is curated.
 

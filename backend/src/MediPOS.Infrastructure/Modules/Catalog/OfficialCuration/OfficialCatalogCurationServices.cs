@@ -1,5 +1,7 @@
 using MediPOS.Application.Modules.Catalog.OfficialCuration;
+using MediPOS.Application.Modules.Catalog.OfficialRefresh;
 using MediPOS.Application.Tenancy;
+using MediPOS.Infrastructure.Modules.Catalog.OfficialRefresh;
 using MediPOS.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -33,12 +35,23 @@ public static class OfficialCatalogCurationServices
         services.AddScoped<PrepareOfficialCatalogCandidateHandler>(); services.AddScoped<ReviewOfficialCatalogCandidateHandler>();
         services.AddScoped<PublishApprovedOfficialCatalogCandidateHandler>(); services.AddScoped<GetOfficialCatalogCurationQueueHandler>();
         services.AddScoped<GetOfficialCatalogCandidateHandler>(); services.AddScoped<GetOfficialCatalogDuplicateCandidatesHandler>();
+        services.AddScoped<IOfficialCatalogRefreshStore>(provider => CreateRefresh(provider, reviewer.ConnectionString, false));
+        services.AddScoped<IOfficialCatalogRefreshApplicationStore>(provider => CreateRefresh(provider, publisher.ConnectionString, true));
+        services.AddScoped<PrepareOfficialCatalogRefreshHandler>(); services.AddScoped<ReviewOfficialCatalogRefreshHandler>();
+        services.AddScoped<ApplyApprovedOfficialCatalogRefreshHandler>(); services.AddScoped<GetOfficialCatalogRefreshQueueHandler>();
+        services.AddScoped<GetOfficialCatalogRefreshHistoryHandler>();
         return services;
     }
     private static OfficialCatalogCurationStore Create(IServiceProvider provider, string connection, bool publisher)
     {
         var context = new MediPosDbContext(new DbContextOptionsBuilder<MediPosDbContext>().UseNpgsql(connection).Options, new TenantDataContext());
         context.AllowOfficialCatalogCurationWrites(publisher);
+        return new(context, provider.GetRequiredService<IOfficialCatalogCurationAdministration>(), publisher);
+    }
+    private static OfficialCatalogRefreshStore CreateRefresh(IServiceProvider provider, string connection, bool publisher)
+    {
+        var context = new MediPosDbContext(new DbContextOptionsBuilder<MediPosDbContext>().UseNpgsql(connection).Options, new TenantDataContext());
+        context.AllowOfficialCatalogRefreshWrites(publisher);
         return new(context, provider.GetRequiredService<IOfficialCatalogCurationAdministration>(), publisher);
     }
     private static NpgsqlConnectionStringBuilder Read(IConfiguration configuration, string name)

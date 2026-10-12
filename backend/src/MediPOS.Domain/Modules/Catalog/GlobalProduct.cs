@@ -13,6 +13,15 @@ public sealed class GlobalProduct
     public DateTimeOffset CreatedAt { get; private set; }
     public MedicineProfile? MedicineProfile { get; private set; }
 
+    // Deliberately limited to reference metadata; medicine composition and tenant products are untouched.
+    public void CorrectOfficialMetadata(string name, string laboratory, Guid categoryId)
+    {
+        if (!IsActive || categoryId == Guid.Empty) throw new InvalidOperationException("official_metadata_invalid");
+        var validName = CatalogFields.Required(name, 256, nameof(name));
+        var validLaboratory = CatalogFields.Required(laboratory, 200, nameof(laboratory));
+        Name = validName; BrandOrLaboratory = validLaboratory; CategoryId = categoryId;
+    }
+
     public static GlobalProduct Create(ProductType productType, string name, Guid categoryId, string brandOrLaboratory,
         string? barcode, MedicineData? medicine, DateTimeOffset createdAt, bool isActive = true)
     {

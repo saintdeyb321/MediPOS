@@ -14,37 +14,7 @@ namespace MediPOS.Infrastructure.Modules.Catalog.OfficialCuration;
 internal sealed class OfficialCatalogCurationStore(MediPosDbContext context, IOfficialCatalogCurationAdministration authority,
     bool publisher) : IOfficialCatalogCurationStore, IOfficialCatalogPublicationStore, IAsyncDisposable
 {
-    private async Task AccessAsync(CancellationToken token)
-    {
-        var capability = publisher ? "medipos_catalog_publisher" : "medipos_catalog_reviewer";
-        var opposite = publisher ? "medipos_catalog_reviewer" : "medipos_catalog_publisher";
-        var allowed = await context.Database.SqlQuery<bool>($"""
-            SELECT NOT rolsuper AND NOT rolbypassrls AND NOT rolcreatedb AND NOT rolcreaterole AND NOT rolreplication AND pg_has_role(current_user,{capability},'USAGE')
-              AND NOT pg_has_role(current_user,'medipos_catalog_importer','USAGE')
-              AND NOT has_schema_privilege(current_user,'public','CREATE')
-              AND NOT has_table_privilege(current_user,'official_catalog_curations','DELETE,TRUNCATE,TRIGGER')
-              AND NOT has_table_privilege(current_user,'official_catalog_revisions','UPDATE,DELETE,TRUNCATE,TRIGGER')
-              AND NOT has_table_privilege(current_user,'official_catalog_publications','UPDATE,DELETE,TRUNCATE,TRIGGER')
-              AND NOT has_table_privilege(current_user,'official_catalog_platform_audits','UPDATE,DELETE,TRUNCATE,TRIGGER')
-              AND NOT has_any_column_privilege(current_user,'categories','INSERT,UPDATE')
-              AND NOT pg_has_role(current_user,{opposite},'USAGE')
-              AND NOT EXISTS (
-                SELECT 1 FROM pg_class private_table JOIN pg_namespace ns ON ns.oid = private_table.relnamespace
-                JOIN pg_attribute ownership ON ownership.attrelid = private_table.oid AND ownership.attname = 'tenant_id' AND NOT ownership.attisdropped
-                WHERE ns.nspname = 'public' AND private_table.relkind IN ('r','p') AND
-                  (has_table_privilege(current_user,private_table.oid,'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER') OR
-                   has_any_column_privilege(current_user,private_table.oid,'SELECT,INSERT,UPDATE')))
-              AND NOT has_table_privilege(current_user,'inventory_lots','SELECT')
-              AND NOT has_table_privilege(current_user,'business_products','UPDATE')
-              AND NOT has_table_privilege(current_user,'official_catalog_staging_rows','INSERT')
-              AND NOT has_any_column_privilege(current_user,'global_products','UPDATE')
-              AND NOT has_any_column_privilege(current_user,'medicine_profiles','UPDATE')
-              AND (has_table_privilege(current_user,'global_products','INSERT') = {publisher})
-              AND (has_table_privilege(current_user,'medicine_profiles','INSERT') = {publisher}) AS "Value"
-            FROM pg_roles WHERE rolname = current_user
-            """).SingleAsync(token).ConfigureAwait(false);
-        if (!allowed) throw OfficialCatalogErrors.Error("curation_database_role_denied", ErrorCategory.Forbidden);
-    }
+    private Task AccessAsync(CancellationToken token) => OfficialCatalogDatabaseAccess.RequireAsync(context, publisher, token);
     private async Task ReauthorizeAsync(OfficialCatalogActor initial, CancellationToken token)
     {
         var actor = await OfficialCurationAccess.RequireAsync(authority, publisher, token).ConfigureAwait(false);
@@ -78,8 +48,7 @@ internal sealed class OfficialCatalogCurationStore(MediPosDbContext context, IOf
     }
     private async Task CategoryAsync(OfficialCatalogProposal proposal, CancellationToken token)
     {
-        var category = proposal.CategoryId.HasValue ? await context.Categories.FromSqlInterpolated($"SELECT * FROM categories WHERE id = {proposal.CategoryId.Value} FOR SHARE").AsNoTracking().SingleOrDefaultAsync(token).ConfigureAwait(false) : null;
-        if (!proposal.HasValidCategory(category)) throw OfficialCatalogErrors.Error("curation_category_invalid");
+        if (!await OfficialCatalogDatabaseAccess.LockCategoryAsync(context, proposal.CategoryId, token).ConfigureAwait(false)) throw OfficialCatalogErrors.Error("curation_category_invalid");
     }
     private static void Identity(OfficialCatalogCuration candidate, OfficialCatalogProposal proposal)
     {
