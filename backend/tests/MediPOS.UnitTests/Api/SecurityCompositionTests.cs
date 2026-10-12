@@ -20,14 +20,15 @@ public sealed class SecurityCompositionTests
     [InlineData("Production", false)]
     [InlineData("Staging", false)]
     [InlineData("Development", true)]
-    public async Task ActualApiPublishesOnlyHealthAndDevelopmentOpenApi(string environment, bool openApi)
+    public async Task ActualApiPublishesOnlyHealthReadinessAndDevelopmentOpenApi(string environment, bool openApi)
     {
         await using var application = global::Program.CreateApplication(
             ["--environment=" + environment, "--ConnectionStrings:MediPosDatabase=" + SyntheticConnection]);
         var routes = ((IEndpointRouteBuilder)application).DataSources.SelectMany(source => source.Endpoints)
             .OfType<RouteEndpoint>().Select(endpoint => endpoint.RoutePattern.RawText!).Order().ToArray();
         Assert.Contains("/health", routes);
-        Assert.Equal(openApi ? 2 : 1, routes.Length);
+        Assert.Contains("/health/ready", routes);
+        Assert.Equal(openApi ? 3 : 2, routes.Length);
         if (openApi) Assert.Contains(routes, route => route.StartsWith("/openapi/", StringComparison.Ordinal));
         using var scope = application.Services.CreateScope();
         Assert.Null(scope.ServiceProvider.GetService<IAuthenticatedMediPosUser>());

@@ -5,12 +5,44 @@ using MediPOS.Infrastructure;
 using MediPOS.TestFixtures;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using MediPOS.UnitTests.Observability;
 
 namespace MediPOS.UnitTests.Modules.ElectronicDocuments;
 
+[Collection("Observability")]
 public sealed class ElectronicDeliveryContractTests
 {
     private static CancellationToken Token => TestContext.Current.CancellationToken;
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task DeliveryMetricsCountCommittedDispatchAndRetainedResultWithoutCountingPolling(bool fenced)
+    {
+        using var metrics = new MeterProbe();
+        var setup = new Setup(new(DeliveryOutcome.Received, "received", "R"), simulation: false);
+        setup.Work.FenceCompletion = fenced;
+        await setup.Run.HandleAsync(setup.Data.Tenant, 1, Token);
+        await setup.Run.HandleAsync(setup.Data.Tenant, 1, Token);
+        Assert.Single(metrics.Of("medipos.electronic_documents.dispatches"));
+        Assert.Equal(fenced ? 0 : 1, metrics.Of("medipos.electronic_documents.results").Length);
+        Assert.Equal(fenced ? 1 : 0, metrics.Of("medipos.electronic_documents.fenced_completions").Length);
+        if (!fenced) Assert.Equal("received", Assert.Single(metrics.Of("medipos.electronic_documents.results")).Tags["outcome"]);
+        Assert.Equal(2, metrics.Of("medipos.operation.executions").Length);
+        Assert.All(metrics.Points.SelectMany(point => point.Tags.Keys), key => Assert.DoesNotContain("tenant", key, StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public async Task UncertainTransportIsObservedOnceAndNeverInventsTaxAcceptance()
+    {
+        using var metrics = new MeterProbe();
+        var setup = new Setup(new(DeliveryOutcome.Received, "received", "R"), simulation: false);
+        setup.Provider.Failure = new TimeoutException("sensitive transport text");
+        await setup.Run.HandleAsync(setup.Data.Tenant, 1, Token);
+        await setup.Run.HandleAsync(setup.Data.Tenant, 1, Token);
+        Assert.Single(metrics.Of("medipos.electronic_documents.dispatches"));
+        Assert.Equal("indeterminate", Assert.Single(metrics.Of("medipos.electronic_documents.results")).Tags["outcome"]);
+        Assert.Equal("uncertain", setup.Document.Status);
+    }
     [Theory]
     [InlineData(DeliveryOutcome.Received, false, false, DeliveryOutcome.Received)]
     [InlineData(DeliveryOutcome.AuthorityAccepted, false, false, DeliveryOutcome.Indeterminate)]
@@ -178,6 +210,7 @@ public sealed class ElectronicDeliveryContractTests
     {
         internal List<ElectronicDocumentAttempt> Events { get; } = [];
         internal bool SaleConfirmed { get; set; } = true;
+        internal bool FenceCompletion { get; set; }
         public Task<int> RecoverExpiredAsync(ElectronicDeliveryIdentity identity, DateTimeOffset now, int limit, CancellationToken token)
         {
             if (document.Status is ElectronicDocumentStates.Reserved or ElectronicDocumentStates.Dispatching && document.LeaseExpiresAtUtc <= now)
@@ -197,6 +230,7 @@ public sealed class ElectronicDeliveryContractTests
         }
         public Task<bool> CompleteAsync(ElectronicDeliveryIdentity identity, ElectronicDeliveryClaim claim, ElectronicProviderResult result, DateTimeOffset now, CancellationToken token)
         {
+            if (FenceCompletion) return Task.FromResult(false);
             if (claim.Token != document.ClaimToken || now >= document.LeaseExpiresAtUtc) return Task.FromResult(false);
             document.Complete(claim.Token, result.Outcome, result.Reference, result.Code, result.Evidence?.EvidenceSha256, now);
             Events.Add(ElectronicDocumentAttempt.Record(document, true, now)); return Task.FromResult(true);

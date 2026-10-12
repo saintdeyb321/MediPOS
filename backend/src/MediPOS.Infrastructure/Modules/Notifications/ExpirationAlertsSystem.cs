@@ -27,14 +27,20 @@ internal sealed class ExpirationAlertsSystem(IServiceScopeFactory scopes, ILogge
     }
     public void TenantFailed(Guid tenantId, Exception exception)
     {
-        if (logger.IsEnabled(LogLevel.Warning)) ExpirationAlertsLog.TenantFailed(logger, tenantId, exception.GetType().Name);
+        try { if (logger.IsEnabled(LogLevel.Warning)) ExpirationAlertsLog.TenantFailed(logger, tenantId, exception.GetType().Name); }
+        catch (Exception) { /* Logging cannot stop other tenant scans. */ }
     }
-    public void RunCompleted(int processedTenants, int failedTenants, int insertedNotifications) =>
-        ExpirationAlertsLog.Completed(logger, processedTenants, failedTenants, insertedNotifications);
+    public void RunCompleted(int processedTenants, int failedTenants, int insertedNotifications)
+    {
+        try { ExpirationAlertsLog.Completed(logger, processedTenants, failedTenants, insertedNotifications); }
+        catch (Exception) { /* Logging cannot change the completed scan. */ }
+    }
 }
 
 internal static partial class ExpirationAlertsLog
 {
+    [LoggerMessage(4103, LogLevel.Information, "Expiration scan started")]
+    internal static partial void Started(ILogger logger);
     [LoggerMessage(4100, LogLevel.Warning, "Expiration scan failed for tenant {TenantId}; error type {ErrorType}")]
     internal static partial void TenantFailed(ILogger logger, Guid tenantId, string errorType);
     [LoggerMessage(4101, LogLevel.Information, "Expiration scan completed: {Tenants} tenants, {Failures} failures, {Notifications} notifications")]

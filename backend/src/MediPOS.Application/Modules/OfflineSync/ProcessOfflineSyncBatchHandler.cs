@@ -8,6 +8,19 @@ public sealed class ProcessOfflineSyncBatchHandler(ResolveAccessContextHandler r
 {
     public async Task<OfflineSyncBatchResult> HandleAsync(OfflineSyncBatchCommand command, CancellationToken token)
     {
+        using var observation = MediPOS.SharedKernel.OperationalTelemetry.Begin(MediPOS.SharedKernel.ObservedOperation.OfflineSyncBatch);
+        try
+        {
+            var result = await ExecuteAsync(command, token).ConfigureAwait(false);
+            observation.Complete();
+            return result;
+        }
+        catch (OperationCanceledException) when (token.IsCancellationRequested)
+        { observation.Complete(MediPOS.SharedKernel.OperationOutcome.Cancelled); throw; }
+    }
+
+    private async Task<OfflineSyncBatchResult> ExecuteAsync(OfflineSyncBatchCommand command, CancellationToken token)
+    {
         var events = OfflineSyncBatchPolicy.ValidateAndSnapshot(command, token);
         var receivedAt = Domain.Modules.OfflineSync.SyncEvent.ServerTime(clock.GetUtcNow());
         await RequireDeviceAsync(command, token).ConfigureAwait(false);
@@ -22,6 +35,7 @@ public sealed class ProcessOfflineSyncBatchHandler(ResolveAccessContextHandler r
             {
                 results.Add(new(envelope.EventId, "rejected", error.Error.Code, null, null, null, null, false, false));
             }
+            MediPOS.SharedKernel.OperationalTelemetry.SyncResult(results[^1].Status, results[^1].IsReplay);
             // Access/device errors, cancellation and persistence failures propagate. Previously committed receipts
             // remain durable; uncertain outcomes are resolved by replay, never by fabricated pending/terminal results.
         }

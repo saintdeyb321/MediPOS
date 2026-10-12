@@ -24,7 +24,11 @@ public sealed class ApplicationExceptionHandler(IProblemDetailsService problemDe
             _ => StatusCodes.Status500InternalServerError,
         };
         if (status == StatusCodes.Status500InternalServerError)
-            LogUnexpected(logger, exception.GetType().Name, traceId, null);
+        {
+            OperationalTelemetry.UnexpectedFailure();
+            try { LogUnexpected(logger, exception.GetType().Name, traceId, null); }
+            catch (Exception) { /* A logger failure cannot replace the sanitized Problem Details response. */ }
+        }
         var problem = new ProblemDetails
         {
             Status = status,

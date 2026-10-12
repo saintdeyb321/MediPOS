@@ -52,6 +52,19 @@ public sealed class RunExpirationAlertsJob(IExpirationAlertsSystem system, TimeP
 {
     public async Task<ExpirationAlertsRunResult> HandleAsync(CancellationToken token)
     {
+        using var observation = MediPOS.SharedKernel.OperationalTelemetry.Begin(MediPOS.SharedKernel.ObservedOperation.ExpirationAlerts);
+        try
+        {
+            var result = await ExecuteAsync(token).ConfigureAwait(false);
+            observation.Complete(result.FailedTenants > 0 ? MediPOS.SharedKernel.OperationOutcome.PartialFailure : MediPOS.SharedKernel.OperationOutcome.Completed);
+            return result;
+        }
+        catch (OperationCanceledException) when (token.IsCancellationRequested)
+        { observation.Complete(MediPOS.SharedKernel.OperationOutcome.Cancelled); throw; }
+    }
+
+    private async Task<ExpirationAlertsRunResult> ExecuteAsync(CancellationToken token)
+    {
         var today = InventoryCalendar.Today(clock);
         Guid? after = null; var processed = 0; var failed = 0; var inserted = 0;
         while (true)
@@ -62,11 +75,17 @@ public sealed class RunExpirationAlertsJob(IExpirationAlertsSystem system, TimeP
             {
                 try
                 {
-                    inserted += await system.ProcessTenantAsync(tenant, today, 100, token).ConfigureAwait(false);
+                    var notifications = await system.ProcessTenantAsync(tenant, today, 100, token).ConfigureAwait(false);
+                    inserted += notifications;
+                    MediPOS.SharedKernel.OperationalTelemetry.ExpirationResults(notifications, 0);
                     processed++;
                 }
                 catch (OperationCanceledException) when (token.IsCancellationRequested) { throw; }
-                catch (Exception error) { failed++; system.TenantFailed(tenant, error); }
+                catch (Exception error)
+                {
+                    failed++; MediPOS.SharedKernel.OperationalTelemetry.ExpirationResults(0, 1);
+                    system.TenantFailed(tenant, error);
+                }
             }
             if (tenants.Count < 100) break;
             after = tenants[^1];

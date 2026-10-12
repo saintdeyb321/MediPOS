@@ -1,4 +1,5 @@
 using MediPOS.Application.Modules.Notifications;
+using System.Diagnostics;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
@@ -12,11 +13,22 @@ internal sealed class ExpirationAlertsScheduler(RunExpirationAlertsJob job, Time
         // Catch up on startup; persisted uniqueness makes restarts and multiple hosts safe.
         while (!stoppingToken.IsCancellationRequested)
         {
+            var parent = Activity.Current;
+            Activity? activity = null;
+            try { activity = new Activity("expiration.scheduler").SetIdFormat(ActivityIdFormat.W3C).Start(); }
+            catch (Exception) { Activity.Current = parent; }
+            try { ExpirationAlertsLog.Started(logger); } catch (Exception) { /* Logging cannot stop the scan. */ }
             try { await job.HandleAsync(stoppingToken).ConfigureAwait(false); }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested) { return; }
             catch (Exception error)
             {
-                if (logger.IsEnabled(LogLevel.Warning)) ExpirationAlertsLog.RunFailed(logger, error.GetType().Name);
+                try { if (logger.IsEnabled(LogLevel.Warning)) ExpirationAlertsLog.RunFailed(logger, error.GetType().Name); }
+                catch (Exception) { /* Logging cannot stop the scheduler. */ }
+            }
+            finally
+            {
+                try { activity?.Dispose(); } catch (Exception) { /* Best effort only. */ }
+                if (Activity.Current == activity) Activity.Current = parent;
             }
             var now = clock.GetUtcNow();
             var local = TimeZoneInfo.ConvertTime(now, Lima);

@@ -11,7 +11,7 @@ dotnet run --project src/MediPOS.Api
 
 Alternatively, set the environment variable `ConnectionStrings__MediPosDatabase`. Startup fails with a configuration error when the connection string is missing or blank. No database is created or migrated automatically.
 
-The local launch profile uses `http://localhost:5080`. `GET /health` reports process health; it does not check database readiness. The OpenAPI document is served at `/openapi/v1.json` only in Development.
+The local launch profile uses `http://localhost:5080`. `GET /health` reports process health; `GET /health/ready` checks the guarded runtime PostgreSQL dependency. Neither authorizes a production pilot. The OpenAPI document is served at `/openapi/v1.json` only in Development.
 
 ```sh
 dotnet restore
