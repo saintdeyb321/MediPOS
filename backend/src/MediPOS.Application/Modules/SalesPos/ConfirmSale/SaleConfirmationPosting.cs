@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using MediPOS.Application.Errors;
@@ -21,22 +22,27 @@ public sealed record SaleConfirmationOrigin(Guid SyncEventId, Guid ClientEventId
 // Shared confirmation rules; the scope owns persistence and determines whether it commits or enlists.
 public sealed class SaleConfirmationPosting(ResolveAccessContextHandler resolver, IBusinessProductStore products, TimeProvider clock)
 {
+    private static readonly ActivitySource Activities = new("MediPOS.Performance.Sale");
     private static readonly TimeZoneInfo Lima = TimeZoneInfo.FindSystemTimeZoneById("America/Lima");
     public async Task<ConfirmSaleResult> ExecuteAsync(ISaleCheckoutScope scope, IReadOnlyList<SalePaymentInput> paymentsInput, CancellationToken cancellationToken, Func<CancellationToken, Task>? revalidateSnapshots = null, SaleConfirmationOrigin? origin = null)
     {
         var sale = scope.Sale;
         var inputs = paymentsInput.ToArray();
+        using var lockedAccessRead = Activities.StartActivity("sale.access.locked");
         var lockedAccess = await SaleDraftAccess.ResolveAsync(resolver, sale.TenantId, sale.BranchId, clock.GetUtcNow(), cancellationToken).ConfigureAwait(false);
         SaleDraftAccess.RequireSeller(sale, lockedAccess);
         RequireCash(scope, lockedAccess);
         ValidateDraft(sale);
+        lockedAccessRead?.Stop();
         var payments = inputs.Select(input => SalePayment.Create(sale, input.Method, input.Amount)).ToArray();
         if (payments.Sum(payment => payment.Amount) != sale.TotalAmount)
             throw new ApplicationErrorException(SalesPosErrors.PaymentTotalMismatch);
 
         // One statement captures a coherent configuration version; a concurrent Owner change affects a later checkout.
+        using var commissionRead = Activities.StartActivity("sale.commission-snapshot");
         var commissionConfiguration = await scope.ReadCommissionConfigurationAsync(cancellationToken).ConfigureAwait(false);
         ValidateCommissionConfiguration(sale, commissionConfiguration);
+        commissionRead?.Stop();
         // Preflight exact arithmetic before stock lock waits; eligibility is re-evaluated at the final ConfirmedAt.
         if (commissionConfiguration.IsEnabled)
             foreach (var line in sale.Lines)
@@ -49,27 +55,35 @@ public sealed class SaleConfirmationPosting(ResolveAccessContextHandler resolver
         var selections = new List<(Guid ProductId, ProductType ProductType, IReadOnlyList<InventoryLot> Lots)>();
         foreach (var group in sale.Lines.GroupBy(line => line.BusinessProductId).OrderBy(group => group.Key))
         {
+            using var productRead = Activities.StartActivity("sale.product-preflight");
             var product = await RequireProductAsync(sale.TenantId, group.Key, cancellationToken).ConfigureAwait(false);
             decimal required;
             try { required = SaleStockAllocation.RequiredQuantity(group); }
             catch (ArithmeticException) { throw new ApplicationErrorException(SalesPosErrors.InconsistentDraft); }
+            productRead?.Stop();
+            using var lotsRead = Activities.StartActivity("sale.lot-locks");
             IReadOnlyList<InventoryLot> lots;
             try { lots = await scope.LockLotsAsync(product.Id, product.ProductType, required, today, cancellationToken).ConfigureAwait(false); }
             catch (ArithmeticException) { throw new ApplicationErrorException(SalesPosErrors.InconsistentDraft); }
+            lotsRead?.Stop();
             selections.Add((product.Id, product.ProductType, lots));
         }
         // Re-evaluate after potentially long lock waits; never commit with an expired license/schedule/date policy.
         foreach (var selection in selections)
         {
+            using var productRead = Activities.StartActivity("sale.product-recheck");
             var product = await RequireProductAsync(sale.TenantId, selection.ProductId, cancellationToken).ConfigureAwait(false);
             if (product.ProductType != selection.ProductType) throw new ApplicationErrorException(SalesPosErrors.ProductUnavailable);
         }
         if (revalidateSnapshots is not null) await revalidateSnapshots(cancellationToken).ConfigureAwait(false);
         var now = clock.GetUtcNow();
+        using var finalAccessRead = Activities.StartActivity("sale.access.final");
         var finalAccess = await SaleDraftAccess.ResolveAsync(resolver, sale.TenantId, sale.BranchId, now, cancellationToken).ConfigureAwait(false);
         SaleDraftAccess.RequireSeller(sale, finalAccess);
         RequireCash(scope, finalAccess);
         if (LocalDate(now) != today) throw new ApplicationErrorException(SalesPosErrors.CheckoutWindowChanged);
+        finalAccessRead?.Stop();
+        using var posting = Activities.StartActivity("sale.posting-and-commit");
         var movements = new List<StockMovement>();
         CommissionEntry[] commissions;
         try

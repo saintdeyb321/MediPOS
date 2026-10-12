@@ -1,4 +1,5 @@
 using System.Data;
+using System.Diagnostics;
 using System.Text;
 using MediPOS.Application.Errors;
 using MediPOS.Application.Modules.Catalog.ReplaceProductUnits;
@@ -15,6 +16,7 @@ namespace MediPOS.Infrastructure.Modules.Catalog.Persistence;
 
 internal sealed class ProductSearchStore(MediPosDbContext context) : IProductSearchStore
 {
+    private static readonly ActivitySource Activities = new("MediPOS.Performance.Search");
     public async Task<License?> FindLicenseAsync(Guid tenantId, CancellationToken cancellationToken)
     {
         context.SelectTenant(tenantId);
@@ -42,11 +44,13 @@ internal sealed class ProductSearchStore(MediPosDbContext context) : IProductSea
             SET LOCAL pg_trgm.similarity_threshold = 0.3;
             SET LOCAL pg_trgm.word_similarity_threshold = 0.6;
             """, cancellationToken).ConfigureAwait(false);
+        using var normalization = Activities.StartActivity("search.normalization");
         var needle = await context.Database.SqlQuery<string>($"SELECT normalize_product_search({query}) AS \"Value\"")
             .SingleAsync(cancellationToken).ConfigureAwait(false);
         if (string.IsNullOrWhiteSpace(needle)) throw new ApplicationErrorException(ApplicationErrors.InvalidRequest);
         var prefix = needle.Replace("\\", "\\\\", StringComparison.Ordinal).Replace("%", "\\%", StringComparison.Ordinal)
             .Replace("_", "\\_", StringComparison.Ordinal) + "%";
+        normalization?.Stop();
         var parameters = new object[]
         {
             new NpgsqlParameter("tenant", NpgsqlDbType.Uuid) { Value = tenantId },
@@ -57,13 +61,16 @@ internal sealed class ProductSearchStore(MediPosDbContext context) : IProductSea
             new NpgsqlParameter("prefix", NpgsqlDbType.Text) { Value = prefix },
             new NpgsqlParameter("fuzzy", NpgsqlDbType.Boolean) { Value = needle.EnumerateRunes().Count(Rune.IsLetterOrDigit) >= 3 },
         };
+        using var main = Activities.StartActivity("search.main");
         var directRows = await context.Database.SqlQueryRaw<SearchRow>(DirectSql, parameters).ToListAsync(cancellationToken).ConfigureAwait(false);
         var direct = directRows.Select(ToCandidate).ToArray();
+        main?.Stop();
         var keys = SearchProductsComposition.EquivalenceOrigins(direct).Select(value => value.EquivalenceKey!)
             .Distinct(StringComparer.Ordinal).ToArray();
         ProductSearchCandidate[] equivalents = [];
         if (keys.Length > 0)
         {
+            using var equivalence = Activities.StartActivity("search.equivalences");
             var rows = await context.Database.SqlQueryRaw<SearchRow>(EquivalentSql,
                 new NpgsqlParameter("tenant", tenantId), new NpgsqlParameter("branch", branchId),
                 new NpgsqlParameter("today", NpgsqlDbType.Date) { Value = today }, new NpgsqlParameter("limit", limit),
@@ -75,6 +82,7 @@ internal sealed class ProductSearchStore(MediPosDbContext context) : IProductSea
         IReadOnlyList<OtherBranchCandidate> other = [];
         if (otherIds.Length > 0)
         {
+            using var otherBranches = Activities.StartActivity("search.other-branches");
             // Branch currently has no inactive state; all existing same-tenant branches are operational.
             other = await (from lot in context.InventoryLots.AsNoTracking()
                            join product in context.BusinessProducts.AsNoTracking()
@@ -91,6 +99,7 @@ internal sealed class ProductSearchStore(MediPosDbContext context) : IProductSea
                 .Take(limit).ToListAsync(cancellationToken).ConfigureAwait(false);
         }
         var productIds = direct.Concat(equivalents).Select(value => value.BusinessProductId).Distinct().ToArray();
+        using var presentations = Activities.StartActivity("search.presentations");
         var units = await context.ProductUnits.AsNoTracking().Where(value => productIds.Contains(value.BusinessProductId) && value.IsActive)
             .OrderByDescending(value => value.IsBaseUnit).ThenBy(value => value.Name).ThenBy(value => value.Id)
             .ToListAsync(cancellationToken).ConfigureAwait(false);
@@ -98,6 +107,7 @@ internal sealed class ProductSearchStore(MediPosDbContext context) : IProductSea
             group => (IReadOnlyList<ProductUnitDetails>)group.Select(ProductUnitDetails.From).ToArray());
         ProductSearchCandidate AddUnits(ProductSearchCandidate candidate) => candidate with
         { Units = options.TryGetValue(candidate.BusinessProductId, out var values) ? values : [] };
+        presentations?.Stop();
         await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
         return new(direct.Select(AddUnits).ToArray(), equivalents.Select(AddUnits).ToArray(), other);
     }

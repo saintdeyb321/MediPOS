@@ -21,6 +21,7 @@
     <ProjectReference Include="../../src/MediPOS.Application/MediPOS.Application.csproj" />
     <ProjectReference Include="../../src/MediPOS.Domain/MediPOS.Domain.csproj" />
     <ProjectReference Include="../../src/MediPOS.Api/MediPOS.Api.csproj" />
+    <ProjectReference Include="../MediPOS.Performance/MediPOS.Performance.csproj" />
   </ItemGroup>
   <ItemGroup>
     <Compile Include="..\Fixtures\ElectronicDocumentTestData.cs" Link="Fixtures\ElectronicDocumentTestData.cs" />

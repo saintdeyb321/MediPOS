@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Text.Json;
 using MediPOS.Application.Errors;
 using MediPOS.Application.Modules.AuditSupport;
@@ -23,6 +24,7 @@ public sealed record ConfirmSaleResult(Guid SaleId, decimal TotalAmount, DateTim
 public sealed class ConfirmSaleHandler(ResolveAccessContextHandler resolver, ISaleDraftStore drafts,
     IFindOpenCashSession cashSessions, ISaleCheckoutTransaction transactions, IBusinessProductStore products, TimeProvider clock)
 {
+    private static readonly ActivitySource Activities = new("MediPOS.Performance.Sale");
 
     public async Task<ConfirmSaleResult> HandleAsync(ConfirmSaleCommand command, CancellationToken cancellationToken)
     {
@@ -36,14 +38,22 @@ public sealed class ConfirmSaleHandler(ResolveAccessContextHandler resolver, ISa
         if (inputs.Select(payment => payment.Method).Distinct().Count() != inputs.Length)
             throw new ApplicationErrorException(SalesPosErrors.DuplicatePaymentMethod);
 
+        using var accessRead = Activities.StartActivity("sale.access.initial");
         var access = await SaleDraftAccess.ResolveAsync(resolver, command.TenantId, command.BranchId, clock.GetUtcNow(), cancellationToken).ConfigureAwait(false);
+        accessRead?.Stop();
+        using var draftRead = Activities.StartActivity("sale.draft-read");
         var draft = await drafts.FindAsync(access.TenantId, command.BranchId, command.SaleId, cancellationToken).ConfigureAwait(false)
             ?? throw new ApplicationErrorException(SalesPosErrors.DraftNotFound);
         SaleDraftAccess.RequireSeller(draft.Sale, access);
         if (draft.Version != command.ExpectedVersion) throw new ApplicationErrorException(SalesPosErrors.ConcurrentEdit);
+        draftRead?.Stop();
+        using var cashRead = Activities.StartActivity("sale.cash-read");
         await SaleDraftAccess.RequireOpenCashAsync(cashSessions, access, draft.Sale.CashSessionId, cancellationToken).ConfigureAwait(false);
+        cashRead?.Stop();
+        using var locks = Activities.StartActivity("sale.cash-sale-locks");
         await using var scope = await transactions.BeginAsync(access.TenantId, command.BranchId, access.MembershipId,
             draft.Sale.CashSessionId, draft.Sale.Id, cancellationToken).ConfigureAwait(false);
+        locks?.Stop();
         if (scope.Version != command.ExpectedVersion) throw new ApplicationErrorException(SalesPosErrors.ConcurrentEdit);
         return await new SaleConfirmationPosting(resolver, products, clock).ExecuteAsync(scope, inputs, cancellationToken).ConfigureAwait(false);
     }

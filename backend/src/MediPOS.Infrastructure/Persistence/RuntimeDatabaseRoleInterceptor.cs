@@ -1,4 +1,5 @@
 using System.Data.Common;
+using System.Diagnostics;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 
 namespace MediPOS.Infrastructure.Persistence;
@@ -7,6 +8,7 @@ namespace MediPOS.Infrastructure.Persistence;
 // FORCE RLS does not protect a connection that can become a bypass role or disable the policy as owner.
 public sealed class RuntimeDatabaseRoleInterceptor : DbConnectionInterceptor
 {
+    private static readonly ActivitySource Activities = new("MediPOS.Performance.Connections");
     private const string Check = """
         SELECT NOT EXISTS (
             SELECT 1 FROM pg_roles r
@@ -22,6 +24,7 @@ public sealed class RuntimeDatabaseRoleInterceptor : DbConnectionInterceptor
 
     public override void ConnectionOpened(DbConnection connection, ConnectionEndEventData eventData)
     {
+        using var measurement = Activities.StartActivity("connection.runtime-role-guard");
         using var command = connection.CreateCommand();
         command.CommandText = Check;
         RequireRestricted(command.ExecuteScalar());
@@ -29,6 +32,7 @@ public sealed class RuntimeDatabaseRoleInterceptor : DbConnectionInterceptor
 
     public override async Task ConnectionOpenedAsync(DbConnection connection, ConnectionEndEventData eventData, CancellationToken cancellationToken = default)
     {
+        using var measurement = Activities.StartActivity("connection.runtime-role-guard");
         await using var command = connection.CreateCommand();
         command.CommandText = Check;
         RequireRestricted(await command.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false));
