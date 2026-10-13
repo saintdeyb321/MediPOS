@@ -222,6 +222,7 @@ public sealed class ConfirmSaleUseCaseTests
     [InlineData("license", "access.license_denied")]
     [InlineData("schedule", "access.schedule_denied")]
     [InlineData("inactive", "access.membership_inactive")]
+    [InlineData("assignment", "access.branch_unassigned")]
     [InlineData("product", "sale.product_unavailable")]
     [InlineData("date", "sale.checkout_window_changed")]
     public async Task AccessAndCatalogAreCheckedAgainAfterWaitingForLots(string scenario, string code)
@@ -234,6 +235,7 @@ public sealed class ConfirmSaleUseCaseTests
                 case "license": setup.Access.Snapshot = setup.Access.Snapshot with { License = null }; break;
                 case "schedule": setup.Clock.Now = Now.AddHours(9); break;
                 case "inactive": setup.Membership.Deactivate(Now); break;
+                case "assignment": setup.Access.Snapshot = setup.Access.Snapshot with { BranchAssigned = false }; break;
                 case "product": setup.Product.SetStatus(false); break;
                 case "date": setup.Clock.Now = Now.AddDays(1); break;
             }

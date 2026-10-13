@@ -1,13 +1,16 @@
 using MediPOS.Application.Errors;
+using MediPOS.Application.Modules.AuditSupport;
 using MediPOS.Application.Modules.Cash;
 using MediPOS.Application.Modules.Catalog;
 using MediPOS.Application.Modules.Commissions;
+using MediPOS.Application.Modules.IdentityAccess;
 using MediPOS.Application.Modules.IdentityAccess.OperationalAccess;
 using MediPOS.Application.Modules.Inventory;
 using MediPOS.Application.Modules.SalesPos;
 using MediPOS.Application.Modules.SalesPos.ConfirmSale;
 using MediPOS.Application.Modules.SalesPos.CreateSaleDraft;
 using MediPOS.Application.Modules.SalesPos.ReplaceSaleLines;
+using MediPOS.Application.Modules.TenancyLicensing.SuspendLicense;
 using MediPOS.Domain.Modules.AuditSupport;
 using MediPOS.Domain.Modules.Cash;
 using MediPOS.Domain.Modules.Catalog;
@@ -121,6 +124,94 @@ public sealed class SaleCheckoutConcurrencyTests(PostgreSqlFixture fixture)
         while (await monitor.Database.SqlQuery<int>($"SELECT count(*)::int AS \"Value\" FROM pg_stat_activity WHERE application_name = {marker} AND wait_event_type = 'Lock'")
             .SingleAsync(timeout.Token) == 0)
             await Task.Delay(10, timeout.Token);
+    }
+
+    [Theory]
+    [InlineData("membership", "access.membership_inactive")]
+    [InlineData("license", "access.license_denied")]
+    [InlineData("assignment", "access.branch_unassigned")]
+    [InlineData("schedule", "access.schedule_denied")]
+    public async Task RevocationCommittedDuringRealLotLockWaitPreventsEveryCheckoutEffect(string change, string expectedCode)
+    {
+        var (tenant, _) = await TenantIsolationTestData.CreatePairAsync(fixture);
+        await using var setup = IdentityAccessTestSetup.CreateServices(fixture);
+        SaleCheckoutTestData.Rows rows;
+        await using (var seed = setup.CreateAsyncScope())
+            rows = await SaleCheckoutTestData.CreateAsync(seed.ServiceProvider, tenant);
+
+        await using var blocker = setup.CreateAsyncScope();
+        var source = blocker.ServiceProvider;
+        var context = source.GetRequiredService<MediPosDbContext>();
+        context.SelectTenant(tenant.TenantId);
+        await using var transaction = await context.Database.BeginTransactionAsync(TestContext.Current.CancellationToken);
+        await context.Database.SqlQuery<Guid>($"SELECT id AS \"Value\" FROM inventory_lots WHERE id = {rows.LotIds[0]} FOR UPDATE")
+            .SingleAsync(TestContext.Current.CancellationToken);
+
+        var marker = "acceptance-revocation-" + Guid.NewGuid().ToString("N");
+        await using var worker = SaleCheckoutTestData.CreateServices(fixture, marker);
+        await using var attempt = worker.CreateAsyncScope();
+        CashSessionTestData.Authenticate(attempt.ServiceProvider, tenant.Identity.UserId);
+        using var deadline = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
+        deadline.CancelAfter(TimeSpan.FromSeconds(45));
+        var pending = attempt.ServiceProvider.GetRequiredService<ConfirmSaleHandler>()
+            .HandleAsync(SaleCheckoutTestData.Command(rows), deadline.Token);
+        var released = false;
+        try
+        {
+            // Observe an actual PostgreSQL lock wait, not just a mocked asynchronous boundary.
+            await WaitForDatabaseLockAsync(marker);
+            await context.Database.SqlQuery<Guid>($"SELECT id AS \"Value\" FROM licenses WHERE id = {tenant.Identity.LicenseId} FOR UPDATE")
+                .SingleAsync(deadline.Token);
+            var store = source.GetRequiredService<IIdentityAccessStore>();
+            var now = IdentityAccessTestSetup.Now;
+            var actor = tenant.Identity.ActorId;
+            if (change == "membership")
+            {
+                var membership = (await store.FindMembershipAsync(tenant.TenantId, tenant.Identity.MembershipId, deadline.Token))!;
+                var before = AuditTrail.MembershipState(membership);
+                membership.Deactivate(now);
+                await store.SaveDeactivationAsync(membership, AuditTrail.Record(tenant.TenantId, actor,
+                    AuditAction.MembershipDeactivated, membership.Id, now, before, AuditTrail.MembershipState(membership)), deadline.Token);
+            }
+            else if (change == "assignment")
+                await store.ReplaceBranchesAsync(tenant.TenantId, tenant.Identity.MembershipId, [], AuditTrail.Record(tenant.TenantId, actor,
+                    AuditAction.MembershipBranchesReplaced, tenant.Identity.MembershipId, now,
+                    AuditTrail.BranchAssignments([tenant.Identity.BranchId]), AuditTrail.BranchAssignments([])), deadline.Token);
+            else if (change == "schedule")
+            {
+                var before = await store.FindWorkScheduleAsync(tenant.TenantId, tenant.Identity.MembershipId, deadline.Token);
+                await store.ReplaceScheduleAsync(tenant.TenantId, tenant.Identity.MembershipId, [], AuditTrail.Record(tenant.TenantId, actor,
+                    AuditAction.MembershipScheduleReplaced, tenant.Identity.MembershipId, now,
+                    AuditTrail.WorkSchedule(before), AuditTrail.WorkSchedule([])), deadline.Token);
+            }
+            else
+                await source.WithPlatformActor(actor).GetRequiredService<SuspendLicenseHandler>()
+                    .HandleAsync(new(tenant.TenantId, tenant.Identity.LicenseId, actor), deadline.Token);
+
+            await transaction.CommitAsync(deadline.Token);
+            released = true;
+            var error = await Assert.ThrowsAsync<ApplicationErrorException>(() => pending);
+            Assert.Equal(expectedCode, error.Error.Code);
+            await using var verify = fixture.CreateContext(tenant.TenantId);
+            var sale = await verify.Sales.SingleAsync(value => value.Id == rows.Draft.SaleId, deadline.Token);
+            Assert.Equal(SaleStatus.Draft, sale.Status);
+            Assert.Null(sale.ConfirmedAt);
+            Assert.Empty(await verify.SalePayments.ToArrayAsync(deadline.Token));
+            Assert.Empty(await verify.CommissionEntries.ToArrayAsync(deadline.Token));
+            Assert.False(await verify.StockMovements.AnyAsync(value => value.MovementType == StockMovementType.Sale, deadline.Token));
+            Assert.False(await verify.AuditLogs.AnyAsync(value => value.Action == AuditAction.SaleConfirmed, deadline.Token));
+            Assert.Equal(3m, await verify.InventoryLots.SumAsync(value => value.QuantityAvailableBase, deadline.Token));
+            Assert.Equal(3m, await verify.StockMovements.SumAsync(value => value.QuantityDeltaBase, deadline.Token));
+        }
+        finally
+        {
+            deadline.Cancel();
+            if (!released) await transaction.RollbackAsync(CancellationToken.None);
+            // Observe the task before its scope is disposed, including when the lock-wait assertion failed.
+            try { await pending; }
+            catch (ApplicationErrorException) { }
+            catch (OperationCanceledException) { }
+        }
     }
 
     [Fact]
