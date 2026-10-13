@@ -16,6 +16,8 @@ public sealed record GoogleAuthenticationSettings(string ClientId, string Client
         if (enabled is null) return null;
         if (!bool.TryParse(enabled, out var active)) throw Invalid();
         if (!active) return null;
+        // Automatic/earlier forwarding would destroy the socket-peer evidence used by this boundary.
+        if (string.Equals(configuration["ForwardedHeaders_Enabled"], "true", StringComparison.OrdinalIgnoreCase)) throw Invalid();
         var client = section["ClientId"];
         var secret = section["ClientSecret"];
         if (client is null || client.Length <= ".apps.googleusercontent.com".Length || client.Length > 256 || !client.EndsWith(".apps.googleusercontent.com", StringComparison.Ordinal) ||
@@ -29,7 +31,9 @@ public sealed record GoogleAuthenticationSettings(string ClientId, string Client
         if (mode is not ("Direct" or "TrustedProxy")) throw Invalid();
         var proxies = section.GetSection("TrustedProxyAddresses").GetChildren().Select(value =>
             IPAddress.TryParse(value.Value, out var address) ? address : throw Invalid()).ToArray();
-        if ((mode == "TrustedProxy") != (proxies.Length > 0) || proxies.Any(IPAddress.Any.Equals) || proxies.Any(IPAddress.IPv6Any.Equals)) throw Invalid();
+        if ((mode == "TrustedProxy") != (proxies.Length > 0) || proxies.Any(IPAddress.Any.Equals) || proxies.Any(IPAddress.IPv6Any.Equals) ||
+            (mode == "TrustedProxy" && section["ProxySanitizesForwardedHeaders"] != "true") ||
+            proxies.Any(address => address.IsIPv4MappedToIPv6)) throw Invalid();
         var keys = section["DataProtection:KeyRingPath"];
         var certificate = section["DataProtection:CertificatePath"];
         var password = section["DataProtection:CertificatePassword"];

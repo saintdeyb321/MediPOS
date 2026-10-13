@@ -294,7 +294,7 @@ public sealed class GoogleAuthenticationHttpTests
         internal HttpClient Client => client;
         internal Users Users => users;
         internal Provider Provider => provider;
-        internal static async Task<Host> CreateAsync(Action<WebApplication>? testRoutes = null)
+        internal static async Task<Host> CreateAsync(Action<WebApplication>? testRoutes = null, Action<Dictionary<string, string>>? configure = null)
         {
             var directory = Path.Combine(Path.GetTempPath(), "medipos-auth-test-" + Guid.NewGuid().ToString("N")); Directory.CreateDirectory(directory);
             using var key = RSA.Create(2048);
@@ -307,6 +307,7 @@ public sealed class GoogleAuthenticationHttpTests
             var certificate = X509CertificateLoader.LoadPkcs12FromFile(certPath, password, X509KeyStorageFlags.UserKeySet);
             var provider = new Provider(); var users = new Users();
             var config = Configuration(directory, certPath, password);
+            configure?.Invoke(config);
             var app = global::Program.CreateApplication(config.Select(pair => "--" + pair.Key + "=" + pair.Value).ToArray(), services =>
             {
                 services.AddScoped<IIdentityAccessStore>(_ => DispatchProxy.Create<IIdentityAccessStore, UsersProxy>().WithUsers(users));
@@ -406,8 +407,12 @@ public sealed class GoogleAuthenticationHttpTests
         internal string Subject = "subject-one";
         internal string? Defect;
         internal bool PkceVerified;
+        internal TaskCompletionSource? ExchangeEntered;
+        internal TaskCompletionSource? ReleaseExchange;
         protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
+            ExchangeEntered?.TrySetResult();
+            if (ReleaseExchange is not null) await ReleaseExchange.Task.WaitAsync(cancellationToken);
             Assert.Equal("https://oauth2.googleapis.com/token", request.RequestUri!.AbsoluteUri);
             var fields = QueryHelpers.ParseQuery(await request.Content!.ReadAsStringAsync(cancellationToken));
             Assert.Equal("https://medipos.example.test/auth/google/callback", fields["redirect_uri"].ToString());

@@ -37,6 +37,16 @@ public sealed class GoogleAuthenticationConfigurationTests
     }
 
     [Fact]
+    public async Task AutomaticForwardingCannotEraseTransportPeerEvidenceBeforeAuthenticationBoundary()
+    {
+        await using var host = await GoogleAuthenticationHttpTests.Host.CreateAsync();
+        var settings = (GoogleAuthenticationSettings)host.App.Services.GetService(typeof(GoogleAuthenticationSettings))!;
+        var config = GoogleAuthenticationHttpTests.Host.Configuration(settings.KeyRingPath, settings.CertificatePath, settings.CertificatePassword);
+        config["ForwardedHeaders_Enabled"] = "true";
+        Assert.Throws<InvalidOperationException>(() => global::Program.CreateApplication(config.Select(pair => "--" + pair.Key + "=" + pair.Value).ToArray()));
+    }
+
+    [Fact]
     public void MissingOrExplicitlyDisabledAuthenticationPreservesClosedComposition()
     {
         Assert.Null(GoogleAuthenticationSettings.Read(new ConfigurationBuilder().Build(), Directory.GetCurrentDirectory()));
@@ -67,6 +77,10 @@ public sealed class GoogleAuthenticationConfigurationTests
         var config = GoogleAuthenticationHttpTests.Host.Configuration(settings.KeyRingPath, settings.CertificatePath, settings.CertificatePassword);
         config["Authentication:Google:HttpsMode"] = "TrustedProxy";
         config["Authentication:Google:TrustedProxyAddresses:0"] = "127.0.0.1";
+        Assert.Throws<InvalidOperationException>(() => GoogleAuthenticationSettings.Read(new ConfigurationBuilder().AddInMemoryCollection(config!).Build(), Directory.GetCurrentDirectory()));
+        config["Authentication:Google:ProxySanitizesForwardedHeaders"] = "false";
+        Assert.Throws<InvalidOperationException>(() => GoogleAuthenticationSettings.Read(new ConfigurationBuilder().AddInMemoryCollection(config!).Build(), Directory.GetCurrentDirectory()));
+        config["Authentication:Google:ProxySanitizesForwardedHeaders"] = "true";
         var parsed = GoogleAuthenticationSettings.Read(new ConfigurationBuilder().AddInMemoryCollection(config!).Build(), Directory.GetCurrentDirectory());
         Assert.NotNull(parsed); Assert.True(parsed.BehindProxy); Assert.Single(parsed.TrustedProxies);
         config["Authentication:Google:TrustedProxyAddresses:0"] = "0.0.0.0";

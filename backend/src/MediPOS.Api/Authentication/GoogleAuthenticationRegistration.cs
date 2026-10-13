@@ -1,4 +1,3 @@
-using System.Threading.RateLimiting;
 using MediPOS.Api.Errors;
 using MediPOS.Infrastructure;
 using Microsoft.AspNetCore.Antiforgery;
@@ -9,7 +8,6 @@ using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Http.Features;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.IdentityModel.Logging;
 using Microsoft.IdentityModel.Protocols.OpenIdConnect;
 
@@ -105,23 +103,14 @@ public static class GoogleAuthenticationRegistration
         builder.Services.AddAuthorization();
         builder.Services.PostConfigure<ForwardedHeadersOptions>(options =>
         {
-            options.ForwardedHeaders = settings.BehindProxy ? ForwardedHeaders.XForwardedProto : ForwardedHeaders.None;
+            options.ForwardedHeaders = settings.BehindProxy ? ForwardedHeaders.XForwardedProto | ForwardedHeaders.XForwardedFor : ForwardedHeaders.None;
             options.ForwardLimit = 1;
+            options.RequireHeaderSymmetry = true;
             options.KnownProxies.Clear(); options.KnownIPNetworks.Clear();
             foreach (var proxy in settings.TrustedProxies)
                 options.KnownIPNetworks.Add(new(proxy, proxy.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork ? 32 : 128));
         });
-        builder.Services.AddRateLimiter(options =>
-        {
-            options.GlobalLimiter = PartitionedRateLimiter.CreateChained(
-                PartitionedRateLimiter.Create<HttpContext, string>(context => context.Request.Path.StartsWithSegments("/auth")
-                    ? RateLimitPartition.GetConcurrencyLimiter("auth", _ => new() { PermitLimit = 4, QueueLimit = 0 }) : RateLimitPartition.GetNoLimiter("other")),
-                PartitionedRateLimiter.Create<HttpContext, string>(context => context.Request.Path.StartsWithSegments("/auth")
-                    ? RateLimitPartition.GetFixedWindowLimiter("auth", _ => new() { PermitLimit = 120, Window = TimeSpan.FromMinutes(1), QueueLimit = 0 }) : RateLimitPartition.GetNoLimiter("other")));
-            options.AddFixedWindowLimiter("auth-flow", limits => { limits.PermitLimit = 20; limits.Window = TimeSpan.FromMinutes(1); limits.QueueLimit = 0; });
-            options.OnRejected = (context, _) => context.HttpContext.Request.Path.StartsWithSegments("/auth")
-                ? new ValueTask(AuthProblem.WriteAsync(context.HttpContext, 429, "auth.rate_limited")) : ValueTask.CompletedTask;
-        });
+        builder.Services.AddRateLimiter(AuthenticationRateLimits.Configure);
         return settings;
     }
 
@@ -129,7 +118,8 @@ public static class GoogleAuthenticationRegistration
     {
         // Resolve through DI so the certificate is disposed with the host.
         _ = app.Services.GetRequiredService<System.Security.Cryptography.X509Certificates.X509Certificate2>();
-        app.UseForwardedHeaders();
+        // Verify the socket peer before native forwarding replaces RemoteIpAddress.
+        var forwardedClient = new object();
         app.Use(async (context, next) =>
         {
             if (!context.Request.Path.StartsWithSegments("/auth")) { await next(context); return; }
@@ -138,11 +128,30 @@ public static class GoogleAuthenticationRegistration
             context.Response.Headers["Referrer-Policy"] = "no-referrer";
             context.Response.Headers["X-Content-Type-Options"] = "nosniff";
             if (context.Features.Get<IHttpMaxRequestBodySizeFeature>() is { IsReadOnly: false } bodyLimit) bodyLimit.MaxRequestBodySize = 16_384;
+            if (settings.BehindProxy)
+            {
+                var peer = context.Connection.RemoteIpAddress;
+                if (peer?.IsIPv4MappedToIPv6 == true) peer = peer.MapToIPv4();
+                var forwarded = context.Request.Headers["X-Forwarded-For"];
+                if (peer is null || !settings.TrustedProxies.Contains(peer) || forwarded.Count != 1 ||
+                    !System.Net.IPAddress.TryParse(forwarded[0], out var client) ||
+                    client.Equals(System.Net.IPAddress.Any) || client.Equals(System.Net.IPAddress.IPv6Any) ||
+                    context.Request.Headers["X-Forwarded-Proto"].Count != 1 || context.Request.Headers["X-Forwarded-Proto"] != "https")
+                { await AuthProblem.WriteAsync(context, 403, "auth.origin_denied"); return; }
+                context.Items[forwardedClient] = client.IsIPv4MappedToIPv6 ? client.MapToIPv4() : client;
+            }
+            await next(context);
+        });
+        app.UseForwardedHeaders();
+        app.Use(async (context, next) =>
+        {
+            if (!context.Request.Path.StartsWithSegments("/auth")) { await next(context); return; }
             var callback = context.Request.Path == GoogleAuthenticationSettings.CallbackPath;
             var proxy = context.Connection.RemoteIpAddress;
             if (proxy?.IsIPv4MappedToIPv6 == true) proxy = proxy.MapToIPv4();
             if (!context.Request.IsHttps || !string.Equals(context.Request.Host.Value, settings.Origin.Authority, StringComparison.OrdinalIgnoreCase) ||
-                (settings.BehindProxy ? proxy is null || !settings.TrustedProxies.Contains(proxy) : context.Features.Get<ITlsConnectionFeature>() is null) ||
+                (settings.BehindProxy ? proxy is null || !proxy.Equals(context.Items[forwardedClient]) :
+                    proxy is null || context.Features.Get<ITlsConnectionFeature>() is null) ||
                 (!callback && (context.Request.Headers.Origin.Count > 0 && context.Request.Headers.Origin != settings.Origin.GetLeftPart(UriPartial.Authority) ||
                     context.Request.Headers["Sec-Fetch-Site"] == "cross-site")) || (callback && context.Request.Method != "GET"))
             { await AuthProblem.WriteAsync(context, 403, "auth.origin_denied"); return; }
@@ -162,9 +171,9 @@ public static class GoogleAuthenticationRegistration
             // Revoke the previous session before starting a new round trip; callback creates a fresh session key.
             await context.SignOutAsync(SessionScheme);
             await context.ChallengeAsync(GoogleScheme, new AuthenticationProperties { RedirectUri = "/" });
-        }).RequireRateLimiting("auth-flow").WithName("medipos.auth.login");
+        }).WithName("medipos.auth.login");
         app.MapGet(GoogleAuthenticationSettings.CallbackPath, (HttpContext context) => AuthProblem.WriteAsync(context, 401, "auth.google_failed"))
-            .RequireRateLimiting("auth-flow").WithName("medipos.auth.callback");
+            .WithName("medipos.auth.callback");
         app.MapGet("/auth/me", (MediPOS.Application.Modules.IdentityAccess.Authentication.IAuthenticatedMediPosUser user) => Results.Json(new { userId = user.UserId }))
             .RequireAuthorization().WithName("medipos.auth.me");
         app.MapPost("/auth/logout", async (HttpContext context, IAntiforgery csrf) =>
@@ -172,7 +181,7 @@ public static class GoogleAuthenticationRegistration
             if (!await ValidCsrf(context, csrf)) return;
             await context.SignOutAsync(SessionScheme);
             context.Response.StatusCode = StatusCodes.Status204NoContent;
-        }).RequireRateLimiting("auth-flow").WithName("medipos.auth.logout");
+        }).WithName("medipos.auth.logout");
     }
     private static async Task<bool> ValidCsrf(HttpContext context, IAntiforgery csrf)
     {
