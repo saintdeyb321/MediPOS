@@ -1,3 +1,4 @@
+using MediPOS.Api.Authentication;
 using MediPOS.Api.Errors;
 using MediPOS.Api.Observability;
 using MediPOS.Infrastructure;
@@ -14,6 +15,7 @@ public partial class Program
         builder.Services.AddApplicationProblemDetails();
         builder.Services.AddInfrastructure(builder.Configuration);
         builder.AddBackendObservability();
+        var authentication = builder.AddGoogleAuthentication();
         configureServices?.Invoke(builder.Services);
 
         if (builder.Environment.IsDevelopment()) builder.Services.AddOpenApi();
@@ -23,7 +25,14 @@ public partial class Program
         application.UseMiddleware<RequestObservationMiddleware>();
         application.UseExceptionHandler(new ExceptionHandlerOptions { SuppressDiagnosticsCallback = _ => true });
         application.UseStatusCodePages();
+        if (authentication is not null) application.UseGoogleAuthenticationBoundary(authentication);
         application.UseRateLimiter();
+        if (authentication is not null)
+        {
+            application.UseAuthentication();
+            application.UseAuthorization();
+            application.MapGoogleAuthentication();
+        }
 
         if (application.Environment.IsDevelopment()) application.MapOpenApi();
         application.MapBackendHealth();

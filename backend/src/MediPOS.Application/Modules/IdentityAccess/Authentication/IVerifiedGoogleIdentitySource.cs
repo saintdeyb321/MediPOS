@@ -10,7 +10,7 @@ public interface IVerifiedGoogleIdentitySource
 
 public sealed record VerifiedGoogleIdentity(string Subject, string Email, string DisplayName);
 
-// Read only from a validated MediPOS server session. There is no production adapter yet.
+// Read only from a validated MediPOS server session; session claims never grant tenant/platform authority.
 public interface IAuthenticatedMediPosUser
 {
     Guid? UserId { get; }

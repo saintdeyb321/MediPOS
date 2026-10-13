@@ -66,6 +66,28 @@ public sealed class IdentityPersistenceTests(PostgreSqlFixture fixture)
     }
 
     [Fact]
+    public async Task SameEmailOnDifferentVerifiedSubjectsNeverMergesInternalUsers()
+    {
+        // Synthetic verified-source boundary only; this is PostgreSQL identity persistence, not live OIDC proof.
+        await using var services = IdentityAccessTestSetup.CreateServices(fixture);
+        await using var first = services.CreateAsyncScope();
+        await using var second = services.CreateAsyncScope();
+        var firstSubject = Guid.NewGuid().ToString("N");
+        var secondSubject = Guid.NewGuid().ToString("N");
+        var email = Guid.NewGuid().ToString("N") + "@example.test";
+        var a = await IdentityAccessTestSetup.CreateUserAsync(first.ServiceProvider, firstSubject, email);
+        var b = await IdentityAccessTestSetup.CreateUserAsync(second.ServiceProvider, secondSubject, email);
+        Assert.NotEqual(a.Id, b.Id);
+        var retried = await IdentityAccessTestSetup.CreateUserAsync(first.ServiceProvider, firstSubject, "updated@example.test");
+        Assert.Equal(a.Id, retried.Id);
+        await using var context = fixture.CreateContext();
+        Assert.Equal(firstSubject, (await context.Users.SingleAsync(value => value.Id == a.Id, TestContext.Current.CancellationToken)).GoogleSubject);
+        var other = await context.Users.SingleAsync(value => value.Id == b.Id, TestContext.Current.CancellationToken);
+        Assert.Equal(secondSubject, other.GoogleSubject);
+        Assert.Equal(email, other.Email);
+    }
+
+    [Fact]
     public async Task ActiveUserTenantPairIsUniqueAndDeactivatedMembershipIsRetained()
     {
         await using var services = IdentityAccessTestSetup.CreateServices(fixture);

@@ -4,9 +4,9 @@ This is the single execution roadmap for the backend. Prompts are given in chat 
 
 ## Working state
 - **Current milestone:** M8 — Backend hardening for real pilot
-- **Current sprint:** B8.5 — Full MVP acceptance regression
-- **Status:** IN_PROGRESS — acceptance inventory and local regression completed; PostgreSQL and production integration remain unverified. A18 controlled physical purge is NOT_IMPLEMENTED; A20 is a FRONTEND_DEPENDENCY. B8.2 targets remain NOT_MEASURED; B8.3 recovery rehearsal and B8.4 deployment/monitor validation remain external. M8 is not DONE; B7.3/B7.4 remain voluntarily deferred outside the initial MVP.
-- **Next gate:** Audit B8.5's acceptance matrix below; resolve controlled purge and trusted OIDC/session/HTTP activation in separately authorized work, then execute the external PostgreSQL and pilot gates. No later sprint is started by this inventory.
+- **Current sprint:** B8.6.1 — Google OIDC and secure production sessions
+- **Status:** IN_PROGRESS — B8.6.1 IMPLEMENTACIÓN LOCAL COMPLETA; live Google/PostgreSQL/hosting validation pending. Opt-in authentication remains disabled by default; platform authority and commercial routes remain disabled. A18 controlled physical purge is NOT_IMPLEMENTED; A20 is a FRONTEND_DEPENDENCY. B8.2 targets remain NOT_MEASURED; B8.3 recovery and B8.4 deployment/monitor validation remain external. M8 is not DONE; B7.3/B7.4 remain voluntarily deferred.
+- **Next gate:** Audit B8.6.1 and validate real Google consent/callback, restricted runtime persistence and protected keys/HTTPS/proxy externally. Independent platform administration, commercial HTTP, controlled purge, PWA and the remaining PostgreSQL/pilot gates require separately authorized work. No subsequent sprint is started.
 
 Local policy: this machine has no Docker and will not install it. Do not check/start Docker or run PostgreSQL/Testcontainers here. B0.1 is complete locally. Keep real PostgreSQL integration tests for another environment; they are not part of the local gate and must not be reported as passed without execution.
 
@@ -422,7 +422,18 @@ Pilot approval remains blocked by:
 - **P0 — user/offline acceptance:** A20/FR-POS-001 and the client parts of A14/FR-OFF-001..005 need the PWA and real browser/device/network/printing workflows. Backend serialization and fake diagnostic probes cannot certify these.
 - **P1 — measured operation:** B8.2 search/sale targets are NOT_MEASURED; B8.4 hosting resources/collectors/alert delivery and pending backlog observers remain external. Record actual measurements and operator decisions before pilot approval; no automatic alert sender is claimed. B7.3/B7.4 remain DEFERRED_APPROVED, not silent MVP requirements or validated SUNAT integrations.
 
-**M8 gate:** backend is ready for controlled real-business pilot.
+### B8.6.1 — Google OIDC and secure production sessions (corrective)
+**Requirements:** FR-AUT-001..005, BR-011/016/017, ADR-007; resolves only B8.5's authentication/session implementation gap.
+
+**Status:** IN_PROGRESS — IMPLEMENTACIÓN LOCAL COMPLETA; opt-in real ASP.NET Core OIDC/cookie adapters and local gate complete; real Google, PostgreSQL and deployment remain external. Configuration and operational prerequisites are in [backend/README.md](../backend/README.md#google-oidc-and-secure-server-sessions--b861). A1–A2 and M8 are not complete.
+
+Authorization Code + PKCE and standard issuer/audience/signature/lifetime/state/nonce/correlation validation precede the final TicketReceived event and existing UpsertGoogleUserHandler. Google `sub` establishes global identity; email never merges accounts. The protected cookie references a bounded process-local server ticket containing only the internal UUID. Absolute expiry, explicit server revocation on logout/login, no sliding/token retention, certificate-encrypted durable key ring, strict single HTTPS origin/trusted scheme-only proxy, antiforgery and native rate limits are implemented. Five authentication routes are opt-in; platform administration, CPE provider/authority and commercial routes remain disabled. No new identity table, migration, financial/domain rule or distributed session infrastructure.
+
+Local HTTP tests use actual HTTPS/OIDC/cookie middleware with synthetic keys/backchannel and fake persistence ports. They verify configured protocol rejection and safe composition, not Google's live signatures/service or PostgreSQL. One same-email/different-sub persistence regression is prepared for external PostgreSQL execution. Required external activation evidence: real client/consent/callback/discovery/exchange, runtime-role persistence and revocation, TLS/proxy spoofing, key/PFX/secret ACLs/durability/recovery and real browser cookie/CSRF/logout/restart behavior. Process restart intentionally requires re-login; multi-instance sessions are not implemented. B8.5's historical acceptance matrix remains evidence of that audited snapshot; authentication implementation now exists behind configuration, while its production integration and every other launch blocker remain pending.
+
+**Local validation (2026-10-13):** `dotnet restore`, `dotnet build` (0 warnings/errors), `dotnet test tests/MediPOS.UnitTests` (**2085 passed, 0 failed/skipped**, including 40 new authentication cases), `dotnet test tests/MediPOS.ArchitectureTests` (**8 passed, 0 failed/skipped**), `dotnet format --verify-no-changes` and offline EF `has-pending-model-changes` (none) passed. One new PostgreSQL identity case compiled but was **NOT EXECUTED**. No real Google/PostgreSQL/container or version-control operation was performed. Live OIDC and external hosting/storage controls are unverified; B8.2/B8.3/B8.4/A18/PWA and independent platform/commercial API gates remain pending. Stop here for audit.
+
+**M8 gate:** backend is ready for controlled real-business pilot only after all mandatory implementation and external acceptance gates pass.
 
 ---
 
