@@ -16,6 +16,12 @@ public partial class Program
         builder.Services.AddInfrastructure(builder.Configuration);
         builder.AddBackendObservability();
         var authentication = builder.AddGoogleAuthentication();
+        var platform = PlatformAdministrationSettings.Read(builder.Configuration, authentication is not null, builder.Environment.IsProduction());
+        if (platform is not null)
+        {
+            builder.Services.AddSingleton(platform);
+            builder.Services.AddScoped<MediPOS.Application.Modules.IdentityAccess.Authentication.IPlatformAdministration, SessionPlatformAdministration>();
+        }
         configureServices?.Invoke(builder.Services);
 
         if (builder.Environment.IsDevelopment()) builder.Services.AddOpenApi();

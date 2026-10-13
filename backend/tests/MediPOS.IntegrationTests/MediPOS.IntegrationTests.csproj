@@ -6,6 +6,8 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Include="..\Fixtures\PlatformSessionFixture.cs" Link="Fixtures\PlatformSessionFixture.cs" />
+    <ProjectReference Include="../../src/MediPOS.Api/MediPOS.Api.csproj" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.10.1" />
     <PackageReference Include="PdfPig" Version="0.1.14" />
     <PackageReference Include="Microsoft.Extensions.Configuration" Version="10.0.12" />

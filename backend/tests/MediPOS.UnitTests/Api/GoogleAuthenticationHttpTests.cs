@@ -294,7 +294,8 @@ public sealed class GoogleAuthenticationHttpTests
         internal HttpClient Client => client;
         internal Users Users => users;
         internal Provider Provider => provider;
-        internal static async Task<Host> CreateAsync(Action<WebApplication>? testRoutes = null, Action<Dictionary<string, string>>? configure = null)
+        internal static async Task<Host> CreateAsync(Action<WebApplication>? testRoutes = null, Action<Dictionary<string, string>>? configure = null,
+            Action<Users>? seedUsers = null, Action<IServiceCollection>? configureServices = null)
         {
             var directory = Path.Combine(Path.GetTempPath(), "medipos-auth-test-" + Guid.NewGuid().ToString("N")); Directory.CreateDirectory(directory);
             using var key = RSA.Create(2048);
@@ -306,6 +307,7 @@ public sealed class GoogleAuthenticationHttpTests
             // Windows Schannel requires a key container for the test TLS server; disposal removes this temporary key.
             var certificate = X509CertificateLoader.LoadPkcs12FromFile(certPath, password, X509KeyStorageFlags.UserKeySet);
             var provider = new Provider(); var users = new Users();
+            seedUsers?.Invoke(users);
             var config = Configuration(directory, certPath, password);
             configure?.Invoke(config);
             var app = global::Program.CreateApplication(config.Select(pair => "--" + pair.Key + "=" + pair.Value).ToArray(), services =>
@@ -323,6 +325,7 @@ public sealed class GoogleAuthenticationHttpTests
                     options.Configuration.SigningKeys.Add(provider.SigningKey);
                     options.Backchannel = new HttpClient(provider);
                 });
+                configureServices?.Invoke(services);
             });
             testRoutes?.Invoke(app);
             await app.StartAsync(Token);
