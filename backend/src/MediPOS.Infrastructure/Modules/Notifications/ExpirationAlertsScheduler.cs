@@ -1,5 +1,5 @@
-using MediPOS.Application.Modules.Notifications;
 using System.Diagnostics;
+using MediPOS.Application.Modules.Notifications;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 

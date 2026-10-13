@@ -3,9 +3,9 @@ using MediPOS.Application.Modules.ElectronicDocuments;
 using MediPOS.Domain.Modules.ElectronicDocuments;
 using MediPOS.Infrastructure;
 using MediPOS.TestFixtures;
+using MediPOS.UnitTests.Observability;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using MediPOS.UnitTests.Observability;
 
 namespace MediPOS.UnitTests.Modules.ElectronicDocuments;
 
@@ -42,6 +42,20 @@ public sealed class ElectronicDeliveryContractTests
         Assert.Single(metrics.Of("medipos.electronic_documents.dispatches"));
         Assert.Equal("indeterminate", Assert.Single(metrics.Of("medipos.electronic_documents.results")).Tags["outcome"]);
         Assert.Equal("uncertain", setup.Document.Status);
+    }
+
+    [Fact]
+    public async Task CallerCancellationAfterRetainedCompletionKeepsResultAndSeparatesCancelledRun()
+    {
+        using var metrics = new MeterProbe();
+        using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(Token);
+        var setup = new Setup(new(DeliveryOutcome.Received, "received", "R"), simulation: false);
+        setup.Work.CancelAfterCompletion = cancellation;
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => setup.Run.HandleAsync(setup.Data.Tenant, 1, cancellation.Token));
+        Assert.Equal(ElectronicDocumentStates.Received, setup.Document.Status);
+        Assert.Single(metrics.Of("medipos.electronic_documents.dispatches"));
+        Assert.Equal("received", Assert.Single(metrics.Of("medipos.electronic_documents.results")).Tags["outcome"]);
+        Assert.Equal("cancelled", Assert.Single(metrics.Of("medipos.operation.executions")).Tags["outcome"]);
     }
     [Theory]
     [InlineData(DeliveryOutcome.Received, false, false, DeliveryOutcome.Received)]
@@ -211,6 +225,7 @@ public sealed class ElectronicDeliveryContractTests
         internal List<ElectronicDocumentAttempt> Events { get; } = [];
         internal bool SaleConfirmed { get; set; } = true;
         internal bool FenceCompletion { get; set; }
+        internal CancellationTokenSource? CancelAfterCompletion { get; set; }
         public Task<int> RecoverExpiredAsync(ElectronicDeliveryIdentity identity, DateTimeOffset now, int limit, CancellationToken token)
         {
             if (document.Status is ElectronicDocumentStates.Reserved or ElectronicDocumentStates.Dispatching && document.LeaseExpiresAtUtc <= now)
@@ -233,6 +248,7 @@ public sealed class ElectronicDeliveryContractTests
             if (FenceCompletion) return Task.FromResult(false);
             if (claim.Token != document.ClaimToken || now >= document.LeaseExpiresAtUtc) return Task.FromResult(false);
             document.Complete(claim.Token, result.Outcome, result.Reference, result.Code, result.Evidence?.EvidenceSha256, now);
+            CancelAfterCompletion?.Cancel();
             Events.Add(ElectronicDocumentAttempt.Record(document, true, now)); return Task.FromResult(true);
         }
     }

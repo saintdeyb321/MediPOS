@@ -7,14 +7,14 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting.Server;
 using Microsoft.AspNetCore.Hosting.Server.Features;
 using Microsoft.AspNetCore.Http;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Logging.Console;
 using Microsoft.Extensions.Options;
-using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Infrastructure;
 
 namespace MediPOS.UnitTests.Observability;
 
@@ -34,10 +34,12 @@ public sealed class HttpObservabilityTests
         using var live = await host.Client.GetAsync("/health", Token);
         Assert.Equal(HttpStatusCode.OK, live.StatusCode); Assert.Equal("Healthy", await live.Content.ReadAsStringAsync(Token));
         Assert.Equal(0, probe.Calls);
+        Assert.True(live.Headers.CacheControl?.NoStore);
         using var ready = await host.Client.GetAsync("/health/ready", Token);
         Assert.Equal(available ? HttpStatusCode.OK : HttpStatusCode.ServiceUnavailable, ready.StatusCode);
         Assert.Equal(available ? "Healthy" : "Unhealthy", await ready.Content.ReadAsStringAsync(Token));
         Assert.Equal(1, probe.Calls);
+        if (available) Assert.DoesNotContain(host.Logs.Points, point => point.EventId.Id is 8000 or 8001);
         Assert.DoesNotContain(Secret, await ready.Content.ReadAsStringAsync(Token), StringComparison.Ordinal);
         Assert.True(ready.Headers.CacheControl?.NoStore);
     }
@@ -131,9 +133,10 @@ public sealed class HttpObservabilityTests
         try
         {
             await probe.TwoStarted.Task.WaitAsync(TimeSpan.FromSeconds(5), Token);
-            using var rejected = await host.Client.GetAsync("/health/ready", Token);
+            using var rejected = await host.Client.GetAsync("/HEALTH/READY", Token);
             Assert.Equal(HttpStatusCode.ServiceUnavailable, rejected.StatusCode); Assert.Equal(2, probe.Calls);
-            using var live = await host.Client.GetAsync("/health", Token);
+            Assert.True(rejected.Headers.CacheControl?.NoStore);
+            using var live = await host.Client.GetAsync("/HEALTH", Token);
             Assert.Equal(HttpStatusCode.OK, live.StatusCode); Assert.Equal(2, probe.Calls);
         }
         finally { probe.Release.TrySetResult(); }
@@ -149,25 +152,35 @@ public sealed class HttpObservabilityTests
         ["--environment=Production", "--ConnectionStrings:MediPosDatabase=Host=unused;Database=synthetic;Username=runtime", "--Observability:Readiness:TimeoutSeconds=" + timeout]));
 
     [Fact]
-    public async Task NativeJsonFormatterEmitsUtcStructuredScopeAndFrameworkDiagnosticsAreSuppressed()
+    public async Task JsonLoggingIsUtcAndRetainsOnlyWarningOrHigherFrameworkEventsDespiteEnvironmentOverrides()
     {
         await using var app = global::Program.CreateApplication(["--environment=Production", "--ConnectionStrings:MediPosDatabase=Host=unused;Database=synthetic;Username=runtime",
-            "--Logging:Console:LogLevel:Microsoft.EntityFrameworkCore.Database.Command=Trace", "--Logging:LogLevel:Npgsql.Command=Trace"]);
+            "--Logging:Console:LogLevel:Microsoft.EntityFrameworkCore.Database.Command=Trace", "--Logging:LogLevel:Npgsql.Command=Trace",
+            "--Logging:Console:FormatterName=json"]);
         var options = app.Services.GetRequiredService<IOptionsMonitor<JsonConsoleFormatterOptions>>().CurrentValue;
         Assert.True(options.UseUtcTimestamp); Assert.True(options.IncludeScopes);
-        var formatter = Assert.Single(app.Services.GetServices<ConsoleFormatter>(), formatter => formatter.Name == ConsoleFormatterNames.Json);
+        var selected = app.Services.GetRequiredService<IOptionsMonitor<ConsoleLoggerOptions>>().CurrentValue.FormatterName;
+        Assert.Equal(SanitizedJsonConsoleFormatter.FormatterName, selected);
+        Assert.Equal(512, app.Services.GetRequiredService<IOptionsMonitor<ConsoleLoggerOptions>>().CurrentValue.MaxQueueLength);
+        Assert.Equal(ConsoleLoggerQueueFullMode.DropWrite, app.Services.GetRequiredService<IOptionsMonitor<ConsoleLoggerOptions>>().CurrentValue.QueueFullMode);
+        var formatter = Assert.Single(app.Services.GetServices<ConsoleFormatter>(), formatter => formatter.Name == selected);
         var scopes = new LoggerExternalScopeProvider();
-        using var scope = scopes.Push(new Dictionary<string, object?> { ["TraceId"] = "server_trace", ["RequestId"] = "server_request", ["Module"] = "http" });
+        using var scope = scopes.Push(new Dictionary<string, object?> { ["TraceId"] = new string('a', 32), ["RequestId"] = new string('b', 16), ["Module"] = "http" });
         using var output = new StringWriter();
         var entry = new LogEntry<string>(LogLevel.Information, "MediPOS.Test", new EventId(8000, "HttpCompleted"), "safe", null, (state, _) => state);
         formatter.Write(entry, scopes, output);
         using var json = JsonDocument.Parse(output.ToString());
         Assert.EndsWith("Z", json.RootElement.GetProperty("Timestamp").GetString(), StringComparison.Ordinal);
         Assert.Equal(8000, json.RootElement.GetProperty("EventId").GetInt32());
-        Assert.Contains("server_request", json.RootElement.GetProperty("Scopes").GetRawText(), StringComparison.Ordinal);
+        Assert.Contains(new string('b', 16), json.RootElement.GetProperty("Scopes").GetRawText(), StringComparison.Ordinal);
         var logs = app.Services.GetRequiredService<ILoggerFactory>();
-        foreach (var category in new[] { "Microsoft.EntityFrameworkCore.Database.Command", "Npgsql", "Microsoft.AspNetCore.Hosting.Diagnostics", "Microsoft.Extensions.Diagnostics.HealthChecks.DefaultHealthCheckService" })
-            Assert.False(logs.CreateLogger(category).IsEnabled(LogLevel.Error));
+        foreach (var category in new[] { "Microsoft.EntityFrameworkCore.Database.Command", "Npgsql", "Microsoft.AspNetCore.Server.Kestrel", "Microsoft.Hosting.Lifetime", "Microsoft.Extensions.Diagnostics.HealthChecks.DefaultHealthCheckService" })
+        {
+            Assert.False(logs.CreateLogger(category).IsEnabled(LogLevel.Information));
+            Assert.True(logs.CreateLogger(category).IsEnabled(LogLevel.Warning));
+            Assert.True(logs.CreateLogger(category).IsEnabled(LogLevel.Error));
+        }
+        Assert.False(logs.CreateLogger("Microsoft.AspNetCore.Hosting.Diagnostics").IsEnabled(LogLevel.Critical));
     }
 
     [Fact]

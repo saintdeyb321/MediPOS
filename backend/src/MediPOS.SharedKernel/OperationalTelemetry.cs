@@ -66,8 +66,14 @@ public static class OperationalTelemetry
         {
             if (_disposed) return;
             _disposed = true;
-            var outcome = _outcome switch { OperationOutcome.Completed => "completed", OperationOutcome.PartialFailure => "partial_failure",
-                OperationOutcome.Cancelled => "cancelled", OperationOutcome.Disabled => "disabled", _ => "failed" };
+            var outcome = _outcome switch
+            {
+                OperationOutcome.Completed => "completed",
+                OperationOutcome.PartialFailure => "partial_failure",
+                OperationOutcome.Cancelled => "cancelled",
+                OperationOutcome.Disabled => "disabled",
+                _ => "failed"
+            };
             try { Executions.Add(1, new("operation", _operation), new("outcome", outcome)); } catch (Exception) { /* Best effort only. */ }
             try { Duration.Record(Stopwatch.GetElapsedTime(_started).TotalSeconds, new("operation", _operation), new("outcome", outcome)); } catch (Exception) { /* Best effort only. */ }
             try { _activity?.Dispose(); } catch (Exception) { /* Best effort only. */ }

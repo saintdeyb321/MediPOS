@@ -50,9 +50,12 @@ public sealed class RunElectronicDocumentDelivery(IElectronicDeliveryWorkStore q
             var retained = await queue.CompleteAsync(identity, claim, result, clock.GetUtcNow(), diagnostic.Token).ConfigureAwait(false);
             var outcome = result.Outcome switch
             {
-                DeliveryOutcome.Received => "received", DeliveryOutcome.AuthorityAccepted => "authority_accepted",
-                DeliveryOutcome.Rejected => "rejected", DeliveryOutcome.TemporaryNotReceived => "temporary_not_received",
-                DeliveryOutcome.Simulated => "simulated", _ => "indeterminate"
+                DeliveryOutcome.Received => "received",
+                DeliveryOutcome.AuthorityAccepted => "authority_accepted",
+                DeliveryOutcome.Rejected => "rejected",
+                DeliveryOutcome.TemporaryNotReceived => "temporary_not_received",
+                DeliveryOutcome.Simulated => "simulated",
+                _ => "indeterminate"
             };
             MediPOS.SharedKernel.OperationalTelemetry.ElectronicResult(outcome, retained);
             token.ThrowIfCancellationRequested();

@@ -4,9 +4,9 @@ This is the single execution roadmap for the backend. Prompts are given in chat 
 
 ## Working state
 - **Current milestone:** M8 — Backend hardening for real pilot
-- **Current sprint:** B8.3 — Backup/recovery & migration rehearsal
-- **Status:** IN_PROGRESS. B8.3: implementación local completa; restore rehearsal externo pendiente. B8.2 search/confirmation targets remain NOT_MEASURED. M8 remains incomplete; B7.3/B7.4 stay voluntarily deferred outside the initial MVP.
-- **Next gate:** Execute B8.3's two-cluster PostgreSQL 18 backup/restore and migration rehearsal, approve operational storage/authentication and RPO/RTO, and run real PostgreSQL regressions. B8.2 measurements, trusted production authentication/session and least-privilege runtime configuration remain pilot prerequisites. B8.4 has not started.
+- **Current sprint:** B8.4 — Observability/operability
+- **Status:** IN_PROGRESS — B8.4: IMPLEMENTACIÓN LOCAL COMPLETA; validación externa pendiente. B8.2 targets remain NOT_MEASURED; B8.3 PostgreSQL backup/restore rehearsal and regressions remain external. M8 remains incomplete; B7.3/B7.4 stay voluntarily deferred outside the initial MVP.
+- **Next gate:** Audit B8.4 and validate restricted-role readiness, hosting/proxy/monitor configuration and alert delivery externally. B8.2 measurements, B8.3 recovery/storage/authentication and RPO/RTO approval, trusted production identity/session and least-privilege runtime configuration remain pilot prerequisites. B8.5 has not started.
 
 Local policy: this machine has no Docker and will not install it. Do not check/start Docker or run PostgreSQL/Testcontainers here. B0.1 is complete locally. Keep real PostgreSQL integration tests for another environment; they are not part of the local gate and must not be reported as passed without execution.
 
@@ -343,6 +343,10 @@ Daily external backup process, destructive-migration backup policy, isolated res
 
 ### B8.4 — Observability/operability
 Structured logs, correlation ids, health/readiness as needed, core resource/job/CPE/sync metrics and minimal alerts.
+
+**Status:** IN_PROGRESS — IMPLEMENTACIÓN LOCAL COMPLETA; validación externa pendiente. Existing instrumentation is preserved and the operational contract is documented in [backend/README.md](../backend/README.md#observability-and-operability--b84). JSON console projection retains safe operational warnings/event codes without raw framework messages, SQL, exceptions or request scopes; HTTP correlation, guarded read-only readiness/cancellation/concurrency, no-cache responses and bounded native operation metrics are implemented. Queue-depth/state-age gauges and alert delivery require external authorized monitors; no polling worker, collector, commercial endpoint or provider is enabled. B8.2/B8.3 external gates remain pending; M8 is not DONE and B8.5 is NOT_STARTED.
+
+**Local validation (2026-10-13):** `dotnet restore`, `dotnet build` (0 warnings/errors), `dotnet test tests/MediPOS.UnitTests` (2044 passed, 0 failed/skipped), `dotnet test tests/MediPOS.ArchitectureTests` (8 passed), `dotnet format --verify-no-changes` and offline EF `has-pending-model-changes` (none) passed. Two real PostgreSQL readiness cases compiled but were **NOT EXECUTED**. HTTP tests use only a controlled diagnostic probe and certify no database behavior. Runtime-role/read-only verification in PostgreSQL, proxy access/TLS, resource baselines, collectors and alert delivery remain external; no production validation is claimed. No version-control or local PostgreSQL/container operation was performed.
 
 ### B8.5 — Full MVP acceptance regression
 Execute A1–A20 backend-relevant acceptance coverage plus high-risk concurrency/security cases.

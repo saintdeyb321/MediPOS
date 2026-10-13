@@ -1,7 +1,7 @@
+using System.Diagnostics;
 using MediPOS.Application.Modules.Notifications;
 using MediPOS.SharedKernel;
 using MediPOS.UnitTests.Modules.OfflineSync;
-using System.Diagnostics;
 
 namespace MediPOS.UnitTests.Observability;
 
@@ -77,6 +77,19 @@ public sealed class OperationMetricsTests
         Assert.Single(metrics.Of("medipos.offline_sync.event_results"));
         Assert.Equal("failed", Assert.Single(metrics.Of("medipos.operation.executions")).Tags["outcome"]);
         Assert.Single(source.Data.CommittedEvents);
+    }
+
+    [Fact]
+    public async Task SyncCancellationBeforeCommitEmitsNoConfirmedEventResult()
+    {
+        using var metrics = new MeterProbe();
+        using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(Token);
+        var source = new OfflineSyncBatchTestSetup();
+        source.Data.BeforeCommit = _ => cancellation.Cancel();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => source.Handler.HandleAsync(source.Command(source.Envelope()), cancellation.Token));
+        Assert.Empty(source.Data.CommittedEvents);
+        Assert.Empty(metrics.Of("medipos.offline_sync.event_results"));
+        Assert.Equal("cancelled", Assert.Single(metrics.Of("medipos.operation.executions")).Tags["outcome"]);
     }
 
     [Fact]

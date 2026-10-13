@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using MediPOS.Api.Errors;
+using Microsoft.AspNetCore.Routing;
 
 namespace MediPOS.Api.Observability;
 
@@ -11,6 +12,8 @@ public sealed partial class RequestObservationMiddleware(RequestDelegate next, I
         var fallback = StartFallbackActivity(context);
         var trace = ApplicationExceptionHandler.GetTraceId(context);
         var requestId = ActivitySpanId.CreateRandom().ToHexString();
+        var operation = context.GetEndpoint()?.Metadata.GetMetadata<IEndpointNameMetadata>()?.EndpointName switch
+        { "medipos.liveness" => "liveness", "medipos.readiness" => "readiness", _ => "request" };
         context.TraceIdentifier = requestId;
         IDisposable? scope = null;
         try { scope = logger.BeginScope(new Dictionary<string, object?> { ["TraceId"] = trace, ["RequestId"] = requestId, ["Module"] = "http" }); }
@@ -19,6 +22,7 @@ public sealed partial class RequestObservationMiddleware(RequestDelegate next, I
         {
             context.Response.Headers["X-Correlation-ID"] = trace;
             context.Response.Headers["X-Request-ID"] = requestId;
+            if (operation != "request") context.Response.Headers.CacheControl = "no-store";
             return Task.CompletedTask;
         });
         var started = Stopwatch.GetTimestamp();
@@ -26,14 +30,13 @@ public sealed partial class RequestObservationMiddleware(RequestDelegate next, I
         finally
         {
             // No URL, query, body, header, identity or remote baggage is copied into logs or metric labels.
-            var operation = context.Request.Path.Value switch { "/health" => "liveness", "/health/ready" => "readiness", _ => "request" };
             var status = context.RequestAborted.IsCancellationRequested ? 499 : context.Response.StatusCode;
             var outcome = status >= 500 ? "server_error" : status >= 400 ? "client_error" : "completed";
             var duration = Stopwatch.GetElapsedTime(started).TotalMilliseconds;
             try
             {
                 if (status >= 500) Failed(logger, operation, outcome, status, duration);
-                else Completed(logger, operation, outcome, status, duration);
+                else if (operation == "request" || status >= 400) Completed(logger, operation, outcome, status, duration);
             }
             catch (Exception) { /* Logging cannot change the HTTP result. */ }
             try { scope?.Dispose(); } catch (Exception) { /* Best effort only. */ }
