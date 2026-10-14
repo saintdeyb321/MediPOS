@@ -15,14 +15,15 @@ public sealed class ApplicationExceptionHandler(IProblemDetailsService problemDe
     {
         var traceId = GetTraceId(httpContext);
         var failure = exception as ApplicationErrorException;
-        var status = failure?.Error.Category switch
+        var boundary = exception as HttpBoundaryException;
+        var status = boundary?.StatusCode ?? (failure?.Error.Category switch
         {
             ErrorCategory.Validation => StatusCodes.Status400BadRequest,
             ErrorCategory.Forbidden => StatusCodes.Status403Forbidden,
             ErrorCategory.NotFound => StatusCodes.Status404NotFound,
             ErrorCategory.Conflict => StatusCodes.Status409Conflict,
             _ => StatusCodes.Status500InternalServerError,
-        };
+        });
         if (status == StatusCodes.Status500InternalServerError)
         {
             OperationalTelemetry.UnexpectedFailure();
@@ -32,9 +33,9 @@ public sealed class ApplicationExceptionHandler(IProblemDetailsService problemDe
         var problem = new ProblemDetails
         {
             Status = status,
-            Title = status == StatusCodes.Status500InternalServerError ? "An unexpected error occurred." : failure!.Error.Message,
+            Title = status == StatusCodes.Status500InternalServerError ? "An unexpected error occurred." : boundary is not null ? "Request could not be completed." : failure!.Error.Message,
         };
-        problem.Extensions["code"] = status == StatusCodes.Status500InternalServerError ? "server.unexpected" : failure!.Error.Code;
+        problem.Extensions["code"] = status == StatusCodes.Status500InternalServerError ? "server.unexpected" : boundary?.Code ?? failure!.Error.Code;
         problem.Extensions["traceId"] = traceId;
         httpContext.Response.StatusCode = status;
         if (!await problemDetails.TryWriteAsync(new ProblemDetailsContext { HttpContext = httpContext, ProblemDetails = problem }).ConfigureAwait(false))

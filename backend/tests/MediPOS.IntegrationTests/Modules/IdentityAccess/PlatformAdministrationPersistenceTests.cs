@@ -8,7 +8,10 @@ using MediPOS.Application.Modules.IdentityAccess.OperationalAccess;
 using MediPOS.Application.Modules.IdentityAccess.UpsertGoogleUser;
 using MediPOS.Application.Modules.TenancyLicensing;
 using MediPOS.Application.Modules.TenancyLicensing.CreateTenant;
+using MediPOS.Application.Modules.TenancyLicensing.ReactivateLicense;
+using MediPOS.Application.Modules.TenancyLicensing.RenewLicense;
 using MediPOS.Application.Modules.TenancyLicensing.RequestTenantPurge;
+using MediPOS.Application.Modules.TenancyLicensing.SuspendLicense;
 using MediPOS.Domain.Modules.AuditSupport;
 using MediPOS.Domain.Modules.IdentityAccess;
 using MediPOS.Domain.Modules.TenancyLicensing;
@@ -123,6 +126,70 @@ public sealed class PlatformAdministrationPersistenceTests(PostgreSqlFixture fix
         Assert.Equal(2, license.Changes.Count); Assert.All(license.Changes, change => Assert.Equal(actor, change.ActorId));
         Assert.Equal(2, await verification.AuditLogs.CountAsync(Token));
         Assert.Equal(actor, (await verification.AuditLogs.SingleAsync(value => value.Action == AuditAction.TenantPurgeRequested, Token)).ActorId);
+    }
+
+    [Fact]
+    public async Task LicenseMutationRetriesRetainExistingIdempotencyConflictsAndAuthenticatedAudit()
+    {
+        var actor = (await Users(1))[0]; await using var services = Services(actor);
+        LicenseDetails initial;
+        await using (var scope = services.CreateAsyncScope())
+        { Session(scope.ServiceProvider, actor); initial = await CreateTenant(scope.ServiceProvider, actor); }
+        async Task Mutate(Func<IServiceProvider, Task> operation)
+        { await using var scope = services.CreateAsyncScope(); Session(scope.ServiceProvider, actor); await operation(scope.ServiceProvider); }
+        var expiration = initial.ExpiresAt.AddDays(10);
+        for (var repeat = 0; repeat < 2; repeat++)
+            await Mutate(provider => provider.GetRequiredService<RenewLicenseHandler>().HandleAsync(new(initial.TenantId, initial.LicenseId, expiration, actor), Token));
+        for (var repeat = 0; repeat < 2; repeat++)
+            await Mutate(provider => provider.GetRequiredService<SuspendLicenseHandler>().HandleAsync(new(initial.TenantId, initial.LicenseId, actor), Token));
+        await Mutate(provider => provider.GetRequiredService<ReactivateLicenseHandler>().HandleAsync(new(initial.TenantId, initial.LicenseId, LicenseStatus.Active, actor), Token));
+        await Mutate(async provider =>
+        {
+            var error = await Assert.ThrowsAsync<ApplicationErrorException>(() => provider.GetRequiredService<ReactivateLicenseHandler>()
+                .HandleAsync(new(initial.TenantId, initial.LicenseId, LicenseStatus.Active, actor), Token));
+            Assert.Equal(ApplicationErrors.LicenseStateConflict, error.Error);
+        });
+        await using var verification = fixture.CreateContext(initial.TenantId);
+        var license = await verification.Licenses.Include(value => value.Changes).SingleAsync(Token);
+        Assert.Equal(expiration, license.ExpiresAt); Assert.Equal(LicenseStatus.Active, license.Status); Assert.Equal(4, license.Changes.Count);
+        var audits = await verification.AuditLogs.ToListAsync(Token); Assert.Equal(4, audits.Count); Assert.All(audits, audit => Assert.Equal(actor, audit.ActorId));
+    }
+
+    [Fact]
+    public async Task ConcurrentRenewalLoserRollsBackBothAppendedHistoryAndAuditWithRestrictedRuntime()
+    {
+        var actor = (await Users(1))[0]; await using var services = Services(actor);
+        LicenseDetails initial;
+        await using (var scope = services.CreateAsyncScope())
+        { Session(scope.ServiceProvider, actor); initial = await CreateTenant(scope.ServiceProvider, actor); }
+        var ready = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously); var arrivals = 0;
+        async Task<bool> Attempt(int days)
+        {
+            await using var scope = services.CreateAsyncScope(); Session(scope.ServiceProvider, actor);
+            var store = new ConcurrentLicenseStore(scope.ServiceProvider.GetRequiredService<ITenancyLicensingStore>(), async () =>
+            {
+                if (Interlocked.Increment(ref arrivals) == 2) ready.TrySetResult();
+                await ready.Task.WaitAsync(TimeSpan.FromSeconds(10), Token);
+            });
+            var handler = new RenewLicenseHandler(store, TimeProvider.System, scope.ServiceProvider.GetRequiredService<IPlatformAdministration>());
+            try { await handler.HandleAsync(new(initial.TenantId, initial.LicenseId, initial.ExpiresAt.AddDays(days), actor), Token); return true; }
+            catch (ApplicationErrorException error) { Assert.Equal(ApplicationErrors.LicenseConcurrency, error.Error); return false; }
+        }
+        var outcomes = await Task.WhenAll(Attempt(10), Attempt(20)); Assert.Single(outcomes, success => success); Assert.Single(outcomes, success => !success);
+        await using var verification = fixture.CreateContext(initial.TenantId);
+        var license = await verification.Licenses.Include(value => value.Changes).SingleAsync(Token);
+        Assert.Equal(2, license.Changes.Count);
+        Assert.True(license.ExpiresAt == initial.ExpiresAt.AddDays(10) || license.ExpiresAt == initial.ExpiresAt.AddDays(20));
+        var audits = await verification.AuditLogs.ToListAsync(Token); Assert.Equal(2, audits.Count); Assert.All(audits, audit => Assert.Equal(actor, audit.ActorId));
+        Assert.Single(audits, audit => audit.Action == AuditAction.LicenseRenewed);
+    }
+
+    private sealed class ConcurrentLicenseStore(ITenancyLicensingStore original, Func<Task> ready) : ITenancyLicensingStore
+    {
+        public Task CreateTenantAsync(Tenant tenant, AuditLog audit, CancellationToken cancellationToken) => original.CreateTenantAsync(tenant, audit, cancellationToken);
+        public async Task<License?> FindLicenseAsync(Guid tenantId, Guid licenseId, CancellationToken cancellationToken)
+        { var license = await original.FindLicenseAsync(tenantId, licenseId, cancellationToken); await ready(); return license; }
+        public Task SaveLicenseAsync(License license, AuditLog audit, CancellationToken cancellationToken) => original.SaveLicenseAsync(license, audit, cancellationToken);
     }
 
     private async Task<Guid[]> Users(int count)

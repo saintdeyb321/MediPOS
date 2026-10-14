@@ -114,20 +114,29 @@ public static class GoogleAuthenticationRegistration
         return settings;
     }
 
-    public static void UseGoogleAuthenticationBoundary(this WebApplication app, GoogleAuthenticationSettings settings)
+    public static void UseGoogleAuthenticationBoundary(this WebApplication app, GoogleAuthenticationSettings settings, bool protectPlatform = false)
     {
         // Resolve through DI so the certificate is disposed with the host.
         _ = app.Services.GetRequiredService<System.Security.Cryptography.X509Certificates.X509Certificate2>();
         // Verify the socket peer before native forwarding replaces RemoteIpAddress.
         var forwardedClient = new object();
+        bool Protected(HttpContext context) => context.Request.Path.StartsWithSegments("/auth") || protectPlatform && context.Request.Path.StartsWithSegments("/platform");
         app.Use(async (context, next) =>
         {
-            if (!context.Request.Path.StartsWithSegments("/auth")) { await next(context); return; }
+            if (!Protected(context)) { await next(context); return; }
             context.Response.Headers.CacheControl = "no-store";
             context.Response.Headers.Pragma = "no-cache";
             context.Response.Headers["Referrer-Policy"] = "no-referrer";
             context.Response.Headers["X-Content-Type-Options"] = "nosniff";
-            if (context.Features.Get<IHttpMaxRequestBodySizeFeature>() is { IsReadOnly: false } bodyLimit) bodyLimit.MaxRequestBodySize = 16_384;
+            context.Response.OnStarting(() =>
+            {
+                // The central exception middleware clears response headers before writing errors.
+                context.Response.Headers["Referrer-Policy"] = "no-referrer";
+                context.Response.Headers["X-Content-Type-Options"] = "nosniff";
+                return Task.CompletedTask;
+            });
+            if (context.Features.Get<IHttpMaxRequestBodySizeFeature>() is { IsReadOnly: false } bodyLimit)
+                bodyLimit.MaxRequestBodySize = context.Request.Path.StartsWithSegments("/platform") ? Platform.PlatformLicenseEndpoints.MaximumBodyBytes : 16_384;
             if (settings.BehindProxy)
             {
                 var peer = context.Connection.RemoteIpAddress;
@@ -145,8 +154,9 @@ public static class GoogleAuthenticationRegistration
         app.UseForwardedHeaders();
         app.Use(async (context, next) =>
         {
-            if (!context.Request.Path.StartsWithSegments("/auth")) { await next(context); return; }
+            if (!Protected(context)) { await next(context); return; }
             var callback = context.Request.Path == GoogleAuthenticationSettings.CallbackPath;
+            var platformRequest = protectPlatform && context.Request.Path.StartsWithSegments("/platform");
             var proxy = context.Connection.RemoteIpAddress;
             if (proxy?.IsIPv4MappedToIPv6 == true) proxy = proxy.MapToIPv4();
             if (!context.Request.IsHttps || !string.Equals(context.Request.Host.Value, settings.Origin.Authority, StringComparison.OrdinalIgnoreCase) ||
@@ -154,6 +164,9 @@ public static class GoogleAuthenticationRegistration
                     proxy is null || context.Features.Get<ITlsConnectionFeature>() is null) ||
                 (!callback && (context.Request.Headers.Origin.Count > 0 && context.Request.Headers.Origin != settings.Origin.GetLeftPart(UriPartial.Authority) ||
                     context.Request.Headers["Sec-Fetch-Site"] == "cross-site")) || (callback && context.Request.Method != "GET"))
+            { await AuthProblem.WriteAsync(context, 403, "auth.origin_denied"); return; }
+            if (platformRequest && (context.Request.Headers.Origin != settings.Origin.GetLeftPart(UriPartial.Authority) ||
+                context.Request.Headers["Sec-Fetch-Site"].ToString() is not ("" or "same-origin" or "none")))
             { await AuthProblem.WriteAsync(context, 403, "auth.origin_denied"); return; }
             await next(context);
         });
