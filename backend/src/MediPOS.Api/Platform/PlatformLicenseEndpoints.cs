@@ -4,6 +4,7 @@ using System.Text.Json.Serialization;
 using MediPOS.Api.Errors;
 using MediPOS.Application.Modules.IdentityAccess.Authentication;
 using MediPOS.Application.Modules.TenancyLicensing;
+using MediPOS.Application.Modules.TenancyLicensing.CreateTenant;
 using MediPOS.Application.Modules.TenancyLicensing.ReactivateLicense;
 using MediPOS.Application.Modules.TenancyLicensing.RenewLicense;
 using MediPOS.Application.Modules.TenancyLicensing.SuspendLicense;
@@ -40,8 +41,31 @@ public static class PlatformLicenseEndpoints
         group.MapPost("/reactivate", (HttpContext context, ReactivateLicenseHandler handler) => Execute<ReactivateRequest>(context,
             (request, tenant, license, actor, token) => handler.HandleAsync(new(tenant, license, Status(request.Status), actor), token)))
             .WithName("medipos.platform.license.reactivate");
-        // Creation intentionally has no route until durable request/operator/payload deduplication
-        // can commit atomically with tenant, license and audit. A memory cache cannot supply it.
+        app.MapPost("/platform/tenants", Create).RequireAuthorization().WithName("medipos.platform.tenant.create");
+    }
+
+    private static async Task<IResult> Create(HttpContext context, CreateTenantIdempotentlyHandler handler)
+    {
+        var actor = await PlatformAdministrationAccess.RequireAsync(context.RequestServices.GetRequiredService<IPlatformAdministration>(), null, context.RequestAborted);
+        using var lease = context.RequestServices.GetRequiredService<PlatformApiRateLimiter>().AttemptAcquire(actor);
+        if (!lease.IsAcquired) throw new HttpBoundaryException(429, "platform.rate_limited");
+        await ValidateCsrf(context);
+        var keys = context.Request.Headers["Idempotency-Key"];
+        if (keys.Count != 1 || keys[0] is not { Length: 36 } keyText || !Guid.TryParseExact(keyText, "D", out var key) || key == Guid.Empty)
+            throw new HttpBoundaryException(400, "platform.idempotency_key_invalid");
+        var request = await Read<CreateRequest>(context);
+        if (!DateTimeOffset.TryParseExact(request.StartsAt, DateFormats, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out var starts) ||
+            !DateTimeOffset.TryParseExact(request.ExpiresAt, DateFormats, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out var expires))
+            throw new HttpBoundaryException(400, "platform.invalid_json");
+        var result = await handler.HandleAsync(new(request.TradingName, starts, expires, request.MaxBranches, Status(request.Status), actor), key, context.RequestAborted);
+        context.Response.Headers["Idempotency-Replayed"] = result.Replayed ? "true" : "false";
+        return Results.Json(Response(result.License), statusCode: result.Replayed ? 200 : 201);
+    }
+
+    private static async Task ValidateCsrf(HttpContext context)
+    {
+        try { await context.RequestServices.GetRequiredService<IAntiforgery>().ValidateRequestAsync(context); }
+        catch (AntiforgeryValidationException) { throw new HttpBoundaryException(400, "auth.csrf_invalid"); }
     }
 
     private static async Task<IResult> Execute<T>(HttpContext context, Func<T, Guid, Guid, Guid, CancellationToken, Task<LicenseDetails>> execute)
@@ -50,15 +74,16 @@ public static class PlatformLicenseEndpoints
         var actor = await PlatformAdministrationAccess.RequireAsync(context.RequestServices.GetRequiredService<IPlatformAdministration>(), null, token);
         using var lease = context.RequestServices.GetRequiredService<PlatformApiRateLimiter>().AttemptAcquire(actor);
         if (!lease.IsAcquired) throw new HttpBoundaryException(429, "platform.rate_limited");
-        try { await context.RequestServices.GetRequiredService<IAntiforgery>().ValidateRequestAsync(context); }
-        catch (AntiforgeryValidationException) { throw new HttpBoundaryException(400, "auth.csrf_invalid"); }
+        await ValidateCsrf(context);
         if (!Guid.TryParseExact(context.Request.RouteValues["tenantId"] as string, "D", out var tenant) || tenant == Guid.Empty ||
             !Guid.TryParseExact(context.Request.RouteValues["licenseId"] as string, "D", out var license) || license == Guid.Empty)
             throw new HttpBoundaryException(400, "platform.invalid_identifier");
         var request = await Read<T>(context);
         var result = await execute(request, tenant, license, actor, token);
-        return Results.Json(new LicenseResponse(result.TenantId, result.LicenseId, Code(result.Status), result.StartsAt, result.ExpiresAt, result.MaxBranches));
+        return Results.Json(Response(result));
     }
+
+    private static LicenseResponse Response(LicenseDetails result) => new(result.TenantId, result.LicenseId, Code(result.Status), result.StartsAt, result.ExpiresAt, result.MaxBranches);
 
     private static async Task<T> Read<T>(HttpContext context)
     {
@@ -102,6 +127,8 @@ public static class PlatformLicenseEndpoints
         _ => throw new InvalidOperationException("Invalid application license status.")
     };
     private sealed record RenewRequest([property: JsonRequired] string ExpiresAt);
+    private sealed record CreateRequest([property: JsonRequired] string TradingName, [property: JsonRequired] string StartsAt,
+        [property: JsonRequired] string ExpiresAt, [property: JsonRequired] int MaxBranches, [property: JsonRequired] string Status);
     private sealed record ReactivateRequest([property: JsonRequired] string Status);
     private sealed record SuspendRequest;
     private sealed record LicenseResponse(Guid TenantId, Guid LicenseId, string Status, DateTimeOffset StartsAt, DateTimeOffset ExpiresAt, int MaxBranches);

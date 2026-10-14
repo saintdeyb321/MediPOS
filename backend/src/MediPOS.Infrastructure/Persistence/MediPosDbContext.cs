@@ -131,6 +131,7 @@ public sealed partial class MediPosDbContext(DbContextOptions<MediPosDbContext> 
         modelBuilder.ApplyConfiguration(new ElectronicDocumentSeriesConfiguration());
         modelBuilder.ApplyConfiguration(new ElectronicDocumentAttemptConfiguration());
         modelBuilder.ApplyConfiguration(new TenantConfiguration());
+        modelBuilder.ApplyConfiguration(new MediPOS.Infrastructure.Modules.TenancyLicensing.Persistence.TenantCreationReceiptConfiguration());
         modelBuilder.ApplyConfiguration(new NotificationConfiguration());
         modelBuilder.ApplyConfiguration(new SyncDeviceConfiguration());
         modelBuilder.ApplyConfiguration(new SyncEventConfiguration());

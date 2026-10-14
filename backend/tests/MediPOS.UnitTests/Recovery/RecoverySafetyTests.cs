@@ -4,6 +4,8 @@ using MediPOS.Domain.Modules.SalesPos;
 using MediPOS.Performance;
 using MediPOS.Recovery;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 
 namespace MediPOS.UnitTests.Recovery;
 
@@ -238,7 +240,10 @@ public sealed class RecoverySafetyTests : IDisposable
         var manifest = new BackupManifest(Configuration.RunId, DateTimeOffset.UtcNow, "Staging", "operator", "protected",
             new string('B', 64), 18, "postgresql18-custom-full", 1, new string('C', 64), new(migrations[..^1], new(), new string('D', 64)));
         var plan = RecoveryWorkflow.MigrationPlan(manifest);
-        Assert.Contains("electronic_documents", plan);
+        // Rehearse the newest migration, not a hard-coded previous last migration.
+        var expected = model.GetService<IMigrator>().GenerateScript(migrations[^2], migrations[^1]);
+        Assert.Equal(expected, plan);
+        Assert.Contains(migrations[^1], plan, StringComparison.Ordinal);
         Assert.Equal(RecoveryWorkflow.PlanHash(plan), RecoveryWorkflow.PlanHash(RecoveryWorkflow.MigrationPlan(manifest)));
         Assert.Equal(64, RecoveryWorkflow.PlanHash(plan).Length);
     }

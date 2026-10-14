@@ -148,6 +148,8 @@ public static class DependencyInjection
             services.AddHostedService<ExpirationAlertsScheduler>();
         services.AddScoped<ITenancyLicensingStore, TenancyLicensingStore>();
         services.AddScoped<CreateTenantHandler>();
+        services.AddScoped<ITenantCreationRequests, TenantCreationRequests>();
+        services.AddScoped<CreateTenantIdempotentlyHandler>();
         services.AddScoped<RenewLicenseHandler>();
         services.AddScoped<SuspendLicenseHandler>();
         services.AddScoped<ReactivateLicenseHandler>();

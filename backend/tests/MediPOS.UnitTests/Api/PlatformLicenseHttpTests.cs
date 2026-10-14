@@ -31,21 +31,23 @@ public sealed class PlatformLicenseHttpTests
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public async Task ApiIsIndependentlyDisabledAndEnabledCompositionOnlyAddsThreeLicenseRoutes(bool omitFlag)
+    public async Task ApiIsIndependentlyDisabledAndEnabledCompositionOnlyAddsFourPlatformRoutes(bool omitFlag)
     {
         var state = new Store(); var user = Operator();
         await using (var disabled = await Host(state, user, api: false, configure: config => { if (omitFlag) config.Remove("PlatformApi:Enabled"); }))
         {
             Assert.Equal(7, Routes(disabled).Length);
+            using var creation = await disabled.Client.PostAsync("/platform/tenants", new StringContent("{}"), Token);
+            Assert.Equal(HttpStatusCode.NotFound, creation.StatusCode);
             foreach (var operation in Operations)
             { using var response = await Send(disabled, state, operation); Assert.Equal(HttpStatusCode.NotFound, response.StatusCode); }
         }
         await using var enabled = await Host(state, user);
         var expected = BaseRoutes
-            .Concat(Operations.Select(operation => "/platform/tenants/{tenantId}/licenses/{licenseId}/" + operation)).Order().ToArray();
+            .Concat(Operations.Select(operation => "/platform/tenants/{tenantId}/licenses/{licenseId}/" + operation)).Append("/platform/tenants").Order().ToArray();
         Assert.Equal(expected, Routes(enabled));
         await Login(enabled);
-        foreach (var path in new[] { "/platform/tenants", "/platform/tenants/purge", "/platform/catalog", "/sales", "/platform/memberships" })
+        foreach (var path in new[] { "/platform/tenants/purge", "/platform/catalog", "/sales", "/platform/memberships" })
         {
             using var request = new HttpRequestMessage(HttpMethod.Post, path) { Content = new StringContent("{}", Encoding.UTF8, "application/json") };
             request.Headers.Add("Origin", "https://medipos.example.test");
@@ -89,6 +91,10 @@ public sealed class PlatformLicenseHttpTests
         Assert.Equal("allowed", await host.Client.GetStringAsync("/__owner", Token));
         using var denied = await Send(host, state, "suspend", body: "malformed");
         await Problem(denied, HttpStatusCode.Forbidden, "access.platform_denied"); Assert.Equal(0, state.Lookups);
+        using var creation = new HttpRequestMessage(HttpMethod.Post, "/platform/tenants") { Content = new StringContent("malformed", Encoding.UTF8, "application/json") };
+        creation.Headers.Add("Origin", "https://medipos.example.test");
+        using var ownerCreation = await host.Client.SendAsync(creation, Token);
+        await Problem(ownerCreation, HttpStatusCode.Forbidden, "access.platform_denied"); Assert.Empty(state.Audits);
     }
 
     [Fact]
