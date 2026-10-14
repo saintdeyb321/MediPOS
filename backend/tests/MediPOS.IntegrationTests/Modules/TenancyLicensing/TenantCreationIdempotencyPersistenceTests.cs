@@ -28,6 +28,46 @@ public sealed class TenantCreationIdempotencyPersistenceTests(PostgreSqlFixture 
     private static CreateTenantCommand Command(Guid actor) => new("Synthetic ñ tenant", new(2026, 10, 1, 0, 0, 0, TimeSpan.Zero),
         new(2027, 10, 1, 0, 0, 0, TimeSpan.Zero), 2, LicenseStatus.Active, actor);
 
+    [Theory]
+    [InlineData(LicenseStatus.Trial, true)]
+    [InlineData(LicenseStatus.Active, true)]
+    [InlineData(LicenseStatus.Grace, true)]
+    [InlineData(LicenseStatus.Suspended, true)]
+    [InlineData(LicenseStatus.Cancelled, false)]
+    [InlineData(LicenseStatus.PurgePending, false)]
+    [InlineData(LicenseStatus.Purged, false)]
+    public async Task InitialStatusAdmissionPreservesWritesAndInvalidRequestsDoNotConsumeKey(LicenseStatus status, bool allowed)
+    {
+        var actor = await User(); await using var services = Services(actor); var command = Command(actor) with { Status = status }; var key = Guid.NewGuid();
+        var before = await CreationCounts(); var beginCalls = 0; TenantCreationResult first;
+        await using (var scope = Scope(services, actor))
+        {
+            var provider = scope.ServiceProvider;
+            var requests = new BeforeRequests(provider.GetRequiredService<ITenantCreationRequests>(), () => beginCalls++);
+            var handler = ActivatorUtilities.CreateInstance<CreateTenantIdempotentlyHandler>(provider, requests);
+            if (allowed)
+            {
+                first = await handler.HandleAsync(command, key, Token); Assert.Equal(1, beginCalls);
+            }
+            else
+            {
+                var error = await Assert.ThrowsAsync<ApplicationErrorException>(() => handler.HandleAsync(command, key, Token));
+                Assert.Equal("tenant.initial_status_invalid", error.Error.Code); Assert.Equal(0, beginCalls);
+                Assert.Empty(provider.GetRequiredService<MediPosDbContext>().ChangeTracker.Entries());
+                Assert.Equal(before, await CreationCounts()); Assert.Equal(0, await Receipts(actor, key));
+                command = command with { Status = LicenseStatus.Active };
+                first = await handler.HandleAsync(command, key, Token); Assert.Equal(1, beginCalls);
+            }
+        }
+        Assert.False(first.Replayed); Assert.Equal(command.Status, first.License.Status); Assert.Equal(1, await Receipts(actor, key));
+        var replay = await Run(services, command, key); Assert.True(replay.Replayed); Assert.Equal(first.License, replay.License);
+        await AssertCreatedOnce(first.License, actor);
+        await using var context = fixture.CreateContext(first.License.TenantId);
+        var license = await context.Licenses.SingleAsync(Token);
+        Assert.Equal(command.Status, license.Status); Assert.Equal(command.Status != LicenseStatus.Suspended, license.AllowsOperation(command.StartsAt));
+        Assert.Equal(command.Status, (await context.LicenseChanges.SingleAsync(Token)).NewStatus);
+    }
+
     [Fact]
     public async Task FreshScopeLostResponseReplayRemainsOriginalAfterLicenseChangesAndRejectsOtherPayload()
     {
@@ -188,6 +228,15 @@ public sealed class TenantCreationIdempotencyPersistenceTests(PostgreSqlFixture 
         await AssertCreatedOnce(first.License, actor); await AssertCreatedOnce(independent.License, actor);
     }
 
+    // Administrative independent oracle for absence of ANY writes, never RLS evidence.
+    private async Task<(int Tenants, int Licenses, int Changes, int Audits, int Receipts)> CreationCounts()
+    {
+        await using var context = fixture.CreateConstraintContext();
+        return (await context.Tenants.IgnoreQueryFilters().CountAsync(Token), await context.Licenses.IgnoreQueryFilters().CountAsync(Token),
+            await context.LicenseChanges.IgnoreQueryFilters().CountAsync(Token), await context.AuditLogs.IgnoreQueryFilters().CountAsync(Token),
+            await context.Database.SqlQueryRaw<int>("SELECT count(*)::int AS \"Value\" FROM platform_tenant_creation_requests").SingleAsync(Token));
+    }
+
     private async Task AssertCreatedOnce(LicenseDetails result, Guid actor, int expectedChanges = 1, int expectedAudits = 1)
     {
         await using var context = fixture.CreateContext(result.TenantId);
@@ -237,6 +286,11 @@ public sealed class TenantCreationIdempotencyPersistenceTests(PostgreSqlFixture 
             var request = await original.BeginAsync(actor, key, hash, token);
             try { await afterReserve(); return request; } catch { await request.DisposeAsync(); throw; }
         }
+    }
+    private sealed class BeforeRequests(ITenantCreationRequests original, Action beforeReserve) : ITenantCreationRequests
+    {
+        public Task<ITenantCreationRequest> BeginAsync(Guid actor, Guid key, byte[] hash, CancellationToken token)
+        { beforeReserve(); return original.BeginAsync(actor, key, hash, token); }
     }
     private sealed class Store(ITenancyLicensingStore original, Func<Tenant, AuditLog, Task> create) : ITenancyLicensingStore
     {

@@ -16,6 +16,55 @@ public sealed class CreateTenantIdempotencyTests
     internal static CreateTenantCommand Command(Guid actor) => new("Botica Ñandú", new(2026, 10, 1, 0, 0, 0, TimeSpan.Zero),
         new(2027, 10, 1, 0, 0, 0, TimeSpan.Zero), 2, LicenseStatus.Active, actor);
 
+    [Theory]
+    [InlineData(LicenseStatus.Trial)]
+    [InlineData(LicenseStatus.Active)]
+    [InlineData(LicenseStatus.Grace)]
+    [InlineData(LicenseStatus.Suspended)]
+    public async Task AllowedInitialStatusCreatesOnceReplaysOriginalAndKeepsPayloadConflict(LicenseStatus status)
+    {
+        var db = new TestDatabase(); var command = Command(Guid.NewGuid()) with { Status = status }; var key = Guid.NewGuid();
+        var first = await Handle(db, command, key); var replay = await Handle(db, command, key);
+        Assert.False(first.Replayed); Assert.True(replay.Replayed); Assert.Equal(first.License, replay.License); Assert.Equal(status, first.License.Status);
+        var stored = Assert.Single(db.Committed.Values);
+        Assert.Equal(status, stored.Tenant.License.Status); Assert.Equal(status != LicenseStatus.Suspended, stored.Tenant.License.AllowsOperation(command.StartsAt));
+        Assert.Single(stored.Tenant.License.Changes); Assert.Equal(AuditAction.TenantCreated, stored.Audit.Action);
+        var otherStatus = status == LicenseStatus.Active ? LicenseStatus.Trial : LicenseStatus.Active;
+        var error = await Assert.ThrowsAsync<ApplicationErrorException>(() => Handle(db, command with { Status = otherStatus }, key));
+        Assert.Equal("platform.idempotency_conflict", error.Error.Code); Assert.Single(db.Committed);
+        Assert.Equal(1, db.CreationAttempts); Assert.Equal(3, db.ReservationAttempts);
+    }
+
+    [Theory]
+    [InlineData(LicenseStatus.Cancelled)]
+    [InlineData(LicenseStatus.PurgePending)]
+    [InlineData(LicenseStatus.Purged)]
+    [InlineData((LicenseStatus)12345)]
+    public async Task InvalidInitialStatusCannotReserveOrCreateAndSameKeyRemainsAvailable(LicenseStatus status)
+    {
+        var db = new TestDatabase(); var command = Command(Guid.NewGuid()) with { Status = status }; var key = Guid.NewGuid();
+        var error = await Assert.ThrowsAsync<ApplicationErrorException>(() => Handle(db, command, key));
+        Assert.Equal("tenant.initial_status_invalid", error.Error.Code); Assert.Equal(ErrorCategory.Validation, error.Error.Category);
+        Assert.Equal(0, db.ReservationAttempts); Assert.Equal(0, db.CreationAttempts); Assert.Empty(db.Gates); Assert.Empty(db.Committed);
+        var valid = await Handle(db, command with { Status = LicenseStatus.Active }, key);
+        Assert.False(valid.Replayed); Assert.Equal(1, db.ReservationAttempts); Assert.Equal(1, db.CreationAttempts);
+        Assert.Single(Assert.Single(db.Committed.Values).Tenant.License.Changes);
+    }
+
+    [Theory]
+    [InlineData(LicenseStatus.Cancelled)]
+    [InlineData(LicenseStatus.PurgePending)]
+    [InlineData(LicenseStatus.Purged)]
+    public async Task ForbiddenPayloadOnCommittedKeyIsRejectedBeforeReceiptLookup(LicenseStatus status)
+    {
+        var db = new TestDatabase(); var command = Command(Guid.NewGuid()); var key = Guid.NewGuid();
+        var first = await Handle(db, command, key);
+        var error = await Assert.ThrowsAsync<ApplicationErrorException>(() => Handle(db, command with { Status = status }, key));
+        Assert.Equal("tenant.initial_status_invalid", error.Error.Code);
+        Assert.Equal(1, db.ReservationAttempts); Assert.Equal(1, db.CreationAttempts); Assert.Single(db.Committed);
+        var replay = await Handle(db, command, key); Assert.True(replay.Replayed); Assert.Equal(first.License, replay.License);
+    }
+
     [Fact]
     public async Task LostResponseReplayReturnsOriginalWithoutRepeatingBusinessOrAudit()
     {
@@ -142,12 +191,14 @@ public sealed class CreateTenantIdempotencyTests
         internal ConcurrentDictionary<(Guid Actor, Guid Key), (byte[] Hash, LicenseDetails Result, Tenant Tenant, AuditLog Audit)> Committed = new();
         internal ConcurrentDictionary<(Guid Actor, Guid Key), SemaphoreSlim> Gates = new();
         internal string? Failure; internal Action? AfterReserve; internal Action? AfterCreate;
+        internal int ReservationAttempts; internal int CreationAttempts;
     }
     internal sealed class TestStore(TestDatabase db) : ITenancyLicensingStore, ITenantCreationRequests
     {
         private Tenant? _tenant; private AuditLog? _audit;
         public Task CreateTenantAsync(Tenant tenant, AuditLog audit, CancellationToken token)
         {
+            Interlocked.Increment(ref db.CreationAttempts);
             if (db.Failure == "save") throw new InvalidOperationException("Synthetic save failure.");
             _tenant = tenant; _audit = audit; db.AfterCreate?.Invoke(); return Task.CompletedTask;
         }
@@ -155,6 +206,7 @@ public sealed class CreateTenantIdempotencyTests
         public Task SaveLicenseAsync(License license, AuditLog audit, CancellationToken token) => throw new NotSupportedException();
         public async Task<ITenantCreationRequest> BeginAsync(Guid actor, Guid key, byte[] hash, CancellationToken token)
         {
+            Interlocked.Increment(ref db.ReservationAttempts);
             var gate = db.Gates.GetOrAdd((actor, key), _ => new(1)); await gate.WaitAsync(token);
             await Task.Yield();
             try

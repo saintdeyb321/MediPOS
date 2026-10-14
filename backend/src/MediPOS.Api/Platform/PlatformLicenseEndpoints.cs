@@ -57,7 +57,9 @@ public static class PlatformLicenseEndpoints
         if (!DateTimeOffset.TryParseExact(request.StartsAt, DateFormats, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out var starts) ||
             !DateTimeOffset.TryParseExact(request.ExpiresAt, DateFormats, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out var expires))
             throw new HttpBoundaryException(400, "platform.invalid_json");
-        var result = await handler.HandleAsync(new(request.TradingName, starts, expires, request.MaxBranches, Status(request.Status), actor), key, context.RequestAborted);
+        var status = Status(request.Status);
+        TenantCreationStatusPolicy.RequireAllowed(status);
+        var result = await handler.HandleAsync(new(request.TradingName, starts, expires, request.MaxBranches, status, actor), key, context.RequestAborted);
         context.Response.Headers["Idempotency-Replayed"] = result.Replayed ? "true" : "false";
         return Results.Json(Response(result.License), statusCode: result.Replayed ? 200 : 201);
     }

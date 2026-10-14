@@ -19,7 +19,8 @@ public sealed class CreateTenantIdempotentlyHandler(
     {
         ArgumentNullException.ThrowIfNull(command);
         await PlatformAdministrationAccess.RequireAsync(administration, command.ActorId, cancellationToken).ConfigureAwait(false);
-        if (key == Guid.Empty || string.IsNullOrWhiteSpace(command.TradingName) || !Enum.IsDefined(command.Status))
+        TenantCreationStatusPolicy.RequireAllowed(command.Status);
+        if (key == Guid.Empty || string.IsNullOrWhiteSpace(command.TradingName))
             throw new ApplicationErrorException(ApplicationErrors.InvalidRequest);
         // PostgreSQL timestamptz stores microseconds. Use precisely the same values for the
         // hash, domain creation and first response, including equivalent explicit UTC offsets.

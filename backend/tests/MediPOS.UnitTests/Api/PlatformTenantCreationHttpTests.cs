@@ -1,5 +1,6 @@
 using System.Net;
 using System.Text;
+using System.Text.Json;
 using MediPOS.Application.Modules.TenancyLicensing;
 using MediPOS.Application.Modules.TenancyLicensing.CreateTenant;
 using MediPOS.Domain.Modules.IdentityAccess;
@@ -16,6 +17,51 @@ public sealed class PlatformTenantCreationHttpTests
 {
     private static CancellationToken Token => TestContext.Current.CancellationToken;
     private const string Body = """{"tradingName":"Botica Ñandú","startsAt":"2026-10-01T00:00:00Z","expiresAt":"2027-10-01T00:00:00Z","maxBranches":2,"status":"active"}""";
+
+    [Theory]
+    [InlineData("trial")]
+    [InlineData("active")]
+    [InlineData("grace")]
+    [InlineData("suspended")]
+    public async Task AllowedInitialStatusReturnsCreatedThenOriginalReplayAndPayloadConflict(string status)
+    {
+        var db = new TestDatabase(); await using var host = await Host(db, PlatformLicenseHttpTests.Operator()); await PlatformLicenseHttpTests.Login(host);
+        var csrf = await host.Csrf(); var key = Guid.NewGuid().ToString("D"); var body = Body.Replace("\"active\"", "\"" + status + "\"", StringComparison.Ordinal);
+        using var first = await Send(host, key, csrf, body); Assert.Equal(HttpStatusCode.Created, first.StatusCode);
+        var original = await first.Content.ReadAsStringAsync(Token); using var json = JsonDocument.Parse(original);
+        Assert.Equal(status, json.RootElement.GetProperty("status").GetString());
+        using var replay = await Send(host, key, csrf, body); Assert.Equal(HttpStatusCode.OK, replay.StatusCode);
+        Assert.Equal("true", Assert.Single(replay.Headers.GetValues("Idempotency-Replayed"))); Assert.Equal(original, await replay.Content.ReadAsStringAsync(Token));
+        using var conflict = await Send(host, key, csrf, body.Replace("\"maxBranches\":2", "\"maxBranches\":3", StringComparison.Ordinal));
+        await Problem(conflict, HttpStatusCode.Conflict, "platform.idempotency_conflict");
+        var stored = Assert.Single(db.Committed.Values); Assert.Single(stored.Tenant.License.Changes);
+        Assert.Equal(1, db.CreationAttempts); Assert.Equal(3, db.ReservationAttempts);
+    }
+
+    [Theory]
+    [InlineData("cancelled")]
+    [InlineData("purge_pending")]
+    [InlineData("purged")]
+    public async Task ForbiddenInitialStatusIsSanitized400WithoutReservingOrWritingAndKeyCanBeReused(string status)
+    {
+        var db = new TestDatabase(); var user = PlatformLicenseHttpTests.Operator(); await using var host = await Host(db, user); await PlatformLicenseHttpTests.Login(host);
+        var csrf = await host.Csrf(); var key = Guid.NewGuid().ToString("D"); var body = Body.Replace("\"active\"", "\"" + status + "\"", StringComparison.Ordinal);
+        using var invalid = await Send(host, key, csrf, body); await Problem(invalid, HttpStatusCode.BadRequest, "tenant.initial_status_invalid");
+        var error = await invalid.Content.ReadAsStringAsync(Token);
+        Assert.DoesNotContain(status, error, StringComparison.Ordinal); Assert.DoesNotContain(key, error, StringComparison.Ordinal);
+        Assert.DoesNotContain(user.Id.ToString("D"), error, StringComparison.OrdinalIgnoreCase);
+        Assert.False(invalid.Headers.Contains("Idempotency-Replayed")); Assert.Null(invalid.Headers.Location);
+        Assert.Equal(0, db.ReservationAttempts); Assert.Equal(0, db.CreationAttempts); Assert.Empty(db.Gates); Assert.Empty(db.Committed);
+        using var valid = await Send(host, key, csrf); Assert.Equal(HttpStatusCode.Created, valid.StatusCode);
+        var original = await valid.Content.ReadAsStringAsync(Token);
+        using var replay = await Send(host, key, csrf); Assert.Equal(HttpStatusCode.OK, replay.StatusCode); Assert.Equal(original, await replay.Content.ReadAsStringAsync(Token));
+        using var conflict = await Send(host, key, csrf, Body.Replace("\"maxBranches\":2", "\"maxBranches\":3", StringComparison.Ordinal));
+        await Problem(conflict, HttpStatusCode.Conflict, "platform.idempotency_conflict");
+        // Even an already-used key cannot turn a prohibited initial state into a receipt lookup.
+        using var invalidAgain = await Send(host, key, csrf, body); await Problem(invalidAgain, HttpStatusCode.BadRequest, "tenant.initial_status_invalid");
+        Assert.Equal(3, db.ReservationAttempts); Assert.Equal(1, db.CreationAttempts);
+        Assert.Single(Assert.Single(db.Committed.Values).Tenant.License.Changes);
+    }
 
     [Theory]
     [InlineData(null)]
