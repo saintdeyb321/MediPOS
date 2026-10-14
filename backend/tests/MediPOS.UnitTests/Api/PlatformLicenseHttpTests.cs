@@ -31,7 +31,7 @@ public sealed class PlatformLicenseHttpTests
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public async Task ApiIsIndependentlyDisabledAndEnabledCompositionOnlyAddsFourPlatformRoutes(bool omitFlag)
+    public async Task ApiIsIndependentlyDisabledAndEnabledCompositionOnlyAddsFivePlatformRoutes(bool omitFlag)
     {
         var state = new Store(); var user = Operator();
         await using (var disabled = await Host(state, user, api: false, configure: config => { if (omitFlag) config.Remove("PlatformApi:Enabled"); }))
@@ -39,12 +39,15 @@ public sealed class PlatformLicenseHttpTests
             Assert.Equal(7, Routes(disabled).Length);
             using var creation = await disabled.Client.PostAsync("/platform/tenants", new StringContent("{}"), Token);
             Assert.Equal(HttpStatusCode.NotFound, creation.StatusCode);
+            using var bootstrap = await disabled.Client.PostAsync($"/platform/tenants/{state.License.TenantId:D}/bootstrap-owner", new StringContent("{}"), Token);
+            Assert.Equal(HttpStatusCode.NotFound, bootstrap.StatusCode);
             foreach (var operation in Operations)
             { using var response = await Send(disabled, state, operation); Assert.Equal(HttpStatusCode.NotFound, response.StatusCode); }
         }
         await using var enabled = await Host(state, user);
         var expected = BaseRoutes
-            .Concat(Operations.Select(operation => "/platform/tenants/{tenantId}/licenses/{licenseId}/" + operation)).Append("/platform/tenants").Order().ToArray();
+            .Concat(Operations.Select(operation => "/platform/tenants/{tenantId}/licenses/{licenseId}/" + operation)).Append("/platform/tenants")
+            .Append("/platform/tenants/{tenantId}/bootstrap-owner").Order().ToArray();
         Assert.Equal(expected, Routes(enabled));
         await Login(enabled);
         foreach (var path in new[] { "/platform/tenants/purge", "/platform/catalog", "/sales", "/platform/memberships" })

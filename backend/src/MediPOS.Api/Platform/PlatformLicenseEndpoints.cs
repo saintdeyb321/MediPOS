@@ -3,6 +3,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using MediPOS.Api.Errors;
 using MediPOS.Application.Modules.IdentityAccess.Authentication;
+using MediPOS.Application.Modules.IdentityAccess.CreateMembership;
 using MediPOS.Application.Modules.TenancyLicensing;
 using MediPOS.Application.Modules.TenancyLicensing.CreateTenant;
 using MediPOS.Application.Modules.TenancyLicensing.ReactivateLicense;
@@ -42,6 +43,27 @@ public static class PlatformLicenseEndpoints
             (request, tenant, license, actor, token) => handler.HandleAsync(new(tenant, license, Status(request.Status), actor), token)))
             .WithName("medipos.platform.license.reactivate");
         app.MapPost("/platform/tenants", Create).RequireAuthorization().WithName("medipos.platform.tenant.create");
+        app.MapPost("/platform/tenants/{tenantId}/bootstrap-owner", BootstrapOwner).RequireAuthorization().WithName("medipos.platform.tenant.bootstrap_owner");
+    }
+
+    private static async Task<IResult> BootstrapOwner(HttpContext context, CreateMembershipHandler handler)
+    {
+        var actor = await PlatformAdministrationAccess.RequireAsync(context.RequestServices.GetRequiredService<IPlatformAdministration>(), null, context.RequestAborted);
+        using var lease = context.RequestServices.GetRequiredService<PlatformApiRateLimiter>().AttemptAcquire(actor);
+        if (!lease.IsAcquired) throw new HttpBoundaryException(429, "platform.rate_limited");
+        await ValidateCsrf(context);
+        var tenant = BootstrapIdentifier(context.Request.RouteValues["tenantId"] as string);
+        var request = await Read<BootstrapOwnerRequest>(context);
+        var user = BootstrapIdentifier(request.UserId);
+        var result = await handler.BootstrapOwnerAsync(tenant, user, actor, context.RequestAborted);
+        return Results.Json(new BootstrapOwnerResponse(result.Id, result.TenantId, result.UserId, "owner", result.IsActive, result.CreatedAt), statusCode: 201);
+    }
+
+    private static Guid BootstrapIdentifier(string? value)
+    {
+        if (value is not { Length: 36 } || !Guid.TryParseExact(value, "D", out var id) || id == Guid.Empty)
+            throw new HttpBoundaryException(400, "platform.invalid_identifier");
+        return id;
     }
 
     private static async Task<IResult> Create(HttpContext context, CreateTenantIdempotentlyHandler handler)
@@ -133,5 +155,7 @@ public static class PlatformLicenseEndpoints
         [property: JsonRequired] string ExpiresAt, [property: JsonRequired] int MaxBranches, [property: JsonRequired] string Status);
     private sealed record ReactivateRequest([property: JsonRequired] string Status);
     private sealed record SuspendRequest;
+    private sealed record BootstrapOwnerRequest([property: JsonRequired] string UserId);
+    private sealed record BootstrapOwnerResponse(Guid MembershipId, Guid TenantId, Guid UserId, string Role, bool IsActive, DateTimeOffset CreatedAt);
     private sealed record LicenseResponse(Guid TenantId, Guid LicenseId, string Status, DateTimeOffset StartsAt, DateTimeOffset ExpiresAt, int MaxBranches);
 }

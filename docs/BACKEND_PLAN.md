@@ -4,9 +4,9 @@ This is the single execution roadmap for the backend. Prompts are given in chat 
 
 ## Working state
 - **Current milestone:** M8 — Backend hardening for real pilot
-- **Current sprint:** B8.6.3.3 — NuGet vulnerability remediation
-- **Status:** IN_PROGRESS — minimal Pkcs patch and complete standard local gate validated without security-warning exceptions; stop for independent audit. B8.6.3/B8.6.3.1/B8.6.3.2 are not externally accepted. All opt-ins remain disabled by default; commercial routes stay unpublished. A18 controlled physical purge is NOT_IMPLEMENTED; A20 is a FRONTEND_DEPENDENCY. B8.2 targets remain NOT_MEASURED; B8.3 recovery and B8.4 deployment/monitor validation remain external. Real Google/TLS/reverse proxy/hosting and patched hosting runtime verification remain pending. M8 is not DONE; SUNAT/SIRE and B7.3/B7.4 remain voluntarily deferred.
-- **Next gate:** Audit B8.6.3.3 and verify patched .NET/ASP.NET Core runtime in hosting; execute initial-status and restricted-runtime B8.6.3.1 creation/receipt/rollback/concurrency/RLS tests externally alongside existing license tests. Validate real Google sessions, protected allowlist/activation/restart and TLS/reverse proxy/hosting controls. B8.6.4 is not started.
+- **Current sprint:** B8.6.4 — Secure HTTP first Owner provisioning
+- **Status:** IN_PROGRESS — first Owner route integrated behind existing default-off platform activation; stop for audit. B8.6.3.x and B8.6.4 are not externally accepted. Commercial routes stay unpublished. A18 controlled physical purge is NOT_IMPLEMENTED; A20 is a FRONTEND_DEPENDENCY. B8.2 targets remain NOT_MEASURED; B8.3 recovery and B8.4 deployment/monitor validation remain external. Real Google/TLS/reverse proxy/hosting and patched hosting runtime verification remain pending. M8 is not DONE; SUNAT/SIRE and B7.3/B7.4 remain voluntarily deferred.
+- **Next gate:** Audit B8.6.4; execute PostgreSQL 18 bootstrap lock/concurrency/rollback/RLS tests alongside B8.6.3.1 creation receipts and initial-status/license regressions. Validate real Google sessions, protected allowlist/activation/restart, patched .NET/ASP.NET Core hosting runtime and TLS/reverse proxy/ACL controls. No later sprint is started.
 
 Local policy: this machine has no Docker and will not install it. Do not check/start Docker or run PostgreSQL/Testcontainers here. B0.1 is complete locally. Keep real PostgreSQL integration tests for another environment; they are not part of the local gate and must not be reported as passed without execution.
 
@@ -509,7 +509,7 @@ New unit/HTTP cases exercise each admitted/rejected state, zero reservation/stor
 ### B8.6.3.3 — NuGet vulnerability remediation
 **Requirements:** restore the standard gate and preserve FR-RPT-001..005 PDF/export contracts; no business, schema, authorization or HTTP changes.
 
-**Status:** IN_PROGRESS — minimal patch and standard local gate validated; stop for independent audit. B8.6.4 is not started; M8 is not DONE.
+**Status at B8.6.3.3 handoff:** IN_PROGRESS — minimal patch and standard local gate validated; stop for independent audit. At that handoff B8.6.4 was not started; M8 is not DONE.
 
 **Confirmed dependency graph and advisories:** before remediation, PDFsharp 6.2.4 was the sole NuGet package introducing System.Security.Cryptography.Pkcs with minimum >= 8.0.1, resolved to vulnerable 8.0.1. Infrastructure owns PDFsharp; Api, Performance, Recovery, UnitTests and IntegrationTests receive it through their existing project references. Multiple project-reference paths converge on Infrastructure/PDFsharp; no second introducing package was found in any restored net10.0 target. Domain, Application, SharedKernel and ArchitectureTests do not resolve Pkcs. NU1902 identifies GHSA-2fmv-rv2c-59x7 (moderate); NU1903 identifies GHSA-846f-f764-76mx (high), observed in the original NuGet audit.
 
@@ -523,7 +523,26 @@ Built-output inspection confirms the distinction: Infrastructure's library deps 
 
 The full unit run includes ReportExportRenderingTests (real PDFsharp PDF generation, embedded font/Unicode, pagination, totals and reading via PdfPig and PDFsharp PdfReader), ReportExportAuthorizationTests and XLSX/PDF regressions. It also includes B8.6.3.1 CreateTenantIdempotencyTests, B8.6.3.2 PlatformTenantCreationHttpTests, PlatformLicenseHttpTests, LicenseTests and existing application lifecycle tests for renewal/suspension/reactivation. Api/Application/Domain/Infrastructure and all remaining solution projects build. This is local functional/package evidence on runtime 10.0.12, not real PostgreSQL, hosting/runtime patch or Google acceptance.
 
-All real PostgreSQL 18 evidence (including B8.6.3.1/B8.6.3.2), Google OIDC, TLS/reverse proxy/hosting, B8.2/B8.3/B8.4 external gates, A18/A20 and first Owner HTTP remain pending. No runtime/hosting patch, real provider test or database acceptance is claimed.
+At B8.6.3.3 handoff, all real PostgreSQL 18 evidence (including B8.6.3.1/B8.6.3.2), Google OIDC, TLS/reverse proxy/hosting, B8.2/B8.3/B8.4 external gates, A18/A20 and first Owner HTTP remained pending; B8.6.4 below now implements only the latter, pending audit/external validation. No runtime/hosting patch, real provider test or database acceptance is claimed.
+
+### B8.6.4 — Secure HTTP first Owner provisioning
+**Requirements:** FR-AUT-001..005, FR-LIC-001..005; BR-001/011/016/017/020 and historical first Owner bootstrap restriction.
+
+**Status:** IN_PROGRESS — implementation integrated; stop for independent audit. No production-readiness declaration or later sprint.
+
+Only `POST /platform/tenants/{tenantId}/bootstrap-owner` is added. Exact bounded JSON contains only `userId`, a nonempty 36-character D UUID; route supplies tenant, server fixes Owner and the native session supplies the independently approved Superadmin actor. Reuses Production/Google/platform opt-ins (default off), HTTPS/Host/Origin/trusted-proxy boundary, native CSRF and shared administrative quota. Success is 201 with only membershipId/tenantId/userId/role/isActive/createdAt, without Location or replay claims. Central sanitized Problem Details and prior authorization prevent private existence disclosure to unauthorized callers.
+
+The recipient first registers through existing Google login and obtains their own MediPOS UUID via `GET /auth/me`. The Superadmin verifies recipient and target botica through an authorized operational channel; UUID knowledge and email are not authority. No public identity search, invitations or new authentication flow is introduced. The operator gains no commercial membership. README documents the exact procedure and error contract.
+
+The existing CreateMembershipHandler, identity store and license provisioning transaction remain the sole implementation. Its explicit bootstrap entry cannot fall back to ordinary Owner administration after platform revocation. Checks repeat after the license row lock and before commit; expiration is checked again after audited save. Concurrent license suspension serializes on that row; a suspension committed first prevents bootstrap, while an earlier committed bootstrap precedes a later suspension. Suspended licenses must be reactivated through the existing flow first. Membership plus authenticated audit are atomic. Any historical Owner, including inactive, permanently closes bootstrap. Ordinary employees, second Owner, branches and schedules remain outside this HTTP scope.
+
+Concurrent operators are coordinated by PostgreSQL, not the in-memory admission limiter. After a committed first creation, every retry receives 403 `access.bootstrap_denied`, including the same target; it is not a successful replay. After ambiguous response loss, authorized support must reconcile existing membership/history/audit read-only against the verified tenant/recipient/operator and incident evidence. A denial alone does not identify the winning target or prove the caller's prior success. Never delete/deactivate history to reopen bootstrap. No parallel receipt ledger, support endpoint, schema or migration is added; Pkcs 8.0.2 and security audit policies remain unchanged.
+
+**Local validation (2026-10-14):** `dotnet restore`, `dotnet build` (**0 warnings/errors**), `dotnet test tests/MediPOS.UnitTests` (**2314 passed, 0 failed/skipped; 50 new cases**), `dotnet test tests/MediPOS.ArchitectureTests` (**8 passed, 0 failed/skipped**) and `dotnet format --verify-no-changes` passed without security-warning exceptions. Offline `dotnet ef migrations has-pending-model-changes --project src/MediPOS.Infrastructure --startup-project src/MediPOS.Infrastructure --no-build` reports **none**. The complete solution build compiles the integration suite without executing it. The initial targeted HTTP/application run passed 120 tests before adding the final missing-route case; the full run includes all cases and existing regressions.
+
+Eight PostgreSQL cases are prepared for two actual approved operators with observed backend lock wait, exactly one historical Owner/audit and fresh-scope lost-response denial, inactive history, rollback after real audited save/persistence failure/license expiry/session expiry, suspension or expiration during lock wait, missing global user, restricted role and RLS without EF filters. These are **NOT EXECUTED** locally. Existing PostgreSQL commercial/security regressions are retained. No Git/GitHub or local database/container operations occurred.
+
+**Pending:** real PostgreSQL 18 including B8.6.3.1 and initial-status cases; genuine Google OIDC, patched hosting runtime, TLS/reverse proxy/ACL, external B8.2/B8.3/B8.4, A18 physical purge, A20 frontend, ordinary employee administration, commercial HTTP and subsequent work. M8 remains IN_PROGRESS.
 
 **M8 gate:** backend is ready for controlled real-business pilot only after all mandatory implementation and external acceptance gates pass.
 

@@ -14,13 +14,21 @@ public sealed record CreateMembershipCommand(Guid TenantId, Guid UserId, TenantR
 public sealed class CreateMembershipHandler(IIdentityAccessStore store, ITenantLicenseProvisioning provisioning, TimeProvider timeProvider,
     ITenantOperationAuthorizer authorization, IPlatformAdministration administration)
 {
-    public async Task<MembershipDetails> HandleAsync(CreateMembershipCommand command, CancellationToken cancellationToken)
+    public Task<MembershipDetails> HandleAsync(CreateMembershipCommand command, CancellationToken cancellationToken) =>
+        ExecuteAsync(command, false, cancellationToken);
+
+    // HTTP platform provisioning must never fall back to ordinary Owner administration
+    // when platform approval expires between admission and executing this handler.
+    public Task<MembershipDetails> BootstrapOwnerAsync(Guid tenantId, Guid userId, Guid actorId, CancellationToken cancellationToken) =>
+        ExecuteAsync(new(tenantId, userId, TenantRole.Owner, actorId), true, cancellationToken);
+
+    private async Task<MembershipDetails> ExecuteAsync(CreateMembershipCommand command, bool requireBootstrap, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(command);
         AuditTrail.RequireActor(command.ActorId);
         if (command.TenantId == Guid.Empty || command.UserId == Guid.Empty || !Enum.IsDefined(command.Role))
             throw new ApplicationErrorException(ApplicationErrors.InvalidRequest);
-        var bootstrap = (await administration.GetAuthorizedActorAsync(cancellationToken).ConfigureAwait(false)).HasValue;
+        var bootstrap = requireBootstrap || (await administration.GetAuthorizedActorAsync(cancellationToken).ConfigureAwait(false)).HasValue;
         if (bootstrap)
             await PlatformAdministrationAccess.RequireAsync(administration, command.ActorId, cancellationToken).ConfigureAwait(false);
         else
@@ -54,7 +62,10 @@ public sealed class CreateMembershipHandler(IIdentityAccessStore store, ITenantL
             null, AuditTrail.MembershipState(membership));
         await store.AddMembershipAsync(membership, audit, cancellationToken).ConfigureAwait(false);
         if (bootstrap)
+        {
             await PlatformAdministrationAccess.RequireAsync(administration, command.ActorId, cancellationToken).ConfigureAwait(false);
+            if (!scope.AllowsOperation(timeProvider.GetUtcNow())) throw new ApplicationErrorException(ApplicationErrors.LicenseDenied);
+        }
         else
             await authorization.RequireAsync(command.TenantId, null, command.ActorId, TenantOperation.Administration, cancellationToken).ConfigureAwait(false);
         await scope.CompleteAsync(cancellationToken).ConfigureAwait(false);
