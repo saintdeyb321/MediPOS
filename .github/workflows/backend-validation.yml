@@ -1,0 +1,231 @@
+name: Backend validation - PostgreSQL 18
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: medipos-backend-validation
+  cancel-in-progress: false
+
+jobs:
+  backend:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    defaults:
+      run:
+        shell: bash
+        working-directory: backend
+    env:
+      DOTNET_CLI_TELEMETRY_OPTOUT: '1'
+      DOTNET_NOLOGO: '1'
+      DOTNET_INSTALL_DIR: ${{ runner.temp }}/medipos-dotnet
+      NuGetAudit: 'true'
+      NuGetAuditMode: all
+      NuGetAuditLevel: low
+      TreatWarningsAsErrors: 'true'
+      # No repository/environment/production secrets are passed to this job.
+      Authentication__Google__Enabled: 'false'
+      PlatformAdministration__Enabled: 'false'
+      PlatformApi__Enabled: 'false'
+
+    steps:
+      - name: Read selected commit
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Install pinned .NET 10 SDK
+        id: sdk
+        uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5.4.0
+        with:
+          dotnet-version: '10.0.402'
+
+      - name: Record execution identity
+        id: identity
+        run: |
+          printf 'Tested commit: %s\n' "$GITHUB_SHA"
+          dotnet --info
+          dotnet --list-runtimes
+          test "$(dotnet --version)" = '10.0.402'
+          mkdir -p "$RUNNER_TEMP/medipos-results"
+
+      - name: Restore with NuGet Audit
+        id: restore
+        run: dotnet restore
+
+      - name: Build all existing projects
+        id: build
+        run: dotnet build
+
+      - name: Check resolved packages and vulnerability audit
+        id: audit
+        run: |
+          dotnet package list --vulnerable --include-transitive --no-restore --format json > "$RUNNER_TEMP/medipos-results/nuget.json"
+          python3 - <<'PY'
+          import json, os
+          from pathlib import Path
+          report = json.loads((Path(os.environ['RUNNER_TEMP']) / 'medipos-results/nuget.json').read_text())
+          if not report.get('projects') or report.get('problems'):
+              raise SystemExit('NuGet audit incomplete; no dependency approval.')
+          vulnerable = []
+          for project in report['projects']:
+              for framework in project.get('frameworks', []):
+                  for kind in ('topLevelPackages', 'transitivePackages'):
+                      for package in framework.get(kind, []):
+                          if package.get('vulnerabilities'):
+                              vulnerable.append(package['id'])
+          if vulnerable:
+              raise SystemExit('Vulnerable packages: ' + ', '.join(sorted(set(vulnerable))))
+          graphs = 0
+          for path in Path('.').glob('**/obj/project.assets.json'):
+              libraries = json.loads(path.read_text())['libraries']
+              pkcs = [key for key in libraries if key.lower().startswith('system.security.cryptography.pkcs/')]
+              if pkcs:
+                  if pkcs != ['System.Security.Cryptography.Pkcs/8.0.2']:
+                      raise SystemExit('Unexpected resolved Pkcs version; review dependency graph.')
+                  graphs += 1
+          if not graphs:
+              raise SystemExit('Missing Pkcs resolution evidence.')
+          print(f'NuGet Audit: no vulnerable packages in {len(report["projects"])} projects; Pkcs 8.0.2 in {graphs} graphs.')
+          PY
+
+      # VSTest: xunit.v3.mtp-off + xunit.runner.visualstudio + Microsoft.NET.Test.Sdk.
+      # Raw TRX/console output stays ephemeral; only safe counts/method names are published.
+      - name: Unit tests
+        id: unit
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        timeout-minutes: 10
+        run: |
+          dotnet test tests/MediPOS.UnitTests --logger 'trx;LogFileName=unit.trx' --results-directory "$RUNNER_TEMP/medipos-results" > "$RUNNER_TEMP/medipos-results/unit.console" 2>&1
+
+      - name: Architecture tests
+        id: architecture
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        run: |
+          dotnet test tests/MediPOS.ArchitectureTests --logger 'trx;LogFileName=architecture.trx' --results-directory "$RUNNER_TEMP/medipos-results" > "$RUNNER_TEMP/medipos-results/architecture.console" 2>&1
+
+      - name: Verify formatting
+        id: format
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        run: dotnet format --verify-no-changes
+
+      - name: Check external runner container infrastructure
+        id: containers
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        timeout-minutes: 5
+        run: |
+          docker info --format 'Docker server: {{.ServerVersion}}'
+          # Same image used by PostgreSqlFixture; no service container or permanent DB.
+          docker pull postgres:18-alpine
+          docker image inspect postgres:18-alpine --format 'PostgreSQL image: {{.Id}} {{json .RepoDigests}}'
+
+      - name: All real PostgreSQL 18 regressions
+        id: postgres
+        if: ${{ !cancelled() && steps.build.outcome == 'success' && steps.containers.outcome == 'success' }}
+        timeout-minutes: 35
+        run: |
+          # No filter, no parallel override: preserve the PostgreSQL collection fixture.
+          # Tests create synthetic identities/ephemeral passwords and migrate only their own container.
+          dotnet test tests/MediPOS.IntegrationTests --no-build --no-restore --logger 'trx;LogFileName=postgres.trx' --results-directory "$RUNNER_TEMP/medipos-results" > "$RUNNER_TEMP/medipos-results/postgres.console" 2>&1
+
+      - name: Publish sanitized gate and suite evidence
+        if: ${{ always() && steps.identity.outcome == 'success' }}
+        env:
+          GATE_STEPS: ${{ toJSON(steps) }}
+        run: |
+          python3 - <<'PY'
+          import collections, json, os, re, xml.etree.ElementTree as ET
+          from pathlib import Path
+          root = Path(os.environ['RUNNER_TEMP']) / 'medipos-results'
+          lines = ['# Backend validation', 'Tested commit: ' + os.environ['GITHUB_SHA']]
+          errors = []
+          def emit(text):
+              print(text)
+              lines.append(text)
+          for name in ('sdk', 'restore', 'build', 'audit', 'unit', 'architecture', 'format', 'containers', 'postgres'):
+              outcome = json.loads(os.environ['GATE_STEPS']).get(name, {}).get('outcome', 'not_executed')
+              emit(f'{name}: {outcome}')
+              if outcome != 'success':
+                  errors.append(name + ': gate not passed')
+          ns = {'t': 'http://microsoft.com/schemas/VisualStudio/TeamTest/2010'}
+          integration = []
+          for name in ('unit', 'architecture', 'postgres'):
+              path = root / (name + '.trx')
+              if not path.is_file():
+                  emit(name + ': NO_RESULT (skipped, aborted or runner failure; not approved)')
+                  errors.append(name + ': missing TRX')
+                  continue
+              document = ET.parse(path)
+              methods = {test.attrib['id']: test.find('t:TestMethod', ns).attrib
+                         for test in document.findall('.//t:TestDefinitions/t:UnitTest', ns)}
+              rows = []
+              for result in document.findall('.//t:Results/t:UnitTestResult', ns):
+                  method = methods.get(result.attrib['testId'], {})
+                  suite = method.get('className', 'Unknown').split(',')[0]
+                  method_name = method.get('name', 'Unknown')
+                  # Never print display names/theory arguments, stdout, exceptions or connection strings.
+                  if not re.fullmatch(r'[A-Za-z0-9_.+]+', suite + '.' + method_name):
+                      raise SystemExit('Unexpected test identifier; refusing unsafe log output.')
+                  outcome = result.attrib.get('outcome', 'Unknown')
+                  rows.append((suite, method_name, outcome))
+                  if outcome not in ('Passed', 'NotExecuted'):
+                      detail = ''.join(result.itertext())
+                      category = 'UNCLASSIFIED_TEST_FAILURE (review system/test defect)'
+                      if 'Docker.DotNet' in detail or 'Docker is either not running' in detail:
+                          category = 'RUNNER_CONTAINER_FAILURE'
+                      elif 'PostgreSqlFixture.InitializeAsync' in detail:
+                          category = 'FIXTURE_SETUP_FAILURE (migration/grants or runner; review required)'
+                      elif 'Xunit.Sdk.' in detail or 'Assert.' in detail:
+                          category = 'ASSERTION_FAILURE (review system/test defect)'
+                      emit(f'FAILED {suite}.{method_name}: {category}')
+              counts = collections.Counter(row[2] for row in rows)
+              counters = document.find('.//t:ResultSummary/t:Counters', ns)
+              total = int(counters.attrib['total']) if counters is not None else -1
+              executed = int(counters.attrib['executed']) if counters is not None else -1
+              emit(f'{name}: total={total}, executed={executed}, passed={counts["Passed"]}, failed={sum(v for k,v in counts.items() if k not in ("Passed", "NotExecuted"))}, skipped={counts["NotExecuted"]}')
+              if not rows or total != len(rows) or executed != total or counts['Passed'] != total:
+                  errors.append(name + ': incomplete, skipped or failed tests')
+              if name == 'postgres':
+                  integration = rows
+                  version = re.search(r'MEDIPOS_POSTGRES_VERSION=(18\.[0-9]+(?:\.[0-9]+)?)', path.read_text())
+                  if version:
+                      emit('Actual PostgreSQL server version: ' + version[1])
+                  else:
+                      emit('Actual PostgreSQL server version: NOT_VERIFIED')
+                      errors.append('missing actual PostgreSQL 18 smoke evidence')
+          # First report the audited critical areas, then every other class; each test ran once.
+          priority = ('MediPOS.IntegrationTests.Tenancy.', 'MediPOS.IntegrationTests.Modules.TenancyLicensing.', 'MediPOS.IntegrationTests.Modules.IdentityAccess.')
+          for suite in sorted({row[0] for row in integration}, key=lambda name: (not name.startswith(priority), name)):
+              selected = [row for row in integration if row[0] == suite]
+              counts = collections.Counter(row[2] for row in selected)
+              emit(f'SUITE {suite}: total={len(selected)}, passed={counts["Passed"]}, failed={sum(v for k,v in counts.items() if k not in ("Passed", "NotExecuted"))}, skipped={counts["NotExecuted"]}')
+          for sprint, class_name, initial in (
+              ('B8.6.3.1', 'TenantCreationIdempotencyPersistenceTests', False),
+              ('B8.6.3.2', 'TenantCreationIdempotencyPersistenceTests', True),
+              ('B8.6.4', 'PlatformBootstrapOwnerPersistenceTests', None)):
+              selected = [row for row in integration if row[0].endswith('.' + class_name)
+                          and (initial is None or row[1].startswith('InitialStatusAdmission') == initial)]
+              passed = bool(selected) and all(row[2] == 'Passed' for row in selected)
+              emit(f'{sprint}: {"PASSED" if passed else "NOT_APPROVED"}, cases={len(selected)}, passed={sum(row[2] == "Passed" for row in selected)}')
+              if not passed:
+                  errors.append(sprint + ': required evidence not passed')
+          emit('Synthetic sessions do not validate real Google OIDC, TLS, hosting or reverse proxy; B8.2/B8.3/B8.4 external gates and A18/A20 remain pending.')
+          emit('Overall: ' + ('NOT_APPROVED' if errors else 'CODE_AND_POSTGRESQL_GATE_PASSED (not production acceptance)'))
+          Path(os.environ['GITHUB_STEP_SUMMARY']).write_text('\n\n'.join(lines) + '\n')
+          if errors:
+              raise SystemExit('Gate incomplete or failed: ' + '; '.join(errors))
+          PY
+
+      - name: Clean ephemeral test resources
+        if: ${{ always() && steps.identity.outcome == 'success' }}
+        timeout-minutes: 3
+        run: |
+          # Fresh GitHub-hosted runner only. Ryuk/fixture disposal is the first cleanup layer.
+          # Remove remaining Testcontainers containers plus anonymous volumes; never inspect their env.
+          docker ps -aq --filter label=org.testcontainers=true | xargs --no-run-if-empty docker rm -f -v
+          rm -rf -- "$RUNNER_TEMP/medipos-results"

@@ -270,7 +270,8 @@ public sealed class TenantCreationIdempotencyPersistenceTests(PostgreSqlFixture 
     private async Task<Guid> User()
     {
         await using var services = Services(Guid.NewGuid()); await using var scope = services.CreateAsyncScope();
-        scope.ServiceProvider.GetRequiredService<IdentityAccessTestSetup.TestGoogleIdentitySource>().Identity = new(Guid.NewGuid().ToString("N"), "synthetic@example.test", "Synthetic operator");
+        ((IdentityAccessTestSetup.TestGoogleIdentitySource)scope.ServiceProvider.GetRequiredService<IVerifiedGoogleIdentitySource>()).Identity =
+            new(Guid.NewGuid().ToString("N"), "synthetic@example.test", "Synthetic operator");
         return (await scope.ServiceProvider.GetRequiredService<UpsertGoogleUserHandler>().HandleAsync(Token)).Id;
     }
     private static AsyncServiceScope Scope(ServiceProvider services, Guid actor)
