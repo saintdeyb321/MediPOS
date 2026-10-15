@@ -27,6 +27,31 @@ public sealed class CommercialDirectoryPostgreSqlTests(PostgreSqlFixture fixture
 {
     private static CancellationToken Token => TestContext.Current.CancellationToken;
 
+    [Fact]
+    public async Task SelfDirectoryWithoutMembershipReturnsEmptyAndClearsDiscoveryScope()
+    {
+        await using var services = IdentityAccessTestSetup.CreateServices(fixture);
+        await using var scope = services.CreateAsyncScope();
+        var context = scope.ServiceProvider.GetRequiredService<MediPosDbContext>();
+        await context.Database.OpenConnectionAsync(Token);
+        var reader = scope.ServiceProvider.GetRequiredService<IMyTenantDirectoryReader>();
+        var unassignedUser = Guid.NewGuid();
+        for (var attempt = 0; attempt < 2; attempt++)
+        {
+            var page = await reader.ReadAsync(unassignedUser, null, 50, Token);
+            Assert.Empty(page.Items);
+            Assert.Null(page.NextAfterTenantId);
+            Assert.Null(context.SelectedTenantId);
+            await using var command = context.Database.GetDbConnection().CreateCommand();
+            command.CommandText = "SELECT COALESCE(current_setting('medipos.discovery_user_id', true), '')";
+            Assert.Equal("", await command.ExecuteScalarAsync(Token));
+            command.CommandText = "SELECT row_security_active('memberships'::regclass)";
+            Assert.Equal(true, await command.ExecuteScalarAsync(Token));
+            command.CommandText = "SELECT count(*) FROM memberships";
+            Assert.Equal(0L, await command.ExecuteScalarAsync(Token));
+        }
+    }
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]

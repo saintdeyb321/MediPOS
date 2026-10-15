@@ -18,7 +18,7 @@ internal sealed class MyTenantDirectoryReader(MediPosDbContext context, MediPOS.
         await using var command = new NpgsqlCommand("""
             SELECT set_config('medipos.discovery_user_id', @user_text, true);
             SELECT m.tenant_id, t.trading_name, m.role
-            FROM memberships m JOIN tenants t ON t.id = m.tenant_id
+            FROM memberships m JOIN tenants t ON t.tenant_id = m.tenant_id
             WHERE m.user_id = @user_id AND m.is_active
               AND (@after IS NULL OR m.tenant_id > @after)
             ORDER BY m.tenant_id LIMIT @limit
