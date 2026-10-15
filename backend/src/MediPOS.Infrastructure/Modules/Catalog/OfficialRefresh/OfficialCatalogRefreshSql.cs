@@ -147,7 +147,7 @@ internal static class OfficialCatalogRefreshSql
              NEW.source_version <> r.source_version OR NEW.official_identity <> r.official_identity OR NEW.import_batch_id <> r.import_batch_id OR
              NEW.staging_row_id IS DISTINCT FROM r.staging_row_id OR NEW.curation_id IS DISTINCT FROM r.curation_id OR
              NEW.previous_snapshot <> r.previous_snapshot OR NEW.proposed_snapshot IS DISTINCT FROM r.proposed_snapshot OR
-             NEW.approved_snapshot IS DISTINCT FROM CASE WHEN r.status IN ('approved','applied') THEN r.proposed_snapshot ELSE NULL END OR NEW.changed_fields <> r.changed_fields OR
+             NEW.approved_snapshot IS DISTINCT FROM (CASE WHEN r.status IN ('approved','applied') THEN r.proposed_snapshot ELSE NULL END) OR NEW.changed_fields <> r.changed_fields OR
              NEW.change_classification <> r.change_classification OR NEW.status <> r.status OR NEW.base_product_version <> r.base_product_version OR
              NEW.applied_product_version IS DISTINCT FROM r.applied_product_version OR NEW.referred_official_identity IS DISTINCT FROM r.referred_official_identity OR
              NEW.reviewed_by_actor_id IS DISTINCT FROM r.reviewed_by_actor_id OR NEW.reviewed_at_utc IS DISTINCT FROM r.reviewed_at_utc OR
