@@ -58,6 +58,7 @@ public partial class Program
         if (application.Environment.IsDevelopment()) application.MapOpenApi();
         application.MapBackendHealth();
         application.MapLocalFrontend();
+        application.MapPublishedFrontend();
         return application;
     }
 }
