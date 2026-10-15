@@ -114,13 +114,14 @@ public static class GoogleAuthenticationRegistration
         return settings;
     }
 
-    public static void UseGoogleAuthenticationBoundary(this WebApplication app, GoogleAuthenticationSettings settings, bool protectPlatform = false)
+    public static void UseGoogleAuthenticationBoundary(this WebApplication app, GoogleAuthenticationSettings settings, bool protectPlatform = false, bool protectTenant = false)
     {
         // Resolve through DI so the certificate is disposed with the host.
         _ = app.Services.GetRequiredService<System.Security.Cryptography.X509Certificates.X509Certificate2>();
         // Verify the socket peer before native forwarding replaces RemoteIpAddress.
         var forwardedClient = new object();
-        bool Protected(HttpContext context) => context.Request.Path.StartsWithSegments("/auth") || protectPlatform && context.Request.Path.StartsWithSegments("/platform");
+        bool Protected(HttpContext context) => context.Request.Path.StartsWithSegments("/auth") || protectPlatform && context.Request.Path.StartsWithSegments("/platform") ||
+            protectTenant && context.Request.Path.StartsWithSegments("/api");
         app.Use(async (context, next) =>
         {
             if (!Protected(context)) { await next(context); return; }
@@ -136,7 +137,8 @@ public static class GoogleAuthenticationRegistration
                 return Task.CompletedTask;
             });
             if (context.Features.Get<IHttpMaxRequestBodySizeFeature>() is { IsReadOnly: false } bodyLimit)
-                bodyLimit.MaxRequestBodySize = context.Request.Path.StartsWithSegments("/platform") ? Platform.PlatformLicenseEndpoints.MaximumBodyBytes : 16_384;
+                bodyLimit.MaxRequestBodySize = context.Request.Path.StartsWithSegments("/platform") ? Platform.PlatformLicenseEndpoints.MaximumBodyBytes :
+                    context.Request.Path.StartsWithSegments("/api") ? context.GetEndpoint()?.Metadata.GetMetadata<Tenant.TenantRequestPolicy>()?.MaximumBodyBytes ?? Tenant.TenantHttp.MaximumBodyBytes : 16_384;
             if (settings.BehindProxy)
             {
                 var peer = context.Connection.RemoteIpAddress;
@@ -156,7 +158,7 @@ public static class GoogleAuthenticationRegistration
         {
             if (!Protected(context)) { await next(context); return; }
             var callback = context.Request.Path == GoogleAuthenticationSettings.CallbackPath;
-            var platformRequest = protectPlatform && context.Request.Path.StartsWithSegments("/platform");
+            var platformRequest = protectPlatform && context.Request.Path.StartsWithSegments("/platform") || protectTenant && context.Request.Path.StartsWithSegments("/api");
             var proxy = context.Connection.RemoteIpAddress;
             if (proxy?.IsIPv4MappedToIPv6 == true) proxy = proxy.MapToIPv4();
             if (!context.Request.IsHttps || !string.Equals(context.Request.Host.Value, settings.Origin.Authority, StringComparison.OrdinalIgnoreCase) ||

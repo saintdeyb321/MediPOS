@@ -156,10 +156,16 @@ public static class DependencyInjection
         services.AddScoped<RequestTenantPurgeHandler>();
         services.AddScoped<ITenantLicenseProvisioning, TenantLicenseProvisioning>();
         services.AddScoped<IBranchesStore, BranchesStore>();
+        services.AddScoped<IBranchDirectoryReader, BranchDirectoryReader>();
+        services.AddScoped<BranchDirectoryQueries>();
         services.AddScoped<CreateLegalEntityHandler>();
         services.AddScoped<CreateBranchHandler>();
         services.AddScoped<SetMainHubBranchHandler>();
         services.AddScoped<IIdentityAccessStore, IdentityAccessStore>();
+        services.AddScoped<MediPOS.Application.Modules.IdentityAccess.Directory.IMyTenantDirectoryReader, MyTenantDirectoryReader>();
+        services.AddScoped<MediPOS.Application.Modules.IdentityAccess.Directory.ListMyTenantsHandler>();
+        services.AddScoped<MediPOS.Application.Modules.IdentityAccess.Directory.IEmployeeDirectoryReader, EmployeeDirectoryReader>();
+        services.AddScoped<MediPOS.Application.Modules.IdentityAccess.Directory.EmployeeDirectoryQueries>();
         services.AddScoped<IOperationalAccessReader, OperationalAccessReader>();
         services.AddScoped<IOpenCashSessionWriter, OpenCashSessionWriter>();
         services.AddScoped<IFindOpenCashSession, CashSessionReader>();
@@ -196,6 +202,8 @@ public static class DependencyInjection
         services.AddScoped<DeactivateMembershipHandler>();
         services.AddScoped<IGlobalCatalogStore, GlobalCatalogStore>();
         services.AddScoped<IBusinessProductStore, BusinessProductStore>();
+        services.AddScoped<ICatalogDirectoryReader, CatalogDirectoryReader>();
+        services.AddScoped<CatalogDirectoryQueries>();
         services.AddScoped<IProductSearchStore, ProductSearchStore>();
         services.AddScoped<SearchProductsHandler>();
         services.AddScoped<CreateCategoryHandler>();
@@ -212,12 +220,17 @@ public static class DependencyInjection
         services.AddScoped<ImportProductsFromExcelHandler>();
         services.AddScoped<GetImportJobResultHandler>();
         services.AddSingleton<GenerateProductImportTemplateHandler>();
+        services.AddScoped<GenerateTenantProductImportTemplateHandler>();
 
         services.AddScoped<IPurchasingStore, PurchasingStore>();
+        services.AddScoped<IPurchaseDirectoryReader, PurchaseDirectoryReader>();
+        services.AddScoped<PurchaseDirectoryQueries>();
         services.AddScoped<IPurchaseReceiptWriter, PurchaseReceiptWriter>();
         services.AddScoped<IStockAdjustmentTransaction, StockAdjustmentTransaction>();
         services.AddScoped<IInventoryReadStore, InventoryReadStore>();
         services.AddScoped<AdjustStockHandler>();
+        services.AddScoped<IInventoryDirectoryReader, InventoryDirectoryReader>();
+        services.AddScoped<InventoryDirectoryQueries>();
         services.AddScoped<PlanFefoAllocationHandler>();
         services.AddScoped<GetExpiringLotsHandler>();
         services.AddScoped<CreateSupplierHandler>();
@@ -275,6 +288,7 @@ public static class DependencyInjection
         services.AddScoped<GetActiveCashSessionsHandler>();
         services.AddScoped<CloseCashSessionHandler>();
         services.AddScoped<GetCashSessionReconciliationHandler>();
+        services.AddScoped<CashSessionStatusQueries>();
         services.AddScoped<DispatchCashTransferHandler>();
         services.AddScoped<ReceiveCashTransferHandler>();
         services.AddScoped<GetCashTransferHandler>();
@@ -299,6 +313,7 @@ public static class DependencyInjection
         services.AddScoped<VoidSaleHandler>();
         services.AddScoped<ReplaceSaleLinesHandler>();
         services.AddScoped<GetSaleDraftHandler>();
+        services.AddScoped<GetSaleStateHandler>();
         services.AddScoped<GetInternalTicketHandler>();
         services.AddScoped<RequestTransferHandler>();
         services.AddScoped<ApproveTransferHandler>();

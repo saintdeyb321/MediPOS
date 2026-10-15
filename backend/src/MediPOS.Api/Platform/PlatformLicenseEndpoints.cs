@@ -44,6 +44,15 @@ public static class PlatformLicenseEndpoints
             .WithName("medipos.platform.license.reactivate");
         app.MapPost("/platform/tenants", Create).RequireAuthorization().WithName("medipos.platform.tenant.create");
         app.MapPost("/platform/tenants/{tenantId}/bootstrap-owner", BootstrapOwner).RequireAuthorization().WithName("medipos.platform.tenant.bootstrap_owner");
+        app.MapPost("/platform/catalog/categories", async (HttpContext context, MediPOS.Application.Modules.Catalog.CreateCategory.CreateCategoryHandler handler) =>
+        {
+            var actor = await PlatformAdministrationAccess.RequireAsync(context.RequestServices.GetRequiredService<IPlatformAdministration>(), null, context.RequestAborted);
+            using var lease = context.RequestServices.GetRequiredService<PlatformApiRateLimiter>().AttemptAcquire(actor);
+            if (!lease.IsAcquired) throw new HttpBoundaryException(429, "platform.rate_limited");
+            await ValidateCsrf(context);
+            var request = await Read<CategoryRequest>(context);
+            return Results.Json(await handler.HandleAsync(new(request.Name), context.RequestAborted), statusCode: 201);
+        }).RequireAuthorization().Accepts<CategoryRequest>("application/json").Produces<MediPOS.Application.Modules.Catalog.CategoryDetails>(201).WithName("medipos.platform.category.create");
     }
 
     private static async Task<IResult> BootstrapOwner(HttpContext context, CreateMembershipHandler handler)
@@ -156,6 +165,7 @@ public static class PlatformLicenseEndpoints
     private sealed record ReactivateRequest([property: JsonRequired] string Status);
     private sealed record SuspendRequest;
     private sealed record BootstrapOwnerRequest([property: JsonRequired] string UserId);
+    private sealed record CategoryRequest([property: JsonRequired] string Name);
     private sealed record BootstrapOwnerResponse(Guid MembershipId, Guid TenantId, Guid UserId, string Role, bool IsActive, DateTimeOffset CreatedAt);
     private sealed record LicenseResponse(Guid TenantId, Guid LicenseId, string Status, DateTimeOffset StartsAt, DateTimeOffset ExpiresAt, int MaxBranches);
 }

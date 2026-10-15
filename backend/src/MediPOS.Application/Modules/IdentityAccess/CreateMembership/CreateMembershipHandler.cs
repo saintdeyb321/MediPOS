@@ -22,13 +22,18 @@ public sealed class CreateMembershipHandler(IIdentityAccessStore store, ITenantL
     public Task<MembershipDetails> BootstrapOwnerAsync(Guid tenantId, Guid userId, Guid actorId, CancellationToken cancellationToken) =>
         ExecuteAsync(new(tenantId, userId, TenantRole.Owner, actorId), true, cancellationToken);
 
-    private async Task<MembershipDetails> ExecuteAsync(CreateMembershipCommand command, bool requireBootstrap, CancellationToken cancellationToken)
+    // Commercial membership administration always requires the tenant's actual Owner role,
+    // even if the same session is independently approved for platform administration.
+    public Task<MembershipDetails> CreateTenantMembershipAsync(CreateMembershipCommand command, CancellationToken cancellationToken) =>
+        ExecuteAsync(command, false, cancellationToken, tenantAdministrationOnly: true);
+
+    private async Task<MembershipDetails> ExecuteAsync(CreateMembershipCommand command, bool requireBootstrap, CancellationToken cancellationToken, bool tenantAdministrationOnly = false)
     {
         ArgumentNullException.ThrowIfNull(command);
         AuditTrail.RequireActor(command.ActorId);
         if (command.TenantId == Guid.Empty || command.UserId == Guid.Empty || !Enum.IsDefined(command.Role))
             throw new ApplicationErrorException(ApplicationErrors.InvalidRequest);
-        var bootstrap = requireBootstrap || (await administration.GetAuthorizedActorAsync(cancellationToken).ConfigureAwait(false)).HasValue;
+        var bootstrap = !tenantAdministrationOnly && (requireBootstrap || (await administration.GetAuthorizedActorAsync(cancellationToken).ConfigureAwait(false)).HasValue);
         if (bootstrap)
             await PlatformAdministrationAccess.RequireAsync(administration, command.ActorId, cancellationToken).ConfigureAwait(false);
         else

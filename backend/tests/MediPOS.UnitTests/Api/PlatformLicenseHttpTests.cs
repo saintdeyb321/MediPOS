@@ -31,7 +31,7 @@ public sealed class PlatformLicenseHttpTests
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public async Task ApiIsIndependentlyDisabledAndEnabledCompositionOnlyAddsFivePlatformRoutes(bool omitFlag)
+    public async Task ApiIsIndependentlyDisabledAndEnabledCompositionOnlyAddsSixPlatformRoutes(bool omitFlag)
     {
         var state = new Store(); var user = Operator();
         await using (var disabled = await Host(state, user, api: false, configure: config => { if (omitFlag) config.Remove("PlatformApi:Enabled"); }))
@@ -47,7 +47,7 @@ public sealed class PlatformLicenseHttpTests
         await using var enabled = await Host(state, user);
         var expected = BaseRoutes
             .Concat(Operations.Select(operation => "/platform/tenants/{tenantId}/licenses/{licenseId}/" + operation)).Append("/platform/tenants")
-            .Append("/platform/tenants/{tenantId}/bootstrap-owner").Order().ToArray();
+            .Append("/platform/tenants/{tenantId}/bootstrap-owner").Append("/platform/catalog/categories").Order().ToArray();
         Assert.Equal(expected, Routes(enabled));
         await Login(enabled);
         foreach (var path in new[] { "/platform/tenants/purge", "/platform/catalog", "/sales", "/platform/memberships" })
