@@ -1,22 +1,47 @@
-import { ArrowRight, ArrowUpRight, CalendarDays, Check, Clock3, MapPin, ShoppingBasket, Sparkles, Store } from 'lucide-react'
+import { ArrowRight, Clock3, MapPin, ShieldCheck } from 'lucide-react'
 import { Link } from 'react-router'
-import { useRuntime, useWorkspace } from '../../hooks/useSession'
-import { PageHeading } from '../../components/ui'
-import { availableNavigation } from '../../app/navigation'
-import { roleLabels } from '../../types/contracts'
+import { useRuntime, useWorkspace, roleLabels } from '../access'
+import { Badge } from '../../shared/ui/Badge'
+import { Panel } from '../../shared/ui/Panel'
+import { PageHeader } from '../../shared/ui/PageHeader'
+import type { LucideIcon } from 'lucide-react'
+import './dashboard.css'
 
-export function DashboardPage() {
-  const w = useWorkspace(); const { preview } = useRuntime()
-  const date = new Intl.DateTimeFormat('es-PE', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'America/Lima' }).format(new Date())
+export interface DashboardShortcut { id: string; label: string; description: string; icon: LucideIcon }
+
+export function DashboardPage({ shortcuts }: { shortcuts: DashboardShortcut[] }) {
+  const w = useWorkspace()
+  const { preview } = useRuntime()
   const verified = new Intl.DateTimeFormat('es-PE', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Lima' }).format(new Date(w.access.evaluatedAtUtc))
-  const modules = availableNavigation(w.access.role).filter(item => item.id && item.id !== 'ventas')
-  return <><PageHeading eyebrow="TU DÍA, MÁS SIMPLE" title="Todo listo para empezar." description="Un solo lugar para cuidar tu botica y atender mejor." action={<span className="date-label"><CalendarDays size={16} />{date}</span>} />
-    <section className="dashboard-hero"><div className="hero-copy"><span className="hero-kicker"><Sparkles size={14} /> BIENVENIDO A TU ESPACIO</span><h2>Tu próxima buena atención<br />empieza aquí.</h2><p>Productos a la mano. Tu sucursal en orden.<br />Concéntrate en lo más importante: tus clientes.</p><Link className="button hero-button" to={`${w.base}/ventas`}>Abrir punto de venta <ArrowRight size={18} /></Link><small>Vista inicial · cobros disponibles en una próxima entrega</small></div>
-      <div className="hero-store" aria-hidden="true"><div className="hero-store-ring" /><div className="hero-receipt"><span className="receipt-icon"><Store size={31} /></span><span className="receipt-line wide" /><span className="receipt-line" /><div className="receipt-divider" /><span className="receipt-line wide" /><span className="receipt-line short" /><span className="receipt-approved"><Check size={24} /></span></div><span className="hero-floating"><Check size={15} /> Todo en su lugar</span></div>
-    </section>
-    <div className="workspace-summary"><div><span className="summary-icon"><MapPin size={19} /></span><span><small>SUCURSAL SELECCIONADA</small><strong>{w.branch.name}</strong></span></div><div><span className="summary-icon blue"><Store size={19} /></span><span><small>TU ACCESO ACTUAL</small><strong>{roleLabels[w.access.role]}</strong></span></div><div><span className="summary-icon soft"><Clock3 size={19} /></span><span><small>ÚLTIMA VERIFICACIÓN</small><strong>{verified} <span className="verified-dot" /> {preview ? 'Simulada' : 'Acceso vigente'}</strong></span></div></div>
-    <div className="dashboard-columns"><section className="panel module-panel"><div className="panel-heading"><div><h2>Tu botica, a un clic</h2><p>Herramientas para tu trabajo diario.</p></div><span className="badge neutral">{modules.length} secciones</span></div><div className="module-rows">{modules.map(item => <Link key={item.id} to={`${w.base}/${item.id}`} className="module-row"><span className={`module-icon ${item.section === 'management' ? 'blue' : ''}`}><item.icon size={21} /></span><span><strong>{item.label}</strong><small>{item.description}</small></span><span className="module-state">{item.id === 'configuracion' ? 'Ver contexto' : 'Próximamente'}</span><ArrowUpRight size={17} /></Link>)}</div></section>
-      <aside className="dashboard-aside"><section className="panel start-panel"><span className="start-icon"><ShoppingBasket size={23} /></span><h2>Una base para crecer contigo.</h2><p>Este es el primer paso de tu espacio MediPOS. Las operaciones de cada sección se habilitarán progresivamente.</p><ul><li><Check size={16} /> Selección de botica y sucursal</li><li><Check size={16} /> Acceso según tu rol actual</li><li><Clock3 size={16} /> Venta y cobro completos</li></ul><Link className="text-link" to={`${w.base}/ventas`}>Conocer el punto de venta <ArrowRight size={15} /></Link></section><div className="context-note"><span className="note-line" /><strong>Siempre en la sucursal correcta</strong><p>El inventario y la caja son independientes. Revisa la sucursal antes de comenzar.</p></div></aside>
-    </div><section className="panel activity-panel"><div className="panel-heading"><div><h2>Actividad de tu botica</h2><p>El resumen comercial se conectará en las próximas entregas.</p></div><span className="badge neutral">Sin datos consultados</span></div><div className="empty-activity"><span className="empty-chart" aria-hidden="true"><i /><i /><i /><i /><i /></span><div><h3>Aquí verás cómo va tu día.</h3><p>Mostraremos ventas y movimientos cuando estén conectados. No hay estadísticas de ejemplo.</p></div></div></section>
-  </>
+  return (
+    <>
+      <PageHeader eyebrow={w.tenantName} title="Todo listo para empezar." description="Revisa tu sucursal y elige dónde continuar." />
+      <Panel className="dashboard-action">
+        <div><Badge tone="info">Vista inicial · F1.1</Badge><h2>Punto de venta</h2><p>Abre tu espacio de atención. La búsqueda y el cobro se habilitarán en F2.</p></div>
+        <Link className="button primary" to={`${w.base}/ventas`}>Abrir punto de venta <ArrowRight size={20} aria-hidden="true" /></Link>
+      </Panel>
+      <dl className="workspace-summary">
+        <div><dt><MapPin aria-hidden="true" />Sucursal seleccionada</dt><dd>{w.branch.name}</dd></div>
+        <div><dt><ShieldCheck aria-hidden="true" />Acceso actual</dt><dd>{roleLabels[w.access.role]}<Badge tone={preview ? 'warning' : 'success'}>{preview ? 'Simulado' : 'Verificado'}</Badge></dd></div>
+        <div><dt><Clock3 aria-hidden="true" />Última verificación · Lima</dt><dd><time dateTime={w.access.evaluatedAtUtc}>{verified}</time></dd></div>
+      </dl>
+      <Panel className="module-panel">
+        <div className="panel-heading"><div><h2>Tu espacio de trabajo</h2><p>Secciones visibles según tu acceso actual.</p></div></div>
+        <div className="module-rows">
+          {shortcuts.map(item => (
+            <Link key={item.id} to={`${w.base}/${item.id}`} className="module-row">
+              <span className="module-icon"><item.icon size={22} aria-hidden="true" /></span>
+              <span><strong>{item.label}</strong><small>{item.description}</small></span>
+              <Badge>{item.id === 'configuracion' ? 'Ver contexto' : 'Próximamente'}</Badge>
+              <ArrowRight size={18} aria-hidden="true" />
+            </Link>
+          ))}
+        </div>
+      </Panel>
+      <Panel className="activity-panel">
+        <div><h2>Indicadores de la sucursal</h2><p>Las ventas, caja y movimientos se mostrarán cuando sus consultas estén conectadas.</p></div>
+        <Badge>Sin datos consultados</Badge>
+      </Panel>
+    </>
+  )
 }

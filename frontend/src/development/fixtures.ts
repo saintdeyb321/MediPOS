@@ -1,6 +1,6 @@
 // Imported only from an import.meta.env.DEV branch. Never a production auth fallback.
-import { ApiError } from '../services/http'
-import type { MediPosService, TenantRole } from '../types/contracts'
+import { ApiError } from '../shared/api/http'
+import type { MediPosService, TenantRole } from '../features/access'
 import type { Scenario } from '../types/development'
 const userId = '019a0162-0000-7000-8000-000000000001'
 const tenantId = '019a0162-0000-7000-8000-000000000002'

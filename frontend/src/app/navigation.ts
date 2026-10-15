@@ -1,6 +1,6 @@
 import { Banknote, BarChart3, Boxes, ClipboardList, LayoutDashboard, Package, Settings2, ShoppingBasket, UsersRound } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
-import type { TenantRole } from '../types/contracts'
+import type { TenantRole } from '../features/access'
 export interface NavigationItem { id: string; label: string; description: string; icon: LucideIcon; roles: TenantRole[]; section: 'operation' | 'management' }
 export const navigation: NavigationItem[] = [
   { id: '', label: 'Inicio', description: 'Tu espacio de trabajo', icon: LayoutDashboard, roles: ['owner', 'pharmacist', 'cashier'], section: 'operation' },

@@ -1,0 +1,1 @@
+export { PosPage } from './PosPage'

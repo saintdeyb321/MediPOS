@@ -1,0 +1,64 @@
+.brand { display: inline-flex; align-items: center; gap: var(--space-3); font-size: 1.5rem; font-weight: 750; letter-spacing: -0.04em; line-height: 1.1; }
+.brand-mark { display: grid; place-items: center; width: var(--control-height); height: var(--control-height); border-radius: var(--radius-md); background: var(--primary); color: var(--on-primary); }
+.brand-accent { color: var(--primary); }
+.brand small { display: block; margin-top: var(--space-1); letter-spacing: 0; color: var(--text-muted); font-weight: 400; }
+.button { display: inline-flex; justify-content: center; align-items: center; gap: var(--space-2); min-height: var(--control-height); padding: var(--space-3) var(--space-4); border: 1px solid transparent; border-radius: var(--radius-md); font-size: var(--text-base); font-weight: 600; line-height: 1.35; transition: background 120ms; }
+.button.primary { color: var(--on-primary); background: var(--primary); }
+.button.primary:hover:not(:disabled) { background: var(--primary-hover); }
+.button.secondary { background: var(--surface); color: var(--text); border-color: var(--control-border); }
+.button.secondary:hover:not(:disabled) { background: var(--surface-muted); }
+.button.quiet { color: var(--info); background: transparent; }
+.button.quiet:hover:not(:disabled) { background: var(--info-soft); }
+.button:disabled { background: var(--surface-muted); color: var(--text-muted); border-color: var(--border); }
+.icon-button { width: var(--control-height); height: var(--control-height); padding: var(--space-2); flex-shrink: 0; }
+.text-link { color: var(--info); display: inline-flex; align-items: center; gap: var(--space-2); min-height: var(--control-height); font-size: var(--text-sm); font-weight: 600; }
+.text-link:hover { text-decoration: underline; text-underline-offset: 3px; }
+.back-link { margin-bottom: var(--space-4); }
+.eyebrow { color: var(--primary); font-size: var(--text-sm); font-weight: 700; letter-spacing: 0.06em; margin-bottom: var(--space-2); overflow-wrap: anywhere; }
+.badge { display: inline-flex; align-items: center; gap: var(--space-1); border-radius: var(--radius-sm); padding: var(--space-1) var(--space-2); font-size: var(--text-sm); line-height: 1.5; font-weight: 600; }
+.badge.neutral { background: var(--surface-muted); color: var(--text-muted); }
+.badge.success, .badge.green { background: var(--success-soft); color: var(--success); }
+.badge.info, .badge.blue { background: var(--info-soft); color: var(--info); }
+.badge.warning { background: var(--warning-soft); color: var(--warning); }
+.notice { display: flex; align-items: flex-start; gap: var(--space-3); padding: var(--space-4); border: 1px solid currentColor; border-radius: var(--radius-md); font-size: var(--text-sm); }
+.notice > svg { margin-top: 1px; }
+.notice.error { color: var(--error); background: var(--error-soft); }
+.notice.warning { color: var(--warning); background: var(--warning-soft); }
+.notice.info { color: var(--info); background: var(--info-soft); }
+.panel { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); box-shadow: var(--shadow); min-width: 0; }
+.panel-heading { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: var(--space-3); padding: var(--space-6); border-bottom: 1px solid var(--border); }
+.panel-heading p { color: var(--text-muted); font-size: var(--text-sm); margin-top: var(--space-1); }
+.page-heading { display: flex; align-items: center; justify-content: space-between; gap: var(--space-6); margin-bottom: var(--space-6); }
+.page-heading h1 { font-size: var(--text-title); letter-spacing: -0.03em; }
+.page-heading > div > p:last-child:not(.eyebrow) { color: var(--text-muted); margin-top: var(--space-2); }
+.page-heading > .button { flex-shrink: 0; }
+.state-block { min-height: 17rem; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: var(--space-8) var(--space-6); gap: var(--space-4); }
+.state-block h1 { font-size: var(--text-title); }
+.state-block h2 { font-size: var(--text-lg); }
+.state-block p { color: var(--text-muted); font-size: var(--text-sm); max-width: 30rem; }
+.state-block small { overflow-wrap: anywhere; max-width: 100%; }
+.state-icon, .module-icon { width: 3rem; height: 3rem; flex-shrink: 0; display: grid; place-items: center; color: var(--primary); background: var(--primary-soft); border-radius: var(--radius-md); }
+.state-icon.error { color: var(--error); background: var(--error-soft); }
+.state-icon.warning { color: var(--warning); background: var(--warning-soft); }
+.form-field label { display: block; font-weight: 600; margin-bottom: var(--space-2); }
+.form-field p { font-size: var(--text-sm); color: var(--text-muted); margin-top: var(--space-2); }
+.form-field .field-error { color: var(--error); }
+.input-shell { display: flex; align-items: center; gap: var(--space-3); border: 1px solid var(--control-border); background: var(--surface); border-radius: var(--radius-md); padding-inline: var(--space-3); }
+.input-shell:focus-within { outline: 3px solid var(--focus); outline-offset: 3px; }
+.input-shell:has(:disabled) { background: var(--surface-muted); }
+.input-shell.invalid { border-color: var(--error); }
+.input-shell > span { display: flex; color: var(--text-muted); }
+.input-shell input { min-width: 0; width: 100%; min-height: 3rem; background: transparent; border: 0; outline: none; color: var(--text); }
+.input-shell input::placeholder { color: var(--text-muted); opacity: 1; }
+.steps { display: flex; padding: 0; margin: 0 0 var(--space-8); list-style: none; gap: var(--space-6); }
+.steps li { display: flex; align-items: center; gap: var(--space-2); color: var(--text-muted); font-size: var(--text-sm); }
+.steps li > span { display: grid; place-items: center; width: 1.75rem; height: 1.75rem; border-radius: 50%; border: 1px solid var(--control-border); }
+.steps .active { color: var(--primary); font-weight: 700; }
+.steps .active > span { background: var(--primary); color: var(--on-primary); border-color: var(--primary); }
+.steps .complete > span { background: var(--primary-soft); color: var(--primary); }
+@media (max-width: 740px) {
+  .page-heading { flex-direction: column; align-items: flex-start; gap: var(--space-4); }
+  .steps { gap: var(--space-3); flex-wrap: wrap; }
+  .steps li { gap: var(--space-1); }
+  .panel-heading { padding: var(--space-4); }
+}

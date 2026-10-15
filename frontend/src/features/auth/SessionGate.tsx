@@ -1,6 +1,7 @@
 import { Link, Navigate, Outlet } from 'react-router'
-import { useAuthState, useSession } from '../../hooks/useSession'
-import { ErrorState, Loading } from '../../components/ui'
+import { useAuthState, useSession } from '../access'
+import { ApiErrorState as ErrorState } from '../access'
+import { LoadingState as Loading } from '../../shared/ui/States'
 
 export function SessionGate() {
   const session = useSession()

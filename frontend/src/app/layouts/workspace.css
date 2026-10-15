@@ -1,0 +1,66 @@
+.app-shell { display: flex; min-height: 100dvh; }
+.desktop-sidebar { width: 17rem; flex-shrink: 0; padding: var(--space-6) var(--space-4); background: var(--surface); border-right: 1px solid var(--border); display: flex; flex-direction: column; }
+.sidebar-brand { padding: var(--space-2) var(--space-3) var(--space-8); }
+.sidebar-tenant { display: flex; align-items: center; gap: var(--space-3); padding: var(--space-4); margin-bottom: var(--space-6); background: var(--surface-muted); border-radius: var(--radius-md); }
+.sidebar-tenant > svg { color: var(--primary); }
+.sidebar-tenant div { min-width: 0; overflow-wrap: anywhere; }
+.sidebar-tenant strong { font-size: var(--text-sm); }
+.sidebar-tenant span { display: block; font-size: var(--text-sm); color: var(--text-muted); }
+.nav-section { margin-bottom: var(--space-6); }
+.nav-section > p { color: var(--text-muted); font-size: var(--text-sm); font-weight: 650; letter-spacing: 0.05em; margin: 0 var(--space-3) var(--space-2); }
+.nav-item { display: flex; align-items: center; gap: var(--space-3); padding: var(--space-3); border-radius: var(--radius-md); font-size: var(--text-sm); min-height: var(--control-height); margin-bottom: var(--space-1); }
+.nav-item:hover { background: var(--surface-muted); }
+.nav-item.active { background: var(--primary-soft); color: var(--primary); font-weight: 650; }
+.nav-item kbd, .nav-item small { margin-left: auto; font-size: var(--text-sm); font-family: inherit; color: var(--text-muted); }
+.nav-item kbd { border: 1px solid var(--border); border-radius: var(--radius-sm); padding-inline: var(--space-1); }
+.sidebar-bottom { margin-top: auto; border-top: 1px solid var(--border); padding: var(--space-4) var(--space-3) 0; }
+.sidebar-status, .switch-tenant { display: flex; align-items: center; gap: var(--space-2); font-size: var(--text-sm); }
+.sidebar-status { color: var(--primary); font-weight: 600; }
+.sidebar-bottom p { color: var(--text-muted); font-size: var(--text-sm); margin: var(--space-2) 0; }
+.switch-tenant { color: var(--info); min-height: var(--control-height); }
+.workspace { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.workspace-header { min-height: 5rem; padding: var(--space-3) var(--space-8); background: var(--surface); border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; gap: var(--space-4); }
+.header-location { display: flex; align-items: center; gap: var(--space-6); min-width: 0; }
+.header-page { font-weight: 650; }
+.branch-switch { display: flex; align-items: center; gap: var(--space-2); color: var(--info); font-size: var(--text-sm); min-height: var(--control-height); }
+.branch-switch span { overflow-wrap: anywhere; }
+.branch-switch small { display: block; color: var(--text-muted); }
+.account-menu { position: relative; flex-shrink: 0; }
+.account-menu summary { display: flex; align-items: center; gap: var(--space-2); list-style: none; min-height: var(--control-height); border-radius: var(--radius-md); }
+.account-menu summary::-webkit-details-marker { display: none; }
+.user-avatar { width: var(--control-height); height: var(--control-height); border-radius: 50%; display: grid; place-items: center; color: var(--primary); background: var(--primary-soft); }
+.account-label { font-weight: 600; font-size: var(--text-sm); }
+.account-label small { display: block; color: var(--text-muted); font-weight: 400; }
+.account-dropdown { position: absolute; top: calc(100% + var(--space-3)); right: 0; width: min(20rem, calc(100vw - 2rem)); padding: var(--space-6); background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md); box-shadow: var(--shadow-popover); z-index: 20; }
+.account-dropdown p, .account-dropdown code { font-size: var(--text-sm); color: var(--text-muted); overflow-wrap: anywhere; }
+.account-dropdown p { margin-top: var(--space-4); }
+.account-dropdown .logout-container { display: block; margin-top: var(--space-4); border-top: 1px solid var(--border); padding-top: var(--space-2); }
+.workspace-main { flex: 1; padding: var(--space-8); width: 100%; max-width: 100rem; margin: 0 auto; }
+.workspace-footer { display: flex; justify-content: space-between; gap: var(--space-4); margin: var(--space-8); margin-top: auto; padding-top: var(--space-4); border-top: 1px solid var(--border); color: var(--text-muted); font-size: var(--text-sm); overflow-wrap: anywhere; }
+.mobile-menu-toggle { display: none; }
+.mobile-navigation:not([open]) { display: none; }
+.mobile-navigation[open] { position: fixed; inset: 0 auto 0 0; margin: 0; height: 100dvh; max-height: 100dvh; width: min(22rem, calc(100vw - 2rem)); max-width: none; border: none; padding: var(--space-6) var(--space-4); display: flex; flex-direction: column; background: var(--surface); color: var(--text); overflow-y: auto; }
+.mobile-navigation::backdrop { background: var(--overlay); }
+.mobile-navigation .sidebar-brand { padding-top: var(--space-8); }
+.close-nav { position: absolute; right: var(--space-2); top: var(--space-2); }
+.configuration-list { padding: 0 var(--space-6); }
+.configuration-list > div { display: flex; justify-content: space-between; gap: var(--space-4); padding: var(--space-4) 0; border-bottom: 1px solid var(--border); }
+.configuration-list dt { color: var(--text-muted); }
+.configuration-list dd { font-weight: 600; text-align: right; overflow-wrap: anywhere; }
+.configuration-panel > .text-link { margin: var(--space-6); }
+@media (max-width: 1099px) {
+  .desktop-sidebar { display: none; }
+  .mobile-menu-toggle { display: inline-flex; }
+  .header-page { display: none; }
+  .header-location { gap: var(--space-3); }
+}
+@media (max-width: 740px) {
+  .workspace-header { padding: var(--space-3) var(--space-4); }
+  .workspace-main { padding: var(--space-6) var(--space-4); }
+  .workspace-footer { margin: var(--space-6) var(--space-4); }
+  .workspace-footer > span:last-child, .account-label { display: none; }
+  .account-menu summary > svg { display: none; }
+  .header-location { gap: var(--space-2); }
+  .configuration-list > div { flex-direction: column; gap: var(--space-2); }
+  .configuration-list dd { text-align: left; }
+}

@@ -1,0 +1,10 @@
+// Public F1 access contract. App composes providers; features consume only this boundary.
+export { useAuthState, useRuntime, useSession, useWorkspace } from './useSession'
+export { AuthContext, RuntimeContext, WorkspaceContext } from './contexts'
+export type { Runtime, Workspace } from './contexts'
+export type { Session, Branch, AccessContext, MediPosService, OperationalAccess, TenantPage, TenantRole, TenantSummary } from './contracts'
+export { isUuid, roleLabels } from './contracts'
+export { createMediPosService } from './medipos'
+export { accessMessage, errorMessage } from './errors'
+export { ApiErrorState } from './ApiErrorState'
+export { useOperationalWorkspace } from './useOperationalWorkspace'
