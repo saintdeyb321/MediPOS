@@ -1,1 +1,5 @@
 export { PosPage } from './PosPage'
+export { salesApi } from './sales.api'
+export type { SaleState, SaleLine } from './sales.api'
+export { ticketsApi } from './tickets.api'
+export type { InternalTicket } from './tickets.api'

@@ -1,9 +1,12 @@
+import { parseExactJson, stringifyExactJson } from './exactJson'
+
 export class ApiError extends Error {
   readonly status: number
   readonly code: string
   readonly traceId?: string
-  constructor(status: number, code: string, traceId?: string) {
-    super(code); this.name = 'ApiError'; this.status = status; this.code = code; this.traceId = traceId
+  readonly outcomeUnknown: boolean
+  constructor(status: number, code: string, traceId?: string, outcomeUnknown = false) {
+    super(code); this.name = 'ApiError'; this.status = status; this.code = code; this.traceId = traceId; this.outcomeUnknown = outcomeUnknown
   }
 }
 export type UnauthorizedListener = () => void
@@ -15,43 +18,62 @@ export class HttpClient {
     this.listeners.add(listener)
     return () => { this.listeners.delete(listener) }
   }
-  async request(path: string, options: { method?: 'GET' | 'POST' | 'PUT'; body?: unknown; signal?: AbortSignal } = {}): Promise<unknown> {
+  async request(path: string, options: { method?: 'GET' | 'POST' | 'PUT'; body?: unknown; signal?: AbortSignal; exactNumbers?: boolean } = {}): Promise<unknown> {
     // Deliberately relative-only: production uses a single HTTPS origin, not a configurable API host.
     if (!/^\/(api|auth)\//.test(path) || path.includes('\\') || /[\r\n]/.test(path)) throw new ApiError(0, 'client.invalid_path')
     if (window.location.protocol !== 'https:') throw new ApiError(0, 'client.https_required')
+    const url = new URL(path, window.location.origin)
+    if (url.origin !== window.location.origin || !/^\/(api|auth)\//.test(url.pathname)) throw new ApiError(0, 'client.invalid_path')
     const method = options.method ?? 'GET'
-    const headers = new Headers({ Accept: 'application/json' })
-    if (method !== 'GET') {
-      headers.set('X-CSRF-TOKEN', await this.csrf(options.signal))
-      if (options.body !== undefined) headers.set('Content-Type', 'application/json')
-    }
-    let response: Response
+    if (method === 'GET' && options.body !== undefined) throw new ApiError(0, 'client.invalid_request')
+    // Encode before CSRF/network I/O. Never round an unsafe JS number into a request.
+    const body = options.body === undefined ? undefined : stringifyExactJson(options.body)
+    const timeout = AbortSignal.timeout(15_000)
+    const signal = options.signal?.aborted ? options.signal : options.signal ? AbortSignal.any([options.signal, timeout]) : timeout
+    let sent = false
     try {
-      response = await this.fetcher(path, {
-        method, headers, credentials: 'same-origin', cache: 'no-store', redirect: 'error',
-        body: options.body === undefined ? undefined : JSON.stringify(options.body), signal: options.signal,
-      })
+      const headers = new Headers({ Accept: 'application/json' })
+      if (method !== 'GET') {
+        headers.set('X-CSRF-TOKEN', await this.csrf(signal))
+        if (options.body !== undefined) headers.set('Content-Type', 'application/json')
+      }
+      let response: Response
+      try {
+        sent = true
+        response = await this.fetcher(path, {
+          method, headers, credentials: 'same-origin', cache: 'no-store', redirect: 'error',
+          body, signal,
+        })
+      } catch (error) {
+        if (signal.aborted || error instanceof DOMException && error.name === 'AbortError') throw error
+        throw new ApiError(0, method === 'GET' ? 'client.network_error' : 'client.outcome_unknown', undefined, method !== 'GET')
+      }
+      if (response.status === 401) this.listeners.forEach(listener => listener())
+      if (response.status === 204 && response.ok) return undefined
+      let data: unknown
+      try {
+        if (!response.headers.get('Content-Type')?.match(/^application\/(json|problem\+json)(;|$)/i)) throw new Error('media')
+        data = options.exactNumbers ? parseExactJson(await response.text()) : await response.json()
+      } catch (error) {
+        if (signal.aborted || error instanceof DOMException && error.name === 'AbortError') throw error
+        const uncertain = method !== 'GET' && (response.ok || response.status >= 500)
+        throw new ApiError(response.ok ? 0 : response.status, uncertain ? 'client.outcome_unknown' : response.status === 401 ? 'auth.session_required' : 'client.unexpected_response', undefined, uncertain)
+      }
+      if (!response.ok) {
+        const problem = data && typeof data === 'object' ? data as Record<string, unknown> : {}
+        const code = typeof problem.code === 'string' && /^[a-z0-9_.]{1,100}$/.test(problem.code) ? problem.code : `http.${response.status}`
+        const trace = typeof problem.traceId === 'string' && /^[a-zA-Z0-9_-]{1,100}$/.test(problem.traceId) ? problem.traceId : undefined
+        throw new ApiError(response.status, code, trace, method !== 'GET' && response.status >= 500)
+      }
+      return data
     } catch (error) {
-      if (options.signal?.aborted || error instanceof DOMException && error.name === 'AbortError') throw error
-      throw new ApiError(0, 'client.network_error')
+      if (options.signal?.aborted) {
+        if (sent && method !== 'GET') throw new ApiError(0, 'client.outcome_unknown', undefined, true)
+        throw error
+      }
+      if (timeout.aborted) throw new ApiError(0, sent && method !== 'GET' ? 'client.outcome_unknown' : 'client.timeout', undefined, sent && method !== 'GET')
+      throw error
     }
-    if (response.status === 401) this.listeners.forEach(listener => listener())
-    if (response.status === 204 && response.ok) return undefined
-    let data: unknown
-    try {
-      if (!response.headers.get('Content-Type')?.match(/^application\/(json|problem\+json)(;|$)/i)) throw new Error('media')
-      data = await response.json()
-    } catch (error) {
-      if (options.signal?.aborted || error instanceof DOMException && error.name === 'AbortError') throw error
-      throw new ApiError(response.ok ? 0 : response.status, response.status === 401 ? 'auth.session_required' : 'client.unexpected_response')
-    }
-    if (!response.ok) {
-      const problem = data && typeof data === 'object' ? data as Record<string, unknown> : {}
-      const code = typeof problem.code === 'string' && /^[a-z0-9_.]{1,100}$/.test(problem.code) ? problem.code : `http.${response.status}`
-      const trace = typeof problem.traceId === 'string' && /^[a-zA-Z0-9_-]{1,100}$/.test(problem.traceId) ? problem.traceId : undefined
-      throw new ApiError(response.status, code, trace)
-    }
-    return data
   }
   async csrf(signal?: AbortSignal): Promise<string> {
     const data = await this.request('/auth/csrf', { signal })

@@ -28,3 +28,9 @@ it('keeps shared independent, features below app, and cross-feature imports publ
   }
   expect(violations).toEqual([])
 })
+
+it('keeps the real application entry independent of development scenarios', () => {
+  const source = readFileSync(resolve(root, 'app/App.tsx'), 'utf8')
+  expect(source).not.toMatch(/development|fixtures|createPreviewService|onPreview/)
+  expect(source).toContain('createMediPosService(http)')
+})

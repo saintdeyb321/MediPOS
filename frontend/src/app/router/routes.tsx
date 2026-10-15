@@ -16,10 +16,10 @@ function DashboardRoute() {
   return <DashboardPage shortcuts={shortcuts} />
 }
 
-export function AppRoutes({ onPreview }: { onPreview?: () => void }) {
+export function AppRoutes() {
   return (
     <Routes>
-      <Route path="/" element={<LoginPage onPreview={onPreview} />} />
+      <Route path="/" element={<LoginPage />} />
       <Route element={<SessionGate />}>
         <Route path="/seleccionar-botica" element={<SelectionLayout><TenantSelection /></SelectionLayout>} />
         <Route path="/boticas/:tenantId/sucursales" element={<SelectionLayout><BranchSelection /></SelectionLayout>} />

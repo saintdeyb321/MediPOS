@@ -1,5 +1,6 @@
 using MediPOS.Api.Authentication;
 using MediPOS.Api.Errors;
+using MediPOS.Api.Hosting;
 using MediPOS.Api.Observability;
 using MediPOS.Api.Platform;
 using MediPOS.Api.Tenant;
@@ -56,6 +57,7 @@ public partial class Program
 
         if (application.Environment.IsDevelopment()) application.MapOpenApi();
         application.MapBackendHealth();
+        application.MapLocalFrontend();
         return application;
     }
 }

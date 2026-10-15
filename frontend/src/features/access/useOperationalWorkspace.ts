@@ -1,4 +1,5 @@
-import { useInfiniteQuery, useQuery } from '@tanstack/react-query'
+import { useEffect } from 'react'
+import { useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useLocation, useParams } from 'react-router'
 import { isUuid } from './contracts'
 import { useRuntime, useSession } from './useSession'
@@ -7,6 +8,13 @@ export function useOperationalWorkspace() {
   const { tenantId = '', branchId = '' } = useParams(); const { service } = useRuntime()
   const { pathname } = useLocation(); const session = useSession()
   const valid = isUuid(tenantId) && isUuid(branchId)
+  const client = useQueryClient()
+  useEffect(() => {
+    const predicate = (query: { queryKey: readonly unknown[] }) => query.queryKey[0] === 'tenant' && isUuid(query.queryKey[2]) &&
+      (query.queryKey[1] !== tenantId || query.queryKey[2] !== branchId)
+    void client.cancelQueries({ predicate })
+    client.removeQueries({ predicate })
+  }, [client, tenantId, branchId])
   const tenants = useInfiniteQuery({ queryKey: ['tenants'], initialPageParam: undefined as string | undefined,
     queryFn: ({ pageParam, signal }) => service.tenants(pageParam, signal), getNextPageParam: page => page.nextAfterTenantId ?? undefined,
   })

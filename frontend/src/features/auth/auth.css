@@ -20,8 +20,6 @@
 .login-security { display: flex; gap: var(--space-3); font-size: var(--text-sm); color: var(--text-muted); margin-block: var(--space-6); }
 .login-help { padding-top: var(--space-6); border-top: 1px solid var(--border); }
 .login-help p { font-size: var(--text-sm); color: var(--text-muted); margin-top: var(--space-2); }
-.preview-link { margin-top: var(--space-6); padding-inline: 0; justify-content: flex-start; flex-wrap: wrap; text-align: left; }
-.preview-link span { flex-basis: 100%; color: var(--text-muted); font-size: var(--text-sm); font-weight: 400; }
 .login-footer { width: 100%; max-width: 27rem; display: flex; justify-content: space-between; gap: var(--space-4); font-size: var(--text-sm); color: var(--text-muted); padding-top: var(--space-6); }
 .login-footer > span { display: flex; gap: var(--space-2); align-items: center; }
 .mobile-brand { display: none; }

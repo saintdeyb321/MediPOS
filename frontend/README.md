@@ -1,6 +1,6 @@
-# MediPOS · Frontend F1 / F1.1
+# MediPOS · Frontend F1 / F1.1 / F2.0
 
-Fundación React + TypeScript + Vite existente, con sistema visual y arquitectura modular F1.1. Implementación local preparada para auditoría; la integración real con Google, hosting y backend continúa pendiente. El backend y sus migraciones no se modifican en F1.
+Fundación React + TypeScript + Vite existente, con sistema visual y arquitectura modular F1.1. F2.0 prepara integración HTTPS real; Google y la recuperación de una migración oficial fallida aún bloquean el recorrido comercial. La evidencia F1/F1.1 de abajo es histórica; el estado F2.0 figura al final.
 
 ## Ejecutar y validar
 
@@ -9,10 +9,12 @@ Node usado localmente: **24.18.1**, npm **11.16.0**. Las versiones resueltas est
 ```powershell
 cd frontend
 npm ci
-npm run dev
+npm run build
+cd ../backend
+dotnet run --project src/MediPOS.Api --launch-profile https-local
 ```
 
-Abrir `http://127.0.0.1:5173/`. Vite escucha únicamente en loopback y requiere el puerto 5173 libre. No hay proxy local hacia la API ni un segundo backend. En HTTP local la conexión real muestra el requisito de HTTPS; no se debilitan los controles del servidor.
+Abrir **https://localhost:7243/**. Kestrel sirve React compilado y API en un mismo origen con el certificado localhost confiable existente. No hay segundo backend ni proxy Vite. Recompilar y refrescar para ver cambios. `npm run dev` sigue siendo únicamente la herramienta de edición HTTP; no permite el acceso real ni habilita demostración.
 
 ```powershell
 npm run build
@@ -27,7 +29,7 @@ npm run test
 ```text
 src/
   app/
-    App.tsx        composición del runtime y entrada de desarrollo
+    App.tsx        composición del runtime HTTP real
     providers/     QueryClient y expiración de sesión
     router/        rutas, composición del panel y secciones pendientes
     layouts/       selección, navegación, cabecera y menú móvil
@@ -42,8 +44,8 @@ src/
     api/           transporte HTTP, CSRF y ApiError
     ui/            primitivos accesibles y sus estilos
     styles/        tokens semánticos y base
-  development/     fixtures y selector explícitos; excluidos de producción
-  types/           identificadores de escenarios de desarrollo
+  development/     fixtures históricos usados únicamente por tests existentes
+  types/           identificadores de esos tests
   test/            preparación de Testing Library
   index.css        únicamente imports de Tailwind y estilos comunes
   main.tsx         montaje de React
@@ -97,18 +99,16 @@ Cookies, tokens, credenciales, roles y selecciones no se guardan en localStorage
 
 El rol del listado de boticas no autoriza la navegación. Se usa el contexto devuelto por `/access`, contrastado con el usuario y la selección. Se vuelve a consultar por ruta, montaje, foco y cada 60 segundos; mientras se comprueba, no se presenta contenido operacional anterior. Una denegación o error bloquea la vista. Las opciones reflejan las reglas actuales: Owner administra; QF ve ventas/inventario/compras/caja; Cashier ve ventas/caja. Esto solo controla presentación; cada operación futura debe seguir sometida a la autorización del servidor. No se agregan permisos permanentes en el cliente ni se interpreta Superadmin como acceso comercial.
 
-## Vista de desarrollo
+## Demostración retirada en F2.0
 
-En el ingreso local, usar **Explorar vista de desarrollo**. El aviso amarillo identifica siempre **datos sintéticos y ausencia de sesión real**. El selector permite Owner, QF, Cashier, boticas vacías, error de listado, sucursales vacías, horario restringido, licencia restringida y sesión expirada.
+La entrada real ya no importa fixtures ni admite el selector de escenarios, tampoco en Development. Se retiraron banner y estilos de demostración. Los fixtures históricos se conservan únicamente para las pruebas existentes de componentes; no se usaron para validar la integración. No hay fallback ante un error de red ni identidad simulada.
 
-El servicio de ejemplo es independiente del cliente HTTP y no intercepta solicitudes reales. No hay fallback automático ante errores. Se reinicia todo el proveedor/caché al cambiar de escenario. Todas las pantallas del recorrido pueden revisarse con este servicio sintético; no hay productos, importes de ventas, movimientos, datos personales ni estadísticas comerciales simulados. `import.meta.env.DEV` controla el import dinámico y la entrada al modo; `npm run build` excluye el módulo de fixtures y el selector. `npm run preview` sirve únicamente la compilación de producción, sin modo de ejemplo.
-
-## Integración HTTPS de mismo origen pendiente
+## Despliegue HTTPS externo pendiente (referencia F1)
 
 1. Servir `dist/` desde la raíz del origen HTTPS público autorizado para MediPOS, con certificado confiable. Puede hacerlo el hosting/reverse proxy aprobado; F1 no configura ese entorno.
 2. Enrutar `/auth/*`, `/api/*`, `/platform/*`, `/health*` y el OpenAPI de desarrollo al backend, sin reescritura SPA. El resto de rutas de navegación del frontend puede resolver a `index.html`. No devolver HTML del frontend cuando una API falla.
 3. Conservar Host público, TLS, controles de proxy confiable, antiforgery y cookies `__Host-*`. No ampliar CORS, confiar en cualquier proxy, omitir Origin ni desactivar HTTPS. El login regresa a `/`, donde el frontend verifica de nuevo `/auth/me` y obtiene un token CSRF nuevo cuando se necesite.
-4. Configurar mediante el procedimiento existente Google, su callback exacto `/auth/google/callback`, `TenantApi:Enabled`, Data Protection y sesión persistente. El backend decide acceso, licencia, membresía, sucursal y horario. F1 no incorpora secretos en variables `VITE_*`.
+4. Configurar mediante el procedimiento existente Google, su callback exacto `/auth/google/callback`, `TenantApi:Enabled`, Data Protection y sesión segura del servidor (el store actual es de memoria; reiniciar requiere login). El backend decide acceso, licencia, membresía, sucursal y horario. F1 no incorpora secretos en variables `VITE_*`.
 5. Validar externamente Google → sesión → botica → sucursal → acceso, renovación/expiración de sesión, rechazo de CSRF/orígenes y logout. En localhost HTTP solo se verifica la interfaz; un proxy de Vite no sustituye estas comprobaciones.
 
 ## Evidencia local y pendientes
@@ -137,3 +137,28 @@ Las capturas locales de login, selección, panel, POS, menú y escenarios se obt
 Google/OIDC real, backend desplegado, HTTPS del hosting, RLS y PostgreSQL no fueron ejecutados. No se modificaron backend, migraciones, contratos HTTP ni configuración de seguridad; tampoco se usó Git/GitHub. **F1.1 está terminado dentro de su alcance local y listo para cierre en auditoría.** La base permite comenzar F2 tras esa revisión y autorización; F2 no se inició. No se declara producción lista.
 
 F2: conectar búsqueda y presentaciones, caja abierta, borrador y versiones optimistas, cantidades/precios calculados por el servidor, pagos exactos/mixtos, confirmación atómica, reconciliación de respuestas ambiguas y ticket. No implementar esos efectos hasta completar sus validaciones y pruebas reales. PWA/offline y el resto de módulos siguen fuera de F1/F1.1. Detenerse para auditoría.
+
+## F2.0 — integración local real (2026-10-15)
+
+**IN_PROGRESS / BLOCKED para aceptación comercial.** Kestrel sirve el build real en https://localhost:7243 con TLS confiable, sin CORS/proxy alternativo. Se retiró el modo de demostración del entry point y del login; los fixtures existentes son exclusivamente de tests. No se creó ningún dato comercial. PostgreSQL 18.4 y `/health/ready` funcionan con `medipos_runtime`, pero solo se aplicaron **28/34 migraciones**: `AddOfficialCatalogVersionedRefresh` falló con 42601 y se detuvo la operación sin editar historia ni esquema manualmente. Ver el estado y la configuración privada en `../backend/README.md`, sección F2.0. Readiness valida conexión/rol, no el esquema completo ni aislamiento con dos tenants.
+
+El mismo `shared/api/http.ts` conserva cookies same-origin, CSRF nuevo por mutación, redirecciones API rechazadas, Problem Details sanitizado y cancelación. Añade límite de 15 segundos (incluye CSRF y consumo del body), validación del path normalizado y serialización estricta. No hay reintentos automáticos. Red/timeout/cancelación tras enviar una mutación, 5xx o respuesta de éxito ilegible se distinguen como resultado incierto: nunca significan rollback ni habilitan otro envío a ciegas. El estado se debe consultar por el mismo UUID persistido; si ni esa consulta responde, conservar el resultado pendiente de reconciliación. Ninguna confirmación/cobro está implementada en este incremento.
+
+Clientes **de lectura** preparados y exportados por feature:
+
+| Feature | Contrato backend inspeccionado | Rutas reales bajo `/api/tenants/{tenantId}/branches/{branchId}` |
+|---|---|---|
+| `catalog/api.ts` | `SearchProductsResult`, `PosProductMatch`, `ProductUnitDetails` | `GET /products/search?q=…&limit=…` |
+| `inventory/api.ts` | `ProductStockDetails` | `GET /inventory/stock?productId=…&offset=…&limit=…` |
+| `cash/api.ts` | `CurrentCashSession`, `OpenCashSessionDetails`, `CashSessionStatusDetails` | `GET /cash-sessions/current`, `GET /cash-sessions/{id}` |
+| `pos/sales.api.ts` | `SaleDraftDetails` y sus líneas | `GET /sales/{saleId}` para leer/reconciliar estado persistido |
+| `pos/tickets.api.ts` | `InternalTicket` y display actual | `GET /sales/{saleId}/ticket` |
+
+Son DTOs TypeScript derivados del código actual citado en cada archivo, con validadores de respuesta, UUIDs, enums y parámetros acotados; no un cliente generado ni un contrato OpenAPI descargado de una sesión real. Caja/venta/ticket contrastan la selección y el identificador de respuesta. No se añaden escrituras ni pantallas. `scopedKey` usa `['tenant', tenantId, branchId, resource, …]`; entrar en selección de sucursal cancela/retira el espacio anterior, y un cambio directo de botica/sucursal retira las consultas de otros espacios. Las features deben pasar el AbortSignal de Query al cliente compartido.
+
+Los clientes comerciales activan lectura numérica exacta: `JsonNumber.literal` conserva el token JSON sin convertir decimales en `Number`, y bloquea coerción aritmética implícita. Los enteros de versión se convierten solo tras comprobar el rango uint. La escritura preparada usa tokens numéricos `JSON.rawJSON`, nunca strings de dinero ni floats; rechaza valores indefinidos/no finitos/cíclicos y números JS no enteros seguros. Requiere [JSON.parse con contexto del token original](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/JSON/parse) y `JSON.rawJSON` nativos; si faltan, rechaza la operación sin pérdida silenciosa. No hace cálculos de pagos ni conversiones de dosis/unidades.
+
+Validado: build, lint y **77 tests** (68 previos intactos, ocho de JSON exacto y una frontera contra fixtures en App). Chrome real a 360/768/1280/1440 abrió el login sin desbordamiento, demo ni errores JS y llamó al backend por HTTPS sin omitir certificados. `/auth/me` y `/auth/csrf` devolvieron 404 Problem Details porque Google sigue deshabilitado; `/health/ready` devolvió 200 Healthy. La primera ejecución encontró una regresión en el orden de validación de HTTPS; se corrigió el cliente sin cambiar la aserción. Los tests unitarios de transporte existentes no cuentan como evidencia de integración real.
+
+**BLOCKED:** migraciones completas; credenciales Google reales; Data Protection externo; login/sesión/CSRF efectivos; boticas/sucursal/acceso autenticados; búsqueda/caja y lectura de venta/ticket con PostgreSQL. Callback previsto: **https://localhost:7243/auth/google/callback**, PublicOrigin idéntico y HttpsMode Direct. Mantener Google y TenantApi deshabilitados hasta completar configuración y recuperar el esquema. Después validar el recorrido real con datos autorizados; solo entonces decidir F2.1. No se inició F2.1 ni se declara producción lista.
+

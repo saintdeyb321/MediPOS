@@ -1,5 +1,15 @@
 {
   "profiles": {
+    "https-local": {
+      "commandName": "Project",
+      "launchBrowser": false,
+      "applicationUrl": "https://localhost:7243",
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Development",
+        "LocalFrontend__Enabled": "true",
+        "AllowedHosts": "localhost"
+      }
+    },
     "http": {
       "commandName": "Project",
       "launchBrowser": false,

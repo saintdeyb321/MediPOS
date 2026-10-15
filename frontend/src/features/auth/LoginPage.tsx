@@ -8,7 +8,7 @@ import { GoogleMark } from './GoogleMark'
 import { useLogin } from './useLogin'
 import './auth.css'
 
-export function LoginPage({ onPreview }: { onPreview?: () => void }) {
+export function LoginPage() {
   const { preview, expired, session, login } = useLogin()
   if (session.data && !expired) return <Navigate to="/seleccionar-botica" replace />
   const checkingSession = !expired && session.isPending
@@ -44,11 +44,6 @@ export function LoginPage({ onPreview }: { onPreview?: () => void }) {
           {session.isError && <Button variant="quiet" onClick={() => void session.refetch()}>Revisar conexión</Button>}
           <p className="login-security"><ShieldCheck size={20} aria-hidden="true" />MediPOS nunca solicita ni almacena tu contraseña de Google.</p>
           <div className="login-help"><h3>¿Aún no tienes acceso?</h3><p>Solicita al propietario que asigne tu cuenta a una botica y sucursal.</p></div>
-          {import.meta.env.DEV && onPreview && (
-            <Button variant="quiet" className="preview-link" disabled={login.isPending || login.isSuccess} onClick={onPreview}>
-              Explorar vista de desarrollo <ArrowRight size={16} aria-hidden="true" /><span>Datos sintéticos · sin autenticación real</span>
-            </Button>
-          )}
         </div>
         <footer className="login-footer"><span>© {new Date().getFullYear()} MediPOS</span><span><LockKeyhole size={16} aria-hidden="true" />Acceso seguro</span></footer>
       </section>
