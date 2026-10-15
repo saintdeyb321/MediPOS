@@ -117,19 +117,23 @@ Gate local F1.1 ejecutado el **2026-10-15**:
 
 | Comando / revisión | Resultado |
 |---|---|
-| `npm run build` | Correcto: TypeScript estricto y Vite 8.3.4; JS 344.25 kB / gzip 107.31 kB; CSS 29.53 kB / gzip 6.28 kB |
+| `npm run build` | Correcto: TypeScript estricto y Vite 8.3.4; JS 344.25 kB / gzip 107.31 kB; CSS 27.70 kB / gzip 5.89 kB |
 | `npm run lint` | Correcto, sin errores ni advertencias |
-| `npm run test` | **68 pruebas aprobadas, 0 fallidas**, cinco archivos; 13.73 s |
+| `npm run test` | **68 pruebas aprobadas, 0 fallidas**, cinco archivos; 12.42 s en la verificación final |
 | `npm run dev` | Arranque confirmado en loopback, puerto 5173 |
 | Compilación de producción | Sin marcadores de UUID/datos/selector/factory de fixtures; sin chunk de fixtures |
-| Navegador | Chrome instalado en modo headless, Playwright del runtime disponible; **30 comprobaciones** a 360, 768, 1280 y 1440 px; ninguna dependencia nueva del proyecto |
+| Navegador | Chrome instalado en modo headless, Playwright del runtime disponible; **46 comprobaciones** a 360, 768, 1280 y 1440 px; ninguna dependencia nueva del proyecto |
 | UI medida | Login, boticas, sucursales, panel, POS, menú móvil y ocho escenarios adicionales: sin desbordamiento horizontal, texto visible mínimo 14 px y sin errores JavaScript de página |
-| Teclado en navegador | Apertura modal con foco en cerrar, ciclo Tab, Escape y retorno al disparador, navegación POS desde menú, Alt+V en escritorio y salto al carrito móvil |
+| Teclado en navegador | Apertura modal con foco en cerrar, ciclo Tab/Shift+Tab, Escape y retorno al disparador, navegación POS desde menú, Alt+V en escritorio y salto al carrito móvil |
+
+La verificación final revisó 56 módulos sin imports relativos rotos, ciclos ni componentes exportados duplicados. Se retiraron únicamente cuatro recursos de plantilla sin referencias: `src/assets/react.svg`, `src/assets/vite.svg`, `src/assets/hero.png` y `public/icons.svg`. El favicon MediPOS se conserva. No se cambiaron componentes ni pruebas durante este cierre.
+
+El primer run completo agotó la espera de la pantalla de ingreso tras logout. El caso aislado y la repetición completa pasaron sin modificar aserciones ni tiempos de espera; el logout también pasó en Chrome en las cuatro anchuras. No se reprodujo un defecto funcional; se conserva esta incidencia para seguimiento si vuelve a ocurrir.
 
 Se conservan las 33 pruebas F1 de transporte, CSRF, cookies, cancelación, sesión, DTOs, roles, horarios, licencias y navegación. Solo se actualizan las consultas de UI afectadas por el título compacto del POS y el tipo semántico `search` del input; las aserciones de bloqueo siguen presentes. Se añaden 35 casos: primitivas accesibles/estados, selección con teclado, carga antes de vacío, descripción de módulos pendientes, fronteras de imports y contraste. Las pruebas Node de arquitectura/colores se tipan con `tsconfig.node.json`; el código del navegador conserva sus tipos DOM separados.
 
 Las capturas locales de login, selección, panel, POS, menú y escenarios se obtuvieron durante la revisión; no forman parte del bundle. El navegador integrado no pudo inicializar su runtime, por lo que se usó Chrome temporal sin sesión ni proveedores reales. Las comprobaciones de navegador emplean exclusivamente los fixtures explícitos de desarrollo.
 
-Google/OIDC real, backend desplegado, HTTPS del hosting, RLS y PostgreSQL no fueron ejecutados. No se modificaron backend, migraciones, contratos HTTP ni configuración de seguridad; tampoco se usó Git/GitHub. F1.1 queda implementado localmente y detenido para auditoría. No se declara producción lista.
+Google/OIDC real, backend desplegado, HTTPS del hosting, RLS y PostgreSQL no fueron ejecutados. No se modificaron backend, migraciones, contratos HTTP ni configuración de seguridad; tampoco se usó Git/GitHub. **F1.1 está terminado dentro de su alcance local y listo para cierre en auditoría.** La base permite comenzar F2 tras esa revisión y autorización; F2 no se inició. No se declara producción lista.
 
 F2: conectar búsqueda y presentaciones, caja abierta, borrador y versiones optimistas, cantidades/precios calculados por el servidor, pagos exactos/mixtos, confirmación atómica, reconciliación de respuestas ambiguas y ticket. No implementar esos efectos hasta completar sus validaciones y pruebas reales. PWA/offline y el resto de módulos siguen fuera de F1/F1.1. Detenerse para auditoría.
