@@ -7,7 +7,12 @@ namespace MediPOS.Application.Modules.Inventory.GetExpiringLots;
 
 public sealed record GetExpiringLotsQuery(Guid TenantId, Guid? BranchId = null);
 public sealed record ExpiringLotDetails(Guid InventoryLotId, Guid BranchId, Guid BusinessProductId, string ProductName,
-    decimal QuantityAvailableBase, DateOnly ExpirationDate, decimal? CostValue, decimal PotentialSaleValue);
+    decimal QuantityAvailableBase, DateOnly ExpirationDate, decimal? CostValue, decimal PotentialSaleValue)
+{
+    public static ExpiringLotDetails From(ExpiringLotSource source, MediPOS.Domain.Modules.IdentityAccess.TenantRole role) => new(source.InventoryLotId, source.BranchId, source.BusinessProductId, source.ProductName,
+        source.QuantityAvailableBase, source.ExpirationDate, role == MediPOS.Domain.Modules.IdentityAccess.TenantRole.Owner ? InventoryValuation.CostValue(source.QuantityAvailableBase, source.UnitCost, source.ConversionToBaseSnapshot) : null,
+        InventoryValuation.PotentialSaleValue(source.QuantityAvailableBase, source.RetailPrice));
+}
 
 public sealed class GetExpiringLotsHandler(IInventoryReadStore inventory, IBranchesStore branches, TimeProvider clock, ITenantOperationAuthorizer authorization)
 {
@@ -31,10 +36,7 @@ public sealed class GetExpiringLotsHandler(IInventoryReadStore inventory, IBranc
         try
         {
             return sources.Where(value => InventoryCalendar.IsExpiring(value.ExpirationDate, value.QuantityAvailableBase, today))
-                .Select(value => new ExpiringLotDetails(value.InventoryLotId, value.BranchId, value.BusinessProductId, value.ProductName,
-                    value.QuantityAvailableBase, value.ExpirationDate, access.Role == MediPOS.Domain.Modules.IdentityAccess.TenantRole.Owner ? InventoryValuation.CostValue(value.QuantityAvailableBase,
-                        value.UnitCost, value.ConversionToBaseSnapshot) : null,
-                    InventoryValuation.PotentialSaleValue(value.QuantityAvailableBase, value.RetailPrice))).ToArray();
+                .Select(value => ExpiringLotDetails.From(value, access.Role)).ToArray();
         }
         catch (ArithmeticException) { throw new ApplicationErrorException(InventoryErrors.ValuationOutOfRange); }
     }

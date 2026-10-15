@@ -36,7 +36,7 @@ public sealed partial class TenantCommercialContractTests
         var state = SeedBranch(); await using var host = await Host(state);
         var endpoints = host.App.Services.GetServices<EndpointDataSource>().SelectMany(source => source.Endpoints).OfType<RouteEndpoint>()
             .Where(endpoint => endpoint.RoutePattern.RawText!.StartsWith("/api", StringComparison.Ordinal)).ToArray();
-        Assert.Equal(56, endpoints.Length);
+        Assert.Equal(86, endpoints.Length);
         foreach (var endpoint in endpoints)
         {
             Assert.NotNull(endpoint.Metadata.GetMetadata<IAuthorizeData>());
@@ -92,6 +92,7 @@ public sealed partial class TenantCommercialContractTests
     [InlineData("employees")]
     [InlineData("branches/BRANCH/inventory/lots")]
     [InlineData("branches/BRANCH/inventory/stock")]
+    [InlineData("branches/BRANCH/inventory/expiring-lots")]
     [InlineData("branches/BRANCH/suppliers")]
     public async Task RevokedMembershipCannotReceiveNewDirectoryResults(string suffix)
     {
@@ -171,6 +172,17 @@ public sealed partial class TenantCommercialContractTests
         using var response = await host.Client.SendAsync(request, Token); await Problem(response, defect == "media" ? 415 : 400, defect == "media" ? "http.415" : "api.invalid_json"); Assert.Empty(state.Employees); Assert.Empty(state.Audits);
     }
 
+    [Theory]
+    [InlineData("1.00000000000000000000000000001")]
+    [InlineData("1e-1000")]
+    [InlineData("1e1000")]
+    public async Task MonetaryJsonCannotRoundUnderflowOrOverflowBeforeDomainValidation(string price)
+    {
+        var state = SeedBranch(); await using var host = await Host(state); await PlatformLicenseHttpTests.Login(host);
+        var body = "{\"internalCode\":\"P1\",\"productType\":\"retail\",\"name\":\"Prueba\",\"categoryId\":\"" + Guid.NewGuid().ToString("D") + "\",\"brandOrLaboratory\":\"Marca\",\"retailPrice\":" + price + "}";
+        using var result = await Send(host, "POST", $"/api/tenants/{state.TenantId:D}/products/local", body, await host.Csrf()); await Problem(result, 400, "api.invalid_json"); Assert.Empty(state.Products); Assert.Empty(state.Audits);
+    }
+
     [Fact]
     public async Task NativeConcurrencyBudgetUsesServerActorAndRejectsBeforeDirectoryRead()
     {
@@ -179,6 +191,36 @@ public sealed partial class TenantCommercialContractTests
         using var first = limiter.Acquire(state.User.Id, true); using var second = limiter.Acquire(state.User.Id, true); using var third = limiter.Acquire(state.User.Id, true); using var fourth = limiter.Acquire(state.User.Id, true);
         Assert.True(first.IsAcquired && second.IsAcquired && third.IsAcquired && fourth.IsAcquired);
         var reads = state.Reads; using var response = await Send(host, "GET", "/api/me/tenants"); await Problem(response, 429, "api.rate_limited"); Assert.Equal(reads, state.Reads);
+    }
+
+    [Fact]
+    public void SyncAndFilesShareBoundedConcurrencyButHaveSeparateBudgetsFromFrequentPosWrites()
+    {
+        using var limiter = new TenantApiRateLimiter();
+        using (var first = limiter.Acquire(Guid.NewGuid(), false, sync: true))
+        using (var second = limiter.Acquire(Guid.NewGuid(), false, sync: true))
+        using (var third = limiter.Acquire(Guid.NewGuid(), false, sync: true))
+        using (var ordinary = limiter.Acquire(Guid.NewGuid(), false))
+        { Assert.True(first.IsAcquired); Assert.True(second.IsAcquired); Assert.False(third.IsAcquired); Assert.True(ordinary.IsAcquired); }
+        var user = Guid.NewGuid();
+        for (var i = 0; i < 30; i++) { using var allowed = limiter.Acquire(user, false, sync: true); Assert.True(allowed.IsAcquired); }
+        using var rejected = limiter.Acquire(user, false, sync: true); Assert.False(rejected.IsAcquired);
+        using var pos = limiter.Acquire(user, false); Assert.True(pos.IsAcquired);
+    }
+
+    [Theory]
+    [InlineData("GET", "same-origin", 200)]
+    [InlineData("GET", "none", 200)]
+    [InlineData("GET", "cross-site", 403)]
+    [InlineData("GET", "same-site", 403)]
+    [InlineData("GET", "", 403)]
+    [InlineData("POST", "same-origin", 403)]
+    public async Task BrowserSameOriginReadsWorkWithoutForgingOriginWhileMutationsRemainStrict(string method, string fetchSite, int status)
+    {
+        var state = SeedBranch(); await using var host = await Host(state); await PlatformLicenseHttpTests.Login(host);
+        using var request = Request(method, method == "GET" ? "/api/me/tenants" : $"/api/tenants/{state.TenantId:D}/legal-entities", method == "GET" ? null : new { legalName = "A", ruc = "123" }, await host.Csrf());
+        request.Headers.Remove("Origin"); if (fetchSite.Length != 0) request.Headers.Add("Sec-Fetch-Site", fetchSite);
+        using var response = await host.Client.SendAsync(request, Token); Assert.Equal(status, (int)response.StatusCode); Assert.Single(state.Entities); Assert.Empty(state.Audits);
     }
 
     [Fact]
@@ -197,14 +239,25 @@ public sealed partial class TenantCommercialContractTests
     {
         var state = SeedBranch(); await using (var production = await Host(state))
         { using var unavailable = await Send(production, "GET", "/openapi/v1.json"); Assert.Equal(HttpStatusCode.NotFound, unavailable.StatusCode); }
-        await using var development = await Host(state, development: true);
+        var diagnostic = new SchemaExceptionObserver();
+        await using var development = await Host(state, development: true, configureServices: services => services.Insert(0, ServiceDescriptor.Singleton<Microsoft.AspNetCore.Diagnostics.IExceptionHandler>(diagnostic)));
+        using (var generated = await Send(development, "GET", "/openapi/v1.json"))
+            Assert.True(generated.StatusCode == HttpStatusCode.OK, diagnostic.Error?.ToString());
         using var schema = await Json(development, "GET", "/openapi/v1.json"); var root = schema.RootElement;
+        AssertSchemaReferences(root, root);
         var sales = root.GetProperty("paths").GetProperty("/api/tenants/{tenantId}/reports/sales").GetProperty("get");
         var parameters = sales.GetProperty("parameters").EnumerateArray().ToArray();
         Assert.Contains(parameters, value => value.GetProperty("name").GetString() == "dimension"); Assert.Contains(parameters, value => value.GetProperty("name").GetString() == "limit");
         var schemas = root.GetProperty("components").GetProperty("schemas").ToString();
+        Assert.Contains(root.GetProperty("components").GetProperty("schemas").EnumerateObject(), schema => schema.Name.EndsWith("OfflineSalePayload", StringComparison.Ordinal));
+        Assert.Equal("string", root.GetProperty("components").GetProperty("schemas").GetProperty("AccessContext").GetProperty("properties").GetProperty("userId").GetProperty("type").GetString());
+        Assert.Equal("string", root.GetProperty("components").GetProperty("schemas").GetProperty("ProblemDetails").GetProperty("properties").GetProperty("code").GetProperty("type").GetString());
         Assert.Contains("\"retail\"", schemas, StringComparison.Ordinal); Assert.Contains("\"yape\"", schemas, StringComparison.Ordinal); Assert.Contains("\"decimal\"", schemas, StringComparison.Ordinal);
-        Assert.DoesNotContain("equivalenceKey", schemas, StringComparison.OrdinalIgnoreCase); Assert.DoesNotContain("googleSubject", schemas, StringComparison.OrdinalIgnoreCase);
+        // The versioned offline catalog intentionally carries its existing clinical equivalence
+        // fields. Ordinary catalog DTOs must still strip the domain's internal fingerprints.
+        foreach (var value in root.GetProperty("components").GetProperty("schemas").EnumerateObject().Where(s => s.Name.EndsWith("MedicineResponse", StringComparison.Ordinal)))
+            Assert.DoesNotContain("equivalenceKey", value.Value.ToString(), StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("googleSubject", schemas, StringComparison.OrdinalIgnoreCase);
         var template = root.GetProperty("paths").GetProperty("/api/tenants/{tenantId}/product-imports/template").GetProperty("get"); Assert.Contains("binary", template.ToString(), StringComparison.Ordinal);
     }
 
@@ -216,4 +269,22 @@ public sealed partial class TenantCommercialContractTests
         state.Lots.Add(InventoryLot.Receive(state.TenantId, state.Branches[0].Id, product.Id, Guid.NewGuid(), 10m, null, null, DateTimeOffset.UtcNow)); return state;
     }
     [GeneratedRegex("\\{[^}]+\\}", RegexOptions.CultureInvariant)] private static partial Regex RouteParameter();
+    private sealed class SchemaExceptionObserver : Microsoft.AspNetCore.Diagnostics.IExceptionHandler
+    {
+        internal Exception? Error { get; private set; }
+        public ValueTask<bool> TryHandleAsync(Microsoft.AspNetCore.Http.HttpContext httpContext, Exception exception, CancellationToken cancellationToken)
+        { Error = exception; return ValueTask.FromResult(false); }
+    }
+    private static void AssertSchemaReferences(JsonElement document, JsonElement node)
+    {
+        if (node.ValueKind == JsonValueKind.Object)
+            foreach (var property in node.EnumerateObject())
+            {
+                if (property.Name == "$ref" && property.Value.GetString() is { } reference && reference.StartsWith("#/components/schemas/", StringComparison.Ordinal))
+                    Assert.True(document.GetProperty("components").GetProperty("schemas").TryGetProperty(reference["#/components/schemas/".Length..], out _), "Unresolved schema reference: " + reference);
+                AssertSchemaReferences(document, property.Value);
+            }
+        else if (node.ValueKind == JsonValueKind.Array)
+            foreach (var item in node.EnumerateArray()) AssertSchemaReferences(document, item);
+    }
 }

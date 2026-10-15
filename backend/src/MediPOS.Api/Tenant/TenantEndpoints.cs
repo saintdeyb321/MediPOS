@@ -46,6 +46,12 @@ public static partial class TenantEndpoints
         MapEmployees(tenants);
         MapReports(tenants);
         MapImports(tenants);
+        MapTransfers(tenants);
+        MapCashTransfers(tenants);
+        MapCommissions(tenants);
+        MapSync(tenants);
+        MapNotifications(tenants);
+        MapAudit(tenants);
         api.WithMetadata(new ProducesResponseTypeAttribute(typeof(ProblemDetails), 400), new ProducesResponseTypeAttribute(typeof(ProblemDetails), 401), new ProducesResponseTypeAttribute(typeof(ProblemDetails), 403),
             new ProducesResponseTypeAttribute(typeof(ProblemDetails), 404), new ProducesResponseTypeAttribute(typeof(ProblemDetails), 409), new ProducesResponseTypeAttribute(typeof(ProblemDetails), 413),
             new ProducesResponseTypeAttribute(typeof(ProblemDetails), 415), new ProducesResponseTypeAttribute(typeof(ProblemDetails), 429));

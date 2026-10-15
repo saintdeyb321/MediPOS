@@ -157,13 +157,14 @@ public static class DependencyInjection
         services.AddScoped<ITenantLicenseProvisioning, TenantLicenseProvisioning>();
         services.AddScoped<IBranchesStore, BranchesStore>();
         services.AddScoped<IBranchDirectoryReader, BranchDirectoryReader>();
+        services.AddScoped<MediPOS.Application.Modules.AuditSupport.IAuditHistoryReader, MediPOS.Infrastructure.Modules.AuditSupport.Persistence.AuditHistoryReader>();
+        services.AddScoped<MediPOS.Application.Modules.AuditSupport.GetAuditHistoryHandler>();
         services.AddScoped<BranchDirectoryQueries>();
         services.AddScoped<CreateLegalEntityHandler>();
         services.AddScoped<CreateBranchHandler>();
         services.AddScoped<SetMainHubBranchHandler>();
         services.AddScoped<IIdentityAccessStore, IdentityAccessStore>();
         services.AddScoped<MediPOS.Application.Modules.IdentityAccess.Directory.IMyTenantDirectoryReader, MyTenantDirectoryReader>();
-        services.AddScoped<MediPOS.Application.Modules.IdentityAccess.Directory.ListMyTenantsHandler>();
         services.AddScoped<MediPOS.Application.Modules.IdentityAccess.Directory.IEmployeeDirectoryReader, EmployeeDirectoryReader>();
         services.AddScoped<MediPOS.Application.Modules.IdentityAccess.Directory.EmployeeDirectoryQueries>();
         services.AddScoped<IOperationalAccessReader, OperationalAccessReader>();
@@ -195,6 +196,7 @@ public static class DependencyInjection
         services.AddScoped<IInternalTicketReader, InternalTicketReader>();
         services.AddScoped<ITransferRequestStore, TransferRequestStore>();
         services.AddScoped<ITransferReader, TransferReader>();
+        services.AddScoped<ITransferDirectoryReader, TransferDirectoryReader>();
         services.AddScoped<ITransferTransaction, TransferTransaction>();
         services.AddScoped<CreateMembershipHandler>();
         services.AddScoped<SetMembershipBranchesHandler>();
@@ -257,8 +259,11 @@ public static class DependencyInjection
     {
         services.AddScoped<IVerifiedGoogleIdentitySource, TGoogleIdentitySource>();
         services.AddScoped<IAuthenticatedMediPosUser, TAuthenticatedUser>();
+        services.AddScoped<MediPOS.Application.Modules.IdentityAccess.Directory.ListMyTenantsHandler>();
         services.AddScoped<UpsertGoogleUserHandler>();
         services.AddScoped<ResolveAccessContextHandler>();
+        services.AddScoped<GetTransfersHandler>();
+        services.AddScoped<GetTenantCommissionSettingsHandler>();
         services.AddScoped<ITenantOperationAuthorizer, TenantOperationAuthorizer>();
         services.AddScoped<ConfigureElectronicSeriesHandler>();
         services.AddScoped<RequestElectronicDocumentHandler>();

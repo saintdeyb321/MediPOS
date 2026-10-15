@@ -9,8 +9,8 @@ namespace MediPOS.Api.Modules.OfflineSync;
 public sealed record OfflineSyncBatchRequest(Guid DeviceId, int ProtocolVersion,
     IReadOnlyList<SyncEventEnvelope>? Events, Guid? BatchRequestId = null);
 
-// Prepared HTTP mapping only. Program.cs has no production OIDC/session adapter and does not publish this route.
-// Future composition must authenticate, select the tenant on the server, enforce body/rate limits and Problem Details.
+// Published only by the opt-in TenantApi behind real Google session, CSRF and resource admission.
+// Route selection grants no authority; the application revalidates the authenticated user/device/branch.
 // The response contract is OfflineSyncBatchResult; it contains no event payload or unauthorized identity metadata.
 public static class OfflineSyncBatchHttpMapping
 {

@@ -8,7 +8,7 @@ namespace MediPOS.Api.Modules.OfflineSync;
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed record ResolveOfflineSaleConflictRequest(string ResolutionCode, string Note);
 
-// Prepared mappings; no public route until a real authenticated server session exists.
+// Mapped by the opt-in TenantApi; server selection is always reauthorized by the real handlers.
 public static class OfflineSaleConflictHttpMapping
 {
     public static GetOfflineSaleConflictsCommand Query(OfflineSaleConflictFilter filter, ITenantDataContext serverContext) => new(Tenant(serverContext), filter);

@@ -56,16 +56,20 @@ public sealed class TenantApiHttpTests
         using var purchasedLines = await Json(host, "PUT", tenant + $"/purchases/{purchaseId:D}/lines", new { lines = new[] { new { businessProductId = productId, productUnitId = unitId, quantity = 10m, unitCost = 1.25m, batchNumber = (string?)null, expirationDate = (string?)null } } }, csrf);
         using var receipt = await Json(host, "POST", tenant + $"/purchases/{purchaseId:D}/confirm", new { }, csrf);
         Assert.Equal("confirmed", receipt.RootElement.GetProperty("status").GetString()); Assert.Single(state.Lots); Assert.Single(state.Movements);
+        using var receivedPurchase = await Json(host, "GET", operational + $"/purchases/{purchaseId:D}"); Assert.Equal("confirmed", receivedPurchase.RootElement.GetProperty("purchase").GetProperty("status").GetString()); Assert.Single(receivedPurchase.RootElement.GetProperty("lines").EnumerateArray());
         using var stock = await Json(host, "GET", operational + "/inventory/stock"); Assert.Equal(10m, stock.RootElement[0].GetProperty("quantityAvailableBase").GetDecimal());
         using var found = await Json(host, "GET", operational + "/products/search?q=Jabon");
         Assert.Single(found.RootElement.GetProperty("directMatches").EnumerateArray()); Assert.DoesNotContain("unitCost", found.RootElement.ToString(), StringComparison.Ordinal);
         using var cash = await Json(host, "POST", operational + "/cash-sessions", new { openingAmount = 10m }, csrf, 201);
         var cashId = cash.RootElement.GetProperty("cashSessionId").GetGuid();
         using var current = await Json(host, "GET", operational + "/cash-sessions/current"); Assert.Equal(cashId, current.RootElement.GetProperty("session").GetProperty("cashSessionId").GetGuid());
+        using var active = await Json(host, "GET", tenant + "/cash-sessions/active"); Assert.Equal(cashId, active.RootElement[0].GetProperty("cashSessionId").GetGuid());
+        using var cashStatus = await Json(host, "GET", operational + $"/cash-sessions/{cashId:D}"); Assert.Equal("open", cashStatus.RootElement.GetProperty("status").GetString());
         using var draft = await Json(host, "POST", operational + "/sales", new { }, csrf, 201);
         var saleId = draft.RootElement.GetProperty("saleId").GetGuid(); Assert.Equal(1u, draft.RootElement.GetProperty("version").GetUInt32());
         using var cart = await Json(host, "PUT", operational + $"/sales/{saleId:D}/lines", new { expectedVersion = 1u, lines = new[] { new { businessProductId = productId, productUnitId = unitId, quantity = 2m, priceKind = "retail" } } }, csrf);
         var confirmation = new { expectedVersion = cart.RootElement.GetProperty("version").GetUInt32(), payments = new[] { new { method = "cash", amount = 2m }, new { method = "yape", amount = 2m } } };
+        using var savedDraft = await Json(host, "GET", operational + $"/sales/{saleId:D}/draft"); Assert.Equal(cart.RootElement.GetProperty("version").GetUInt32(), savedDraft.RootElement.GetProperty("version").GetUInt32());
         using var confirmed = await Json(host, "POST", operational + $"/sales/{saleId:D}/confirm", confirmation, csrf);
         Assert.Equal(4m, confirmed.RootElement.GetProperty("totalAmount").GetDecimal()); Assert.Equal(2, state.Payments.Count); Assert.Equal(8m, Assert.Single(state.Lots).QuantityAvailableBase);
         Assert.Single(state.Audits, audit => audit.Action == AuditAction.SaleConfirmed);
@@ -130,7 +134,9 @@ public sealed class TenantApiHttpTests
         var body = defect switch
         {
             "duplicate" => "{\"legalName\":\"A\",\"legalName\":\"B\",\"ruc\":\"20123456789\"}",
-            "null" => "{\"legalName\":null,\"ruc\":\"20123456789\"}", "malformed" => "{", "oversized" => new string('x', TenantHttp.MaximumBodyBytes + 1),
+            "null" => "{\"legalName\":null,\"ruc\":\"20123456789\"}",
+            "malformed" => "{",
+            "oversized" => new string('x', TenantHttp.MaximumBodyBytes + 1),
             _ => "{\"legalName\":\"A\",\"ruc\":\"20123456789\",\"" + defect + "\":\"synthetic_private_payload\"}"
         };
         using var response = await Send(host, "POST", $"/api/tenants/{state.TenantId:D}/legal-entities", body, await host.Csrf());
@@ -166,13 +172,13 @@ public sealed class TenantApiHttpTests
         var state = new TenantHttpTestState(); var entity = LegalEntity.Create(state.TenantId, "Legal", "20123456789", DateTimeOffset.UtcNow);
         state.Entities.Add(entity); state.Branches.Add(Branch.Create(state.TenantId, entity.Id, state.TenantId, "Centro", DateTimeOffset.UtcNow)); return state;
     }
-    internal static Task<GoogleHost> Host(TenantHttpTestState state, bool enabled = true, bool platform = false, bool development = false) => GoogleHost.CreateAsync(seedUsers: users => users.BySubject[state.User.GoogleSubject] = state.User,
+    internal static Task<GoogleHost> Host(TenantHttpTestState state, bool enabled = true, bool platform = false, bool development = false, Action<IServiceCollection>? configureServices = null) => GoogleHost.CreateAsync(seedUsers: users => users.BySubject[state.User.GoogleSubject] = state.User,
         configure: values =>
         {
             values["TenantApi:Enabled"] = enabled ? "true" : "false";
             if (development) values["environment"] = "Development";
             if (platform) { values["PlatformApi:Enabled"] = "true"; values["PlatformAdministration:Enabled"] = "true"; values["PlatformAdministration:AdministratorUserIds:0"] = state.User.Id.ToString("D"); }
-        }, configureServices: state.Configure);
+        }, configureServices: services => { state.Configure(services); configureServices?.Invoke(services); });
     private static string[] Routes(GoogleHost host) => host.App.Services.GetServices<EndpointDataSource>().SelectMany(value => value.Endpoints).OfType<RouteEndpoint>().Select(value => value.RoutePattern.RawText!).ToArray();
     internal static HttpRequestMessage Request(string method, string path, object? body = null, string? csrf = null)
     {

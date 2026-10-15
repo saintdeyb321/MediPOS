@@ -1,21 +1,21 @@
 using MediPOS.Application.Modules.Branches;
 using MediPOS.Application.Modules.Catalog;
+using MediPOS.Application.Modules.IdentityAccess.Authentication;
 using MediPOS.Application.Modules.IdentityAccess.CreateMembership;
 using MediPOS.Application.Modules.IdentityAccess.DeactivateMembership;
 using MediPOS.Application.Modules.IdentityAccess.Directory;
 using MediPOS.Application.Modules.Inventory;
 using MediPOS.Application.Modules.Purchasing;
+using MediPOS.Domain.Modules.IdentityAccess;
+using MediPOS.Infrastructure;
 using MediPOS.Infrastructure.Persistence;
 using MediPOS.IntegrationTests.Modules.IdentityAccess;
 using MediPOS.IntegrationTests.Modules.Purchasing;
 using MediPOS.IntegrationTests.Modules.TenancyLicensing;
-using MediPOS.Domain.Modules.IdentityAccess;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Npgsql;
-using MediPOS.Infrastructure;
-using MediPOS.Application.Modules.IdentityAccess.Authentication;
-using Microsoft.Extensions.Configuration;
 
 namespace MediPOS.IntegrationTests.Tenancy;
 
@@ -153,5 +153,83 @@ public sealed class CommercialDirectoryPostgreSqlTests(PostgreSqlFixture fixture
             context.SelectTenant(a.TenantId);
             await Assert.ThrowsAsync<InvalidOperationException>(() => reader.ReadAsync(user, null, 1, Token));
         }
+    }
+
+    [Fact]
+    public async Task ReadingMissingCommissionSettingsIsReadOnlyUnderRealOwnerSession()
+    {
+        var (a, _) = await TenantIsolationTestData.CreatePairAsync(fixture);
+        await using var services = IdentityAccessTestSetup.CreateServices(fixture); await using var scope = services.CreateAsyncScope(); var source = scope.ServiceProvider;
+        await source.GetRequiredService<CreateMembershipHandler>().HandleAsync(new(a.TenantId, a.Identity.ActorId, TenantRole.Owner, a.Identity.ActorId), Token);
+        ((IdentityAccessTestSetup.TestServerSession)source.GetRequiredService<IAuthenticatedMediPosUser>()).UserId = a.Identity.ActorId;
+        var context = source.GetRequiredService<MediPosDbContext>(); var audits = await context.AuditLogs.CountAsync(Token);
+        var handler = source.GetRequiredService<MediPOS.Application.Modules.Commissions.GetTenantCommissionSettingsHandler>();
+        var first = await handler.HandleAsync(a.TenantId, Token); var retry = await handler.HandleAsync(a.TenantId, Token);
+        Assert.False(first.IsConfigured); Assert.False(first.IsEnabled); Assert.Equal(first, retry);
+        Assert.Empty(await context.TenantCommissionSettings.ToListAsync(Token)); Assert.Empty(await context.CommissionRules.ToListAsync(Token)); Assert.Empty(await context.CommissionEntries.ToListAsync(Token));
+        Assert.Equal(audits, await context.AuditLogs.CountAsync(Token));
+    }
+
+    [Fact]
+    public async Task TransferInboxIsBoundedScopedToEitherBranchAndCannotReadAnotherTenant()
+    {
+        var (a, b) = await TenantIsolationTestData.CreatePairAsync(fixture);
+        await using var services = IdentityAccessTestSetup.CreateServices(fixture);
+        MediPOS.IntegrationTests.Modules.Transfers.TransferTestData.Rows first;
+        await using (var seed = services.CreateAsyncScope()) first = await MediPOS.IntegrationTests.Modules.Transfers.TransferTestData.CreateAsync(seed.ServiceProvider, a);
+        await using (var seed = services.CreateAsyncScope()) _ = await MediPOS.IntegrationTests.Modules.Transfers.TransferTestData.CreateAsync(seed.ServiceProvider, b);
+        await using var scope = services.CreateAsyncScope(); var reader = scope.ServiceProvider.GetRequiredService<MediPOS.Application.Modules.Transfers.ITransferDirectoryReader>();
+        foreach (var branch in new[] { a.Identity.BranchId, a.SpareBranchId })
+        {
+            var rows = await reader.ReadAsync(new(a.TenantId, branch, MediPOS.Domain.Modules.Transfers.TransferStatus.Requested, 0, 1), Token);
+            Assert.Equal(first.Requested.Id, Assert.Single(rows).Id);
+        }
+        Assert.Empty(await reader.ReadAsync(new(a.TenantId, b.Identity.BranchId), Token));
+        Assert.Empty(await reader.ReadAsync(new(a.TenantId, Status: MediPOS.Domain.Modules.Transfers.TransferStatus.Approved), Token));
+        Assert.Empty(await reader.ReadAsync(new(a.TenantId, Offset: 1, Limit: 1), Token));
+        var context = scope.ServiceProvider.GetRequiredService<MediPosDbContext>(); Assert.Empty(await context.TransferLotAllocations.ToListAsync(Token));
+        Assert.Single(await context.Transfers.ToListAsync(Token)); Assert.Single(await context.TransferEvents.ToListAsync(Token));
+    }
+
+    [Fact]
+    public async Task ValuedExpiringLotsArePagedInSqlUseHistoricalCostAndRespectTenantBranchAndHorizon()
+    {
+        var (a, b) = await TenantIsolationTestData.CreatePairAsync(fixture); await using var services = IdentityAccessTestSetup.CreateServices(fixture);
+        foreach (var tenant in new[] { a, b })
+        {
+            await using var seed = services.CreateAsyncScope(); var source = seed.ServiceProvider;
+            var product = await source.GetRequiredService<MediPOS.Application.Modules.Catalog.CreateLocalBusinessProduct.CreateLocalBusinessProductHandler>().HandleAsync(
+                new(tenant.TenantId, "EXPIRY", MediPOS.Domain.Modules.Catalog.ProductType.Medicine, "Medicamento sintético", tenant.CategoryId, "Lab", null,
+                    new MedicineInput([new("Paracetamol", "500 mg")], "Tableta", "Oral"), 2.125m, null, tenant.Identity.ActorId), Token);
+            var units = await source.GetRequiredService<MediPOS.Application.Modules.Catalog.ReplaceProductUnits.ReplaceProductUnitsHandler>().HandleAsync(new(tenant.TenantId, product.Id, [new("Base", 1m, true)], tenant.Identity.ActorId), Token);
+            var today = MediPOS.IntegrationTests.Modules.SalesPos.SaleCheckoutTestData.Today;
+            await MediPOS.IntegrationTests.Modules.SalesPos.SaleCheckoutTestData.ReceiveAsync(source, tenant, product.Id, units.Single().Id, [(2m, today.AddDays(2)), (3m, today.AddDays(3)), (5m, today.AddDays(40))]);
+        }
+        await using var scope = services.CreateAsyncScope(); var reader = scope.ServiceProvider.GetRequiredService<IInventoryDirectoryReader>();
+        var day = MediPOS.IntegrationTests.Modules.SalesPos.SaleCheckoutTestData.Today;
+        var page = await reader.ExpiringAsync(a.TenantId, a.Identity.BranchId, null, day, 0, 1, Token); var first = Assert.Single(page);
+        Assert.Equal(a.TenantId, first.TenantId); Assert.Equal(day.AddDays(2), first.ExpirationDate);
+        var valued = MediPOS.Application.Modules.Inventory.GetExpiringLots.ExpiringLotDetails.From(first, TenantRole.Owner);
+        Assert.Equal(2m, valued.CostValue); Assert.Equal(4.25m, valued.PotentialSaleValue);
+        Assert.Equal(day.AddDays(3), Assert.Single(await reader.ExpiringAsync(a.TenantId, a.Identity.BranchId, null, day, 1, 1, Token)).ExpirationDate);
+        Assert.Empty(await reader.ExpiringAsync(a.TenantId, a.Identity.BranchId, null, day, 2, 100, Token));
+        Assert.Empty(await reader.ExpiringAsync(a.TenantId, b.Identity.BranchId, null, day, 0, 100, Token));
+        Assert.Empty(await reader.ExpiringAsync(a.TenantId, a.Identity.BranchId, b.BusinessProductId, day, 0, 100, Token));
+        var context = scope.ServiceProvider.GetRequiredService<MediPosDbContext>(); Assert.Equal(3, await context.StockMovements.CountAsync(Token));
+        Assert.Equal(10m, await context.InventoryLots.SumAsync(lot => lot.QuantityAvailableBase, Token));
+    }
+
+    [Fact]
+    public async Task AuditMetadataReaderCannotExposeOtherTenantOrMutateExistingSnapshots()
+    {
+        var (a, b) = await TenantIsolationTestData.CreatePairAsync(fixture); await using var services = IdentityAccessTestSetup.CreateServices(fixture); await using var scope = services.CreateAsyncScope();
+        var reader = scope.ServiceProvider.GetRequiredService<MediPOS.Application.Modules.AuditSupport.IAuditHistoryReader>();
+        var query = new MediPOS.Application.Modules.AuditSupport.AuditHistoryQuery(a.TenantId, IdentityAccessTestSetup.Now.AddDays(-1), IdentityAccessTestSetup.Now.AddDays(1), Limit: 1);
+        var row = Assert.Single(await reader.ReadAsync(query, Token)); var context = scope.ServiceProvider.GetRequiredService<MediPosDbContext>();
+        var before = await context.AuditLogs.AsNoTracking().Select(log => new { log.Id, log.BeforeJson, log.AfterJson }).ToArrayAsync(Token);
+        Assert.Contains(before, log => log.Id == row.AuditId); Assert.NotEmpty(row.Action); Assert.NotEmpty(row.EntityType);
+        Assert.Empty(await reader.ReadAsync(query with { EntityId = b.Identity.MembershipId }, Token));
+        var after = await context.AuditLogs.AsNoTracking().Select(log => new { log.Id, log.BeforeJson, log.AfterJson }).ToArrayAsync(Token);
+        Assert.Equal(before.OrderBy(log => log.Id), after.OrderBy(log => log.Id));
     }
 }

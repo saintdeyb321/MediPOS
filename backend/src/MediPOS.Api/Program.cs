@@ -30,7 +30,9 @@ public partial class Program
         if (tenantApi)
         {
             builder.Services.AddSingleton<TenantApiRateLimiter>();
-            builder.Services.ConfigureHttpJsonOptions(options => TenantHttp.ConfigureJson(options.SerializerOptions));
+            // OpenAPI composes schemas deeper than an individual request. Incoming tenant JSON
+            // still uses TenantHttp's separate options and explicit document limit of 12.
+            builder.Services.ConfigureHttpJsonOptions(options => TenantHttp.ConfigureJson(options.SerializerOptions, maximumDepth: 64));
         }
         configureServices?.Invoke(builder.Services);
 

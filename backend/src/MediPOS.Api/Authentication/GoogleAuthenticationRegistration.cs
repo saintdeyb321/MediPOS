@@ -158,7 +158,8 @@ public static class GoogleAuthenticationRegistration
         {
             if (!Protected(context)) { await next(context); return; }
             var callback = context.Request.Path == GoogleAuthenticationSettings.CallbackPath;
-            var platformRequest = protectPlatform && context.Request.Path.StartsWithSegments("/platform") || protectTenant && context.Request.Path.StartsWithSegments("/api");
+            var platformRequest = protectPlatform && context.Request.Path.StartsWithSegments("/platform");
+            var tenantRequest = protectTenant && context.Request.Path.StartsWithSegments("/api");
             var proxy = context.Connection.RemoteIpAddress;
             if (proxy?.IsIPv4MappedToIPv6 == true) proxy = proxy.MapToIPv4();
             if (!context.Request.IsHttps || !string.Equals(context.Request.Host.Value, settings.Origin.Authority, StringComparison.OrdinalIgnoreCase) ||
@@ -167,7 +168,12 @@ public static class GoogleAuthenticationRegistration
                 (!callback && (context.Request.Headers.Origin.Count > 0 && context.Request.Headers.Origin != settings.Origin.GetLeftPart(UriPartial.Authority) ||
                     context.Request.Headers["Sec-Fetch-Site"] == "cross-site")) || (callback && context.Request.Method != "GET"))
             { await AuthProblem.WriteAsync(context, 403, "auth.origin_denied"); return; }
-            if (platformRequest && (context.Request.Headers.Origin != settings.Origin.GetLeftPart(UriPartial.Authority) ||
+            // Browsers control Origin and normally omit it on same-origin GET. Only that safe
+            // method may use native same-origin/navigation metadata instead; mutations and
+            // platform operations still require the exact Origin as well as their CSRF check.
+            var sameOriginRead = tenantRequest && HttpMethods.IsGet(context.Request.Method) && context.Request.Headers.Origin.Count == 0 &&
+                context.Request.Headers["Sec-Fetch-Site"].ToString() is "same-origin" or "none";
+            if ((platformRequest || tenantRequest) && ((!sameOriginRead && context.Request.Headers.Origin != settings.Origin.GetLeftPart(UriPartial.Authority)) ||
                 context.Request.Headers["Sec-Fetch-Site"].ToString() is not ("" or "same-origin" or "none")))
             { await AuthProblem.WriteAsync(context, 403, "auth.origin_denied"); return; }
             await next(context);

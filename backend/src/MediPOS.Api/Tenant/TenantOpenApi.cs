@@ -20,14 +20,26 @@ public static class TenantOpenApi
             document.Components ??= new(); document.Components.SecuritySchemes ??= new Dictionary<string, IOpenApiSecurityScheme>();
             document.Components.SecuritySchemes["MediPosSession"] = new OpenApiSecurityScheme
             {
-                Type = SecuritySchemeType.ApiKey, In = ParameterLocation.Cookie, Name = Authentication.GoogleAuthenticationRegistration.SessionCookie,
+                Type = SecuritySchemeType.ApiKey,
+                In = ParameterLocation.Cookie,
+                Name = Authentication.GoogleAuthenticationRegistration.SessionCookie,
                 Description = "HttpOnly Google-authenticated MediPOS session. Browsers send it with same-origin credentials; never copy it to script storage."
             };
             return Task.CompletedTask;
         });
         options.AddSchemaTransformer((schema, context, _) =>
         {
-            if (context.JsonTypeInfo.Type == typeof(decimal)) { schema.Type = JsonSchemaType.Number; schema.Format = "decimal"; }
+            var nullable = Nullable.GetUnderlyingType(context.JsonTypeInfo.Type);
+            var type = nullable ?? context.JsonTypeInfo.Type;
+            if (type == typeof(decimal)) { schema.Type = JsonSchemaType.Number | (nullable is null ? 0 : JsonSchemaType.Null); schema.Format = "decimal"; }
+            if (type == typeof(Guid)) { schema.Type = JsonSchemaType.String | (nullable is null ? 0 : JsonSchemaType.Null); schema.Format = "uuid"; }
+            if (type == typeof(Microsoft.AspNetCore.Mvc.ProblemDetails))
+            {
+                schema.Properties ??= new Dictionary<string, IOpenApiSchema>(); schema.Required ??= new HashSet<string>();
+                schema.Properties["code"] = new OpenApiSchema { Type = JsonSchemaType.String };
+                schema.Properties["traceId"] = new OpenApiSchema { Type = JsonSchemaType.String };
+                schema.Required.Add("code"); schema.Required.Add("traceId");
+            }
             return Task.CompletedTask;
         });
         options.AddOperationTransformer(async (operation, context, token) =>
@@ -45,23 +57,37 @@ public static class TenantOpenApi
                     var schema = await context.GetOrCreateSchemaAsync(property.PropertyType, cancellationToken: token);
                     if (property.GetCustomAttributes(typeof(RangeAttribute), true).OfType<RangeAttribute>().SingleOrDefault() is { } range)
                     {
-                        schema = new OpenApiSchema { Type = JsonSchemaType.Integer, Format = "int32",
+                        schema = new OpenApiSchema
+                        {
+                            Type = JsonSchemaType.Integer,
+                            Format = "int32",
                             Minimum = Convert.ToString(range.Minimum, System.Globalization.CultureInfo.InvariantCulture),
-                            Maximum = Convert.ToString(range.Maximum, System.Globalization.CultureInfo.InvariantCulture) };
+                            Maximum = Convert.ToString(range.Maximum, System.Globalization.CultureInfo.InvariantCulture)
+                        };
                     }
                     operation.Parameters.Add(new OpenApiParameter
                     {
-                        Name = JsonNamingPolicy.CamelCase.ConvertName(property.Name), In = ParameterLocation.Query, Schema = schema,
+                        Name = JsonNamingPolicy.CamelCase.ConvertName(property.Name),
+                        In = ParameterLocation.Query,
+                        Schema = schema,
                         Required = property.IsDefined(typeof(RequiredAttribute), true)
                     });
                 }
             }
             if (context.Description.HttpMethod != "GET")
                 operation.Parameters.Add(new OpenApiParameter { Name = "X-CSRF-TOKEN", In = ParameterLocation.Header, Required = true, Schema = new OpenApiSchema { Type = JsonSchemaType.String } });
-            operation.Parameters.Add(new OpenApiParameter { Name = "Origin", In = ParameterLocation.Header, Required = true, Schema = new OpenApiSchema { Type = JsonSchemaType.String, Format = "uri" }, Description = "Exact configured public origin; authenticated requests use the HttpOnly MediPOS session cookie." });
             operation.Description = "Requires the authenticated MediPOS cookie and current tenant authorization. " +
                 "Tenant/branch IDs select a resource; they do not grant access. Enum values are strings, monetary values are exact decimals, timestamps are UTC. " +
-                "Mutations require native CSRF. Recheck persisted state after ambiguous sale confirmation; do not blindly retry with a new version.";
+                "Mutations require native CSRF and exact public Origin emitted by the browser. Same-origin GET may omit Origin only with native Sec-Fetch-Site same-origin/none. " +
+                "Do not set browser-controlled Origin/Sec-Fetch headers in a generated client. Recheck persisted state after ambiguous sale confirmation; do not blindly retry with a new version.";
+            if (operation.OperationId == "tenant.sync.batch")
+            {
+                var payload = await context.GetOrCreateSchemaAsync(typeof(MediPOS.Application.Modules.OfflineSync.OfflineSalePayload), cancellationToken: token);
+                var document = context.Document ?? throw new InvalidOperationException("OpenAPI document scope is required.");
+                document.Components ??= new(); document.Components.Schemas ??= new Dictionary<string, IOpenApiSchema>();
+                document.Components.Schemas.TryAdd("OfflineSalePayload", payload);
+                operation.Description += " offline_sale.v1 payload is a canonical JSON string using OfflineSalePayload (schemaVersion 1); preserve its event UUID, exact numeric text, declared time and SHA256 across retries. pending acknowledges reception only; accepted acknowledges commercial posting. BatchRequestId is tracing only.";
+            }
             if (operation.RequestBody?.Content is { } content)
                 foreach (var entry in content.Where(value => value.Key != "application/json")) entry.Value.Schema = new OpenApiSchema { Type = JsonSchemaType.String, Format = "binary" };
             foreach (var response in operation.Responses?.Values.AsEnumerable() ?? [])
@@ -77,6 +103,12 @@ public static class TenantOpenApi
     public sealed class PurchaseSearch : Page { [Required] public string Reference { get; init; } = ""; }
     public sealed class ProductPage : Page { public Guid? ProductId { get; init; } }
     public sealed class BranchPage : Page { public Guid? BranchId { get; init; } }
+    public sealed class CashTransfers : Page { public Guid? DestinationBranchId { get; init; } }
+    public sealed class Transfers : Page { public Guid? BranchId { get; init; } public MediPOS.Domain.Modules.Transfers.TransferStatus? Status { get; init; } }
+    public sealed class Notifications : Page { public Guid? BranchId { get; init; } public bool? OnlyUnread { get; init; } }
+    public sealed class AuditHistory : Page { public Guid? EntityId { get; init; } public DateTimeOffset? FromUtc { get; init; } public DateTimeOffset? ToUtc { get; init; } }
+    public sealed class CommissionRules : Page { public Guid? ProductId { get; init; } public bool? IncludeInactive { get; init; } }
+    public sealed class CommissionReport : Page { public Guid? BranchId { get; init; } public Guid? SellerMembershipId { get; init; } public Guid? ProductId { get; init; } [Required] public DateOnly From { get; init; } [Required] public DateOnly To { get; init; } }
     public sealed class ImportFile { public string? FileName { get; init; } }
     public sealed class ImportRows { [Range(0, MediPOS.Application.Modules.Catalog.ProductImport.ProductImportLimits.MaximumWorksheetRow)] public int? AfterRowNumber { get; init; } [Range(1, 100)] public int? Limit { get; init; } }
     public sealed class DateRange { [Required] public DateOnly From { get; init; } [Required] public DateOnly To { get; init; } public Guid? BranchId { get; init; } }

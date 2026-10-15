@@ -1,32 +1,33 @@
 using System.Reflection;
 using MediPOS.Application.Modules.Branches;
 using MediPOS.Application.Modules.Cash;
+using MediPOS.Application.Modules.Cash.GetActiveCashSessions;
 using MediPOS.Application.Modules.Cash.OpenCashSession;
 using MediPOS.Application.Modules.Catalog;
+using MediPOS.Application.Modules.Catalog.ProductImport;
 using MediPOS.Application.Modules.Catalog.ReplaceProductUnits;
 using MediPOS.Application.Modules.Catalog.SearchProducts;
 using MediPOS.Application.Modules.Commissions;
 using MediPOS.Application.Modules.IdentityAccess;
 using MediPOS.Application.Modules.IdentityAccess.Directory;
 using MediPOS.Application.Modules.IdentityAccess.OperationalAccess;
+using MediPOS.Application.Modules.IdentityAccess.ReplaceWorkSchedule;
 using MediPOS.Application.Modules.Inventory;
 using MediPOS.Application.Modules.Purchasing;
 using MediPOS.Application.Modules.Purchasing.CreateSupplier;
 using MediPOS.Application.Modules.Purchasing.ReplacePurchaseLines;
+using MediPOS.Application.Modules.Reporting.ExportOwnerReport;
 using MediPOS.Application.Modules.Reporting.GetOwnerBranchOverview;
+using MediPOS.Application.Modules.Reporting.Operational;
 using MediPOS.Application.Modules.SalesPos;
 using MediPOS.Application.Modules.SalesPos.ConfirmSale;
 using MediPOS.Application.Modules.SalesPos.VoidSale;
-using MediPOS.Application.Modules.IdentityAccess.ReplaceWorkSchedule;
-using MediPOS.Application.Modules.Catalog.ProductImport;
-using MediPOS.Application.Modules.Reporting.Operational;
-using MediPOS.Application.Modules.Reporting.ExportOwnerReport;
-using MediPOS.Domain.Modules.Catalog.ProductImport;
 using MediPOS.Application.Modules.TenancyLicensing;
 using MediPOS.Domain.Modules.AuditSupport;
 using MediPOS.Domain.Modules.Branches;
 using MediPOS.Domain.Modules.Cash;
 using MediPOS.Domain.Modules.Catalog;
+using MediPOS.Domain.Modules.Catalog.ProductImport;
 using MediPOS.Domain.Modules.Commissions;
 using MediPOS.Domain.Modules.IdentityAccess;
 using MediPOS.Domain.Modules.Inventory;
@@ -38,7 +39,7 @@ using Microsoft.Extensions.DependencyInjection;
 namespace MediPOS.UnitTests.Api;
 
 // Recording persistence for real HTTP/application composition only. Does not prove PostgreSQL ACID/RLS/locks.
-public sealed class TenantHttpTestState
+public sealed partial class TenantHttpTestState
 {
     internal readonly Guid TenantId = Guid.NewGuid();
     internal User User { get; } = PlatformLicenseHttpTests.Operator();
@@ -84,14 +85,28 @@ public sealed class TenantHttpTestState
             typeof(IPurchasingStore), typeof(IPurchaseReceiptWriter), typeof(IPurchaseDirectoryReader), typeof(IInventoryDirectoryReader), typeof(IProductSearchStore),
             typeof(IOpenCashSessionWriter), typeof(IFindOpenCashSession), typeof(ISaleDraftStore), typeof(ISaleCheckoutTransaction), typeof(IInternalTicketReader),
             typeof(ICashCloseTransaction), typeof(ICashSessionReconciliationReader), typeof(IOwnerBranchOverviewReader), typeof(ISaleVoidTransaction),
-            typeof(IIdentityAccessStore), typeof(IEmployeeDirectoryReader), typeof(IProductImportStore), typeof(IStockAdjustmentTransaction),
+            typeof(IIdentityAccessStore), typeof(IEmployeeDirectoryReader), typeof(IProductImportStore), typeof(IStockAdjustmentTransaction), typeof(IActiveCashSessionsReader),
             typeof(IOwnerOperationalDashboardReader), typeof(IOwnerSalesReportReader), typeof(IOwnerInventoryRiskReader), typeof(IOwnerProductRotationReader), typeof(IReportExportReader)];
         foreach (var port in ports)
             services.AddScoped(port, _ => { var proxy = DispatchProxy.Create(port, typeof(Port)); ((Port)proxy).State = this; return proxy; });
+        ConfigureTransfers(services);
+        ConfigureCashTransfers(services);
+        ConfigureCommissions(services);
+        ConfigureSync(services);
+        ConfigureThresholds(services);
+        ConfigureNotifications(services);
+        ConfigureAudit(services);
     }
     private object Invoke(Type type, string method, object?[] a)
     {
         Reads++;
+        if (type == typeof(MediPOS.Application.Modules.AuditSupport.IAuditHistoryReader)) return ReadAudit(a);
+        if (type == typeof(MediPOS.Application.Modules.Inventory.SetBranchProductStockThreshold.IBranchStockThresholdTransaction)) return Task.FromResult<MediPOS.Application.Modules.Inventory.SetBranchProductStockThreshold.IBranchStockThresholdScope>(new ThresholdScope(this));
+        if (InvokeTransfers(type, method, a, out var transferResult)) return transferResult!;
+        if (InvokeCashTransfers(type, method, a, out var cashTransferResult)) return cashTransferResult!;
+        if (InvokeCommissions(type, method, a, out var commissionResult)) return commissionResult!;
+        if (InvokeSync(type, method, a, out var syncResult)) return syncResult!;
+        if (InvokeNotifications(type, method, a, out var notificationResult)) return notificationResult!;
         if (type == typeof(IOwnerOperationalDashboardReader)) return Task.FromResult(new DashboardMetrics(0, 0, 0, 0, 0, 0, 0, 0, 0, 0));
         if (type == typeof(IOwnerSalesReportReader)) return Task.FromResult(new SalesReportPage([], new(0, 0, 0)));
         if (type == typeof(IOwnerProductRotationReader)) return Task.FromResult(new ProductRotationPage([], new(0, 0)));
@@ -227,6 +242,7 @@ public sealed class TenantHttpTestState
         }
         if (type == typeof(IInventoryDirectoryReader))
         {
+            if (method == "ExpiringAsync") return Task.FromResult<IReadOnlyList<ExpiringLotSource>>(ExpiringSources.Where(source => source.TenantId == (Guid)a[0]! && source.BranchId == (Guid)a[1]! && (a[2] is null || source.BusinessProductId == (Guid)a[2]!)).Skip((int)a[4]!).Take((int)a[5]!).ToArray());
             if (method == "StockAsync") return Task.FromResult<IReadOnlyList<ProductStockDetails>>(Lots.GroupBy(value => value.BusinessProductId).Select(group => new ProductStockDetails(group.Key, group.Sum(value => value.QuantityAvailableBase))).ToArray());
             return Task.FromResult<IReadOnlyList<LotStockDetails>>(Lots.Select(value => new LotStockDetails(value.Id, value.BusinessProductId, value.BatchNumber, value.ExpirationDate, value.QuantityAvailableBase)).ToArray());
         }
@@ -238,7 +254,8 @@ public sealed class TenantHttpTestState
                 Units.Where(unit => unit.BusinessProductId == value.Id).Select(ProductUnitDetails.From).ToArray())).ToArray(), [], []));
         }
         if (type == typeof(IOpenCashSessionWriter)) return Save(() => { Cash.Add((CashSession)a[0]!); Audits.Add((AuditLog)a[1]!); });
-        if (type == typeof(IFindOpenCashSession)) return Task.FromResult(Cash.SingleOrDefault(value => value.MembershipId == (Guid)a[2]! && value.Status == CashSessionStatus.Open) is { } session ? OpenCashSessionDetails.From(session) : null);
+        if (type == typeof(IActiveCashSessionsReader)) return Task.FromResult<IReadOnlyList<ActiveCashSessionDetails>>(Cash.Where(session => session.Status == CashSessionStatus.Open).Select(session => new ActiveCashSessionDetails(session.Id, session.BranchId, Branches.Single(branch => branch.Id == session.BranchId).Name, session.MembershipId, User.Id, User.DisplayName, session.OpeningAmount, session.OpenedAt, 0m)).ToArray());
+        if (type == typeof(IFindOpenCashSession)) return Task.FromResult(Cash.SingleOrDefault(value => value.BranchId == (Guid)a[1]! && value.MembershipId == (Guid)a[2]! && value.Status == CashSessionStatus.Open) is { } session ? OpenCashSessionDetails.From(session) : null);
         if (type == typeof(ISaleDraftStore))
         {
             if (method == "AddAsync") { var sale = (Sale)a[0]!; Sales.Add(sale); Versions[sale.Id] = 1; return Task.FromResult(1u); }
@@ -279,7 +296,7 @@ public sealed class TenantHttpTestState
     { await reauthorize(token); var result = ImportRowResult.Imported(job, rowNumber, product); Products.Add(product); Units.Add(unit); ImportRows.Add(result); return result; }
     private async Task CompleteImportAsync(AuditLog audit, Func<CancellationToken, Task> reauthorize, CancellationToken token) { await reauthorize(token); Audits.Add(audit); }
     private CashSessionParty Party(CashSession cash) => new(cash.BranchId, Branches.Single(value => value.Id == cash.BranchId).Name, cash.MembershipId, User.Id, User.DisplayName);
-    private CashPaymentLedger Ledger(CashSession cash) => new(Sales.Where(value => value.CashSessionId == cash.Id).ToArray(), Payments.Where(payment => Sales.Any(sale => sale.Id == payment.SaleId && sale.CashSessionId == cash.Id)).ToArray(), Reversals.ToArray());
+    private CashPaymentLedger Ledger(CashSession cash) => new(Sales.Where(value => value.CashSessionId == cash.Id).ToArray(), Payments.Where(payment => Sales.Any(sale => sale.Id == payment.SaleId && sale.CashSessionId == cash.Id)).ToArray(), Reversals.Where(reversal => Sales.Any(sale => sale.Id == reversal.SaleId && sale.CashSessionId == cash.Id)).ToArray(), CashTransfers.Where(transfer => transfer.SourceCashSessionId == cash.Id || transfer.DestinationCashSessionId == cash.Id).ToArray());
     public class Port : DispatchProxy
     {
         internal TenantHttpTestState State { get; set; } = null!;
@@ -305,12 +322,13 @@ public sealed class TenantHttpTestState
         public CashSession CashSession => state.Cash.Single(value => value.Id == sale.CashSessionId);
         public Sale Sale => sale;
         public uint Version { get; } = state.Versions[sale.Id];
-        public Task<CommissionConfigurationSnapshot> ReadCommissionConfigurationAsync(CancellationToken cancellationToken) => Task.FromResult(new CommissionConfigurationSnapshot(false, []));
+        public Task<CommissionConfigurationSnapshot> ReadCommissionConfigurationAsync(CancellationToken cancellationToken) => Task.FromResult(new CommissionConfigurationSnapshot(state.CommissionSettings?.IsEnabled == true, state.CommissionRules.Where(rule => rule.IsActive && sale.Lines.Any(line => line.BusinessProductId == rule.BusinessProductId)).ToArray()));
         public Task<IReadOnlyList<InventoryLot>> LockLotsAsync(Guid productId, ProductType productType, decimal requested, DateOnly today, CancellationToken cancellationToken)
         { state.AfterCheckoutLock?.Invoke(); return Task.FromResult<IReadOnlyList<InventoryLot>>(state.Lots.Where(value => value.BusinessProductId == productId).ToArray()); }
         public Task<uint> CompleteAsync(IReadOnlyList<SalePayment> payments, IReadOnlyList<StockMovement> movements, IReadOnlyList<CommissionEntry> commissions, AuditLog audit, CancellationToken cancellationToken)
         {
             state.Payments.AddRange(payments); state.Movements.AddRange(movements); state.Audits.Add(audit);
+            state.CommissionEntries.AddRange(commissions);
             foreach (var movement in movements) state.Lots.Single(value => value.Id == movement.InventoryLotId).ApplySale(movement);
             return Task.FromResult(++state.Versions[sale.Id]);
         }
@@ -329,13 +347,13 @@ public sealed class TenantHttpTestState
         public CashSession CashSession => state.Cash.Single(value => value.Id == sale.CashSessionId);
         public Sale Sale => sale;
         public uint Version => state.Versions[sale.Id];
-        public Task<SaleVoidEffects> LoadEffectsAsync(CancellationToken cancellationToken) => Task.FromResult(new SaleVoidEffects(state.Payments.Where(value => value.SaleId == sale.Id).ToArray(), state.Movements.Where(value => sale.Lines.Any(line => line.Id == value.SourceSaleLineId)).ToArray()));
+        public Task<SaleVoidEffects> LoadEffectsAsync(CancellationToken cancellationToken) => Task.FromResult(new SaleVoidEffects(state.Payments.Where(value => value.SaleId == sale.Id).ToArray(), state.Movements.Where(value => sale.Lines.Any(line => line.Id == value.SourceSaleLineId)).ToArray()) { Commissions = state.CommissionEntries.Where(entry => entry.SaleId == sale.Id && entry.EntryType == CommissionEntryType.Earned).ToArray() });
         public Task<CashPaymentLedger> ReadCashLedgerAsync(CancellationToken cancellationToken) => Task.FromResult(state.Ledger(CashSession));
         public Task<IReadOnlyList<InventoryLot>> LockLotsAsync(CancellationToken cancellationToken) => Task.FromResult<IReadOnlyList<InventoryLot>>(state.Lots.ToArray());
         public Task<uint> CompleteAsync(IReadOnlyList<SalePaymentReversal> payments, IReadOnlyList<StockMovement> movements, IReadOnlyList<CommissionEntry> commissions, AuditLog audit, CancellationToken cancellationToken)
         {
             foreach (var movement in movements) state.Lots.Single(value => value.Id == movement.InventoryLotId).ApplySaleReversal(movement, state.Movements.Single(value => value.Id == movement.ReversesStockMovementId));
-            state.Reversals.AddRange(payments); state.Movements.AddRange(movements); state.Audits.Add(audit); return Task.FromResult(++state.Versions[sale.Id]);
+            state.Reversals.AddRange(payments); state.Movements.AddRange(movements); state.CommissionEntries.AddRange(commissions); state.Audits.Add(audit); return Task.FromResult(++state.Versions[sale.Id]);
         }
         public ValueTask DisposeAsync() => ValueTask.CompletedTask;
     }

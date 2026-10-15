@@ -8,7 +8,7 @@ namespace MediPOS.Api.Modules.OfflineSync;
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed record BranchCatalogRequest(Guid DeviceId, string? Cursor = null, int PageSize = 100);
 
-// Prepared only: activate routes once production server authentication exists. Device is a selection, not a credential.
+// Mapped by the opt-in TenantApi. Device is a selection, not a credential; the handler rechecks ownership.
 public static class BranchCatalogHttpMapping
 {
     public static GetBranchCatalogSnapshotCommand Snapshot(BranchCatalogRequest request, ITenantDataContext serverContext)
