@@ -9,6 +9,7 @@ import { ProductsPage } from '../../features/catalog'
 import { PurchasesPage } from '../../features/purchasing'
 import { InventoryPage } from '../../features/inventory'
 import { EmployeesPage } from '../../features/employees'
+import { CashTransfersPage, TransfersPage } from '../../features/transfers'
 import { useWorkspace } from '../../features/access'
 import { WorkspaceLayout } from '../layouts/WorkspaceLayout'
 import { SelectionLayout } from '../layouts/SelectionLayout'
@@ -36,6 +37,8 @@ export function AppRoutes() {
           <Route path="compras" element={<PurchasesPage />} />
           <Route path="inventario" element={<InventoryPage />} />
           <Route path="empleados" element={<EmployeesPage />} />
+          <Route path="transferencias" element={<TransfersPage />} />
+          <Route path="transferencias/sencillo" element={<CashTransfersPage />} />
           <Route path=":module" element={<ModulePage />} />
         </Route>
       </Route>

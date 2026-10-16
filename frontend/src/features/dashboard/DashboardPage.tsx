@@ -32,7 +32,7 @@ export function DashboardPage({ shortcuts }: { shortcuts: DashboardShortcut[] })
             <Link key={item.id} to={`${w.base}/${item.id}`} className="module-row">
               <span className="module-icon"><item.icon size={22} aria-hidden="true" /></span>
               <span><strong>{item.label}</strong><small>{item.description}</small></span>
-              <Badge>{item.id === 'configuracion' ? 'Ver contexto' : 'Próximamente'}</Badge>
+              <Badge>{item.id === 'configuracion' ? 'Ver contexto' : item.id === 'transferencias' ? 'Consultar y operar' : 'Próximamente'}</Badge>
               <ArrowRight size={18} aria-hidden="true" />
             </Link>
           ))}
