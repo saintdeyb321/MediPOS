@@ -43,7 +43,7 @@ export class HttpClient {
     this.listeners.add(listener)
     return () => { this.listeners.delete(listener) }
   }
-  async request(path: string, options: { method?: 'GET' | 'POST' | 'PUT'; body?: unknown; signal?: AbortSignal; exactNumbers?: boolean; responseType?: 'blob'; timeoutMs?: number } = {}): Promise<unknown> {
+  async request(path: string, options: { method?: 'GET' | 'POST' | 'PUT'; body?: unknown; xlsxBody?: Blob; signal?: AbortSignal; exactNumbers?: boolean; responseType?: 'blob'; timeoutMs?: number } = {}): Promise<unknown> {
     // Deliberately relative-only: production uses a single HTTPS origin, not a configurable API host.
     if (!/^\/(api|auth)\//.test(path) || path.includes('\\') || /[\r\n]/.test(path)) throw new ApiError(0, 'client.invalid_path')
     if (window.location.protocol !== 'https:') throw new ApiError(0, 'client.https_required')
@@ -51,8 +51,10 @@ export class HttpClient {
     if (url.origin !== window.location.origin || !/^\/(api|auth)\//.test(url.pathname)) throw new ApiError(0, 'client.invalid_path')
     const method = options.method ?? 'GET'
     if (method === 'GET' && options.body !== undefined) throw new ApiError(0, 'client.invalid_request')
+    // B1.6 accepts raw XLSX bytes only, bounded before CSRF or network I/O.
+    if (options.xlsxBody !== undefined && (method !== 'POST' || options.body !== undefined || !(options.xlsxBody instanceof Blob) || options.xlsxBody.size < 1 || options.xlsxBody.size > 5 * 1024 * 1024)) throw new ApiError(0, 'client.invalid_request')
     // Encode before CSRF/network I/O. Never round an unsafe JS number into a request.
-    const body = options.body === undefined ? undefined : stringifyExactJson(options.body)
+    const body = options.xlsxBody ?? (options.body === undefined ? undefined : stringifyExactJson(options.body))
     const timeoutMs = options.timeoutMs ?? 15_000
     if (!Number.isInteger(timeoutMs) || timeoutMs < 1000 || timeoutMs > 60_000) throw new ApiError(0, 'client.invalid_request')
     const timeout = AbortSignal.timeout(timeoutMs)
@@ -64,6 +66,7 @@ export class HttpClient {
       if (method !== 'GET') {
         headers.set('X-CSRF-TOKEN', await this.csrf(signal))
         if (options.body !== undefined) headers.set('Content-Type', 'application/json')
+        if (options.xlsxBody !== undefined) headers.set('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
       }
       let response: Response
       // CSRF acquisition finishes before taking the mutation's slot, avoiding a

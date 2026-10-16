@@ -20,6 +20,15 @@ function mount(scenario: Scenario = 'owner', path = '/', overrides?: Partial<Run
   return runtime.service
 }
 describe('F1 navigation and access boundaries', () => {
+  it.each([['notificaciones', 'Notificaciones'], ['configuracion', 'Configuración'], ['auditoria', 'Auditoría'], ['importacion', 'Importación de productos Excel']])('connects block 08 route %s to its functional page', async (path, heading) => {
+    mount('owner', workspace + '/' + path)
+    expect(await screen.findByRole('heading', { name: heading, level: 1 })).toBeInTheDocument()
+  })
+  it.each(['configuracion', 'auditoria', 'importacion'])('guards block 08 Owner route %s for an ordinary cashier', async path => {
+    mount('cashier', workspace + '/' + path)
+    expect(await screen.findByRole('heading', { name: 'Esta sección requiere otro acceso' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /Crear entidad legal|Crear sucursal|Importar archivo confirmado/ })).not.toBeInTheDocument()
+  })
   // Several async screens plus native user interactions; retain a bounded budget under build load.
   it('walks botica → branch → dashboard → POS shell → logout without creating a sale', async () => {
     const user = userEvent.setup(); mount()

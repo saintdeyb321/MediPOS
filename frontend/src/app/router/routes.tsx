@@ -12,6 +12,10 @@ import { EmployeesPage } from '../../features/employees'
 import { CashTransfersPage, TransfersPage } from '../../features/transfers'
 import { ReportsPage } from '../../features/reporting'
 import { CommissionsPage } from '../../features/commissions'
+import { NotificationsPage } from '../../features/notifications'
+import { SettingsPage } from '../../features/settings'
+import { AuditPage } from '../../features/audit'
+import { ImportPage } from '../../features/product-import'
 import { useWorkspace } from '../../features/access'
 import { WorkspaceLayout } from '../layouts/WorkspaceLayout'
 import { SelectionLayout } from '../layouts/SelectionLayout'
@@ -43,6 +47,10 @@ export function AppRoutes() {
           <Route path="transferencias/sencillo" element={<CashTransfersPage />} />
           <Route path="reportes" element={<ReportsPage />} />
           <Route path="comisiones" element={<CommissionsPage />} />
+          <Route path="notificaciones" element={<NotificationsPage />} />
+          <Route path="configuracion" element={<SettingsPage />} />
+          <Route path="auditoria" element={<AuditPage />} />
+          <Route path="importacion" element={<ImportPage />} />
           <Route path=":module" element={<ModulePage />} />
         </Route>
       </Route>

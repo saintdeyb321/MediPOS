@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
+import { Link } from 'react-router'
 import { ApiErrorState, useRuntime, useWorkspace } from '../access'
 import { ApiError } from '../../shared/api/http'
 import { scopedKey } from '../../shared/api/contracts'
@@ -45,6 +46,7 @@ function CatalogWorkspace() {
   const categoryName = (id: string) => categories.data?.find(row => row.id === id)?.name ?? 'No disponible en las categorías consultables'
   return <div className="catalog-page">
     <PageHeader title="Productos" description={`Catálogo del negocio · ${w.tenantName}. Precios por unidad base; este listado no devuelve stock.`} />
+    <Link to={w.base + '/importacion'}>Importar productos desde Excel</Link>
     {!http && <Notice tone="warning">Esta pantalla requiere conexión HTTPS real con MediPOS.</Notice>}
     {write.error != null && <ApiErrorState error={write.error} title="No pudimos completar la operación de catálogo" />}
     {write.notice && <p role="status">{write.notice}</p>}
