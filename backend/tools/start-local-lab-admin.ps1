@@ -2,6 +2,10 @@
 param([switch]$ValidateOnly)
 
 $ErrorActionPreference = 'Stop'
+function Test-LabAdministrativePurpose($Approval) {
+    if ($Approval.Purpose -ceq 'MediPOS LAB initial onboarding') { return $true }
+    return $Approval.Purpose -ceq 'MediPOS LAB medicine category' -and $Approval.CategoryName -ceq 'Medicamentos'
+}
 & (Join-Path $PSScriptRoot 'start-local-lab.ps1') -ValidateOnly
 $labRoot = Join-Path $env:LOCALAPPDATA 'MediPOS\Lab'
 $approvalPath = Join-Path $labRoot 'admin-window.json'
@@ -18,7 +22,7 @@ $userId = [Guid]::Empty
 $expires = [DateTimeOffset]::Parse($approval.ExpiresAtUtc, [Globalization.CultureInfo]::InvariantCulture)
 $approved = [DateTimeOffset]::Parse($approval.ApprovedAtUtc, [Globalization.CultureInfo]::InvariantCulture)
 if (-not [Guid]::TryParseExact($approval.UserId, 'D', [ref]$userId) -or $userId -eq [Guid]::Empty -or
-    $approval.Database -ne 'medipos_lab' -or $approval.Purpose -ne 'MediPOS LAB initial onboarding' -or
+    $approval.Database -ne 'medipos_lab' -or -not (Test-LabAdministrativePurpose $approval) -or
     $expires -le [DateTimeOffset]::UtcNow -or $approved -gt [DateTimeOffset]::UtcNow -or
     $expires -gt $approved.AddMinutes(30) -or $expires -le $approved) {
     throw 'A current, bounded, independently approved LAB operator is required.'

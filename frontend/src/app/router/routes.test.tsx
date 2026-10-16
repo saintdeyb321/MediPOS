@@ -31,7 +31,7 @@ describe('F1 navigation and access boundaries', () => {
     expect(await screen.findByRole('heading', { name: 'Punto de venta', level: 1 })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /continuar al cobro/i })).toBeDisabled()
     expect(screen.getByRole('searchbox', { name: /buscar un producto/i })).toBeDisabled()
-    expect(screen.getByRole('searchbox')).toHaveAccessibleDescription(/Disponible en F2/)
+    expect(screen.getByRole('searchbox')).toHaveAccessibleDescription(/conexión real con MediPOS/)
     expect(screen.getByRole('button', { name: /continuar al cobro/i })).toHaveAccessibleDescription(/No hay una venta creada/)
     await user.click(screen.getByText('Propietario', { selector: '.account-label' }))
     await user.click(screen.getByRole('button', { name: 'Cerrar sesión' }))
