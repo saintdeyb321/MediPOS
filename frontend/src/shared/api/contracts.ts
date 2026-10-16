@@ -9,6 +9,12 @@ export const uuid: Decoder<string> = value => typeof value === 'string' &&
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value) &&
   value !== '00000000-0000-0000-0000-000000000000' ? value : invalid()
 export const utc: Decoder<string> = value => /(?:Z|\+00:00)$/.test(text(value)) && Number.isFinite(Date.parse(text(value))) ? text(value) : invalid()
+export const dateOnly: Decoder<string> = value => {
+  const result = text(value)
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(result) || result < '0001-01-01') return invalid()
+  const date = new Date(result + 'T00:00:00Z')
+  return Number.isFinite(date.getTime()) && date.toISOString().slice(0, 10) === result ? result : invalid()
+}
 export const decimal: Decoder<JsonNumber> = value => value instanceof JsonNumber ? value : invalid()
 export const uint: Decoder<number> = value => {
   const literal = decimal(value).literal

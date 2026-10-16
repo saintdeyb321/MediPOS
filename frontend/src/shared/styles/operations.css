@@ -1,0 +1,10 @@
+.operations > * + *, .operation-body > * + *, .operation-body form > * + *, .operation-body fieldset > * + * { margin-top: var(--space-3); }
+.operation-body { padding: var(--space-4); }
+.operation-body fieldset { min-width: 0; padding: var(--space-3); border: 1px solid var(--border); }
+.operation-actions { display: flex; flex-wrap: wrap; gap: var(--space-3); align-items: center; }
+.operations select { max-width: 100%; min-height: 2.75rem; background: var(--surface); color: var(--text); border: 1px solid var(--control-border); padding: var(--space-2); font: inherit; }
+.operation-table { overflow-x: auto; }
+.operation-table table { width: 100%; border-collapse: collapse; }
+.operation-table th, .operation-table td { padding: var(--space-3); border-bottom: 1px solid var(--border); text-align: left; vertical-align: top; }
+.operations ul { padding-left: var(--space-4); }
+.operations .state-block { min-height: auto; padding: var(--space-4); }

@@ -57,3 +57,16 @@ export function decimalInput(text: string, maximum: JsonNumber, scale: number, a
   const parsed = new JsonNumber(text.trim().replace(',', '.'))
   return fits(parsed, maximum, scale, allowZero) ? parsed : null
 }
+
+// Unbounded PostgreSQL numeric inputs still have to fit the backend's System.Decimal exactly.
+export function isSystemDecimal(input: JsonNumber): boolean {
+  const literal = decimalLabel(input).replace(/^-/, '')
+  const [whole, fraction = ''] = literal.split('.')
+  return fraction.length <= 28 && BigInt(whole! + fraction) <= 79228162514264337593543950335n
+}
+export function systemDecimalInput(text: string, allowZero = false, signed = false): JsonNumber | null {
+  const literal = text.trim().replace(',', '.')
+  if (literal.length > 90 || !/^-?(?:0|[1-9]\d*)(?:\.\d+)?$/.test(literal) || !signed && literal.startsWith('-')) return null
+  const result = new JsonNumber(literal)
+  return isSystemDecimal(result) && (allowZero || compare(result, zero) !== 0) ? result : null
+}
