@@ -20,11 +20,13 @@ export function useSaleDraft(lines: CartLine[], replaceCart: (lines: CartLine[])
   // UUID text is case-insensitive, just like the API resource identity.
   const saleId = (parameters.get('sale') ?? '').toLowerCase()
   const creationUnknown = parameters.has('draftPending') && !saleId
-  const checkoutPending = parameters.has('confirmPending')
+  const voidPending = parameters.has('voidPending')
+  const checkoutPending = parameters.has('confirmPending') || voidPending
   const [server, setServer] = useState<SaleState | null>(null)
   const [phase, setPhase] = useState<Phase>(saleId ? 'loading' : 'idle')
   const [error, setError] = useState<unknown>(null); const [notice, setNotice] = useState('')
   const loadedId = useRef(''); const busy = useRef(false); const operation = useRef<AbortController | null>(null)
+  const preparingRef = useRef(false); const [preparing, setPreparing] = useState(false)
   useEffect(() => () => operation.current?.abort(), [])
   const mark = useCallback((changes: Record<string, string | null>) => {
     // Router search-param updaters are not queued like React state. Async responses
@@ -52,7 +54,7 @@ export function useSaleDraft(lines: CartLine[], replaceCart: (lines: CartLine[])
     } else void read(saleId, controller.signal).then(state => {
       if (controller.signal.aborted) return
       loadedId.current = state.saleId; setServer(state); replaceCart(restoreCart(state)); setPhase('idle'); setError(null)
-      setNotice('Borrador recuperado del servidor. Los precios guardados son snapshots; el stock y las presentaciones actuales se consultan en el buscador.')
+      setNotice('Venta recuperada del servidor. Consulta el buscador para conocer la disponibilidad actual.')
       mark({ savingDraft: null, draftPending: null })
     }).catch(failure => { if (!controller.signal.aborted) { setError(failure); setPhase('blocked') } })
     return () => controller.abort()
@@ -60,7 +62,7 @@ export function useSaleDraft(lines: CartLine[], replaceCart: (lines: CartLine[])
 
   const seller = !server || server.sellerMembershipId === access.membershipId
   const cashMatches = Boolean(cash && (!server || server.cashSessionId === cash.cashSessionId))
-  const locked = checkoutPending || phase === 'loading' || phase === 'creating' || phase === 'saving' || phase === 'blocked' || !seller || Boolean(server && server.status !== 'draft')
+  const locked = preparing || creationUnknown || checkoutPending || phase === 'loading' || phase === 'creating' || phase === 'saving' || phase === 'blocked' || !seller || Boolean(server && server.status !== 'draft')
   const dirty = Boolean(server && !matchesSaved(lines, server))
   const writable = Boolean(api && cashMatches && seller && !cartError(lines) && !locked && phase === 'idle' && (!server || server.saleId === saleId))
   async function create() {
@@ -76,7 +78,8 @@ export function useSaleDraft(lines: CartLine[], replaceCart: (lines: CartLine[])
       if (result.status !== 'draft' || result.sellerMembershipId !== access.membershipId || result.cashSessionId !== cash?.cashSessionId) {
         throw new ApiError(0, 'client.outcome_unknown', undefined, true)
       }
-      setPhase('idle'); setNotice('Borrador creado. Tu carrito sigue local: pulsa Guardar líneas para persistirlo. Conserva esta dirección para recuperarlo al recargar.')
+      setPhase('idle'); setNotice('Preparando la venta para cobrar…')
+      return result
     } catch (failure) {
       if (operation.current.signal.aborted) return
       setError(failure)
@@ -100,17 +103,18 @@ export function useSaleDraft(lines: CartLine[], replaceCart: (lines: CartLine[])
     } catch (failure) { if (!operation.current.signal.aborted) { setError(failure); setPhase('blocked') } }
     finally { busy.current = false }
   }
-  async function save() {
-    if (!api || !server || !writable || !dirty || busy.current) return
+  async function save(target = server) {
+    if (!api || !target || !writable || matchesSaved(lines, target) || busy.current) return
     busy.current = true; operation.current = new AbortController(); setPhase('saving'); setError(null)
-    const submitted = lines; const expectedVersion = server.version; const id = server.saleId
+    const submitted = lines; const expectedVersion = target.version; const id = target.saleId
     mark({ sale: id, draftPending: null, savingDraft: String(expectedVersion) })
     try {
       const result = await api.replace({ tenantId, branchId }, id, expectedVersion, saleInputs(submitted), operation.current.signal)
       if (operation.current.signal.aborted) return
       setServer(result)
       if (result.status !== 'draft' || !matchesSaved(submitted, result)) { setPhase('conflict'); setNotice('El resultado guardado difiere del carrito. Revisa el estado persistido.'); return }
-      setPhase('idle'); mark({ sale: id, draftPending: null, savingDraft: null }); setNotice('Líneas guardadas en el servidor. Es un borrador: no hay pagos ni descuento de stock.')
+      setPhase('idle'); mark({ sale: id, draftPending: null, savingDraft: null }); setNotice('Venta preparada. Revisa los medios de pago antes de confirmar.')
+      return result
     } catch (failure) {
       if (operation.current.signal.aborted) return
       setError(failure)
@@ -119,7 +123,8 @@ export function useSaleDraft(lines: CartLine[], replaceCart: (lines: CartLine[])
           const state = await read(id, operation.current.signal)
           setServer(state)
           if (state.status === 'draft' && matchesSaved(submitted, state)) {
-            setPhase('idle'); setError(null); mark({ sale: id, draftPending: null, savingDraft: null }); setNotice('La lectura del mismo borrador confirma las líneas guardadas. No se repitió la escritura.')
+            setPhase('idle'); setError(null); mark({ sale: id, draftPending: null, savingDraft: null }); setNotice('Venta preparada y verificada. No se repitió la escritura.')
+            return state
           } else { setPhase('conflict'); setNotice('No se confirmó tu edición. Conservamos tu carrito; compara con el borrador persistido antes de resolver.'); }
         } catch { setPhase('uncertain') }
       } else {
@@ -127,11 +132,26 @@ export function useSaleDraft(lines: CartLine[], replaceCart: (lines: CartLine[])
       }
     } finally { busy.current = false }
   }
+  async function prepare() {
+    if (preparingRef.current || !writable || creationUnknown || !lines.length) return false
+    preparingRef.current = true; setPreparing(true)
+    try {
+      const target = server ?? await create()
+      if (!target || operation.current?.signal.aborted) return false
+      return matchesSaved(lines, target) || Boolean(await save(target))
+    } finally { preparingRef.current = false; if (!operation.current?.signal.aborted) setPreparing(false) }
+  }
+  function nextSale() {
+    if (busy.current || preparingRef.current || checkoutPending || !server || server.status === 'draft') return false
+    loadedId.current = ''; setServer(null); replaceCart([]); setError(null); setNotice(''); setPhase('idle')
+    mark({ sale: null, savingDraft: null, draftPending: null, confirmPending: null, voidPending: null })
+    return true
+  }
   function resolve(useServer: boolean) {
     if (!server || phase !== 'conflict') return
     if (useServer) replaceCart(restoreCart(server))
     setError(null); setPhase('idle'); mark({ savingDraft: null })
-    setNotice(useServer ? 'Carrito reemplazado por las líneas persistidas.' : 'Conservaste el carrito local. Guardar líneas enviará una edición explícita con la versión recién consultada.')
+    setNotice(useServer ? 'Carrito reemplazado por la venta guardada.' : 'Carrito conservado. Pulsa Cobrar para preparar la venta con la versión consultada.')
   }
   async function recover(id: string) {
     if (!isUuid(id) || busy.current || checkoutPending) return
@@ -141,12 +161,14 @@ export function useSaleDraft(lines: CartLine[], replaceCart: (lines: CartLine[])
       if (operation.current.signal.aborted) return
       loadedId.current = state.saleId; setServer(state); replaceCart(restoreCart(state))
       setError(null); setPhase('idle'); mark({ sale: state.saleId, draftPending: null, savingDraft: null })
-      setNotice('Borrador recuperado del servidor. El carrito se reemplazó por las líneas persistidas.')
+      setNotice('Venta recuperada del servidor. El carrito se reemplazó por las líneas guardadas.')
     } catch (failure) { if (!operation.current.signal.aborted) { setError(failure); setPhase('blocked') } }
     finally { busy.current = false }
   }
   return { server, phase, error, notice, seller, cashMatches, locked, dirty, creationUnknown, create, save, refresh, resolve, recover, hasKnownId: isUuid(saleId),
-    checkoutPending, markCheckout: (pending: boolean) => mark({ confirmPending: pending ? '1' : null }),
+    prepare, preparing, nextSale, canPrepare: writable && !creationUnknown && lines.length > 0,
+    checkoutPending, voidPending, markCheckout: (pending: boolean, kind: 'confirm' | 'void' = 'confirm') =>
+      mark(pending ? { [kind === 'void' ? 'voidPending' : 'confirmPending']: '1' } : { confirmPending: null, voidPending: null }),
     canCheckout: writable && Boolean(server && server.status === 'draft' && server.lines.length) && !dirty,
     canCreate: writable && !server && !saleId && !creationUnknown && lines.length > 0,
     canSave: writable && Boolean(server) && dirty,

@@ -25,17 +25,17 @@ function PosWorkspace() {
   const draft = useSaleDraft(lines, setLines, cash.query.isFetching || cash.pending || cash.uncertain ? null : cash.session)
   function changeCart(next: CartLine[]) {
     if (new Set(next.map(lineKey)).size !== next.length) { setMessage('Esta presentación ya está en el carrito. Ajusta su cantidad sin duplicar la línea.'); return }
-    setLines(next); setMessage('Carrito local actualizado; los cambios aún no se guardaron.')
+    setLines(next); setMessage('Carrito actualizado.')
   }
   function select(selection: ProductSelection) {
     if (draft.locked) return
-    try { setLines(addSelection(lines, selection)); setMessage(`${selection.product.name} agregado al carrito local.`) }
+    try { setLines(addSelection(lines, selection)); setMessage(`${selection.product.name} agregado al carrito.`) }
     catch (error) { setMessage(error instanceof Error ? error.message : 'Revisa el carrito antes de agregar.') }
   }
   return (
     <>
       <PosHeader />
-      <Notice>Prepara y guarda el borrador. Solo Confirmar venta y registrar pagos realiza el cobro y descuenta stock.</Notice>
+      <Notice>Busca productos y pulsa Cobrar. Revisa los pagos antes de confirmar la venta.</Notice>
       <CashSessionPanel cash={cash} />
       <a href="#carrito" className="text-link mobile-cart-link">Ir al carrito</a>
       <div className="pos-layout"><ProductSearchPanel onSelect={select} disabled={draft.locked} />

@@ -4,6 +4,7 @@ import { TenantSelection } from '../../features/tenants'
 import { BranchSelection } from '../../features/branches'
 import { DashboardPage } from '../../features/dashboard'
 import { PosPage } from '../../features/pos'
+import { CashPage } from '../../features/cash'
 import { useWorkspace } from '../../features/access'
 import { WorkspaceLayout } from '../layouts/WorkspaceLayout'
 import { SelectionLayout } from '../layouts/SelectionLayout'
@@ -26,6 +27,7 @@ export function AppRoutes() {
         <Route path="/boticas/:tenantId/sucursales/:branchId" element={<WorkspaceLayout />}>
           <Route index element={<DashboardRoute />} />
           <Route path="ventas" element={<PosPage />} />
+          <Route path="caja" element={<CashPage />} />
           <Route path=":module" element={<ModulePage />} />
         </Route>
       </Route>

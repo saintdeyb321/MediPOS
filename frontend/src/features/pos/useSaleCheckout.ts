@@ -19,16 +19,16 @@ export function useSaleCheckout(draft: DraftController) {
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; controller.current?.abort() } }, [])
   const sale = draft.server
   const terminal = sale?.status === 'confirmed' || sale?.status === 'voided'
-  const ticket = useQuery({ queryKey: scopedKey({ tenantId, branchId }, 'ticket', session.userId, access.membershipId, sale?.saleId),
+  const ticket = useQuery({ queryKey: scopedKey({ tenantId, branchId }, 'ticket', session.userId, access.membershipId, sale?.saleId, sale?.status, sale?.version),
     queryFn: ({ signal }) => {
       if (!http || !sale) throw new ApiError(0, 'client.unexpected_response')
       return ticketsApi(http).read({ tenantId, branchId }, sale.saleId, signal)
     }, enabled: Boolean(http && terminal), retry: false, staleTime: 0,
   })
-  async function reconcile() {
+  async function reconcile(expectVoid = draft.voidPending) {
     const state = await draft.refresh()
     if (!mounted.current || !state) return false
-    if (state.status !== 'draft') {
+    if (state.status === 'voided' || state.status === 'confirmed' && !expectVoid) {
       draft.markCheckout(false); setError(null)
       setNotice(state.status === 'confirmed' ? 'Venta confirmada en el servidor. Consulta su ticket interno; no repitas el cobro.' : 'La venta está anulada. No puede cobrarse de nuevo.')
       // Refresh only this branch's commercial reads; no mutation is retried.
@@ -38,6 +38,26 @@ export function useSaleCheckout(draft: DraftController) {
       return true
     }
     return false
+  }
+  async function voidSale(reason: string) {
+    if (!http || !sale || sale.status !== 'confirmed' || draft.checkoutPending || running.current || denied ||
+      !(access.role === 'owner' || sale.sellerMembershipId === access.membershipId) || !reason.trim() || reason.trim().length > 512) return
+    running.current = true; setBusy(true); setError(null); setNotice(''); draft.markCheckout(true, 'void')
+    controller.current = new AbortController()
+    try {
+      await salesApi(http).void({ tenantId, branchId }, sale.saleId, sale.version, reason.trim(), controller.current.signal)
+      if (!mounted.current) return
+      if (!await reconcile(true) && mounted.current) setNotice('Falta verificar la anulación. Consulta la misma venta; no repitas la operación.')
+    } catch (failure) {
+      if (!mounted.current) return
+      setError(failure)
+      const definite = failure instanceof ApiError && !failure.outcomeUnknown
+      if (definite && (failure.status === 401 || failure.status === 403)) setDenied(true)
+      const completed = await reconcile(true)
+      if (!mounted.current) return
+      if (!completed && definite) draft.markCheckout(false)
+      if (!completed && !definite) setNotice('Anulación incierta. Que aún aparezca confirmada no demuestra que la reversión falló. Consulta antes de seguir vendiendo.')
+    } finally { running.current = false; if (mounted.current) setBusy(false) }
   }
   async function confirm(payments: SalePaymentInput[]) {
     if (!http || !sale || !draft.canCheckout || denied || running.current) return
@@ -63,5 +83,7 @@ export function useSaleCheckout(draft: DraftController) {
     running.current = true; setBusy(true)
     try { await reconcile() } finally { running.current = false; if (mounted.current) setBusy(false) }
   }
-  return { busy, error, notice, ticket, confirm, consult, denied }
+  return { busy, error, notice, ticket, confirm, voidSale, consult, denied,
+    clearResult: () => { if (!running.current) { setError(null); setNotice(''); setDenied(false) } },
+  }
 }

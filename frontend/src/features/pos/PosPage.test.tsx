@@ -10,7 +10,7 @@ import { createPreviewService } from '../../development/fixtures'
 import { HttpClient } from '../../shared/api/http'
 import { JsonNumber, parseExactJson, stringifyExactJson } from '../../shared/api/exactJson'
 import { array, decimal, object, oneOf, uint, uuid } from '../../shared/api/contracts'
-import { multiply, roundEven4, add, zero } from '../../shared/api/decimal'
+import { multiply, roundEven4, add, decimalLabel, zero } from '../../shared/api/decimal'
 import type { ProductMatch } from '../catalog'
 import type { OpenCashSession } from '../cash'
 import type { SaleLineInput, SaleState, SalePaymentInput } from './sales.api'
@@ -47,7 +47,7 @@ function server() {
   const state = { cash: cash as OpenCashSession | null, sale: null as SaleState | null, loseOpen: false, storeOpen: true, loseCreate: false,
     loseSave: false, conflict: false, denySave: false, failReads: false,
     loseConfirm: false, storeConfirm: true, confirmFailure: 0, confirmConflict: false, failTicket: false, malformedConfirm: false,
-    payments: [] as SalePaymentInput[] }
+    loseVoid: false, storeVoid: true, voidFailure: 0, payments: [] as SalePaymentInput[] }
   const fetcher = vi.fn<typeof fetch>().mockImplementation(async (input, init) => {
     const path = String(input); const method = init?.method ?? 'GET'
     if (path === '/auth/csrf') return json({ requestToken: 'unit-test-csrf' })
@@ -70,13 +70,19 @@ function server() {
       return json({ saleId, totalAmount: state.sale!.totalAmount, confirmedAt: '2026-10-16T12:00:00Z', version: state.sale!.version,
         payments: state.payments.map((payment, index) => ({ ...payment, salePaymentId: id(String(70 + index)) })) })
     }
+    if (method === 'POST' && path.endsWith('/void')) {
+      if (state.voidFailure) return json({ code: state.voidFailure === 403 ? 'sale.forbidden_void' : 'sale.insufficient_cash' }, state.voidFailure)
+      if (state.storeVoid) state.sale = { ...state.sale!, status: 'voided', version: state.sale!.version + 1 }
+      if (state.loseVoid) throw new TypeError('Unit-test lost void response')
+      return json({ saleId, voidedAt: '2026-10-16T12:01:00Z', version: state.sale!.version, paymentReversalCount: 2, stockReversalCount: 1 })
+    }
     if (path.endsWith('/ticket')) {
       if (state.failTicket) return json({ code: 'server.unavailable' }, 503)
       const sale = state.sale!
       const ticket: InternalTicket = { saleId, cashSessionId: cash.cashSessionId, ticketNumber: 'MP-UNIT-TEST',
         currentDisplayData: { tenantId, branchId, businessName: 'Negocio unitario', legalEntityId: id('4'), legalName: 'Prueba', ruc: 'NO-FISCAL',
           branchName: 'Sede unitaria', sellerMembershipId: membershipId, sellerUserId: userId, sellerDisplayName: 'Vendedor de prueba' },
-        saleDateTime: '2026-10-16T12:00:00Z', status: 'confirmed', statusLabel: 'CONFIRMADA', isVoided: false, voidedAt: null, voidReason: null,
+        saleDateTime: '2026-10-16T12:00:00Z', status: sale.status === 'voided' ? 'voided' : 'confirmed', statusLabel: sale.status === 'voided' ? 'ANULADA' : 'CONFIRMADA', isVoided: sale.status === 'voided', voidedAt: sale.status === 'voided' ? '2026-10-16T12:01:00Z' : null, voidReason: sale.status === 'voided' ? 'Motivo unitario' : null,
         lines: sale.lines.map(line => ({ productName: line.productNameSnapshot, unitName: line.unitNameSnapshot, quantity: line.quantity,
           baseQuantity: line.baseQuantity, conversionToBase: line.conversionToBaseSnapshot, unitPrice: line.unitPriceSnapshot, priceKind: line.priceKind, lineTotal: line.lineTotal, unitPriceBasis: 'BASE_UNIT' })),
         payments: state.payments, totalAmount: sale.totalAmount, documentType: 'INTERNAL_TICKET', footer: 'Documento interno de prueba', supportedPrintWidthsMm: [58, 80] }
@@ -119,23 +125,69 @@ async function select(quantity = '2') {
   fireEvent.click(button)
 }
 async function createDraft() {
-  const button = screen.getByRole('button', { name: 'Crear borrador' })
+  const button = screen.getByRole('button', { name: 'Cobrar' })
   await waitFor(() => expect(button).toBeEnabled())
   fireEvent.click(button)
-  await waitFor(() => expect(screen.getByRole('button', { name: 'Guardar líneas' })).toBeEnabled())
+  fireEvent.click(button)
+  await screen.findByRole('form', { name: 'Pagos de la venta' })
 }
 async function preparePayment(fake: ReturnType<typeof server>) {
   fake.state.sale = withLines()
   const view = mount(fake, '?sale=' + saleId)
-  await waitFor(() => expect(screen.getByRole('button', { name: 'Continuar al cobro' })).toBeEnabled())
-  fireEvent.click(screen.getByRole('button', { name: 'Continuar al cobro' }))
+  await waitFor(() => expect(screen.getByRole('button', { name: 'Cobrar' })).toBeEnabled())
+  fireEvent.click(screen.getByRole('button', { name: 'Cobrar' }))
+  await screen.findByRole('form', { name: 'Pagos de la venta' })
   fireEvent.change(screen.getByRole('textbox', { name: 'Efectivo (S/)' }), { target: { value: '0.10' } })
   fireEvent.change(screen.getByRole('textbox', { name: 'Yape (S/)' }), { target: { value: '0.10' } })
   fireEvent.click(screen.getByRole('checkbox', { name: /Revisé los importes/ }))
   return view
 }
+async function prepareVoid(fake: ReturnType<typeof server>) {
+  const view = await preparePayment(fake)
+  fireEvent.click(screen.getByRole('button', { name: 'Confirmar venta y registrar pagos' }))
+  await screen.findByRole('article', { name: 'Ticket interno' })
+  await waitFor(() => expect(screen.getByRole('button', { name: 'Seguir vendiendo sin imprimir' })).toBeEnabled())
+  fireEvent.click(screen.getByText('Anular esta venta', { selector: 'summary' }))
+  fireEvent.change(screen.getByRole('textbox', { name: 'Motivo de anulación' }), { target: { value: ' Motivo unitario ' } })
+  fireEvent.click(screen.getByRole('checkbox', { name: /Revisé la devolución/ }))
+  return view
+}
 
 describe('POS local cart, cash and persisted draft', () => {
+  it('voids a confirmed sale once with reason/version, reads the voided ticket and leaves its history visible', async () => {
+    const fake = server(); await prepareVoid(fake)
+    const button = screen.getByRole('button', { name: 'Confirmar anulación' })
+    fireEvent.click(button); fireEvent.click(button)
+    await screen.findByText('Ticket interno · ANULADA')
+    expect(fake.writes()).toHaveLength(2)
+    expect(fake.writes()[1]?.[1]?.body).toBe('{"expectedVersion":3,"reason":"Motivo unitario"}')
+    expect(fake.state.sale?.status).toBe('voided')
+    expect(screen.queryByRole('button', { name: 'Confirmar venta y registrar pagos' })).not.toBeInTheDocument()
+  })
+  it('does not interpret an early confirmed state as failure of an uncertain void', async () => {
+    const fake = server(); fake.state.loseVoid = true; fake.state.storeVoid = false; const view = await prepareVoid(fake)
+    fireEvent.click(screen.getByRole('button', { name: 'Confirmar anulación' }))
+    await screen.findByText(/Que aún aparezca confirmada no demuestra/)
+    expect(screen.queryByRole('button', { name: 'Seguir vendiendo sin imprimir' })).not.toBeInTheDocument()
+    const search = screen.getByTestId('location').textContent!
+    expect(search).toContain('voidPending')
+    view.unmount(); mount(fake, search)
+    await screen.findByRole('article', { name: 'Ticket interno' })
+    expect(screen.getByRole('button', { name: 'Confirmar anulación' })).toBeDisabled()
+    fake.state.sale = { ...fake.state.sale!, status: 'voided', version: 4 }
+    fireEvent.click(screen.getByRole('button', { name: 'Consultar resultado de venta' }))
+    await screen.findByText('Ticket interno · ANULADA')
+    expect(fake.writes()).toHaveLength(2)
+  })
+  it.each([403, 409])('does not retry a rejected void %s or claim a reversal', async status => {
+    const fake = server(); fake.state.voidFailure = status; await prepareVoid(fake)
+    fireEvent.click(screen.getByRole('button', { name: 'Confirmar anulación' }))
+    await screen.findByText('Revisa el resultado antes de cobrar de nuevo')
+    await waitFor(() => expect(screen.getByTestId('location')).not.toHaveTextContent('voidPending'))
+    expect(fake.writes()).toHaveLength(2)
+    expect(fake.state.sale?.status).toBe('confirmed')
+    expect(screen.queryByText('Ticket interno · ANULADA')).not.toBeInTheDocument()
+  })
   it('confirms mixed exact payments once, reads the ticket, prints only on demand and recovers without another POST', async () => {
     const fake = server(); const view = await preparePayment(fake)
     const print = vi.spyOn(window, 'print').mockImplementation(() => {})
@@ -157,6 +209,12 @@ describe('POS local cart, cash and persisted draft', () => {
     view.unmount(); mount(fake, search)
     await screen.findByRole('article', { name: 'Ticket interno' })
     expect(screen.queryByRole('button', { name: 'Confirmar venta y registrar pagos' })).not.toBeInTheDocument()
+    expect(fake.writes()).toHaveLength(1)
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Seguir vendiendo sin imprimir' })).toBeEnabled())
+    fireEvent.click(screen.getByRole('button', { name: 'Seguir vendiendo sin imprimir' }))
+    expect(screen.getByText('Tu carrito está vacío')).toBeInTheDocument()
+    expect(screen.getByText('Caja abierta')).toBeInTheDocument()
+    expect(screen.getByTestId('location').textContent).toBe('')
     expect(fake.writes()).toHaveLength(1)
   })
   it('requires a saved cart, exact payment sum and explicit review before confirmation', async () => {
@@ -190,9 +248,10 @@ describe('POS local cart, cash and persisted draft', () => {
     const search = screen.getByTestId('location').textContent!
     expect(search).toContain('confirmPending')
     view.unmount(); mount(fake, search)
-    await screen.findByText(/Borrador recuperado del servidor/)
-    expect(screen.getByRole('button', { name: 'Continuar al cobro' })).toBeDisabled()
-    expect(screen.getByRole('button', { name: 'Guardar líneas' })).toBeDisabled()
+    await screen.findByText(/Venta recuperada del servidor/)
+    expect(screen.queryByRole('button', { name: 'Crear borrador' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Guardar líneas' })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Cobrar' })).toBeDisabled()
     expect(fake.writes()).toHaveLength(1)
     fake.state.sale = { ...fake.state.sale!, status: 'confirmed', version: 3 }
     fireEvent.click(screen.getByRole('button', { name: 'Consultar resultado de venta' }))
@@ -232,7 +291,7 @@ describe('POS local cart, cash and persisted draft', () => {
   it('reconciles a version conflict and requires reviewing new amounts without resending confirmation', async () => {
     const fake = server(); fake.state.confirmConflict = true; await preparePayment(fake)
     fireEvent.click(screen.getByRole('button', { name: 'Confirmar venta y registrar pagos' }))
-    await screen.findByText('Total guardado por el servidor: S/ 0.30')
+    await screen.findByText('Total consultado en el servidor: S/ 0.30')
     expect(screen.getByRole('textbox', { name: 'Efectivo (S/)' })).toHaveValue('')
     expect(screen.getByRole('checkbox', { name: /Revisé los importes/ })).not.toBeChecked()
     expect(screen.getByRole('button', { name: 'Confirmar venta y registrar pagos' })).toBeDisabled()
@@ -277,7 +336,8 @@ describe('POS local cart, cash and persisted draft', () => {
     fireEvent.click(cart.getByRole('button', { name: /Quitar.*Caja de 10/ }))
     expect(cart.getByText('1 líneas')).toBeInTheDocument()
     expect(fake.writes()).toHaveLength(0)
-    expect(screen.getByRole('button', { name: 'Continuar al cobro' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Cobrar' })).toBeEnabled()
+    expect(screen.queryByRole('heading', { name: 'Borrador en el servidor' })).not.toBeInTheDocument()
   })
   it('blocks evident aggregate shortage and invalid quantities before any write', async () => {
     const fake = server(); mount(fake); await select('1')
@@ -286,12 +346,12 @@ describe('POS local cart, cash and persisted draft', () => {
     fireEvent.click(screen.getByRole('button', { name: `Seleccionar ${product.name}` }))
     expect(within(screen.getByRole('region', { name: 'Carrito local' })).getByRole('status')).toHaveTextContent(/supera el stock/)
     fireEvent.change(screen.getByRole('textbox', { name: /Cantidad en carrito/ }), { target: { value: '21' } })
-    expect(screen.getByRole('button', { name: 'Crear borrador' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Cobrar' })).toBeDisabled()
     expect(fake.writes()).toHaveLength(0)
   })
   it('opens cash only on explicit submission, exactly serializes the amount, prevents double click and rereads current cash', async () => {
     const fake = server(); fake.state.cash = null; mount(fake); await select()
-    expect(screen.getByRole('button', { name: 'Crear borrador' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Cobrar' })).toBeDisabled()
     const button = await screen.findByRole('button', { name: 'Abrir mi caja' })
     fireEvent.change(screen.getByRole('textbox', { name: /Monto inicial/ }), { target: { value: '0.10' } })
     expect(fake.writes()).toHaveLength(0)
@@ -323,34 +383,32 @@ describe('POS local cart, cash and persisted draft', () => {
   it('creates once on command, persists exact inputs/expectedVersion, and restores the same draft after reload', async () => {
     const fake = server(); const view = mount(fake); await select(); expect(fake.writes()).toHaveLength(0)
     await createDraft()
-    expect(fake.writes()).toHaveLength(1)
-    fireEvent.click(screen.getByRole('button', { name: 'Guardar líneas' }))
-    await screen.findByText(/Líneas guardadas en el servidor/)
+    await screen.findByText(/Venta preparada/)
     expect(fake.writes()).toHaveLength(2)
     expect(fake.writes()[1]?.[1]?.body).toContain('"expectedVersion":1')
     expect(fake.writes()[1]?.[1]?.body).toContain('"quantity":2')
-    expect(screen.getByText('Total guardado por el servidor: S/ 0.20')).toBeInTheDocument()
+    expect(screen.getByText('Total a cobrar: S/ 0.20')).toBeInTheDocument()
     const search = screen.getByTestId('location').textContent!; expect(search).toContain('sale=' + saleId)
     view.unmount(); mount(fake, search)
-    await screen.findByText(/Borrador recuperado del servidor/)
+    await screen.findByText(/Venta recuperada del servidor/)
     expect(screen.getByRole('textbox', { name: /Cantidad en carrito/ })).toHaveValue('2')
-    expect(screen.getByRole('button', { name: 'Guardar líneas' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Cobrar' })).toBeEnabled()
     expect(fake.fetcher.mock.calls.some(([path]) => String(path).endsWith(`/sales/${saleId}/draft`))).toBe(true)
     expect(fake.writes()).toHaveLength(2)
     expect(fake.writes().some(([path]) => /confirm|payments|ticket/.test(String(path)))).toBe(false)
   })
   it('reconciles lost line-save responses on the same ID without resending', async () => {
     const fake = server(); fake.state.loseSave = true; mount(fake); await select(); await createDraft()
-    fireEvent.click(screen.getByRole('button', { name: 'Guardar líneas' }))
-    await screen.findByText(/lectura del mismo borrador confirma/)
+    fireEvent.click(screen.getByRole('button', { name: 'Cobrar' }))
+    await screen.findByText(/Venta preparada y verificada/)
     expect(fake.writes()).toHaveLength(2)
-    expect(screen.getByRole('button', { name: 'Guardar líneas' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Confirmar venta y registrar pagos' })).toBeDisabled()
   })
   it('allows editing the same recovered UUID when the URL uses uppercase letters', async () => {
     const fake = server(); fake.state.sale = withLines(); mount(fake, '?sale=' + saleId.toUpperCase())
-    await screen.findByText(/Borrador recuperado del servidor/)
+    await screen.findByText(/Venta recuperada del servidor/)
     fireEvent.change(screen.getByRole('textbox', { name: /Cantidad en carrito/ }), { target: { value: '3' } })
-    expect(screen.getByRole('button', { name: 'Guardar líneas' })).toBeEnabled()
+    expect(screen.getByRole('button', { name: 'Cobrar' })).toBeEnabled()
     expect(fake.writes()).toHaveLength(0)
   })
   it('restores both presentations and exact totals, then explicitly persists removal with the recovered version', async () => {
@@ -359,11 +417,11 @@ describe('POS local cart, cash and persisted draft', () => {
     fireEvent.change(screen.getByRole('textbox', { name: /Cantidad a agregar/ }), { target: { value: '1' } })
     fireEvent.click(screen.getByRole('button', { name: `Seleccionar ${product.name}` }))
     await createDraft()
-    fireEvent.click(screen.getByRole('button', { name: 'Guardar líneas' }))
-    await screen.findByText('Total guardado por el servidor: S/ 1.20')
+    fireEvent.click(screen.getByRole('button', { name: 'Cobrar' }))
+    await screen.findByText('Total a cobrar: S/ 1.20')
     const search = screen.getByTestId('location').textContent!
     view.unmount(); mount(fake, search)
-    await screen.findByText(/Borrador recuperado del servidor/)
+    await screen.findByText(/Venta recuperada del servidor/)
     const cart = within(screen.getByRole('region', { name: 'Carrito local' }))
     expect(cart.getByRole('textbox', { name: /Cantidad en carrito.*Tableta/ })).toHaveValue('2')
     expect(cart.getByRole('textbox', { name: /Cantidad en carrito.*Caja de 10/ })).toHaveValue('1')
@@ -371,72 +429,72 @@ describe('POS local cart, cash and persisted draft', () => {
     expect(fake.writes()).toHaveLength(2)
     fireEvent.click(cart.getByRole('button', { name: /Quitar.*Caja de 10/ }))
     expect(fake.writes()).toHaveLength(2)
-    fireEvent.click(screen.getByRole('button', { name: 'Guardar líneas' }))
-    await screen.findByText('Total guardado por el servidor: S/ 0.20')
+    fireEvent.click(screen.getByRole('button', { name: 'Cobrar' }))
+    await screen.findByText('Total a cobrar: S/ 0.20')
     expect(fake.writes()).toHaveLength(3)
     expect(fake.writes()[2]?.[1]?.body).toContain('"expectedVersion":2')
     expect(fake.state.sale?.lines).toHaveLength(1)
   })
   it('blocks another save when reconciliation fails, then recovers by reads only', async () => {
-    const fake = server(); fake.state.loseSave = true; mount(fake); await select(); await createDraft()
-    fake.state.failReads = true
-    fireEvent.click(screen.getByRole('button', { name: 'Guardar líneas' }))
+    const fake = server(); fake.state.loseSave = true; fake.state.failReads = true; mount(fake); await select()
+    fireEvent.click(screen.getByRole('button', { name: 'Cobrar' }))
     await screen.findByText(/No pudimos confirmar el resultado/)
-    expect(screen.getByRole('button', { name: 'Guardar líneas' })).toBeDisabled()
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Consultar borrador guardado' })).toBeEnabled())
+    expect(screen.getByRole('button', { name: 'Cobrar' })).toBeDisabled()
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Consultar venta pendiente' })).toBeEnabled())
     fake.state.failReads = false
-    fireEvent.click(screen.getByRole('button', { name: 'Consultar borrador guardado' }))
-    await screen.findByText(/Estado persistido consultado/)
-    expect(screen.getByText('Total guardado por el servidor: S/ 0.20')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Consultar venta pendiente' }))
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Cobrar' })).toBeEnabled())
+    expect(decimalLabel(fake.state.sale!.totalAmount, 2)).toBe('0.20')
     expect(fake.writes()).toHaveLength(2)
   })
   it('does not edit a restored draft attached to another cash session or another seller', async () => {
     const fake = server(); fake.state.sale = { ...withLines(), sellerMembershipId: id('90'), cashSessionId: id('91') }
     mount(fake, '?sale=' + saleId)
-    await screen.findByText(/Borrador recuperado del servidor/)
+    await screen.findByText(/Venta recuperada del servidor/)
     expect(screen.getByText(/pertenece a otra membresía/)).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Guardar líneas' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Cobrar' })).toBeDisabled()
     expect(screen.getByRole('textbox', { name: /Cantidad en carrito/ })).toBeDisabled()
     expect(fake.writes()).toHaveLength(0)
   })
   it('recovers a known draft on demand without creating a new one', async () => {
-    const fake = server(); fake.state.sale = withLines(); mount(fake)
-    fireEvent.click(screen.getByText('Recuperar un borrador por su identificador'))
-    fireEvent.change(screen.getByRole('textbox', { name: 'Identificador del borrador' }), { target: { value: saleId } })
+    const fake = server(); fake.state.sale = withLines(); mount(fake, '?draftPending=1')
+    fireEvent.click(screen.getByText('Recuperación excepcional por identificador'))
+    fireEvent.change(screen.getByRole('textbox', { name: 'Identificador de la venta pendiente' }), { target: { value: saleId } })
     fireEvent.click(screen.getByRole('button', { name: 'Recuperar y reemplazar carrito' }))
     await screen.findByText(/El carrito se reemplazó/)
     expect(screen.getByRole('textbox', { name: /Cantidad en carrito/ })).toHaveValue('2')
     expect(fake.writes()).toHaveLength(0)
   })
   it('preserves local edits on version conflict and requires review before using the fresh version', async () => {
-    const fake = server(); fake.state.conflict = true; mount(fake); await select(); await createDraft()
-    fireEvent.click(screen.getByRole('button', { name: 'Guardar líneas' }))
-    await screen.findByRole('button', { name: 'Revisado: conservar mi carrito' })
+    const fake = server(); fake.state.conflict = true; mount(fake); await select()
+    fireEvent.click(screen.getByRole('button', { name: 'Cobrar' }))
+    await screen.findByRole('button', { name: 'Conservar mi carrito revisado' })
     expect(screen.getByRole('textbox', { name: /Cantidad en carrito/ })).toHaveValue('2')
-    expect(screen.getByText('Total guardado por el servidor: S/ 0.30')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Guardar líneas' })).toBeDisabled()
-    fireEvent.click(screen.getByRole('button', { name: 'Revisado: conservar mi carrito' }))
+    expect(screen.getByText('Total consultado en el servidor: S/ 0.30')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Cobrar' })).toBeDisabled()
+    fireEvent.click(screen.getByRole('button', { name: 'Conservar mi carrito revisado' }))
     expect(fake.writes()).toHaveLength(2)
-    fireEvent.click(screen.getByRole('button', { name: 'Guardar líneas' }))
-    await screen.findByText(/Líneas guardadas en el servidor/)
+    fireEvent.click(screen.getByRole('button', { name: 'Cobrar' }))
+    await screen.findByText(/Venta preparada/)
     expect(fake.writes()[2]?.[1]?.body).toContain('"expectedVersion":2')
   })
   it('blocks another creation after loss of the POST response, including after reload', async () => {
     const fake = server(); fake.state.loseCreate = true; const view = mount(fake); await select()
-    fireEvent.click(screen.getByRole('button', { name: 'Crear borrador' }))
-    await screen.findByText(/creación tiene un resultado incierto/)
-    expect(screen.getByRole('button', { name: 'Crear borrador' })).toBeDisabled()
+    fireEvent.click(screen.getByRole('button', { name: 'Cobrar' }))
+    await screen.findByText(/No recibimos el identificador de la venta/)
+    expect(screen.getByRole('button', { name: 'Cobrar' })).toBeDisabled()
     const search = screen.getByTestId('location').textContent!; view.unmount(); mount(fake, search)
-    await select()
-    expect(screen.getByRole('button', { name: 'Crear borrador' })).toBeDisabled()
+    expect(screen.getByRole('searchbox')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: `Seleccionar ${product.name}` })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Cobrar' })).toBeDisabled()
     expect(fake.writes()).toHaveLength(1)
     expect(fake.state.sale?.saleId).toBe(saleId)
   })
   it('blocks writes after a license denial and retains the cart', async () => {
-    const fake = server(); fake.state.denySave = true; mount(fake); await select(); await createDraft()
-    fireEvent.click(screen.getByRole('button', { name: 'Guardar líneas' }))
+    const fake = server(); fake.state.denySave = true; mount(fake); await select()
+    fireEvent.click(screen.getByRole('button', { name: 'Cobrar' }))
     await screen.findByText(/licencia de esta botica no permite/)
-    expect(screen.getByRole('button', { name: 'Guardar líneas' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Cobrar' })).toBeDisabled()
     expect(screen.getByRole('textbox', { name: /Cantidad en carrito/ })).toHaveValue('2')
     expect(fake.writes()).toHaveLength(2)
   })

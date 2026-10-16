@@ -2,6 +2,8 @@
 
 Plan operativo único, estados por bloque y aceptación integral: [Plan maestro de integración](../docs/FRONTEND_INTEGRATION_PLAN.md). El bloque 01 reutiliza el carrito/caja/borrador existente; el bloque 02 conecta pagos mixtos exactos, confirmación explícita con versión, reconciliación sin reenvíos y ticket interno con impresión opcional. Ambos esperan aceptación comercial real conjunta en Chrome LAB; anulación/cierre quedan en 02b.
 
+**Flujo operativo actual:** abrir caja → buscar/agregar → **Cobrar** (crea/guarda internamente) → medios de pago → confirmar explícitamente → **VENTA REALIZADA** verificada → imprimir o seguir vendiendo con la misma caja. La recuperación por identificador es excepcional; no hay botones normales de administración de borradores. El formato quita ceros sobrantes y conserva todos los decimales significativos. 02b conecta anulación desde el ticket y cierre/arqueo desde Caja con revisión y conciliación; pendientes de aceptación real. Las secciones F2.1 inferiores conservan evidencia histórica de los incrementos técnicos anteriores.
+
 Fundación React + TypeScript + Vite existente, con sistema visual y arquitectura modular F1.1. F2.0 LAB tiene Google real y onboarding funcional confirmados por el operador en Chrome: Owner, botica y dos sucursales, con Superadmin revocado. F2.1 conecta búsqueda, carrito, caja, borrador, pagos/confirmación y ticket al backend existente; el operador aún debe aceptar el circuito completo. La evidencia F1/F1.1 de abajo es histórica.
 
 ## Ejecutar y validar

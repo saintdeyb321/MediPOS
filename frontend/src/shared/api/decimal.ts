@@ -19,7 +19,7 @@ export function decimalLabel(input: JsonNumber, minimumFractionDigits = 0): stri
   const { coefficient, scale } = parts(input)
   const literal = value(coefficient, scale).literal
   const [whole, fraction = ''] = literal.split('.')
-  const padded = fraction.padEnd(minimumFractionDigits, '0')
+  const padded = fraction.replace(/0+$/, '').padEnd(minimumFractionDigits, '0')
   return whole + (padded ? '.' + padded : '')
 }
 export function compare(a: JsonNumber, b: JsonNumber): number {

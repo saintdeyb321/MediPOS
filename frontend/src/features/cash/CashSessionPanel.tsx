@@ -19,7 +19,7 @@ export function CashSessionPanel({ cash }: { cash: CashController }) {
       {cash.query.isError && <ApiErrorState error={cash.query.error} title="No pudimos consultar la caja" />}
       {cash.error != null && <ApiErrorState error={cash.error} title="Revisa el resultado de apertura" />}
       {cash.session && cash.uncertain && <Notice tone="warning">Se encontró una caja abierta. Pulsa Consultar caja para reconciliar la apertura pendiente antes de crear un borrador.</Notice>}
-      {cash.session ? <p>Monto inicial registrado: S/ {decimalLabel(cash.session.openingAmount, 2)}. Caja vinculada a tu membresía actual.</p> :
+      {cash.session ? <p>Monto inicial registrado: S/ {decimalLabel(cash.session.openingAmount, 2)}. Tu caja está abierta en esta sucursal.</p> :
         cash.uncertain ? <Notice tone="warning">La apertura tiene un resultado pendiente. Consulta la caja; no se enviará otra apertura automáticamente.</Notice> :
           !cash.query.isPending && !cash.query.isError && cash.connected && <form onSubmit={event => { event.preventDefault(); void cash.open(amount) }}>
             <TextField label="Monto inicial de caja (S/)" inputMode="decimal" value={amount} maxLength={32} required

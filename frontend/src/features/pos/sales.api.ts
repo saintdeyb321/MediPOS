@@ -33,6 +33,14 @@ export function salesApi(http: HttpClient) {
     return result
   }
   return {
+    async void(scope: BranchScope, saleId: string, expectedVersion: number, reason: string, signal?: AbortSignal) {
+      const data = await http.request(`${branchPath(scope)}/sales/${uuid(saleId)}/void`, { method: 'POST', body: { expectedVersion, reason }, signal, exactNumbers: true })
+      try {
+        const result = object({ saleId: uuid, voidedAt: utc, version: uint, paymentReversalCount: uint, stockReversalCount: uint })(data)
+        if (result.saleId.toLowerCase() !== saleId.toLowerCase()) throw new Error('Unexpected resource')
+        return result
+      } catch { throw new ApiError(0, 'client.outcome_unknown', undefined, true) }
+    },
     async confirm(scope: BranchScope, saleId: string, expectedVersion: number, payments: SalePaymentInput[], signal?: AbortSignal) {
       const data = await http.request(`${branchPath(scope)}/sales/${uuid(saleId)}/confirm`, {
         method: 'POST', body: { expectedVersion, payments }, signal, exactNumbers: true,

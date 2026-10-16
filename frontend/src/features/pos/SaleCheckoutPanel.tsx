@@ -1,6 +1,5 @@
-import { useState } from 'react'
-import { useLocation } from 'react-router'
-import { ApiErrorState } from '../access'
+import { useEffect, useRef, useState } from 'react'
+import { ApiErrorState, useWorkspace } from '../access'
 import { Button } from '../../shared/ui/Button'
 import { Notice } from '../../shared/ui/Notice'
 import { Panel } from '../../shared/ui/Panel'
@@ -12,35 +11,53 @@ import { emptyPayments, paymentInputs, paymentMethods } from './payments'
 import { InternalTicketPanel } from './InternalTicketPanel'
 
 export function SaleCheckoutPanel({ draft }: { draft: DraftController }) {
-  return <Checkout key={draft.server?.saleId ?? 'no-sale'} draft={draft} />
-}
-function Checkout({ draft }: { draft: DraftController }) {
   const checkout = useSaleCheckout(draft)
   const [opened, setOpened] = useState(false)
-  const location = useLocation()
+  const mounted = useRef(true)
+  useEffect(() => { mounted.current = true; return () => { mounted.current = false } }, [])
   const terminal = draft.server && draft.server.status !== 'draft'
   return <Panel className="checkout-panel" aria-labelledby="checkout-title">
-    <div className="panel-heading"><h2 id="checkout-title">Cobro y ticket interno</h2></div>
+    <div className="panel-heading"><h2 id="checkout-title">Cobro</h2></div>
     <div className="pos-section-body">
       {checkout.error != null && <ApiErrorState error={checkout.error} title="Revisa el resultado antes de cobrar de nuevo" />}
       {checkout.notice && <p role="status">{checkout.notice}</p>}
-      {draft.checkoutPending && <Notice tone="warning">Confirmación pendiente de reconciliar. No envíes otro cobro ni prepares otra venta para reemplazarla. Consulta este mismo registro.</Notice>}
+      {draft.checkoutPending && <Notice tone="warning">Operación pendiente de reconciliar. No envíes otro cobro ni prepares otra venta para reemplazarla. Consulta este mismo registro.</Notice>}
       {!terminal && <>
-        <p id="checkout-requirements">Primero guarda todas las líneas del borrador con tu caja abierta. El cobro utiliza el total del servidor, no el estimado local.</p>
-        <Button aria-describedby="checkout-requirements" disabled={!draft.canCheckout || checkout.busy || checkout.denied} onClick={() => setOpened(true)}>Continuar al cobro</Button>
-        {opened && draft.server && <PaymentForm key={draft.server.version} draft={draft} checkout={checkout} />}
+        <p id="checkout-requirements">Agrega productos y abre tu caja para cobrar. Prepararemos la venta automáticamente; solo se registran pagos al confirmar.</p>
+        <Button aria-describedby="checkout-requirements" pending={draft.preparing} disabled={!draft.canPrepare || checkout.busy || checkout.denied}
+          onClick={async () => { const ready = await draft.prepare(); if (mounted.current) setOpened(ready) }}>Cobrar</Button>
+        {!draft.cashMatches && <p>Abre o consulta tu caja en esta sucursal antes de cobrar.</p>}
+        {!draft.seller && <Notice tone="warning">Esta venta pertenece a otra membresía. No puedes editarla ni cobrarla.</Notice>}
+        {draft.notice && draft.phase === 'idle' && <p role="status">{draft.notice}</p>}
+        {opened && draft.server && <PaymentForm key={`${draft.server.saleId}/${draft.server.version}`} draft={draft} checkout={checkout} />}
       </>}
       {(draft.checkoutPending || checkout.error != null || terminal) && <Button variant="secondary" pending={checkout.busy} disabled={draft.phase === 'loading'} onClick={() => void checkout.consult()}>Consultar resultado de venta</Button>}
       {terminal && <>
-        <p role="status">{draft.server?.status === 'confirmed' ? 'Venta confirmada. Los pagos y el stock se registraron en el servidor.' : 'Venta anulada. No está disponible para otro cobro.'}</p>
+        <p role="status">{draft.server?.status === 'confirmed' ? 'VENTA REALIZADA. Pagos y stock verificados en el servidor.' : 'Venta anulada. No está disponible para otro cobro.'}</p>
         {checkout.ticket.isPending && <p role="status">Consultando ticket interno…</p>}
         {checkout.ticket.isError && <ApiErrorState error={checkout.ticket.error} title="El ticket no pudo recuperarse; esto no autoriza repetir el cobro" />}
         <Button variant="quiet" disabled={checkout.ticket.isFetching} onClick={() => void checkout.ticket.refetch()}>Consultar ticket</Button>
-        {checkout.ticket.data && !checkout.ticket.isError && <InternalTicketPanel ticket={checkout.ticket.data} />}
-        {!draft.checkoutPending && <a className="text-link no-print" href={location.pathname}>Preparar otra venta</a>}
+        {checkout.ticket.data && !checkout.ticket.isError && checkout.ticket.data.status === draft.server?.status && <InternalTicketPanel ticket={checkout.ticket.data} />}
+        {!draft.checkoutPending && <Button variant="secondary" className="no-print" disabled={checkout.busy} onClick={() => {
+          if (draft.nextSale()) { setOpened(false); checkout.clearResult() }
+        }}>Seguir vendiendo sin imprimir</Button>}
+        {draft.server?.status === 'confirmed' && <VoidSaleForm draft={draft} checkout={checkout} />}
       </>}
     </div>
   </Panel>
+}
+function VoidSaleForm({ draft, checkout }: { draft: DraftController; checkout: ReturnType<typeof useSaleCheckout> }) {
+  const { access } = useWorkspace()
+  const [reason, setReason] = useState(''); const [reviewed, setReviewed] = useState(false)
+  if (access.role !== 'owner' && !draft.seller) return null
+  return <details className="no-print"><summary>Anular esta venta</summary><form aria-label="Anulación de venta" onSubmit={event => {
+    event.preventDefault(); if (reviewed) void checkout.voidSale(reason)
+  }}>
+    <TextField label="Motivo de anulación" value={reason} maxLength={512} disabled={checkout.busy || draft.checkoutPending} onChange={event => { setReason(event.target.value); setReviewed(false) }} />
+    <p>Se registrarán reversiones de pagos y stock; no se borra la venta. La caja original debe seguir abierta y disponer del efectivo necesario para la devolución.</p>
+    <label><input type="checkbox" checked={reviewed} disabled={checkout.busy || draft.checkoutPending} onChange={event => setReviewed(event.target.checked)} /> Revisé la devolución y autorizo la anulación.</label>
+    <Button type="submit" variant="secondary" disabled={!reviewed || !reason.trim() || checkout.busy || draft.checkoutPending || checkout.denied}>Confirmar anulación</Button>
+  </form></details>
 }
 function PaymentForm({ draft, checkout }: { draft: DraftController; checkout: ReturnType<typeof useSaleCheckout> }) {
   const [fields, setFields] = useState(emptyPayments)
@@ -52,7 +69,7 @@ function PaymentForm({ draft, checkout }: { draft: DraftController; checkout: Re
     event.preventDefault()
     if (!disabled && reviewed && !validation.error) void checkout.confirm(validation.payments)
   }}>
-    <p><strong>Total guardado: S/ {decimalLabel(sale.totalAmount, 2)}</strong> · Versión {sale.version}</p>
+    <p><strong>Total a cobrar: S/ {decimalLabel(sale.totalAmount, 2)}</strong></p>
     <p>Deja vacíos los medios que no uses. Efectivo es el importe aplicado a la venta, sin incluir vuelto. Yape y Plin no requieren número de operación.</p>
     {paymentMethods.map(({ method, label }) => <TextField key={method} label={`${label} (S/)`} inputMode="decimal" maxLength={32}
       disabled={disabled} value={fields[method]} onChange={event => { setFields({ ...fields, [method]: event.target.value }); setReviewed(false) }} />)}

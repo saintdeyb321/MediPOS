@@ -1,6 +1,6 @@
 import type { ProductUnit } from '../catalog'
 import { JsonNumber } from '../../shared/api/exactJson'
-import { add, compare, decimalInput, fits, maximumMoney, maximumQuantity, multiply, roundEven4, zero } from '../../shared/api/decimal'
+import { add, compare, decimalInput, decimalLabel, fits, maximumMoney, maximumQuantity, multiply, roundEven4, zero } from '../../shared/api/decimal'
 import type { ProductSelection } from './productSelection'
 import type { SaleLineInput, SaleState } from './sales.api'
 
@@ -57,7 +57,7 @@ export function saleInputs(lines: CartLine[]): SaleLineInput[] {
 }
 export function restoreCart(sale: SaleState): CartLine[] {
   return sale.lines.map(line => ({ productId: line.businessProductId, name: line.productNameSnapshot,
-    unitId: line.productUnitIdSnapshot, quantity: line.quantity.literal, basePrice: line.unitPriceSnapshot, priceKind: line.priceKind, stock: null,
+    unitId: line.productUnitIdSnapshot, quantity: decimalLabel(line.quantity), basePrice: line.unitPriceSnapshot, priceKind: line.priceKind, stock: null,
     units: [{ id: line.productUnitIdSnapshot, name: line.unitNameSnapshot, conversionToBase: line.conversionToBaseSnapshot, isActive: true, isBaseUnit: compare(line.conversionToBaseSnapshot, new JsonNumber('1')) === 0 }] }))
 }
 export function matchesSaved(lines: CartLine[], sale: SaleState): boolean {
