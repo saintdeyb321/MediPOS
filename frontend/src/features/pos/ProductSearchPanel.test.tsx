@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter } from 'react-router'
 import { RuntimeProvider } from '../../app/providers/runtime'
 import { WorkspaceContext } from '../access'
@@ -8,7 +8,7 @@ import { createPreviewService } from '../../development/fixtures'
 import { HttpClient } from '../../shared/api/http'
 import { JsonNumber, stringifyExactJson } from '../../shared/api/exactJson'
 import type { ProductMatch, ProductSearch } from '../catalog'
-import { PosPage } from './PosPage'
+import { ProductSearchPanel } from './ProductSearchPanel'
 
 // Component-level transport doubles; never evidence of PostgreSQL or OIDC integration.
 const tenantId = '019a0162-0000-7000-8000-000000000002'
@@ -34,9 +34,10 @@ function workspace(branch = branchId): Workspace {
 }
 function mount(fetcher: typeof fetch) {
   const runtime = { service: createPreviewService('owner'), http: new HttpClient(fetcher), preview: false }
-  const tree = (branch = branchId) => <RuntimeProvider runtime={runtime}><MemoryRouter><WorkspaceContext.Provider value={workspace(branch)}><PosPage /></WorkspaceContext.Provider></MemoryRouter></RuntimeProvider>
+  const selected = vi.fn()
+  const tree = (branch = branchId) => <RuntimeProvider runtime={runtime}><MemoryRouter><WorkspaceContext.Provider value={workspace(branch)}><ProductSearchPanel key={branch} onSelect={selected} /></WorkspaceContext.Provider></MemoryRouter></RuntimeProvider>
   const view = render(tree())
-  return { ...view, changeBranch: () => view.rerender(tree(otherBranchId)) }
+  return { ...view, selected, changeBranch: () => view.rerender(tree(otherBranchId)) }
 }
 const search = (text: string) => fireEvent.change(screen.getByRole('searchbox', { name: 'Buscar un producto' }), { target: { value: text } })
 afterEach(() => vi.useRealTimers())
@@ -67,9 +68,9 @@ describe('real-client POS search component', () => {
     expect(await screen.findByRole('heading', { name: 'Sin coincidencias en esta sucursal' })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /^Seleccionar / })).not.toBeInTheDocument()
   })
-  it('keeps exact price/stock, selects an available presentation and never creates a sale', async () => {
+  it('emits an exact selection without writes; subsequent searching does not clear it', async () => {
     const fetcher = vi.fn<typeof fetch>().mockImplementation(async () => json(result([product])))
-    mount(fetcher); search('TEST')
+    const view = mount(fetcher); search('TEST')
     const select = await screen.findByRole('button', { name: `Seleccionar ${product.name}` })
     expect(screen.getByText('S/ 99999999999999.9999')).toBeInTheDocument()
     expect(screen.getByText('5.0000')).toBeInTheDocument()
@@ -78,11 +79,10 @@ describe('real-client POS search component', () => {
     expect(select).toHaveAccessibleDescription(/No hay stock vendible suficiente/)
     fireEvent.change(screen.getByRole('combobox'), { target: { value: product.units[0]!.id } })
     fireEvent.click(select)
-    expect(within(screen.getByRole('region', { name: 'Selección preparada' })).getByText('Presentación: Unidad')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /Continuar al cobro/ })).toBeDisabled()
+    expect(view.selected).toHaveBeenCalledExactlyOnceWith({ product, unit: product.units[0], quantity: new JsonNumber('1') })
     expect(fetcher.mock.calls.every(([, init]) => init?.method === 'GET')).toBe(true)
     search('otra consulta')
-    expect(screen.queryByRole('region', { name: 'Selección preparada' })).not.toBeInTheDocument()
+    expect(view.selected).toHaveBeenCalledOnce()
   })
   it('does not offer zero-stock or inactive presentations as available', async () => {
     const fetcher = vi.fn<typeof fetch>().mockImplementation(async () => json(result([{ ...product, quantityAvailableBase: new JsonNumber('0'), units: product.units.map(unit => ({ ...unit, isActive: false })) }])))

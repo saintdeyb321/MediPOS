@@ -13,7 +13,32 @@ export type UnauthorizedListener = () => void
 export class HttpClient {
   private readonly listeners = new Set<UnauthorizedListener>()
   private readonly fetcher: typeof fetch
+  private activeRequests = 0
+  private readonly waiting: (() => void)[] = []
   constructor(fetcher: typeof fetch = (...args) => fetch(...args)) { this.fetcher = fetcher }
+  private admit(signal: AbortSignal): Promise<() => void> {
+    // Focus can refresh directory/access/cash/search together. Respect the existing
+    // server budgets (4 tenant requests, 2 auth requests) without retrying anything.
+    return new Promise((resolve, reject) => {
+      const cancel = () => {
+        const index = this.waiting.indexOf(enter)
+        if (index >= 0) this.waiting.splice(index, 1)
+        signal.removeEventListener('abort', cancel); reject(signal.reason)
+      }
+      const enter = () => {
+        if (signal.aborted) { cancel(); return }
+        signal.removeEventListener('abort', cancel); this.activeRequests++
+        let released = false
+        resolve(() => {
+          if (released) return
+          released = true; this.activeRequests--; this.waiting.shift()?.()
+        })
+      }
+      if (signal.aborted) { reject(signal.reason); return }
+      if (this.activeRequests < 2) enter()
+      else { this.waiting.push(enter); signal.addEventListener('abort', cancel, { once: true }) }
+    })
+  }
   subscribeUnauthorized(listener: UnauthorizedListener) {
     this.listeners.add(listener)
     return () => { this.listeners.delete(listener) }
@@ -31,6 +56,7 @@ export class HttpClient {
     const timeout = AbortSignal.timeout(15_000)
     const signal = options.signal?.aborted ? options.signal : options.signal ? AbortSignal.any([options.signal, timeout]) : timeout
     let sent = false
+    let release: (() => void) | undefined
     try {
       const headers = new Headers({ Accept: 'application/json' })
       if (method !== 'GET') {
@@ -38,6 +64,9 @@ export class HttpClient {
         if (options.body !== undefined) headers.set('Content-Type', 'application/json')
       }
       let response: Response
+      // CSRF acquisition finishes before taking the mutation's slot, avoiding a
+      // nested request deadlock. Cancellation while queued never marks a POST sent.
+      release = await this.admit(signal)
       try {
         sent = true
         response = await this.fetcher(path, {
@@ -73,7 +102,7 @@ export class HttpClient {
       }
       if (timeout.aborted) throw new ApiError(0, sent && method !== 'GET' ? 'client.outcome_unknown' : 'client.timeout', undefined, sent && method !== 'GET')
       throw error
-    }
+    } finally { release?.() }
   }
   async csrf(signal?: AbortSignal): Promise<string> {
     const data = await this.request('/auth/csrf', { signal })

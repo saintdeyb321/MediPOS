@@ -32,7 +32,7 @@ describe('F1 navigation and access boundaries', () => {
     expect(screen.getByRole('button', { name: /continuar al cobro/i })).toBeDisabled()
     expect(screen.getByRole('searchbox', { name: /buscar un producto/i })).toBeDisabled()
     expect(screen.getByRole('searchbox')).toHaveAccessibleDescription(/conexión real con MediPOS/)
-    expect(screen.getByRole('button', { name: /continuar al cobro/i })).toHaveAccessibleDescription(/No hay una venta creada/)
+    expect(screen.getByRole('button', { name: /continuar al cobro/i })).toHaveAccessibleDescription(/guarda todas las líneas del borrador con tu caja abierta/)
     await user.click(screen.getByText('Propietario', { selector: '.account-label' }))
     await user.click(screen.getByRole('button', { name: 'Cerrar sesión' }))
     expect(await screen.findByRole('heading', { name: 'Un buen día empieza aquí.' })).toBeInTheDocument()

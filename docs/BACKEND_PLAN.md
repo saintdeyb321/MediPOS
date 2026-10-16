@@ -2,6 +2,8 @@
 
 This is the single execution roadmap for the backend. Prompts are given in chat and are **not** stored in the repository.
 
+Frontend vertical integration status and acceptance are maintained in [FRONTEND_INTEGRATION_PLAN.md](FRONTEND_INTEGRATION_PLAN.md); that plan reuses existing F2.1 work and does not advance backend milestones.
+
 ## Working state
 - **Current milestone:** M8 — Backend hardening for real pilot
 - **Current sprint:** B8.6.5.1 — GitHub Actions context validation corrective
@@ -614,6 +616,8 @@ External PostgreSQL 18, B8.6.3.1, Google/browser/hosting/TLS/proxy, B8.2/B8.3/B8
 **F2.1 empty-catalog operator acceptance:** Chrome LAB Centro returned the actual three empty search blocks for paracetamol and rendered the matching empty state. This verifies the response/UI observation, not an independently captured numeric HTTP status. A separate red request is compatible with intended cancellation but remains unattributed without its Network status; ordinary logs contain no 200/499/5xx observations. Four targeted cancellation/late-response regressions pass again; six unrelated component cases were not selected. Positive catalog/stock acceptance now awaits an explicitly approved real-source pilot; no product/import writes or platform activation were performed.
 
 **F2.1 medicine pilot — authorized, prepared, awaiting interactive login:** scope is one local PANADOL Antigripal NF product with the three documented components, PANADOL brand (no inferred manufacturer), documented EE-05129 without a current-validity assertion, tableta/box-of-10, and the explicitly fictitious LAB purchase/lot/expiry for 20 tablets in LAB Centro. Read-only preflight found no matching category/product/purchase. The existing administrative launcher now accepts the explicit Medicamentos category purpose; five pure PS5.1 regressions, private helper syntax, isolated frontend build and lint pass. Administrative activation is deferred until operator readiness; category creation/revocation precedes all ordinary Owner product/purchase operations. No new business record, active platform authority, source import or application/migration/security change has been made in this preparation.
+
+**F2.1 medicine pilot executed; cart/cash/draft increment IN_PROGRESS:** the operator completed category creation and the ordinary Owner product/units/purchase flow. Actual PostgreSQL verifies one local PANADOL Antigripal NF, two presentations, the authorized fictitious receipt and 20 tablets available in LAB Centro; Chrome search acceptance passed. Temporary authority/approval were closed, both helper pages removed and platform returns 404. The normal POS now supports multiple local lines with exact decimals/aggregate-stock guards, own cash lookup/explicit opening, versioned draft creation/lines and recovery by URL ID. Unknown writes are reconciled without automatic mutation retries; missing creation ID blocks another POST. Background access rechecks no longer erase the cart while waiting, and denials still remove protected content. Isolated LAB build, lint and 132 frontend tests pass; no backend logic, migration, RLS, DEV configuration or commercial test POST changed. Real HTTPS/static/readiness and read-only pilot/runtime checks pass. New cash/draft Chrome acceptance remains pending operator interaction; payments/confirmation/ticket and external PostgreSQL gates remain pending. F2.1 is not DONE and production readiness is not claimed.
 
 # M9 — Post-pilot scale/readiness review
 Not an automatic rewrite. Use measured evidence from real customers.

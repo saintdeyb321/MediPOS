@@ -50,11 +50,13 @@ describe('same-origin HTTP and native OIDC contract', () => {
     await expect(new HttpClient(fetcher).request('/auth/me')).rejects.toMatchObject({ code: 'client.https_required' }); expect(fetcher).not.toHaveBeenCalled()
   })
   it('passes cancellation through and does not retry an aborted request', async () => {
-    const controller = new AbortController(); controller.abort()
+    const controller = new AbortController()
     const error = new DOMException('Aborted', 'AbortError')
-    const fetcher = vi.fn<typeof fetch>().mockRejectedValue(error)
+    const fetcher = vi.fn<typeof fetch>().mockImplementation(async () => { controller.abort(); throw error })
     await expect(new HttpClient(fetcher).request('/api/me/tenants', { signal: controller.signal })).rejects.toBe(error)
-    expect(fetcher).toHaveBeenCalledOnce(); expect(fetcher.mock.calls[0]![1]?.signal).toBe(controller.signal)
+    expect(fetcher).toHaveBeenCalledOnce()
+    expect(fetcher.mock.calls[0]![1]?.signal?.aborted).toBe(true)
+    expect(fetcher.mock.calls[0]![1]?.signal?.reason).toBe(controller.signal.reason)
   })
   it('notifies subscribers of 401 and never retries a failed mutation', async () => {
     const listener = vi.fn(); const fetcher = vi.fn<typeof fetch>().mockResolvedValueOnce(json({ requestToken: 'csrf' })).mockResolvedValue(json({ code: 'auth.session_required' }, 401))

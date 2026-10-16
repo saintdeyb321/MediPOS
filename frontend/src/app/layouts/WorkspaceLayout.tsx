@@ -17,7 +17,7 @@ export function WorkspaceLayout() {
       <div className="state-block"><h1>Dirección no válida</h1><p>Selecciona una botica y sucursal para continuar.</p></div>
     </SelectionLayout>
   )
-  if (access.isPending || branches.isPending || session.isPending || access.isFetching) return <LoadingState label="Verificando acceso a la sucursal…" />
+  if (access.isPending || branches.isPending || session.isPending) return <LoadingState label="Verificando acceso a la sucursal…" />
   if (access.isError || branches.isError || session.isError) return (
     <SelectionLayout>
       {back}
