@@ -1,5 +1,15 @@
 import { ApiError } from '../../shared/api/http'
 const messages: Record<string, string> = {
+  'catalog.internal_code_duplicate': 'Ese código interno ya existe en tu negocio. Consulta el producto antes de intentar otra alta.',
+  'catalog.business_product_not_found': 'No encontramos el producto en este negocio.',
+  'catalog.product_not_found': 'No encontramos el producto en este negocio.',
+  'catalog.category_not_found': 'La categoría seleccionada no está disponible. Vuelve a consultar las categorías.',
+  'catalog.global_product_inactive': 'La referencia global dejó de estar activa. Consulta su estado antes de asociarla.',
+  'catalog.pharma_normalization_required': 'La referencia necesita revisión farmacéutica estructurada antes de asociarla al negocio.',
+  'catalog.concurrent_change': 'El producto cambió durante la operación. Consulta el detalle antes de continuar.',
+  'catalog.units_replacement_blocked': 'Ya existen presentaciones. Se bloqueó el reemplazo para conservar sus identificadores y referencias.',
+  'catalog.units_atomic_contract_required': 'No se enviaron presentaciones: el contrato necesita una condición atómica para evitar reemplazar una configuración concurrente.',
+  'catalog.category_page_limit': 'El catálogo de categorías supera el límite consultable. No se mostrará una selección incompleta como si fuera completa.',
   'client.https_required': 'La conexión necesita HTTPS y el mismo origen que MediPOS. Contacta al administrador para configurar el acceso.',
   'client.timeout': 'El servidor no respondió a tiempo. Comprueba el estado antes de repetir una operación.',
   'client.outcome_unknown': 'No pudimos confirmar el resultado. Consulta el estado de la operación antes de volver a enviarla.',
