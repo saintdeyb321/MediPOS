@@ -10,18 +10,19 @@ namespace MediPOS.UnitTests.Api;
 public sealed class PublishedFrontendTests
 {
     [Theory]
-    [InlineData("/", "GET", "https", "medipos-lab.localhost:7343", 200)]
-    [InlineData("/dashboard", "GET", "https", "medipos-lab.localhost:7343", 200)]
-    [InlineData("/missing.js", "GET", "https", "medipos-lab.localhost:7343", 404)]
-    [InlineData("/dashboard", "POST", "https", "medipos-lab.localhost:7343", 404)]
-    [InlineData("/", "GET", "http", "medipos-lab.localhost:7343", 400)]
+    [InlineData("/", "GET", "https", "localhost:7343", 200)]
+    [InlineData("/dashboard", "GET", "https", "localhost:7343", 200)]
+    [InlineData("/missing.js", "GET", "https", "localhost:7343", 404)]
+    [InlineData("/dashboard", "POST", "https", "localhost:7343", 404)]
+    [InlineData("/", "GET", "http", "localhost:7343", 400)]
     [InlineData("/", "GET", "https", "localhost:7243", 400)]
-    [InlineData("/", "GET", "https", "medipos-lab.localhost:7344", 400)]
-    [InlineData("/api/missing", "GET", "https", "medipos-lab.localhost:7343", 404)]
-    [InlineData("/auth/missing", "GET", "https", "medipos-lab.localhost:7343", 404)]
-    [InlineData("/platform/tenants", "GET", "https", "medipos-lab.localhost:7343", 404)]
-    [InlineData("/health/unknown", "GET", "https", "medipos-lab.localhost:7343", 404)]
-    [InlineData("/openapi/v1.json", "GET", "https", "medipos-lab.localhost:7343", 404)]
+    [InlineData("/", "GET", "https", "localhost:7344", 400)]
+    [InlineData("/", "GET", "https", "medipos-lab.localhost:7343", 400)]
+    [InlineData("/api/missing", "GET", "https", "localhost:7343", 404)]
+    [InlineData("/auth/missing", "GET", "https", "localhost:7343", 404)]
+    [InlineData("/platform/tenants", "GET", "https", "localhost:7343", 404)]
+    [InlineData("/health/unknown", "GET", "https", "localhost:7343", 404)]
+    [InlineData("/openapi/v1.json", "GET", "https", "localhost:7343", 404)]
     public async Task SpaNeverMasksApiOrInvalidOrigins(string path, string method, string scheme, string host, int status)
     {
         var directory = Directory.CreateTempSubdirectory("medipos-published-test-");
@@ -66,7 +67,7 @@ public sealed class PublishedFrontendTests
         {
             ["PublishedFrontend:Enabled"] = "true",
             ["PublishedFrontend:RootPath"] = root,
-            ["Authentication:Google:PublicOrigin"] = "https://medipos-lab.localhost:7343",
+            ["Authentication:Google:PublicOrigin"] = "https://localhost:7343",
             ["LocalFrontend:Enabled"] = local.ToString()
         });
         return builder.Build();
