@@ -142,10 +142,11 @@ describe('F1 navigation and access boundaries', () => {
     expect(await screen.findByRole('heading', { name: 'Cada sucursal, bajo control.' })).toBeInTheDocument()
     expect(screen.getByText('Sucursal', { selector: '[aria-current="step"]' })).toBeInTheDocument()
   })
-  it('describes future navigation as unavailable for operations', async () => {
+  it('describes the connected reports navigation without an unavailable label', async () => {
     mount('owner', workspace)
     const reports = await screen.findByRole('link', { name: 'Reportes' })
-    expect(reports).toHaveAccessibleDescription('Próximamente: esta sección aún no permite operaciones.')
+    expect(reports).not.toHaveAttribute('title')
+    expect(reports).toHaveAttribute('href', workspace + '/reportes')
   })
   it('redirects an unauthenticated deep link to login and explains session expiration', async () => {
     mount('expired', workspace)

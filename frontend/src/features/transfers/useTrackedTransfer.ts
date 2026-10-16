@@ -1,10 +1,10 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useEffectEvent, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router'
 import { ApiError } from '../../shared/api/http'
 import { isUuid } from '../access'
 
 // The two real transfer flows share response-loss tracking, not stock/cash business rules.
-export function useTrackedTransfer<T extends { id: string }>(prefix: 'goods' | 'cashTransfer', read: (id: string, signal: AbortSignal) => Promise<T>, settled: (value: T, action: string) => boolean, verified: (value: T) => void) {
+export function useTrackedTransfer<T extends { id: string }>(prefix: 'goods' | 'cashTransfer', read: (id: string, signal: AbortSignal) => Promise<T>, settled: (value: T, action: string) => boolean, verified: (value: T) => void, superseded?: (value: T, action: string) => boolean) {
   const [params, setParams] = useSearchParams(); const latest = useRef(params)
   useEffect(() => { latest.current = params }, [params])
   const idKey = prefix + 'Id'; const pendingKey = prefix + 'Pending'; const unknownKey = prefix + 'Unidentified'
@@ -24,13 +24,14 @@ export function useTrackedTransfer<T extends { id: string }>(prefix: 'goods' | '
   function apply(value: T) {
     setRecord(value); verified(value)
     const action = latest.current.get(pendingKey)
-    if (action && !latest.current.has(unknownKey) && settled(value, action)) { mark(null, value.id); setError(null); setNotice('Estado verificado al consultar la misma transferencia. No se repitió la operación.') }
+    if (action && !latest.current.has(unknownKey) && (settled(value, action) || superseded?.(value, action))) { mark(null, value.id); setError(null); setNotice(settled(value, action) ? 'Estado verificado al consultar la misma transferencia. No se repitió la operación.' : 'Otra transición impide la operación pendiente. Se muestra el estado persistido; no se declara exitosa la acción solicitada ni se repite.') }
   }
+  const observe = useEffectEvent((value: T) => apply(value))
   // Read/verified are stable callbacks of the selected workspace, whose key remounts this hook.
   useEffect(() => {
     if (!isUuid(initialId)) return
     const abort = new AbortController(); initial.current = abort; let active = true
-    void Promise.resolve().then(() => read(initialId, abort.signal)).then(value => { if (active && !abort.signal.aborted) setRecord(value) }).catch(failure => { if (active && !abort.signal.aborted) setError(failure) })
+    void Promise.resolve().then(() => read(initialId, abort.signal)).then(value => { if (active && !abort.signal.aborted) observe(value) }).catch(failure => { if (active && !abort.signal.aborted) setError(failure) })
     return () => { active = false; abort.abort() }
   }, [initialId, read])
   async function run(action: string, send: (signal: AbortSignal) => Promise<T>) {

@@ -10,6 +10,8 @@ import { PurchasesPage } from '../../features/purchasing'
 import { InventoryPage } from '../../features/inventory'
 import { EmployeesPage } from '../../features/employees'
 import { CashTransfersPage, TransfersPage } from '../../features/transfers'
+import { ReportsPage } from '../../features/reporting'
+import { CommissionsPage } from '../../features/commissions'
 import { useWorkspace } from '../../features/access'
 import { WorkspaceLayout } from '../layouts/WorkspaceLayout'
 import { SelectionLayout } from '../layouts/SelectionLayout'
@@ -39,6 +41,8 @@ export function AppRoutes() {
           <Route path="empleados" element={<EmployeesPage />} />
           <Route path="transferencias" element={<TransfersPage />} />
           <Route path="transferencias/sencillo" element={<CashTransfersPage />} />
+          <Route path="reportes" element={<ReportsPage />} />
+          <Route path="comisiones" element={<CommissionsPage />} />
           <Route path=":module" element={<ModulePage />} />
         </Route>
       </Route>

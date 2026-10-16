@@ -11,7 +11,7 @@ import { PageHeader } from '../../shared/ui/PageHeader'
 import { Panel } from '../../shared/ui/Panel'
 import { equalId, states, stateLabel, transfersApi } from './api'
 import type { DispatchSelection, GoodsAction, ReceiptSelection, Transfer, TransferState } from './api'
-import { goodsSettled } from './model'
+import { goodsSettled, goodsSuperseded } from './model'
 import { useTrackedTransfer } from './useTrackedTransfer'
 import { TransferRecovery } from './TransferRecovery'
 import { RequestGoods } from './RequestGoods'
@@ -31,7 +31,7 @@ function TransfersWorkspace() {
     void client.invalidateQueries({ predicate: query => query.queryKey[0] === 'tenant' && query.queryKey[1] === w.tenantId && query.queryKey[3] === 'transfers' })
     if (value.status === 'in_transit' || value.status === 'received') void client.invalidateQueries({ predicate: query => query.queryKey[0] === 'tenant' && query.queryKey[1] === w.tenantId && [value.sourceBranchId, value.destinationBranchId].includes(String(query.queryKey[2])) && ['stock', 'inventory-lots', 'inventory-expiring', 'product-search'].includes(String(query.queryKey[3])) })
   }, [client, w.tenantId])
-  const tracked = useTrackedTransfer('goods', read, goodsSettled, verified)
+  const tracked = useTrackedTransfer('goods', read, goodsSettled, verified, goodsSuperseded)
   const branches = useQuery({ queryKey: scopedKey(w, 'transfer-branches', w.session.userId, w.access.membershipId), queryFn: ({ signal }) => service.branches(w.tenantId, signal), retry: false, staleTime: 0, refetchOnWindowFocus: false })
   const complete = branches.isSuccess && !branches.isError && branches.data.length < 100
   const list = useQuery({ queryKey: scopedKey(w, 'transfers', w.session.userId, w.access.membershipId, branch, status, offset), queryFn: ({ signal }) => { if (!api) throw new ApiError(0, 'client.https_required'); return api.list(w, w.access.role === 'owner' ? branch || undefined : w.branchId, status || undefined, offset, signal) }, enabled: Boolean(api), retry: false, staleTime: 0, refetchOnWindowFocus: false })

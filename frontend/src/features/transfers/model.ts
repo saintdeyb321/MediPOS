@@ -26,6 +26,10 @@ export function goodsSettled(t: Transfer, action: string) {
   const event = ({ approve: 'approved', cancel: 'cancelled', dispatch: 'dispatched', receive: 'received' } as Record<string, string>)[action]
   return action === 'create' || Boolean(event && t.events.some(row => row.eventType === event))
 }
+// Immutable terminal history can rule out an outstanding transition, without proving it succeeded.
+export function goodsSuperseded(t: Transfer, action: string) {
+  return (action === 'approve' || action === 'dispatch') && t.status === 'cancelled' || action === 'cancel' && (t.status === 'in_transit' || t.status === 'received')
+}
 export interface RequestLine { name: string; unit: string; base: JsonNumber; input: TransferLineInput }
 export function requestLine(product: ProductDetail, unit: ProductUnit | undefined, text: string): RequestLine | null {
   const quantity = decimalInput(text, maximumQuantity, 12)

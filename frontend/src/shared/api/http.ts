@@ -43,7 +43,7 @@ export class HttpClient {
     this.listeners.add(listener)
     return () => { this.listeners.delete(listener) }
   }
-  async request(path: string, options: { method?: 'GET' | 'POST' | 'PUT'; body?: unknown; signal?: AbortSignal; exactNumbers?: boolean } = {}): Promise<unknown> {
+  async request(path: string, options: { method?: 'GET' | 'POST' | 'PUT'; body?: unknown; signal?: AbortSignal; exactNumbers?: boolean; responseType?: 'blob'; timeoutMs?: number } = {}): Promise<unknown> {
     // Deliberately relative-only: production uses a single HTTPS origin, not a configurable API host.
     if (!/^\/(api|auth)\//.test(path) || path.includes('\\') || /[\r\n]/.test(path)) throw new ApiError(0, 'client.invalid_path')
     if (window.location.protocol !== 'https:') throw new ApiError(0, 'client.https_required')
@@ -53,12 +53,14 @@ export class HttpClient {
     if (method === 'GET' && options.body !== undefined) throw new ApiError(0, 'client.invalid_request')
     // Encode before CSRF/network I/O. Never round an unsafe JS number into a request.
     const body = options.body === undefined ? undefined : stringifyExactJson(options.body)
-    const timeout = AbortSignal.timeout(15_000)
+    const timeoutMs = options.timeoutMs ?? 15_000
+    if (!Number.isInteger(timeoutMs) || timeoutMs < 1000 || timeoutMs > 60_000) throw new ApiError(0, 'client.invalid_request')
+    const timeout = AbortSignal.timeout(timeoutMs)
     const signal = options.signal?.aborted ? options.signal : options.signal ? AbortSignal.any([options.signal, timeout]) : timeout
     let sent = false
     let release: (() => void) | undefined
     try {
-      const headers = new Headers({ Accept: 'application/json' })
+      const headers = new Headers({ Accept: options.responseType === 'blob' ? 'application/pdf, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, application/problem+json' : 'application/json' })
       if (method !== 'GET') {
         headers.set('X-CSRF-TOKEN', await this.csrf(signal))
         if (options.body !== undefined) headers.set('Content-Type', 'application/json')
@@ -81,6 +83,11 @@ export class HttpClient {
       if (response.status === 204 && response.ok) return undefined
       let data: unknown
       try {
+        if (response.ok && options.responseType === 'blob') {
+          const type = response.headers.get('Content-Type')?.split(';')[0]?.trim().toLowerCase()
+          if (type !== 'application/pdf' && type !== 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet') throw new Error('media')
+          return await response.blob()
+        }
         if (!response.headers.get('Content-Type')?.match(/^application\/(json|problem\+json)(;|$)/i)) throw new Error('media')
         data = options.exactNumbers ? parseExactJson(await response.text()) : await response.json()
       } catch (error) {
