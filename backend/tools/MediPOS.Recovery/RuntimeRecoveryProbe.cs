@@ -48,7 +48,7 @@ public static class RuntimeRecoveryProbe
                 if (tenant is not null) actual.Parameters.AddWithValue("tenant", tenant.Value);
                 await using var reader = await actual.ExecuteReaderAsync(token).ConfigureAwait(false);
                 if (!await reader.ReadAsync(token).ConfigureAwait(false)) throw new InvalidOperationException("Runtime visibility result absent.");
-                var check = new RuntimeVisibility(tenant is null ? null : index + 1, ownRows, reader.GetInt64(0), reader.GetInt64(1));
+                var check = new RuntimeVisibility(tenant is null ? null : index + 1, ExpectedActorlessRows(table, ownRows), reader.GetInt64(0), reader.GetInt64(1));
                 RequireVisibility(check);
                 checks[table].Add(check);
             }
@@ -71,13 +71,21 @@ public static class RuntimeRecoveryProbe
         if (check.ExpectedRows < 0 || check.VisibleRows != check.ExpectedRows || check.ForeignRows != 0)
             throw new InvalidOperationException("Restored runtime role cannot read exactly its tenant's private rows.");
     }
+
+    public static long ExpectedActorlessRows(string table, long storedTenantRows)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegative(storedTenantRows);
+        // Snapshot comparison verifies stored rows. This probe never fabricates an Owner or ticket scope.
+        return table == "employee_invitations" ? 0 : storedTenantRows;
+    }
 }
 
 // Ordinals identify only the examined contexts, not tenant identities. Null denotes the empty scope.
 public sealed record RuntimeVisibility(int? TenantOrdinal, long ExpectedRows, long VisibleRows, long ForeignRows);
 public sealed record RuntimeTableEvidence(string Table, RuntimeVisibility[] Checks)
 {
-    public string CrossTenantCoverage => Checks.Length == 2 ?
+    public string ReadScope => Table == "employee_invitations" ? "ACTORLESS_DENIAL_ONLY" : "TENANT_ROWS";
+    public string CrossTenantCoverage => ReadScope == "ACTORLESS_DENIAL_ONLY" ? "ACTOR_CONTEXT_NOT_EXERCISED" : Checks.Length == 2 ?
         (Checks.All(check => check.ExpectedRows > 0) ? "SELECTED_PAIR_ROWS_PRESENT" : "SELECTED_PAIR_ROWS_INCOMPLETE") :
         (Checks[0].TenantOrdinal is null ? "NO_TENANTS" : "SINGLE_TENANT_ONLY");
 }
@@ -98,13 +106,15 @@ public sealed record RuntimeRecoveryEvidence(long TenantsAvailable, int TenantsE
             for (var index = 0; index < table.Checks.Length; index++)
             {
                 var check = table.Checks[index];
-                if (check.TenantOrdinal != (examined == 0 ? (int?)null : index + 1) || (examined == 0 && check.ExpectedRows != 0))
+                if (check.TenantOrdinal != (examined == 0 ? (int?)null : index + 1) || (examined == 0 && check.ExpectedRows != 0) ||
+                    (table.ReadScope == "ACTORLESS_DENIAL_ONLY" && check.ExpectedRows != 0))
                     throw new InvalidOperationException("Runtime evidence has an incorrect tenant context.");
                 RuntimeRecoveryProbe.RequireVisibility(check);
             }
         }
         var gaps = tables.Any(table => table.CrossTenantCoverage != "SELECTED_PAIR_ROWS_PRESENT");
         var pending = new List<string> { "EXTERNAL_SECURITY_AND_TRANSACTION_REGRESSIONS" };
+        if (tables.Any(table => table.ReadScope == "ACTORLESS_DENIAL_ONLY")) pending.Add("INVITATION_OWNER_AND_TICKET_RLS");
         if (examined < 2) pending.Add("REPRESENTATIVE_TWO_TENANT_REHEARSAL");
         else if (gaps) pending.Add("PRIVATE_TABLE_ROW_COVERAGE");
         if (available > examined) pending.Add("ADDITIONAL_TENANTS");

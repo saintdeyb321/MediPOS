@@ -11,6 +11,29 @@ namespace MediPOS.UnitTests.Recovery;
 
 public sealed class RuntimeRecoveryEvidenceTests
 {
+    [Fact]
+    public void InvitationsDenyActorlessReadsWithoutClaimingOwnerOrTicketIsolation()
+    {
+        Assert.Equal(0, RuntimeRecoveryProbe.ExpectedActorlessRows("employee_invitations", 7));
+        Assert.Equal(7, RuntimeRecoveryProbe.ExpectedActorlessRows("audit_logs", 7));
+        var table = new RuntimeTableEvidence("employee_invitations", [new(1, 0, 0, 0), new(2, 0, 0, 0)]);
+        var evidence = RuntimeRecoveryEvidence.FromChecks(2, [Table("audit_logs", 2), table]);
+        Assert.Equal("ACTORLESS_DENIAL_ONLY", table.ReadScope);
+        Assert.Equal("ACTOR_CONTEXT_NOT_EXERCISED", table.CrossTenantCoverage);
+        Assert.Equal("SELECTED_PAIR_READ_CHECKED_WITH_GAPS", evidence.TenantIsolation);
+        Assert.Contains("INVITATION_OWNER_AND_TICKET_RLS", evidence.PendingVerifications);
+        Assert.Contains("PRIVATE_TABLE_ROW_COVERAGE", evidence.PendingVerifications);
+    }
+
+    [Fact]
+    public void InvitationVisibilityCannotBeBroadenedOrOmittedToManufactureRecoveryApproval()
+    {
+        Assert.Throws<ArgumentOutOfRangeException>(() => RuntimeRecoveryProbe.ExpectedActorlessRows("employee_invitations", -1));
+        Assert.Throws<InvalidOperationException>(() => RuntimeRecoveryEvidence.FromChecks(1, [new("employee_invitations", [new(1, 0, 1, 0)])]));
+        Assert.Throws<InvalidOperationException>(() => RuntimeRecoveryEvidence.FromChecks(1, [new("employee_invitations", [new(1, 1, 1, 0)])]));
+        Assert.Throws<InvalidOperationException>(() => RuntimeRecoveryEvidence.FromChecks(2, [new("employee_invitations", [new(1, 0, 0, 0)])]));
+    }
+
     [Theory]
     [InlineData(0, "NOT_DEMONSTRATED_NO_TENANTS", "EMPTY_TENANT_CONTEXT_READ")]
     [InlineData(1, "NOT_DEMONSTRATED_SINGLE_TENANT", "SINGLE_TENANT_READ")]

@@ -1,5 +1,8 @@
 using System.Data;
+using System.Security.Cryptography;
+using MediPOS.Application.Modules.IdentityAccess.Invitations;
 using MediPOS.Application.Modules.SalesPos.VoidSale;
+using MediPOS.Domain.Modules.IdentityAccess;
 using MediPOS.Domain.Modules.SalesPos;
 using MediPOS.Infrastructure.Persistence;
 using MediPOS.IntegrationTests.Modules.TenancyLicensing;
@@ -127,6 +130,32 @@ public sealed class RecoveryPostgreSqlTests(PostgreSqlFixture fixture)
             Assert.Contains("PRIVATE_TABLE_ROW_COVERAGE", evidence.PendingVerifications);
         }
         if (tenants > 2) Assert.Contains("ADDITIONAL_TENANTS", evidence.PendingVerifications);
+        RecoveryInspection.Compare(before, await RecoveryWorkflow.InspectAsync(owner, true, Token));
+    }
+
+    [Fact]
+    public async Task StoredInvitationHistoryRemainsIntactWhenActorlessRuntimeMustReadNoInvitations()
+    {
+        await using var harness = await CreateAsync();
+        await GrantProbeReadsAsync(harness);
+        await using var owner = new NpgsqlConnection(harness.OwnerConnection);
+        await owner.OpenAsync(Token);
+        var role = RecoveryInspection.Quote(new NpgsqlConnectionStringBuilder(harness.Database.RuntimeConnection).Username!);
+        await using (var grant = new NpgsqlCommand("GRANT INSERT ON employee_invitations TO " + role, owner))
+            await grant.ExecuteNonQueryAsync(Token);
+        var tenant = harness.Dataset.Tenants[0];
+        await using (var scope = harness.Dataset.Scope(tenant.Owner))
+            await scope.ServiceProvider.GetRequiredService<EmployeeInvitationHandler>().CreateAsync(
+                new(tenant.Id, Guid.NewGuid(), TenantRole.Cashier, SHA256.HashData(RandomNumberGenerator.GetBytes(32)), tenant.Owner), Token);
+        var before = await RecoveryWorkflow.InspectAsync(owner, true, Token);
+        Assert.Equal(1, before.Tables["employee_invitations"].Rows);
+        var evidence = await RuntimeRecoveryProbe.ValidateAsync(harness.Database.RuntimeConnection, owner, Token);
+        var invitation = Assert.Single(evidence.Tables, table => table.Table == "employee_invitations");
+        Assert.Equal("ACTORLESS_DENIAL_ONLY", invitation.ReadScope);
+        Assert.Equal("ACTOR_CONTEXT_NOT_EXERCISED", invitation.CrossTenantCoverage);
+        Assert.All(invitation.Checks, check => { Assert.Equal(0, check.VisibleRows); Assert.Equal(0, check.ForeignRows); });
+        Assert.Contains("INVITATION_OWNER_AND_TICKET_RLS", evidence.PendingVerifications);
+        Assert.Equal("SELECTED_PAIR_READ_CHECKED_WITH_GAPS", evidence.TenantIsolation);
         RecoveryInspection.Compare(before, await RecoveryWorkflow.InspectAsync(owner, true, Token));
     }
 
