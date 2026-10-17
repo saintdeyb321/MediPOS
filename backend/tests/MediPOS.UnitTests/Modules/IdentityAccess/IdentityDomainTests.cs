@@ -74,6 +74,38 @@ public sealed class IdentityDomainTests
     }
 
     [Theory]
+    [InlineData(0)]
+    [InlineData(1)]
+    public void LastActiveOwnerCannotBeDeactivated(int activeOwners)
+    {
+        var membership = Membership.Create(Guid.NewGuid(), Guid.NewGuid(), TenantRole.Owner, CreatedAt);
+        Assert.Throws<InvalidOperationException>(() => membership.EnsureDeactivationAllowed(activeOwners));
+        Assert.True(membership.IsActive);
+        Assert.Null(membership.DeactivatedAt);
+    }
+
+    [Theory]
+    [InlineData(TenantRole.Owner, 2)]
+    [InlineData(TenantRole.Pharmacist, 0)]
+    [InlineData(TenantRole.Cashier, 0)]
+    public void DeactivationAllowsAnotherActiveOwnerOrAWorker(TenantRole role, int activeOwners)
+    {
+        var membership = Membership.Create(Guid.NewGuid(), Guid.NewGuid(), role, CreatedAt);
+        membership.EnsureDeactivationAllowed(activeOwners);
+        membership.Deactivate(CreatedAt.AddHours(1));
+        Assert.False(membership.IsActive);
+    }
+
+    [Fact]
+    public void AlreadyInactiveOwnerDoesNotRequireAnotherOwnerToRemainAnInactiveRecord()
+    {
+        var membership = Membership.Create(Guid.NewGuid(), Guid.NewGuid(), TenantRole.Owner, CreatedAt);
+        membership.Deactivate(CreatedAt.AddHours(1));
+        membership.EnsureDeactivationAllowed(0);
+        Assert.Throws<ArgumentOutOfRangeException>(() => membership.EnsureDeactivationAllowed(-1));
+    }
+
+    [Theory]
     [InlineData(true, false)]
     [InlineData(false, true)]
     public void BranchAssignmentCannotCrossEitherTenant(bool foreignMembership, bool foreignBranch)

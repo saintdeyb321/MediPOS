@@ -4,6 +4,7 @@ using MediPOS.Application.Modules.IdentityAccess;
 using MediPOS.Application.Modules.IdentityAccess.Authentication;
 using MediPOS.Application.Modules.IdentityAccess.CreateMembership;
 using MediPOS.Application.Modules.IdentityAccess.DeactivateMembership;
+using MediPOS.Application.Modules.IdentityAccess.OperationalAccess;
 using MediPOS.Application.Modules.IdentityAccess.ReplaceWorkSchedule;
 using MediPOS.Application.Modules.IdentityAccess.SetMembershipBranches;
 using MediPOS.Application.Modules.IdentityAccess.UpsertGoogleUser;
@@ -18,6 +19,8 @@ public sealed class IdentityApplicationTests
 {
     private static readonly DateTimeOffset Now = new(2026, 10, 6, 14, 0, 0, TimeSpan.Zero);
     private static readonly string[] CreationSteps = ["lock", "user", "duplicate", "owners", "insert", "commit", "dispose"];
+    private static readonly string[] LastOwnerRejectionSteps = ["lock", "owners", "dispose"];
+    private static readonly string[] OwnerDeactivationSteps = ["lock", "owners", "deactivate", "commit", "dispose"];
 
     [Fact]
     public async Task GoogleUpsertUsesVerifiedSubjectAndPreservesIdentityWhenEmailChanges()
@@ -221,6 +224,82 @@ public sealed class IdentityApplicationTests
         Assert.DoesNotContain("commit", store.Steps);
     }
 
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task LastActiveOwnerFailsInsideProvisioningWithoutMutationOrAudit(bool self)
+    {
+        var store = new RecordingStore();
+        var owner = Membership.Create(store.TenantId, store.UserId, TenantRole.Owner, Now);
+        var historical = Membership.Create(store.TenantId, Guid.NewGuid(), TenantRole.Owner, Now);
+        historical.Deactivate(Now);
+        store.Memberships.AddRange([owner, historical]);
+        var handler = new DeactivateMembershipHandler(store, new RecordingProvisioning(store), new Clock(), new BusinessRuleAuthorizationStub());
+        var error = await Assert.ThrowsAsync<ApplicationErrorException>(() => handler.HandleAsync(
+            new(store.TenantId, owner.Id, self ? owner.UserId : Guid.NewGuid()), TestContext.Current.CancellationToken));
+        Assert.Equal("membership.last_active_owner", error.Error.Code);
+        Assert.Equal(ErrorCategory.Conflict, error.Error.Category);
+        Assert.Equal(LastOwnerRejectionSteps, store.Steps);
+        Assert.True(owner.IsActive);
+        Assert.Null(owner.DeactivatedAt);
+        Assert.Empty(store.Audits);
+    }
+
+    [Fact]
+    public async Task TwoActiveOwnersAllowOneDeactivationAndThenRejectTheRemainingOwner()
+    {
+        var store = new RecordingStore();
+        var first = Membership.Create(store.TenantId, store.UserId, TenantRole.Owner, Now);
+        var second = Membership.Create(store.TenantId, Guid.NewGuid(), TenantRole.Owner, Now);
+        store.Memberships.AddRange([first, second]);
+        var handler = new DeactivateMembershipHandler(store, new RecordingProvisioning(store), new Clock(), new BusinessRuleAuthorizationStub());
+        await handler.HandleAsync(new(store.TenantId, first.Id, first.UserId), TestContext.Current.CancellationToken);
+        Assert.Equal(OwnerDeactivationSteps, store.Steps);
+        Assert.Equal(first.Id, Assert.Single(store.Audits).EntityId);
+        var error = await Assert.ThrowsAsync<ApplicationErrorException>(() => handler.HandleAsync(
+            new(store.TenantId, second.Id, second.UserId), TestContext.Current.CancellationToken));
+        Assert.Equal("membership.last_active_owner", error.Error.Code);
+        Assert.True(second.IsActive);
+        await handler.HandleAsync(new(store.TenantId, first.Id, second.UserId), TestContext.Current.CancellationToken);
+        Assert.Single(store.Audits);
+        Assert.Single(store.Memberships, value => value.IsActive);
+    }
+
+    [Theory]
+    [InlineData(TenantRole.Cashier)]
+    [InlineData(TenantRole.Pharmacist)]
+    public async Task WorkerDeactivationDoesNotReadOwnerCount(TenantRole role)
+    {
+        var store = new RecordingStore();
+        var worker = Membership.Create(store.TenantId, store.UserId, role, Now);
+        store.Memberships.Add(worker);
+        await new DeactivateMembershipHandler(store, new RecordingProvisioning(store), new Clock(), new BusinessRuleAuthorizationStub()).HandleAsync(
+            new(store.TenantId, worker.Id, Guid.NewGuid()), TestContext.Current.CancellationToken);
+        Assert.False(worker.IsActive);
+        Assert.DoesNotContain("owners", store.Steps);
+        Assert.Single(store.Audits);
+    }
+
+    [Theory]
+    [InlineData("access.membership_inactive")]
+    [InlineData("access.license_denied")]
+    public async Task DeactivationReauthorizesAfterWaitingBeforeReadingOwnersOrMutating(string code)
+    {
+        var store = new RecordingStore();
+        var owner = Membership.Create(store.TenantId, store.UserId, TenantRole.Owner, Now);
+        store.Memberships.Add(owner);
+        var handler = new DeactivateMembershipHandler(store, new RecordingProvisioning(store), new Clock(), new RevokedAuthorization(code));
+        var error = await Assert.ThrowsAsync<ApplicationErrorException>(() => handler.HandleAsync(
+            new(store.TenantId, owner.Id, owner.UserId), TestContext.Current.CancellationToken));
+        Assert.Equal(code, error.Error.Code);
+        Assert.Equal("lock", store.Steps[0]);
+        Assert.Equal("dispose", store.Steps[^1]);
+        Assert.DoesNotContain("owners", store.Steps);
+        Assert.DoesNotContain("commit", store.Steps);
+        Assert.True(owner.IsActive);
+        Assert.Empty(store.Audits);
+    }
+
     [Fact]
     public async Task SensitiveMembershipChangesCarryMinimalAuditsAndRepeatedDeactivationDoesNotDuplicate()
     {
@@ -316,6 +395,18 @@ public sealed class IdentityApplicationTests
     private sealed class Clock : TimeProvider
     {
         public override DateTimeOffset GetUtcNow() => Now;
+    }
+
+    private sealed class RevokedAuthorization(string code) : ITenantOperationAuthorizer
+    {
+        private readonly BusinessRuleAuthorizationStub _allowed = new();
+        private int _reads;
+        public Task<AccessContext> RequireAsync(Guid tenantId, Guid? branchId, Guid? actorId, TenantOperation operation, CancellationToken token)
+        {
+            if (++_reads > 1) throw new ApplicationErrorException(new(code, ErrorCategory.Forbidden, "Revoked while waiting."));
+            return _allowed.RequireAsync(tenantId, branchId, actorId, operation, token);
+        }
+        public Task<AccessContext> IdentifyForBranchLookupAsync(Guid tenantId, Guid? actorId, TenantOperation operation, CancellationToken token) => throw new NotSupportedException();
     }
 
     private sealed class VerifiedSource(VerifiedGoogleIdentity? identity) : IVerifiedGoogleIdentitySource

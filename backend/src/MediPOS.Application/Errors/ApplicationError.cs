@@ -29,5 +29,6 @@ public static class ApplicationErrors
     public static readonly ApplicationError BranchLimitReached = new("branch.limit_reached", ErrorCategory.Conflict, "The licensed branch limit has been reached.");
     public static readonly ApplicationError MembershipDuplicate = new("membership.active_duplicate", ErrorCategory.Conflict, "An active membership already exists for this user and tenant.");
     public static readonly ApplicationError OwnerLimitReached = new("membership.owner_limit_reached", ErrorCategory.Conflict, "The tenant already has two active Owners.");
+    public static readonly ApplicationError LastActiveOwner = new("membership.last_active_owner", ErrorCategory.Conflict, "The last active Owner cannot be deactivated.");
     public static readonly ApplicationError MembershipInactive = new("membership.inactive", ErrorCategory.Forbidden, "Inactive memberships retain their configuration.");
 }

@@ -51,6 +51,7 @@ const messages: Record<string, string> = {
   'access.membership_missing': 'No tienes una membresía vigente en esta botica.',
   'access.role_denied': 'Tu rol actual no permite acceder a esta sección.',
   'access.context_changed': 'Tu acceso cambió. Vuelve a seleccionar una sucursal.',
+  'membership.last_active_owner': 'No se puede desactivar al último propietario activo de la botica.',
   'api.rate_limited': 'Has realizado varias solicitudes. Espera un momento y vuelve a intentarlo.',
 }
 export function errorMessage(error: unknown) {

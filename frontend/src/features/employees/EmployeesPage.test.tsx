@@ -122,7 +122,7 @@ it.each([true, false])('reconciles a lost deactivation only when the same member
     await screen.findByRole('heading', { name: 'Cambio pendiente de conciliación' }); await waitFor(() => expect(screen.getByRole('button', { name: 'Consultar empleado de la operación' })).toBeEnabled()); fireEvent.click(screen.getByRole('button', { name: 'Consultar empleado de la operación' }))
     await waitFor(() => expect(screen.getByRole('button', { name: 'Consultar empleado de la operación' })).toBeEnabled()); expect(screen.getByRole('button', { name: 'Desactivar empleado una vez' })).toBeDisabled()
     expect(screen.getByTestId('location').textContent).toContain('employeePending=deactivate')
-  } else { await screen.findByText(/Esta membresía está inactiva/); expect(screen.getByTestId('location').textContent).not.toContain('employeePending') }
+  } else { await screen.findByText(/Esta membresía está inactiva/); await waitFor(() => expect(screen.getByTestId('location').textContent).not.toContain('employeePending')) }
   expect(fake.writes()).toHaveLength(1)
 })
 it('resets own operational context and tenant caches before permitting further operations', async () => {

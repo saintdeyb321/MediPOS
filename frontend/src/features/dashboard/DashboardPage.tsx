@@ -5,9 +5,11 @@ import { Badge } from '../../shared/ui/Badge'
 import { Panel } from '../../shared/ui/Panel'
 import { PageHeader } from '../../shared/ui/PageHeader'
 import type { LucideIcon } from 'lucide-react'
+import { availabilityLabels } from '../../shared/ui/availability'
+import type { Availability } from '../../shared/ui/availability'
 import './dashboard.css'
 
-export interface DashboardShortcut { id: string; label: string; description: string; icon: LucideIcon }
+export interface DashboardShortcut { id: string; label: string; description: string; icon: LucideIcon; availability: Availability }
 
 export function DashboardPage({ shortcuts }: { shortcuts: DashboardShortcut[] }) {
   const w = useWorkspace()
@@ -17,7 +19,7 @@ export function DashboardPage({ shortcuts }: { shortcuts: DashboardShortcut[] })
     <>
       <PageHeader eyebrow={w.tenantName} title="Todo listo para empezar." description="Revisa tu sucursal y elige dónde continuar." />
       <Panel className="dashboard-action">
-        <div><Badge tone="info">Vista inicial · F1.1</Badge><h2>Punto de venta</h2><p>Abre tu espacio de atención. La búsqueda y el cobro se habilitarán en F2.</p></div>
+        <div><Badge tone="info">POS conectado</Badge><h2>Punto de venta</h2><p>Busca productos, prepara el carrito y recupera borradores. Los pagos y el ticket interno requieren confirmación explícita en el servidor.</p></div>
         <Link className="button primary" to={`${w.base}/ventas`}>Abrir punto de venta <ArrowRight size={20} aria-hidden="true" /></Link>
       </Panel>
       <dl className="workspace-summary">
@@ -26,21 +28,21 @@ export function DashboardPage({ shortcuts }: { shortcuts: DashboardShortcut[] })
         <div><dt><Clock3 aria-hidden="true" />Última verificación · Lima</dt><dd><time dateTime={w.access.evaluatedAtUtc}>{verified}</time></dd></div>
       </dl>
       <Panel className="module-panel">
-        <div className="panel-heading"><div><h2>Tu espacio de trabajo</h2><p>Secciones visibles según tu acceso actual.</p></div></div>
+        <div className="panel-heading"><div><h2>Tu espacio de trabajo</h2><p>Secciones conectadas según tu acceso actual. Implementado no significa aceptación comercial aprobada; los circuitos LAB siguen pendientes de aceptación.</p></div></div>
         <div className="module-rows">
           {shortcuts.map(item => (
             <Link key={item.id} to={`${w.base}/${item.id}`} className="module-row">
               <span className="module-icon"><item.icon size={22} aria-hidden="true" /></span>
               <span><strong>{item.label}</strong><small>{item.description}</small></span>
-              <Badge>{item.id === 'configuracion' ? 'Administrar negocio' : item.id === 'notificaciones' ? 'Consultar alertas' : item.id === 'transferencias' ? 'Consultar y operar' : item.id === 'reportes' ? 'Consultar reportes' : 'Próximamente'}</Badge>
+              <Badge tone={item.availability === 'partial' ? 'warning' : 'neutral'}>{availabilityLabels[item.availability]}</Badge>
               <ArrowRight size={18} aria-hidden="true" />
             </Link>
           ))}
         </div>
       </Panel>
       <Panel className="activity-panel">
-        <div><h2>Indicadores de la sucursal</h2><p>Las ventas, caja y movimientos se mostrarán cuando sus consultas estén conectadas.</p></div>
-        <Badge>Sin datos consultados</Badge>
+        <div><h2>Consultas operativas</h2><p>Consulta Caja e Inventario desde los accesos disponibles. Owner puede revisar Reportes para ver los indicadores del servidor. Este inicio no consulta ni calcula métricas.</p><p>Offline Sync: no iniciado; requiere autorización de su bloque.</p></div>
+        <Badge>Sin métricas en este inicio</Badge>
       </Panel>
     </>
   )

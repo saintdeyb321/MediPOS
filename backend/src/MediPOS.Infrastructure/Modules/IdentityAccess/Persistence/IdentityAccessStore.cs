@@ -35,6 +35,7 @@ internal sealed class IdentityAccessStore(MediPosDbContext context) : IIdentityA
     public Task<int> CountActiveOwnersAsync(Guid tenantId, CancellationToken cancellationToken)
     {
         context.SelectTenant(tenantId);
+        RequireProvisioningTransaction();
         return context.Memberships.CountAsync(value => value.TenantId == tenantId && value.IsActive && value.Role == TenantRole.Owner, cancellationToken);
     }
 

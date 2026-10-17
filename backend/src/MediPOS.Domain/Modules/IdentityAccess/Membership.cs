@@ -53,4 +53,12 @@ public sealed class Membership
         IsActive = false;
         DeactivatedAt = utc;
     }
+
+    // The caller must read the count while holding the tenant provisioning lock.
+    public void EnsureDeactivationAllowed(int activeOwnerCount)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegative(activeOwnerCount);
+        if (IsActive && Role == TenantRole.Owner && activeOwnerCount <= 1)
+            throw new InvalidOperationException("The last active Owner cannot be deactivated.");
+    }
 }

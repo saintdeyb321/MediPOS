@@ -9,6 +9,7 @@ public interface IIdentityAccessStore
     Task<User> UpsertGoogleUserAsync(User user, CancellationToken cancellationToken);
     Task<bool> UserExistsAsync(Guid userId, CancellationToken cancellationToken);
     Task<bool> HasActiveMembershipAsync(Guid tenantId, Guid userId, CancellationToken cancellationToken);
+    // Invariant reads must use the active tenant license provisioning transaction/lock.
     Task<int> CountActiveOwnersAsync(Guid tenantId, CancellationToken cancellationToken);
     Task<bool> HasOwnerHistoryAsync(Guid tenantId, CancellationToken cancellationToken);
     Task<Membership?> FindMembershipAsync(Guid tenantId, Guid membershipId, CancellationToken cancellationToken);

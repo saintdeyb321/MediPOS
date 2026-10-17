@@ -5,6 +5,7 @@ import type { Workspace } from '../../features/access'
 import { useRuntime } from '../../features/access'
 import { Brand } from '../../shared/ui/Brand'
 import { NotificationCounter } from '../../features/notifications'
+import { availabilityLabels } from '../../shared/ui/availability'
 
 export function WorkspaceNavigation({ workspace: w, onNavigate }: { workspace: Workspace; onNavigate?: () => void }) {
   const { preview } = useRuntime()
@@ -21,11 +22,12 @@ export function WorkspaceNavigation({ workspace: w, onNavigate }: { workspace: W
               <p>{section === 'operation' ? 'TU BOTICA' : 'GESTIÓN'}</p>
               {items.map(item => (
                 <NavLink key={item.id} to={item.id ? `${w.base}/${item.id}` : w.base} end className={({ isActive }) => `nav-item${isActive ? ' active' : ''}`} onClick={onNavigate}
-                  title={item.id && !['ventas', 'configuracion', 'transferencias', 'reportes', 'notificaciones'].includes(item.id) ? 'Próximamente: esta sección aún no permite operaciones.' : undefined}>
+                  aria-label={item.availability !== 'implemented' ? `${item.label} · ${availabilityLabels[item.availability]}` : undefined}
+                  title={item.availability !== 'implemented' ? item.description : undefined}>
                   <item.icon size={20} aria-hidden="true" />
                   <span>{item.label}</span>
                   {item.id === 'notificaciones' && <NotificationCounter />}
-                  {item.id === 'ventas' ? <kbd aria-hidden="true">Alt V</kbd> : item.id && !['configuracion', 'transferencias', 'reportes', 'notificaciones'].includes(item.id) && <small aria-hidden="true">Pronto</small>}
+                  {item.id === 'ventas' ? <kbd aria-hidden="true">Alt V</kbd> : item.availability !== 'implemented' && <small aria-hidden="true">{availabilityLabels[item.availability]}</small>}
                 </NavLink>
               ))}
             </div>

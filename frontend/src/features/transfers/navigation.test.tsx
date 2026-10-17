@@ -10,7 +10,7 @@ it('exposes the real transfers route without inheriting an unavailable label in 
   const link = screen.getByRole('link', { name: 'Transferencias' }); expect(link).toHaveAttribute('href', workspace.base + '/transferencias'); expect(link).not.toHaveAttribute('title')
   expect(within(link).queryByText('Pronto')).not.toBeInTheDocument(); expect(screen.getByRole('link', { name: 'Reportes' })).not.toHaveAttribute('title'); expect(fake.writes()).toHaveLength(0)
 })
-it('describes the transfers shortcut as operational without enabling a future reporting module', () => {
-  const fake = transferServer(); mountTransfers(fake, <DashboardPage shortcuts={[{ id: 'transferencias', label: 'Transferencias', description: 'Mercadería entre sucursales', icon: ArrowLeftRight }]} />)
-  const link = screen.getByRole('link', { name: /^Transferencias/ }); expect(within(link).getByText('Consultar y operar')).toBeInTheDocument(); expect(within(link).queryByText('Próximamente')).not.toBeInTheDocument(); expect(fake.writes()).toHaveLength(0)
+it('describes the connected transfers shortcut without claiming commercial acceptance', () => {
+  const fake = transferServer(); mountTransfers(fake, <DashboardPage shortcuts={[{ id: 'transferencias', label: 'Transferencias', description: 'Mercadería entre sucursales', icon: ArrowLeftRight, availability: 'implemented' }]} />)
+  const link = screen.getByRole('link', { name: /^Transferencias/ }); expect(within(link).getByText('Implementado')).toBeInTheDocument(); expect(within(link).queryByText('Próximamente')).not.toBeInTheDocument(); expect(screen.getByText(/Implementado no significa aceptación comercial aprobada/)).toBeInTheDocument(); expect(fake.writes()).toHaveLength(0)
 })
