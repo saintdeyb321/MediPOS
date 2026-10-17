@@ -221,6 +221,7 @@ public sealed class CatalogFoundationTests(PostgreSqlFixture fixture)
         var registrations = new ServiceCollection();
         registrations.AddSingleton<TimeProvider>(new IdentityAccessTestSetup.Clock());
         registrations.AddInfrastructure(configuration);
+        registrations.AddPersistenceFixtureAuthorization();
         registrations.AddScoped(source =>
         {
             var tenant = source.GetRequiredService<ITenantDataContext>();

@@ -226,7 +226,7 @@ public sealed class CommercialDirectoryPostgreSqlTests(PostgreSqlFixture fixture
             var product = await source.GetRequiredService<MediPOS.Application.Modules.Catalog.CreateLocalBusinessProduct.CreateLocalBusinessProductHandler>().HandleAsync(
                 new(tenant.TenantId, "EXPIRY", MediPOS.Domain.Modules.Catalog.ProductType.Medicine, "Medicamento sintético", tenant.CategoryId, "Lab", null,
                     new MedicineInput([new("Paracetamol", "500 mg")], "Tableta", "Oral"), 2.125m, null, tenant.Identity.ActorId), Token);
-            var units = await source.GetRequiredService<MediPOS.Application.Modules.Catalog.ReplaceProductUnits.ReplaceProductUnitsHandler>().HandleAsync(new(tenant.TenantId, product.Id, [new("Base", 1m, true)], tenant.Identity.ActorId), Token);
+            var units = await source.GetRequiredService<VersionedProductUnitsFixture>().HandleAsync(new(tenant.TenantId, product.Id, [new("Base", 1m, true)], tenant.Identity.ActorId), Token);
             var today = MediPOS.IntegrationTests.Modules.SalesPos.SaleCheckoutTestData.Today;
             await MediPOS.IntegrationTests.Modules.SalesPos.SaleCheckoutTestData.ReceiveAsync(source, tenant, product.Id, units.Single().Id, [(2m, today.AddDays(2)), (3m, today.AddDays(3)), (5m, today.AddDays(40))]);
         }

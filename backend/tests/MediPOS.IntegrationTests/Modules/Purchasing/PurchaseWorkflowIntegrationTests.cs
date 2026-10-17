@@ -36,6 +36,7 @@ public sealed class PurchaseWorkflowIntegrationTests(PostgreSqlFixture fixture)
         var (tenant, _) = await TenantIsolationTestData.CreatePairAsync(fixture);
         var rows = await PurchaseTestData.CreateAsync(fixture, tenant, true);
         await using var context = fixture.CreateContext(rows.TenantId);
+        var originalUnit = await context.ProductUnits.AsNoTracking().SingleAsync(value => value.Name == "Blíster", TestContext.Current.CancellationToken);
         Assert.False(context.Database.HasPendingModelChanges());
         Assert.Contains(await context.Database.GetAppliedMigrationsAsync(TestContext.Current.CancellationToken),
             value => value.EndsWith("_AddPurchasingAndReceiptFoundation", StringComparison.Ordinal));
@@ -81,7 +82,10 @@ public sealed class PurchaseWorkflowIntegrationTests(PostgreSqlFixture fixture)
         Assert.Equal(lines.Select(value => (value.Id, value.UnitNameSnapshot, value.ConversionToBaseSnapshot, value.BaseQuantity, value.UnitCost)),
             historical.Select(value => (value.Id, value.UnitNameSnapshot, value.ConversionToBaseSnapshot, value.BaseQuantity, value.UnitCost)));
         Assert.All(historical, value => Assert.Equal("Blíster", value.UnitNameSnapshot));
-        Assert.False(await context.ProductUnits.AnyAsync(value => value.Name == "Blíster", TestContext.Current.CancellationToken));
+        var preservedUnit = await context.ProductUnits.SingleAsync(value => value.Name == "Blíster", TestContext.Current.CancellationToken);
+        Assert.Equal(originalUnit.Id, preservedUnit.Id);
+        Assert.Equal(originalUnit.ConversionToBase, preservedUnit.ConversionToBase);
+        Assert.All(historical, value => Assert.Equal(preservedUnit.ConversionToBase, value.ConversionToBaseSnapshot));
         var conflict = await Assert.ThrowsAsync<ApplicationErrorException>(() => scope.ServiceProvider.GetRequiredService<ConfirmPurchaseHandler>()
             .HandleAsync(new(rows.TenantId, rows.PurchaseId, rows.ActorId), TestContext.Current.CancellationToken));
         Assert.Equal(PurchasingErrors.DraftRequired, conflict.Error);

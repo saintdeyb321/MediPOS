@@ -175,7 +175,12 @@ public sealed class OfficialCurationPersistenceTests(PostgreSqlFixture fixture)
         await using var connection = new NpgsqlConnection(fixture.CatalogReviewConnectionString); await connection.OpenAsync(Token); await using var transaction = await connection.BeginTransactionAsync(Token);
         await using var command = connection.CreateCommand(); command.Transaction = transaction;
         command.CommandText = "UPDATE official_catalog_curations SET version=version+1,status='needs_correction' WHERE id=@id"; command.Parameters.AddWithValue("id", candidate.Id);
-        await command.ExecuteNonQueryAsync(Token); Assert.Equal("23514", (await Assert.ThrowsAsync<PostgresException>(() => transaction.CommitAsync(Token))).SqlState);
+        var rejected = await Assert.ThrowsAsync<PostgresException>(async () =>
+        {
+            await command.ExecuteNonQueryAsync(Token);
+            await transaction.CommitAsync(Token);
+        });
+        Assert.Equal("23514", rejected.SqlState);
         await using var admin = fixture.CreateConstraintContext(); Assert.Equal(1, await admin.OfficialCatalogCurations.Where(row => row.Id == candidate.Id).Select(row => row.Version).SingleAsync(Token));
     }
     [Fact]

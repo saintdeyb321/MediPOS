@@ -84,11 +84,14 @@ public sealed class CashSessionIsolationTests(PostgreSqlFixture fixture)
         var nan = await Assert.ThrowsAsync<PostgresException>(() => constraints.Database.ExecuteSqlInterpolatedAsync(
             $"UPDATE cash_sessions SET opening_amount = 'NaN'::numeric WHERE id = {pair.OpenA.CashSessionId}", TestContext.Current.CancellationToken));
         Assert.Equal(PostgresErrorCodes.CheckViolation, nan.SqlState);
-        Assert.Equal("ck_cash_sessions_opening_amount", nan.ConstraintName);
+        Assert.Null(nan.ConstraintName); // The immutable-history BEFORE trigger rejects UPDATE first.
         var status = await Assert.ThrowsAsync<PostgresException>(() => constraints.Database.ExecuteSqlInterpolatedAsync(
             $"UPDATE cash_sessions SET status = 'unknown' WHERE id = {pair.OpenA.CashSessionId}", TestContext.Current.CancellationToken));
         Assert.Equal(PostgresErrorCodes.CheckViolation, status.SqlState);
-        Assert.Equal("ck_cash_sessions_status", status.ConstraintName);
+        Assert.Null(status.ConstraintName);
+        var unchanged = await constraints.CashSessions.AsNoTracking().SingleAsync(value => value.Id == pair.OpenA.CashSessionId, TestContext.Current.CancellationToken);
+        Assert.Equal(CashSessionStatus.Open, unchanged.Status);
+        Assert.True(unchanged.OpeningAmount >= 0m);
     }
 
     [Fact]

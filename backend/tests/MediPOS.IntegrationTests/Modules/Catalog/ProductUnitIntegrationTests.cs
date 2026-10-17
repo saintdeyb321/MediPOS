@@ -201,8 +201,16 @@ public sealed class ProductUnitIntegrationTests(PostgreSqlFixture fixture)
         var unit = await foreign.ProductUnits.AsNoTracking().FirstAsync(TestContext.Current.CancellationToken);
         await using var context = fixture.CreateContext(first.TenantId);
         context.ProductUnits.Attach(unit);
-        context.Entry(unit).Property(value => value.TenantId).CurrentValue = first.TenantId;
-        await Assert.ThrowsAsync<InvalidOperationException>(() => context.SaveChangesAsync(TestContext.Current.CancellationToken));
+        // TenantId is part of an immutable alternate key; EF rejects the assignment before SaveChanges.
+        await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+        {
+            context.Entry(unit).Property(value => value.TenantId).CurrentValue = first.TenantId;
+            await context.SaveChangesAsync(TestContext.Current.CancellationToken);
+        });
+        Assert.Equal(second.TenantId, await foreign.ProductUnits.Where(value => value.Id == unit.Id)
+            .Select(value => value.TenantId).SingleAsync(TestContext.Current.CancellationToken));
+        await using var verification = fixture.CreateContext(first.TenantId);
+        Assert.False(await verification.ProductUnits.AnyAsync(value => value.Id == unit.Id, TestContext.Current.CancellationToken));
     }
 
     private static (string Name, decimal Factor, bool Base, bool Active)[] Values(IEnumerable<ProductUnit> units) =>

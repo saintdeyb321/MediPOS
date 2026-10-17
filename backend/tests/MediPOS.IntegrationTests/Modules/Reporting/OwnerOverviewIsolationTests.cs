@@ -109,8 +109,11 @@ public sealed class OwnerOverviewIsolationTests(PostgreSqlFixture fixture)
         var source = scope.ServiceProvider;
         var owner = await OwnerOverviewTestData.AddOwnerAsync(source, tenant);
         if (deactivateMembership)
+        {
+            await CashSessionTestData.AddOwnerAsync(source, tenant.Identity);
             await source.GetRequiredService<DeactivateMembershipHandler>().HandleAsync(
                 new(tenant.TenantId, owner.MembershipId, owner.UserId), OwnerOverviewTestData.Token);
+        }
         else
             await source.WithPlatformActor(owner.UserId).GetRequiredService<SuspendLicenseHandler>().HandleAsync(
                 new(tenant.TenantId, tenant.Identity.LicenseId, owner.UserId), OwnerOverviewTestData.Token);

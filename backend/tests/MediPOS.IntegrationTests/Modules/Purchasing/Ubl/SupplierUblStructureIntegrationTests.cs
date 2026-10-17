@@ -23,7 +23,8 @@ public sealed class SupplierUblStructureIntegrationTests(PostgreSqlFixture fixtu
         await using var services = IdentityAccessTestSetup.CreateServices(fixture);
         await using var scope = services.CreateAsyncScope(); var source = scope.ServiceProvider;
         var a = await SupplierUblTestData.Setup(source);
-        var b = await SupplierUblTestData.Setup(source);
+        await using var foreignScope = services.CreateAsyncScope();
+        var b = await SupplierUblTestData.Setup(foreignScope.ServiceProvider);
         SupplierUblTestData.Authenticate(source, a.UserId);
         var xml = SupplierUblSyntheticXml.ChangeElement(SupplierUblTestData.Document(), "cac:TaxTotal", element => element.Remove());
         var error = await Assert.ThrowsAsync<ApplicationErrorException>(() => SupplierUblTestData.Import(source, a, xml));

@@ -13,7 +13,8 @@ class SafeFailureDiagnosticsTests(unittest.TestCase):
         self.root = Path(self.directory.name)
         source = self.root / "src/Module/Handler.cs"
         source.parent.mkdir(parents=True)
-        source.write_text('// synthetic source location; constraint "ck_demo_integrity"\n' + "// fixture line\n" * 100, encoding="utf-8")
+        source.write_text('// synthetic source location; constraint "ck_demo_integrity"\n'
+                          "// RAISE EXCEPTION 'cpe.audit_missing'\n" + "// fixture line\n" * 100, encoding="utf-8")
 
     def result(self, message="", stack="", stdout=""):
         def element(name, parent):
@@ -80,6 +81,21 @@ class SafeFailureDiagnosticsTests(unittest.TestCase):
         self.assertIn("constraint=ck_demo_integrity", output)
         self.assertNotIn("ck_private_dynamic_value", " ".join(output))
         self.assertNotIn("synthetic-secret", " ".join(output))
+
+    def test_fixed_source_guard_codes_are_returned_without_database_messages(self):
+        output = failure_diagnostics(self.result(message=(
+            "Npgsql.PostgresException: 23514: cpe.audit_missing private-value "
+            "cpe.private_dynamic_value Password=synthetic-secret")), self.root)
+        self.assertIn("guard_code=cpe.audit_missing", output)
+        for secret in ("private-value", "private_dynamic_value", "synthetic-secret"):
+            self.assertNotIn(secret, " ".join(output))
+
+    def test_schema_collision_and_pending_trigger_sqlstates_remain_safe_codes(self):
+        for state in ("55006", "42723", "42P07", "3F000"):
+            with self.subTest(state=state):
+                output = failure_diagnostics(self.result(message=f"Npgsql.PostgresException: {state}: private schema contents"), self.root)
+                self.assertIn("sqlstate=" + state, output)
+                self.assertNotIn("private schema contents", " ".join(output))
 
 
 if __name__ == "__main__":

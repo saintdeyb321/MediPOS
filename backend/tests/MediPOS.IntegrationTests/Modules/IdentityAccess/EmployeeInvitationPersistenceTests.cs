@@ -52,6 +52,9 @@ public sealed class EmployeeInvitationPersistenceTests(PostgreSqlFixture fixture
         }
         var results = await Task.WhenAll(Approve(), Approve());
         Assert.Equal(results[0].ResultMembershipId, results[1].ResultMembershipId);
+        // A fresh scope must replay terminal history even though its UPDATE policy rejects row locks.
+        var replayed = await Approve();
+        Assert.Equal(results[0].ResultMembershipId, replayed.ResultMembershipId);
         await using var context = fixture.CreateContext(setup.TenantId);
         var member = await context.Memberships.SingleAsync(row => row.UserId == worker, Token);
         Assert.Equal(TenantRole.Cashier, member.Role);
@@ -128,6 +131,16 @@ public sealed class EmployeeInvitationPersistenceTests(PostgreSqlFixture fixture
             Assert.Equal(worker, visible[0].AcceptedUserId);
             var denied = await Assert.ThrowsAsync<PostgresException>(() => context.Database.ExecuteSqlInterpolatedAsync(
                 $"UPDATE employee_invitations SET status = 'approved', approved_at = clock_timestamp() WHERE id = {invitation.Id}", Token));
+            // BEFORE UPDATE rejects a fabricated approval without its accepted membership before RLS WITH CHECK.
+            Assert.Equal(PostgresErrorCodes.CheckViolation, denied.SqlState);
+        }
+        await using (var context = fixture.CreateContext(setup.TenantId))
+        {
+            await using var transaction = await context.Database.BeginTransactionAsync(Token);
+            await context.Database.ExecuteSqlInterpolatedAsync($"SELECT set_config('medipos.invitation_actor_id', {worker.ToString("D")}, true), set_config('medipos.invitation_id', {invitation.Id.ToString("D")}, true), set_config('medipos.invitation_hash', {Convert.ToHexString(hash)}, true)", Token);
+            // A structurally valid transition passes the history trigger, so RLS itself must deny it.
+            var denied = await Assert.ThrowsAsync<PostgresException>(() => context.Database.ExecuteSqlInterpolatedAsync(
+                $"UPDATE employee_invitations SET status = 'revoked', revoked_at = clock_timestamp(), revoked_by_user_id = {worker}, revocation_reason = 'Synthetic unauthorized revocation' WHERE id = {invitation.Id}", Token));
             Assert.Equal(PostgresErrorCodes.InsufficientPrivilege, denied.SqlState);
         }
         var accepted = await Handler(source, setup.UserId).ReadAsync(setup.TenantId, invitation.Id, Token);

@@ -52,9 +52,11 @@ public sealed class PlatformBootstrapOwnerPersistenceTests(PostgreSqlFixture fix
         await using (var scope = services.CreateAsyncScope())
         {
             Session(scope.ServiceProvider, owner.UserId);
-            await scope.ServiceProvider.GetRequiredService<DeactivateMembershipHandler>()
-                .HandleAsync(new(initial.TenantId, owner.Id, owner.UserId), Token);
+            var denied = await Assert.ThrowsAsync<ApplicationErrorException>(() => scope.ServiceProvider.GetRequiredService<DeactivateMembershipHandler>()
+                .HandleAsync(new(initial.TenantId, owner.Id, owner.UserId), Token));
+            Assert.Equal(ApplicationErrors.LastActiveOwner, denied.Error);
         }
+        await HistoricalOwnerFixture.RecordInactiveAsync(fixture, initial.TenantId, owner.Id, owner.UserId, Token);
         Assert.Equal("access.bootstrap_denied", (await Assert.ThrowsAsync<ApplicationErrorException>(() =>
             Attempt(services, initial.TenantId, users[3], users[1]))).Error.Code);
         await using var verification = fixture.CreateContext(initial.TenantId);

@@ -16,12 +16,8 @@ public static class RuntimeRecoveryProbe
         await RecoveryInspection.ExecuteAsync(owner, ownerTransaction, "SET TRANSACTION READ ONLY", token).ConfigureAwait(false);
         await using var count = new NpgsqlCommand("SELECT count(*) FROM tenants", owner, ownerTransaction);
         var available = (long)(await count.ExecuteScalarAsync(token).ConfigureAwait(false))!;
-        var tenants = await RecoveryInspection.StringsAsync(owner, ownerTransaction, "SELECT id::text FROM tenants ORDER BY id LIMIT 2", token).ConfigureAwait(false);
-        var tables = await RecoveryInspection.StringsAsync(owner, ownerTransaction, """
-            SELECT c.relname FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
-            WHERE n.nspname='public' AND c.relkind='r' AND EXISTS(SELECT 1 FROM pg_attribute a WHERE a.attrelid=c.oid AND a.attname='tenant_id' AND NOT a.attisdropped)
-            ORDER BY c.relname
-            """, token).ConfigureAwait(false);
+        var tenants = await RecoveryInspection.StringsAsync(owner, ownerTransaction, "SELECT tenant_id::text FROM tenants ORDER BY tenant_id LIMIT 2", token).ConfigureAwait(false);
+        var tables = await RecoveryInspection.StringsAsync(owner, ownerTransaction, RecoveryInspection.TenantPrivateTablesQuery, token).ConfigureAwait(false);
         var checks = tables.ToDictionary(table => table, _ => new List<RuntimeVisibility>(), StringComparer.Ordinal);
         // Empty databases still open the real guarded runtime, with an empty tenant scope, never a fabricated identity.
         for (var index = 0; index < Math.Max(1, tenants.Length); index++)

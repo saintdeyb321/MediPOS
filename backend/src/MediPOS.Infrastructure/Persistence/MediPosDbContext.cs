@@ -264,10 +264,16 @@ public sealed partial class MediPosDbContext(DbContextOptions<MediPosDbContext> 
         ValidateElectronicDocumentWrites();
         ValidateSupplierUblWrites();
         ValidateTenantWrites();
-        return base.SaveChanges(acceptAllChangesOnSuccess);
+        // Audit guards compare xmin with the outer transaction ID. EF's implicit savepoint
+        // would write a subtransaction xmin. Explicit use-case savepoints remain available;
+        // failed use cases must still roll back/dispose their owning transaction.
+        var automaticSavepoints = Database.AutoSavepointsEnabled;
+        Database.AutoSavepointsEnabled = false;
+        try { return base.SaveChanges(acceptAllChangesOnSuccess); }
+        finally { Database.AutoSavepointsEnabled = automaticSavepoints; }
     }
 
-    public override Task<int> SaveChangesAsync(bool acceptAllChangesOnSuccess, CancellationToken cancellationToken = default)
+    public override async Task<int> SaveChangesAsync(bool acceptAllChangesOnSuccess, CancellationToken cancellationToken = default)
     {
         ValidateLicenseHistory();
         ValidateSyncWrites();
@@ -289,7 +295,10 @@ public sealed partial class MediPosDbContext(DbContextOptions<MediPosDbContext> 
         ValidateElectronicDocumentWrites();
         ValidateSupplierUblWrites();
         ValidateTenantWrites();
-        return base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken);
+        var automaticSavepoints = Database.AutoSavepointsEnabled;
+        Database.AutoSavepointsEnabled = false;
+        try { return await base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken).ConfigureAwait(false); }
+        finally { Database.AutoSavepointsEnabled = automaticSavepoints; }
     }
 
     private void ValidateLicenseHistory()

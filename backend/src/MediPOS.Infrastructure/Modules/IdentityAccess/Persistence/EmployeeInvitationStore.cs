@@ -50,12 +50,17 @@ internal sealed class EmployeeInvitationStore(MediPosDbContext context) : IEmplo
             .SingleOrDefaultAsync(token);
     }
 
-    public Task<InvitationRow?> LockAsync(Guid tenantId, Guid invitationId, CancellationToken token)
+    public async Task<InvitationRow?> LockAsync(Guid tenantId, Guid invitationId, CancellationToken token)
     {
         context.SelectTenant(tenantId);
         RequireTransaction();
-        return Rows(context.EmployeeInvitations.FromSqlInterpolated($"SELECT i.*, i.xmin FROM employee_invitations AS i WHERE i.tenant_id = {tenantId} AND i.id = {invitationId} FOR UPDATE OF i"))
-            .SingleOrDefaultAsync(token);
+        var locked = await Rows(context.EmployeeInvitations.FromSqlInterpolated($"SELECT i.*, i.xmin FROM employee_invitations AS i WHERE i.tenant_id = {tenantId} AND i.id = {invitationId} FOR UPDATE OF i"))
+            .SingleOrDefaultAsync(token).ConfigureAwait(false);
+        // UPDATE RLS deliberately excludes terminal history. An approved result is immutable and
+        // can replay under Owner SELECT RLS without obtaining permission to update that history.
+        return locked ?? await Rows(context.EmployeeInvitations.AsNoTracking().Where(value => value.TenantId == tenantId &&
+            value.Id == invitationId && value.Status == MediPOS.Domain.Modules.IdentityAccess.EmployeeInvitationStatus.Approved))
+            .SingleOrDefaultAsync(token).ConfigureAwait(false);
     }
 
     public async Task<IEmployeeInvitationAcceptanceScope> BeginAcceptanceAsync(Guid tenantId, Guid invitationId, byte[] secretHash, Guid actorId, CancellationToken token)

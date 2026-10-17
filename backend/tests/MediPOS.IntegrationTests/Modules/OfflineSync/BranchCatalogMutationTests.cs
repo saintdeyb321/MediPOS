@@ -30,7 +30,12 @@ public sealed class BranchCatalogMutationTests(PostgreSqlFixture fixture)
         var first = await Changes(source, rows, created.NextCursor, 100); var repeat = await Changes(source, rows, created.NextCursor, 100);
         Assert.Equal(first.NextCursor, repeat.NextCursor);
         var entries = first.Items.Where(item => item.BusinessProductId == product).ToArray(); Assert.Equal(3, entries.Length);
-        Assert.Equal(3.4567m, entries[0].Product!.RetailPrice); Assert.Single(entries[1].Product!.Units); Assert.Equal("tombstone", entries[2].Operation); Assert.Null(entries[2].Product);
+        Assert.Equal(3.4567m, entries[0].Product!.RetailPrice);
+        var originalUnits = created.Items.Last(item => item.BusinessProductId == product).Product!.Units;
+        Assert.Equal(originalUnits.Select(unit => (unit.ProductUnitId, unit.ConversionToBase)).OrderBy(unit => unit.ProductUnitId),
+            entries[1].Product!.Units.Select(unit => (unit.ProductUnitId, unit.ConversionToBase)).OrderBy(unit => unit.ProductUnitId));
+        Assert.Equal("Nueva base", Assert.Single(entries[1].Product!.Units, unit => unit.IsBaseUnit).Name);
+        Assert.Equal("tombstone", entries[2].Operation); Assert.Null(entries[2].Product);
         Assert.Contains((await Snapshot(source, rows)).Items, item => item.BusinessProductId == product && !item.Product!.IsActive);
         await source.GetRequiredService<SetBusinessProductStatusHandler>().HandleAsync(new(rows.Tenant.TenantId, product, true, rows.Tenant.Identity.UserId), Token);
         Assert.Equal("upsert", Assert.Single((await Changes(source, rows, first.NextCursor)).Items).Operation);

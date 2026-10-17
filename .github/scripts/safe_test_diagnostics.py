@@ -32,7 +32,7 @@ SQLSTATES = {
     "08001", "08006", "0A000", "22001", "22003", "22007", "22008", "22023",
     "22P02", "23502", "23503", "23505", "23514", "25P02", "28P01", "40001",
     "40P01", "42501", "42601", "42703", "42804", "42883", "42P01", "55000",
-    "55P03", "57014", "57P01", "53300", "P0001",
+    "55P03", "55006", "57014", "57P01", "53300", "42723", "42P07", "3F000", "P0001",
 }
 
 
@@ -41,12 +41,13 @@ def source_metadata(backend_root):
     files = [path for folder in ("src", "tests", "tools")
              for path in (backend_root / folder).rglob("*.cs")
              if not {"bin", "obj"}.intersection(path.relative_to(backend_root).parts)]
-    known, constraints = {}, set()
+    known, constraints, guards = {}, set(), set()
     for path in files:
         source = path.read_text(encoding="utf-8-sig")
         known[path.relative_to(backend_root).as_posix()] = len(source.splitlines())
         constraints.update(re.findall(r"(?<!\w)(?:ck_|FK_|ux_|IX_)[A-Za-z0-9_~]+", source))
-    return known, constraints
+        guards.update(re.findall(r"RAISE EXCEPTION '([a-z][a-z0-9_]*(?:\.[a-z0-9_]+)+)'", source))
+    return known, constraints, guards
 
 
 def failure_diagnostics(result, backend_root):
@@ -61,7 +62,11 @@ def failure_diagnostics(result, backend_root):
         diagnostics.append("sqlstate=" + ",".join(states))
     # Only existing repository C# locations, never absolute paths or arbitrary identifiers.
     backend_root = Path(backend_root).resolve()
-    known, constraints = source_metadata(backend_root)
+    known, constraints, guards = source_metadata(backend_root)
+    # Only fixed public guard codes from source SQL, never arbitrary database messages.
+    mentioned = set(re.findall(r"(?<![\w.])[a-z][a-z0-9_]*(?:\.[a-z0-9_]+)+(?![\w.])", message))
+    for code in sorted(mentioned & guards)[:4]:
+        diagnostics.append("guard_code=" + code)
     names = re.findall(r"\bconstraint [\"']([^\"'\r\n]+)[\"']", message, re.IGNORECASE)
     for name in sorted(set(names) & constraints)[:4]:
         diagnostics.append("constraint=" + name)

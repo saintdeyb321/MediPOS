@@ -200,9 +200,11 @@ public sealed class SecurityHardeningTests(PostgreSqlFixture fixture)
         await using (var scope = services.CreateAsyncScope())
         {
             Session(scope.ServiceProvider).UserId = seed.Owner.UserId;
-            await scope.ServiceProvider.GetRequiredService<DeactivateMembershipHandler>().HandleAsync(
-                new(seed.Owner.TenantId, seed.Owner.MembershipId, seed.Owner.UserId), Token);
+            var denied = await Assert.ThrowsAsync<ApplicationErrorException>(() => scope.ServiceProvider.GetRequiredService<DeactivateMembershipHandler>().HandleAsync(
+                new(seed.Owner.TenantId, seed.Owner.MembershipId, seed.Owner.UserId), Token));
+            Assert.Equal(ApplicationErrors.LastActiveOwner, denied.Error);
         }
+        await HistoricalOwnerFixture.RecordInactiveAsync(fixture, seed.Owner.TenantId, seed.Owner.MembershipId, seed.Owner.UserId, Token);
         await using (var scope = services.CreateAsyncScope())
         {
             ((PlatformSession)scope.ServiceProvider.GetRequiredService<IPlatformAdministration>()).Actor = seed.Owner.ActorId;
@@ -219,6 +221,7 @@ public sealed class SecurityHardeningTests(PostgreSqlFixture fixture)
     public async Task ImportedRowRollsBackWhenAuthorityIsRevokedBeforeItsCommit()
     {
         var seed = await SeedAsync();
+        var successor = (await UsersAsync(1))[0];
         Guid category;
         await using (var seedServices = IdentityAccessTestSetup.CreateServices(fixture))
         await using (var scope = seedServices.CreateAsyncScope())
@@ -227,6 +230,8 @@ public sealed class SecurityHardeningTests(PostgreSqlFixture fixture)
         await using var target = services.CreateAsyncScope();
         var provider = target.ServiceProvider;
         Session(provider).UserId = seed.Owner.UserId;
+        await provider.GetRequiredService<CreateMembershipHandler>().HandleAsync(
+            new(seed.Owner.TenantId, successor, TenantRole.Owner, seed.Owner.UserId), Token);
         var authorization = provider.GetRequiredService<ITenantOperationAuthorizer>();
         await authorization.RequireAsync(seed.Owner.TenantId, null, seed.Owner.UserId, TenantOperation.Administration, Token);
         var store = provider.GetRequiredService<IProductImportStore>();

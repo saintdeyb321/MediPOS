@@ -190,7 +190,9 @@ public sealed class SupplierUblIntegrationTests(PostgreSqlFixture fixture)
     {
         await using var services = IdentityAccessTestSetup.CreateServices(fixture);
         await using var scope = services.CreateAsyncScope(); var source = scope.ServiceProvider;
-        var own = await SupplierUblTestData.Setup(source); var foreign = await SupplierUblTestData.Setup(source);
+        var own = await SupplierUblTestData.Setup(source);
+        await using var foreignScope = services.CreateAsyncScope();
+        var foreign = await SupplierUblTestData.Setup(foreignScope.ServiceProvider);
         SupplierUblTestData.Authenticate(source, own.UserId);
         var imported = await SupplierUblTestData.Import(source, own, SupplierUblTestData.Document());
         await using var context = fixture.CreateContext(own.TenantId);
@@ -262,7 +264,10 @@ public sealed class SupplierUblIntegrationTests(PostgreSqlFixture fixture)
     {
         await using var services = IdentityAccessTestSetup.CreateServices(fixture);
         await using var scope = services.CreateAsyncScope(); var source = scope.ServiceProvider;
-        var a = await SupplierUblTestData.Setup(source); var b = await SupplierUblTestData.Setup(source); SupplierUblTestData.Authenticate(source, a.UserId);
+        var a = await SupplierUblTestData.Setup(source);
+        await using var foreignScope = services.CreateAsyncScope();
+        var b = await SupplierUblTestData.Setup(foreignScope.ServiceProvider);
+        SupplierUblTestData.Authenticate(source, a.UserId);
         var imported = await SupplierUblTestData.Import(source, a, SupplierUblTestData.Document());
         await using var own = fixture.CreateContext(a.TenantId); await using var foreign = fixture.CreateContext(b.TenantId);
         var unit = defect == "foreign_product" ? await foreign.ProductUnits.SingleAsync(v => v.BusinessProductId == b.ProductIds[0] && v.IsBaseUnit, Token) :
@@ -280,12 +285,16 @@ public sealed class SupplierUblIntegrationTests(PostgreSqlFixture fixture)
     {
         await using var services = IdentityAccessTestSetup.CreateServices(fixture);
         await using var scope = services.CreateAsyncScope(); var source = scope.ServiceProvider;
-        var a = await SupplierUblTestData.Setup(source); var b = await SupplierUblTestData.Setup(source); SupplierUblTestData.Authenticate(source, a.UserId);
+        var a = await SupplierUblTestData.Setup(source);
+        await using var foreignScope = services.CreateAsyncScope();
+        var otherSource = foreignScope.ServiceProvider;
+        var b = await SupplierUblTestData.Setup(otherSource);
+        SupplierUblTestData.Authenticate(source, a.UserId);
         var imported = await SupplierUblTestData.Import(source, a, SupplierUblTestData.Document());
         var converted = await SupplierUblTestData.Convert(source, a, await SupplierUblTestData.Review(source, a, imported, [a.ProductIds[0]]));
-        SupplierUblTestData.Authenticate(source, b.UserId);
-        Assert.Equal("ubl.import_not_found", (await Assert.ThrowsAsync<ApplicationErrorException>(() => source.GetRequiredService<GetSupplierUblImportHandler>().HandleAsync(new(b.TenantId, b.BranchId, imported.Id), Token))).Error.Code);
-        Assert.Empty((await source.GetRequiredService<SearchSupplierUblImportsHandler>().HandleAsync(new(b.TenantId, b.BranchId, Document: imported.OriginalDocumentId), Token)).Imports);
+        SupplierUblTestData.Authenticate(otherSource, b.UserId);
+        Assert.Equal("ubl.import_not_found", (await Assert.ThrowsAsync<ApplicationErrorException>(() => otherSource.GetRequiredService<GetSupplierUblImportHandler>().HandleAsync(new(b.TenantId, b.BranchId, imported.Id), Token))).Error.Code);
+        Assert.Empty((await otherSource.GetRequiredService<SearchSupplierUblImportsHandler>().HandleAsync(new(b.TenantId, b.BranchId, Document: imported.OriginalDocumentId), Token)).Imports);
         var pooled = new NpgsqlConnectionStringBuilder(fixture.ConnectionString) { MaxPoolSize = 1, ApplicationName = "ubl-isolation-" + Guid.NewGuid().ToString("N") }.ConnectionString;
         for (var n = 0; n < 3; n++)
         {

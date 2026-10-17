@@ -67,8 +67,11 @@ public sealed class PlatformAdministrationPersistenceTests(PostgreSqlFixture fix
         {
             Session(scope.ServiceProvider, owner.UserId);
             Assert.Null(await scope.ServiceProvider.GetRequiredService<IPlatformAdministration>().GetAuthorizedActorAsync(Token));
-            await scope.ServiceProvider.GetRequiredService<DeactivateMembershipHandler>().HandleAsync(new(tenant, owner.Id, owner.UserId), Token);
+            var denied = await Assert.ThrowsAsync<ApplicationErrorException>(() => scope.ServiceProvider.GetRequiredService<DeactivateMembershipHandler>()
+                .HandleAsync(new(tenant, owner.Id, owner.UserId), Token));
+            Assert.Equal(ApplicationErrors.LastActiveOwner, denied.Error);
         }
+        await HistoricalOwnerFixture.RecordInactiveAsync(fixture, tenant, owner.Id, owner.UserId, Token);
         await using (var scope = services.CreateAsyncScope())
         {
             Session(scope.ServiceProvider, users[0]);

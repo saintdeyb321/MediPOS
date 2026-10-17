@@ -195,6 +195,7 @@ public sealed class ProductSearchPersistenceTests(PostgreSqlFixture fixture)
         var registrations = new ServiceCollection();
         registrations.AddSingleton<TimeProvider>(new IdentityAccessTestSetup.Clock());
         registrations.AddInfrastructure(configuration);
+        registrations.AddPersistenceFixtureAuthorization();
         await using var services = registrations.BuildServiceProvider();
         int pid;
         await using (var firstScope = services.CreateAsyncScope())

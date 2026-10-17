@@ -257,19 +257,22 @@ public sealed class CashClosePersistenceTests(PostgreSqlFixture fixture)
         await using var context = fixture.CreateContext(setup.TenantId);
         await using var transaction = await context.Database.BeginTransactionAsync(TestContext.Current.CancellationToken);
         var cash = await context.CashSessions.SingleAsync(TestContext.Current.CancellationToken);
-        if (field == "delete") context.CashSessions.Remove(cash);
-        else if (field == "reopen") context.Entry(cash).Property(s => s.Status).CurrentValue = CashSessionStatus.Open;
-        else
+        await Assert.ThrowsAsync<InvalidOperationException>(async () =>
         {
-            var property = context.Entry(cash).Property(field);
-            property.CurrentValue = field switch
+            if (field == "delete") context.CashSessions.Remove(cash);
+            else if (field == "reopen") context.Entry(cash).Property(s => s.Status).CurrentValue = CashSessionStatus.Open;
+            else
             {
-                "ClosedAt" or "OpenedAt" => IdentityAccessTestSetup.Now.AddSeconds(1),
-                "ClosedByActorId" or "TenantId" or "BranchId" or "MembershipId" or "OpenedByActorId" => Guid.NewGuid(),
-                _ => 1m,
-            };
-        }
-        await Assert.ThrowsAsync<InvalidOperationException>(() => context.SaveChangesAsync(TestContext.Current.CancellationToken));
+                var property = context.Entry(cash).Property(field);
+                property.CurrentValue = field switch
+                {
+                    "ClosedAt" or "OpenedAt" => IdentityAccessTestSetup.Now.AddSeconds(1),
+                    "ClosedByActorId" or "TenantId" or "BranchId" or "MembershipId" or "OpenedByActorId" => Guid.NewGuid(),
+                    _ => 1m,
+                };
+            }
+            await context.SaveChangesAsync(TestContext.Current.CancellationToken);
+        });
     }
 
     internal static async Task<SaleDraftDetails> NewDraftAsync(IServiceProvider source, SaleCheckoutTestData.Rows rows)

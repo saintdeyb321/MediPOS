@@ -94,7 +94,9 @@ public sealed class RuntimeRoleHardeningTests(PostgreSqlFixture fixture)
         command.CommandText = """
             SELECT c.relname, c.relrowsecurity, c.relforcerowsecurity,
                    EXISTS(SELECT 1 FROM pg_policies p WHERE p.schemaname='public' AND p.tablename=c.relname
-                          AND p.qual LIKE '%medipos.tenant_id%' AND p.with_check LIKE '%medipos.tenant_id%')
+                          AND p.cmd IN ('ALL','SELECT') AND p.qual LIKE '%medipos.tenant_id%')
+                   AND EXISTS(SELECT 1 FROM pg_policies p WHERE p.schemaname='public' AND p.tablename=c.relname
+                          AND p.cmd IN ('ALL','INSERT') AND p.with_check LIKE '%medipos.tenant_id%')
             FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
             WHERE n.nspname='public' AND c.relname=ANY(@tables) ORDER BY c.relname
             """;

@@ -213,7 +213,7 @@ public sealed class OfflineSyncPersistenceTests(PostgreSqlFixture fixture)
         await using var context = fixture.CreateContext(pair.A.TenantId);
         var sql = mutation switch
         {
-            "payload" => "UPDATE sync_events SET payload='{}'",
+            "payload" => "UPDATE sync_events SET payload='{{}}'", // Literal braces through EF composite SQL formatting.
             "device" => "UPDATE sync_devices SET branch_id=gen_random_uuid()",
             "tenant" => "UPDATE sync_events SET tenant_id=gen_random_uuid()",
             "delete_event" => "DELETE FROM sync_events",
@@ -237,7 +237,7 @@ public sealed class OfflineSyncPersistenceTests(PostgreSqlFixture fixture)
         // Limit privileged destructive statements to this fresh scenario. TRUNCATE is rejected before any row deletion.
         var sql = mutation switch
         {
-            "payload" => $"UPDATE sync_events SET payload='{{}}' WHERE tenant_id='{pair.A.TenantId}'",
+            "payload" => $"UPDATE sync_events SET payload='{{{{}}}}' WHERE tenant_id='{pair.A.TenantId}'",
             "branch" => $"UPDATE sync_devices SET branch_id='{pair.A.SpareBranchId}' WHERE id='{device.DeviceId}'",
             "delete" => $"DELETE FROM sync_events WHERE tenant_id='{pair.A.TenantId}'",
             _ => "TRUNCATE sync_events"

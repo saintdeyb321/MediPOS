@@ -98,7 +98,11 @@ public sealed class AuditFoundationTests(PostgreSqlFixture fixture)
         await using var verification = fixture.CreateContext(setup.TenantId);
         var rows = await verification.AuditLogs.ToListAsync(TestContext.Current.CancellationToken);
         Assert.Equal(12, rows.Count);
-        Assert.Equal(Enum.GetValues<AuditAction>().Where(value => AuditCodes.EntityFor(value) is not (AuditEntityType.BusinessProduct or AuditEntityType.Purchase or AuditEntityType.InventoryLot)).Order(), rows.Select(value => value.Action).Order());
+        AuditAction[] expected = [AuditAction.TenantCreated, AuditAction.LicenseRenewed, AuditAction.LicenseSuspended,
+            AuditAction.LicenseReactivated, AuditAction.TenantPurgeRequested, AuditAction.LegalEntityCreated,
+            AuditAction.BranchCreated, AuditAction.BranchMainHubChanged, AuditAction.MembershipCreated,
+            AuditAction.MembershipBranchesReplaced, AuditAction.MembershipScheduleReplaced, AuditAction.MembershipDeactivated];
+        Assert.Equal(expected.Order(), rows.Select(value => value.Action).Order());
         Assert.All(rows, row =>
         {
             Assert.Equal(setup.TenantId, row.TenantId);

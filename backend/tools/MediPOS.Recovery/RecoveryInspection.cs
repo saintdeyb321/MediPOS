@@ -14,6 +14,16 @@ namespace MediPOS.Recovery;
 
 public static class RecoveryInspection
 {
+    // tenants.tenant_id is its primary identity; the platform receipt column is a result reference.
+    // Neither is tenant ownership. Unknown tables with tenant_id still require RLS, fail closed.
+    public const string TenantPrivateTablesQuery = """
+        SELECT c.relname FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
+        WHERE n.nspname='public' AND c.relkind='r'
+          AND c.relname NOT IN ('tenants','platform_tenant_creation_requests')
+          AND EXISTS(SELECT 1 FROM pg_attribute a WHERE a.attrelid=c.oid AND a.attname='tenant_id' AND NOT a.attisdropped)
+        ORDER BY c.relname
+        """;
+
     public static MediPosDbContext ModelContext(string? connection = null) => new(
         (connection is null ? new DbContextOptionsBuilder<MediPosDbContext>().UseNpgsql() :
             new DbContextOptionsBuilder<MediPosDbContext>().UseNpgsql(connection)).Options, new TenantDataContext());
@@ -82,9 +92,9 @@ public static class RecoveryInspection
     {
         await using var model = ModelContext();
         RequireMigrationPrefix(model.Database.GetMigrations().ToArray(), snapshot.Migrations, current);
-        await RecoveryDatabaseGuard.RequireAsync(connection, """
+        await RecoveryDatabaseGuard.RequireAsync(connection, $"""
             SELECT NOT EXISTS (SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
-                WHERE n.nspname='public' AND c.relkind='r' AND EXISTS(SELECT 1 FROM pg_attribute a WHERE a.attrelid=c.oid AND a.attname='tenant_id' AND NOT a.attisdropped)
+                WHERE n.nspname='public' AND c.relname IN ({TenantPrivateTablesQuery})
                 AND (NOT c.relrowsecurity OR NOT c.relforcerowsecurity OR NOT EXISTS(SELECT 1 FROM pg_policy p WHERE p.polrelid=c.oid)))
               AND NOT EXISTS (SELECT 1 FROM pg_constraint k JOIN pg_namespace n ON n.oid=k.connamespace WHERE n.nspname='public' AND NOT k.convalidated)
               AND NOT EXISTS (SELECT 1 FROM pg_trigger t JOIN pg_class c ON c.oid=t.tgrelid JOIN pg_namespace n ON n.oid=c.relnamespace

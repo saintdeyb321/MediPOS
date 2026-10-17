@@ -81,6 +81,9 @@ public sealed class OperationalAccessPersistenceTests(PostgreSqlFixture fixture)
         await scope.ServiceProvider.WithPlatformActor(setup.UserId).GetRequiredService<ReactivateLicenseHandler>().HandleAsync(
             new(setup.TenantId, setup.LicenseId, LicenseStatus.Active, setup.UserId), TestContext.Current.CancellationToken);
         Assert.True((await resolver.HandleAsync(setup.TenantId, null, IdentityAccessTestSetup.Now, TestContext.Current.CancellationToken)).IsAllowed);
+        var successor = await IdentityAccessTestSetup.CreateUserAsync(scope.ServiceProvider);
+        await scope.ServiceProvider.GetRequiredService<CreateMembershipHandler>().HandleAsync(
+            new(setup.TenantId, successor.Id, TenantRole.Owner, setup.UserId), TestContext.Current.CancellationToken);
         await scope.ServiceProvider.GetRequiredService<DeactivateMembershipHandler>().HandleAsync(
             new(setup.TenantId, setup.MembershipId, Guid.NewGuid()), TestContext.Current.CancellationToken);
         Assert.Equal("access.membership_inactive",

@@ -36,9 +36,10 @@ public sealed class RecoveryPostgreSqlTests(PostgreSqlFixture fixture)
         await using (var scope = harness.Dataset.Scope(harness.Dataset.Tenants[0].Owner))
         {
             var context = scope.ServiceProvider.GetRequiredService<MediPosDbContext>(); context.SelectTenant(employee.TenantId);
-            var target = await context.Sales.AsNoTracking().OrderByDescending(value => value.CreatedAt).FirstAsync(Token);
+            var target = await context.Sales.AsNoTracking().OrderByDescending(value => value.CreatedAt).ThenByDescending(value => value.Id)
+                .Select(value => new { value.Id, Version = EF.Property<uint>(value, "Version") }).FirstAsync(Token);
             await scope.ServiceProvider.GetRequiredService<VoidSaleHandler>().HandleAsync(new(employee.TenantId, employee.BranchId, target.Id,
-                context.Entry(target).Property<uint>("Version").CurrentValue, "Synthetic recovery reversal"), Token);
+                target.Version, "Synthetic recovery reversal"), Token);
         }
         await using var owner = new NpgsqlConnection(harness.OwnerConnection); await owner.OpenAsync(Token);
         var before = await RecoveryWorkflow.InspectAsync(owner, true, Token);
@@ -212,15 +213,43 @@ public sealed class RecoveryPostgreSqlTests(PostgreSqlFixture fixture)
         RecoveryInspection.Compare(before, await RecoveryWorkflow.InspectAsync(owner, true, Token));
     }
 
+    [Fact]
+    public async Task RecoveryInventoryDistinguishesGlobalReferencesFromTenantOwnership()
+    {
+        await using var harness = await CreateAsync(0);
+        await using var owner = new NpgsqlConnection(harness.OwnerConnection);
+        await owner.OpenAsync(Token);
+        var tables = await RecoveryInspection.StringsAsync(owner, null, RecoveryInspection.TenantPrivateTablesQuery, Token);
+        using var model = RecoveryInspection.ModelContext();
+        var expected = model.Model.GetEntityTypes().Where(entity => !entity.IsOwned() && entity.FindProperty("TenantId") is not null)
+            .Select(entity => entity.GetTableName()!).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
+        Assert.Equal(expected, tables);
+        Assert.DoesNotContain("tenants", tables);
+        Assert.DoesNotContain("platform_tenant_creation_requests", tables);
+        Assert.Contains("employee_invitations", tables);
+        await RecoveryWorkflow.InspectAsync(owner, true, Token);
+    }
+
+    [Fact]
+    public async Task UnmappedPrivateTableCannotEscapeRestorationRlsChecks()
+    {
+        await using var harness = await CreateAsync(0);
+        await using var owner = new NpgsqlConnection(harness.OwnerConnection);
+        await owner.OpenAsync(Token);
+        await using var transaction = await owner.BeginTransactionAsync(Token);
+        await RecoveryInspection.ExecuteAsync(owner, transaction, "CREATE TABLE recovery_unmapped_private (tenant_id uuid NOT NULL)", Token);
+        var tables = await RecoveryInspection.StringsAsync(owner, transaction, RecoveryInspection.TenantPrivateTablesQuery, Token);
+        Assert.Contains("recovery_unmapped_private", tables);
+        var snapshot = await RecoveryInspection.CaptureAsync(owner, transaction, Token);
+        await Assert.ThrowsAsync<InvalidOperationException>(() => RecoveryInspection.ValidateAsync(owner, transaction, snapshot, true, Token));
+        await transaction.RollbackAsync(Token);
+    }
+
     private static async Task GrantProbeReadsAsync(Harness harness)
     {
         // The performance harness grants only benchmark tables. Extend SELECT only on this newly created synthetic database.
         await using var owner = new NpgsqlConnection(harness.OwnerConnection); await owner.OpenAsync(Token);
-        var tables = await RecoveryInspection.StringsAsync(owner, null, """
-            SELECT c.relname FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
-            WHERE n.nspname='public' AND c.relkind='r' AND EXISTS(SELECT 1 FROM pg_attribute a WHERE a.attrelid=c.oid AND a.attname='tenant_id' AND NOT a.attisdropped)
-            ORDER BY c.relname
-            """, Token);
+        var tables = await RecoveryInspection.StringsAsync(owner, null, RecoveryInspection.TenantPrivateTablesQuery, Token);
         var role = RecoveryInspection.Quote(new NpgsqlConnectionStringBuilder(harness.Database.RuntimeConnection).Username!);
         await using var grant = new NpgsqlCommand("GRANT SELECT ON " +
             string.Join(",", tables.Select(table => "public." + RecoveryInspection.Quote(table))) + " TO " + role, owner);

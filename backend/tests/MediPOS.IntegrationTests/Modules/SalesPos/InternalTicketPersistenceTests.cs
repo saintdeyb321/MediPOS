@@ -89,7 +89,8 @@ public sealed class InternalTicketPersistenceTests(PostgreSqlFixture fixture)
             new(tenant.TenantId, rows.ProductId, 999m, 888m, tenant.Identity.ActorId), TestContext.Current.CancellationToken);
         await source.GetRequiredService<VersionedProductUnitsFixture>().HandleAsync(
             new(tenant.TenantId, rows.ProductId, [new("Nueva base", 1m, true), new("Nueva caja", 20m, false)], tenant.Identity.ActorId), TestContext.Current.CancellationToken);
-        Assert.False(await context.ProductUnits.AnyAsync(u => u.Id == oldUnit, TestContext.Current.CancellationToken));
+        var preservedUnit = await context.ProductUnits.AsNoTracking().SingleAsync(u => u.Id == oldUnit, TestContext.Current.CancellationToken);
+        Assert.Equal(10m, preservedUnit.ConversionToBase);
         await using (var admin = fixture.CreateConstraintContext())
         {
             await admin.Database.ExecuteSqlInterpolatedAsync($"UPDATE business_products SET name = 'Nombre nuevo' WHERE id = {rows.ProductId}", TestContext.Current.CancellationToken);
