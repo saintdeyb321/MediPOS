@@ -120,6 +120,9 @@ public sealed class CommissionAtomicityTests(PostgreSqlFixture fixture)
             await constraint.Database.ExecuteSqlRawAsync("ALTER TABLE sales DISABLE TRIGGER sale_commission_marker", CommissionTestData.Token);
             Assert.Equal(1, await constraint.Database.ExecuteSqlInterpolatedAsync(
                 $"UPDATE sales SET commission_entry_count = NULL WHERE id = {confirmed.SaleId} AND tenant_id = {tenant.TenantId}", CommissionTestData.Token));
+            // Flush deferred checks before ALTER TABLE; PostgreSQL rejects DDL with pending trigger events.
+            // The legacy marker trigger alone is disabled; all remaining integrity checks still execute.
+            await constraint.Database.ExecuteSqlRawAsync("SET CONSTRAINTS ALL IMMEDIATE", CommissionTestData.Token);
             await constraint.Database.ExecuteSqlRawAsync("ALTER TABLE sales ENABLE TRIGGER sale_commission_marker", CommissionTestData.Token);
             await transaction.CommitAsync(CommissionTestData.Token);
         }

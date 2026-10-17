@@ -186,7 +186,7 @@ public sealed class ElectronicDocumentPersistenceTests(PostgreSqlFixture fixture
         await using var verify = fixture.CreateContext(setup.Command.TenantId); Assert.Equal(afterDispatch ? "provider_received" : "manual_review", (await verify.ElectronicDocuments.SingleAsync(Token)).Status);
     }
     [Theory]
-    [InlineData("UPDATE electronic_documents SET snapshot_json='{}'::jsonb WHERE id={0}")]
+    [InlineData("UPDATE electronic_documents SET snapshot_json='{{}}'::jsonb WHERE id={0}")]
     [InlineData("UPDATE electronic_documents SET status='authority_accepted' WHERE id={0}")]
     [InlineData("DELETE FROM electronic_documents WHERE id={0}")]
     public async Task DirectSqlCannotRewriteOriginalOrInventAcceptanceOrEraseHistory(string sql)

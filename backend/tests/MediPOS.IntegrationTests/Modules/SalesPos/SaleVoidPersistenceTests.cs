@@ -24,6 +24,7 @@ namespace MediPOS.IntegrationTests.Modules.SalesPos;
 [Trait("Category", "PostgreSql")]
 public sealed class SaleVoidPersistenceTests(PostgreSqlFixture fixture)
 {
+    private static readonly string[] VoidAuditProperties = ["commissionEntryCount", "paymentReversalCount", "reason", "status", "stockReversalCount", "totalAmount", "totalCommissionAmount", "voidedAt"];
     [Fact]
     public async Task MigrationMatchesModelAndCreatesBothUniqueReversalIndexes()
     {
@@ -95,9 +96,12 @@ public sealed class SaleVoidPersistenceTests(PostgreSqlFixture fixture)
         using var before = JsonDocument.Parse(audit.BeforeJson!);
         Assert.Equal("confirmed", before.RootElement.GetProperty("status").GetString());
         using var after = JsonDocument.Parse(audit.AfterJson!);
-        Assert.Equal(6, after.RootElement.EnumerateObject().Count());
+        Assert.Equal(VoidAuditProperties,
+            after.RootElement.EnumerateObject().Select(value => value.Name).Order(StringComparer.Ordinal));
         Assert.Equal(3, after.RootElement.GetProperty("paymentReversalCount").GetInt32());
         Assert.Equal(3, after.RootElement.GetProperty("stockReversalCount").GetInt32());
+        Assert.Equal(0, after.RootElement.GetProperty("commissionEntryCount").GetInt32());
+        Assert.Equal(0m, after.RootElement.GetProperty("totalCommissionAmount").GetDecimal());
     }
 
     [Theory]

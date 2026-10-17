@@ -42,7 +42,8 @@ public sealed class SaleCheckoutConcurrencyTests(PostgreSqlFixture fixture)
         var barrier = new TwoPartyBarrier();
         var outcomes = await Task.WhenAll(ConfirmAsync(services, rows, barrier, beforeLots: false), ConfirmAsync(services, rows, barrier, beforeLots: false));
         Assert.Single(outcomes, outcome => outcome.Result is not null);
-        Assert.Equal(SalesPosErrors.NotDraft, Assert.Single(outcomes, outcome => outcome.Error is not null).Error!.Error);
+        // The winner advances xmin; the stale request is rejected before posting/status validation.
+        Assert.Equal(SalesPosErrors.ConcurrentEdit, Assert.Single(outcomes, outcome => outcome.Error is not null).Error!.Error);
         await VerifySingleCommitAsync(rows, rows.Draft.SaleId);
         await using var verify = fixture.CreateContext(tenant.TenantId);
         Assert.Equal(2m, await verify.InventoryLots.Where(lot => lot.Id == rows.LotIds[0]).Select(lot => lot.QuantityAvailableBase).SingleAsync(TestContext.Current.CancellationToken));

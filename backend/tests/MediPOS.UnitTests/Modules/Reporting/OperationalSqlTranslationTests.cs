@@ -8,6 +8,19 @@ namespace MediPOS.UnitTests.Modules.Reporting;
 // Provider translation only, without opening a connection. Real PostgreSQL behavior remains an integration gate.
 public sealed class OperationalSqlTranslationTests
 {
+    [Fact]
+    public void TopRotationExcludesTheMissingSideOfTheSalesLeftJoin()
+    {
+        using var context = Context();
+        var scope = Scope(context);
+        var period = OperationalReportPolicy.Resolve(new(OperationalPeriodType.Day, scope.TodayLocal), DateTimeOffset.UtcNow);
+        var rows = OperationalInventoryQueries.Rotation(context.BusinessProducts,
+            OperationalSalesQueries.Lines(context.Sales, context.SaleLines, context.BusinessProducts, scope, period), context.InventoryLots,
+            new(scope, period, OwnerProductRotationMode.Top, 0, 10));
+        var sql = rows.ToQueryString();
+        Assert.Matches("COALESCE\\([^\\r\\n]*SalesCount[^\\r\\n]*, 0\\) > 0", sql);
+    }
+
     [Theory]
     [InlineData(OwnerSalesDimension.Branch, 0)]
     [InlineData(OwnerSalesDimension.Branch, 1)]

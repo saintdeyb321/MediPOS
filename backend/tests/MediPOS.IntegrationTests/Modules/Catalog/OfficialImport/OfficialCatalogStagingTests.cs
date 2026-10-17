@@ -186,8 +186,9 @@ public sealed class OfficialCatalogStagingTests(PostgreSqlFixture fixture)
         {
             "update" => $"UPDATE official_catalog_staging_rows SET original_name='rewritten' WHERE import_batch_id='{batch.Id}'",
             "delete" => $"DELETE FROM official_catalog_staging_rows WHERE import_batch_id='{batch.Id}'",
-            _ => "TRUNCATE official_catalog_staging_rows",
+            _ => "TRUNCATE official_catalog_staging_rows CASCADE",
         };
+        await using var mutationTransaction = await admin.Database.BeginTransactionAsync(Token);
         Assert.Equal(PostgresErrorCodes.InsufficientPrivilege, (await Assert.ThrowsAsync<PostgresException>(() => admin.Database.ExecuteSqlRawAsync(sql, Token))).SqlState);
     }
 }

@@ -29,9 +29,9 @@ public static class OfficialCurationAccess
             using var diagnostic = new CancellationTokenSource(TimeSpan.FromSeconds(10));
             try { await failure(code, diagnostic.Token).ConfigureAwait(false); }
             catch (Exception diagnosticError) when (diagnosticError is not OutOfMemoryException)
-            { throw OfficialCatalogErrors.Error("curation_failure_audit_unavailable", ErrorCategory.Conflict); }
+            { throw new ApplicationErrorException(OfficialCatalogErrors.Error("curation_failure_audit_unavailable", ErrorCategory.Conflict).Error, new AggregateException(error, diagnosticError)); }
             if (error is ApplicationErrorException or OperationCanceledException) throw;
-            throw OfficialCatalogErrors.Error("curation_persistence_failed", ErrorCategory.Conflict);
+            throw new ApplicationErrorException(OfficialCatalogErrors.Error("curation_persistence_failed", ErrorCategory.Conflict).Error, error);
         }
     }
 }

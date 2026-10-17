@@ -219,8 +219,12 @@ public sealed class PlatformAdministrationPersistenceTests(PostgreSqlFixture fix
     }
     private static void Session(IServiceProvider services, Guid actor) =>
         services.GetRequiredService<IHttpContextAccessor>().HttpContext = PlatformSessionFixture.Context(actor).HttpContext;
-    private static Task<MediPOS.Application.Modules.TenancyLicensing.LicenseDetails> CreateTenant(IServiceProvider services, Guid actor, string name = "Synthetic platform tenant") =>
-        services.GetRequiredService<CreateTenantHandler>().HandleAsync(new(name, DateTimeOffset.UtcNow.AddDays(-1), DateTimeOffset.UtcNow.AddDays(1), 3, LicenseStatus.Active, actor), Token);
+    private static Task<MediPOS.Application.Modules.TenancyLicensing.LicenseDetails> CreateTenant(IServiceProvider services, Guid actor, string name = "Synthetic platform tenant")
+    {
+        // Synthetic input uses representable precision so the exact persisted-value assertions remain meaningful.
+        var now = DateTimeOffset.FromUnixTimeMilliseconds(DateTimeOffset.UtcNow.ToUnixTimeMilliseconds());
+        return services.GetRequiredService<CreateTenantHandler>().HandleAsync(new(name, now.AddDays(-1), now.AddDays(1), 3, LicenseStatus.Active, actor), Token);
+    }
     private sealed class ConcurrentProvisioning(ITenantLicenseProvisioning original, Func<Task> ready) : ITenantLicenseProvisioning
     {
         public async Task<ITenantLicenseProvisioningScope?> BeginAsync(Guid tenantId, CancellationToken cancellationToken)

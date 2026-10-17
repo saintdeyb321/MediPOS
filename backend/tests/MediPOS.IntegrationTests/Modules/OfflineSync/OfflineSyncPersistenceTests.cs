@@ -240,8 +240,10 @@ public sealed class OfflineSyncPersistenceTests(PostgreSqlFixture fixture)
             "payload" => $"UPDATE sync_events SET payload='{{{{}}}}' WHERE tenant_id='{pair.A.TenantId}'",
             "branch" => $"UPDATE sync_devices SET branch_id='{pair.A.SpareBranchId}' WHERE id='{device.DeviceId}'",
             "delete" => $"DELETE FROM sync_events WHERE tenant_id='{pair.A.TenantId}'",
-            _ => "TRUNCATE sync_events"
+            _ => "TRUNCATE sync_events CASCADE"
         };
+        // Reach the immutable-history trigger despite inbound FKs. Rollback also protects shared fixture data if the guard regresses.
+        await using var mutationTransaction = await admin.Database.BeginTransactionAsync(Token);
         Assert.Equal(PostgresErrorCodes.InsufficientPrivilege, (await Assert.ThrowsAsync<PostgresException>(() => admin.Database.ExecuteSqlRawAsync(sql, Token))).SqlState);
     }
 

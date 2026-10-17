@@ -41,6 +41,12 @@ class SafeFailureDiagnosticsTests(unittest.TestCase):
         for secret in secrets:
             self.assertNotIn(secret, " ".join(output))
 
+    def test_ambiguous_column_error_reports_only_its_allowlisted_sqlstate(self):
+        output = failure_diagnostics(self.result(
+            "Npgsql.PostgresException: 42702: column reference contains private query text"), self.root)
+        self.assertIn("sqlstate=42702", output)
+        self.assertNotIn("private query text", " ".join(output))
+
     def test_stdout_and_display_name_are_not_diagnostic_sources(self):
         result = self.result(stdout="Npgsql.PostgresException: 23505: secret")
         result.set("testName", "Npgsql.PostgresException: 42601: private-theory-argument")

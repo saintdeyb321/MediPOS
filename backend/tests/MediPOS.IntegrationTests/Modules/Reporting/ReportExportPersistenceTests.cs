@@ -197,13 +197,48 @@ public sealed class ReportExportPersistenceTests(PostgreSqlFixture fixture)
     {
         var (tenant, _) = await TenantIsolationTestData.CreatePairAsync(fixture); var clock = new OwnerOverviewTestData.Clock();
         var data = await SeedAsync(tenant, clock, commissions: false);
-        // Synthetic read-limit fixture only; copy a valid purchase lineage with fresh IDs without issuing 10000 use cases.
+        // Synthetic read-limit fixture only: new purchase/lines, one receipt per lot, matching ledger and audit.
+        // No guard is disabled and no existing purchase/history is changed to create the cardinality boundary.
         await using (var seed = fixture.CreateContext(tenant.TenantId))
+        {
+            await using var transaction = await seed.Database.BeginTransactionAsync(Token);
+            var purchaseId = Guid.NewGuid();
+            var beforeJson = """{"status":"draft"}""";
             await seed.Database.ExecuteSqlInterpolatedAsync($"""
-                INSERT INTO inventory_lots (id, tenant_id, branch_id, business_product_id, source_purchase_line_id, batch_number, expiration_date, quantity_available_base, created_at)
-                SELECT gen_random_uuid(), tenant_id, branch_id, business_product_id, source_purchase_line_id, batch_number, expiration_date, 1, created_at
-                FROM inventory_lots CROSS JOIN generate_series(1, {additionalLots}) WHERE id = {data.OriginalLot}
+                INSERT INTO purchases (id,tenant_id,branch_id,supplier_id,document_reference,status,created_at,created_by_actor_id)
+                SELECT {purchaseId},p.tenant_id,p.branch_id,p.supplier_id,'SYNTHETIC-EXPORT-LIMIT','draft',p.created_at,p.created_by_actor_id
+                FROM purchases p JOIN purchase_lines l ON l.purchase_id=p.id AND l.tenant_id=p.tenant_id WHERE l.id={data.OriginalPurchaseLine};
                 """, Token);
+            Assert.Equal(additionalLots, await seed.Database.ExecuteSqlInterpolatedAsync($"""
+                WITH new_lines AS (
+                  INSERT INTO purchase_lines (id,tenant_id,purchase_id,business_product_id,quantity,unit_name_snapshot,
+                    conversion_to_base_snapshot,base_quantity,unit_cost,batch_number,expiration_date)
+                  SELECT gen_random_uuid(),tenant_id,{purchaseId},business_product_id,quantity,unit_name_snapshot,
+                    conversion_to_base_snapshot,base_quantity,unit_cost,batch_number,expiration_date
+                  FROM purchase_lines CROSS JOIN generate_series(1,{additionalLots}) WHERE id={data.OriginalPurchaseLine}
+                  RETURNING *
+                ), new_lots AS (
+                  INSERT INTO inventory_lots (id,tenant_id,branch_id,business_product_id,source_purchase_line_id,batch_number,expiration_date,quantity_available_base,created_at)
+                  SELECT gen_random_uuid(),l.tenant_id,p.branch_id,l.business_product_id,l.id,l.batch_number,l.expiration_date,l.base_quantity,p.created_at
+                  FROM new_lines l JOIN purchases p ON p.tenant_id=l.tenant_id AND p.id=l.purchase_id
+                  RETURNING *
+                )
+                INSERT INTO stock_movements (id,tenant_id,branch_id,business_product_id,inventory_lot_id,movement_type,quantity_delta_base,source_purchase_line_id,actor_id,occurred_at)
+                SELECT gen_random_uuid(),l.tenant_id,l.branch_id,l.business_product_id,l.id,'purchase_receipt',l.quantity_available_base,l.source_purchase_line_id,
+                  p.created_by_actor_id,p.created_at FROM new_lots l JOIN purchases p ON p.tenant_id=l.tenant_id AND p.id={purchaseId};
+                """, Token));
+            Assert.Equal(1, await seed.Database.ExecuteSqlInterpolatedAsync($"""
+                UPDATE purchases p SET status='confirmed',confirmed_at=p.created_at,confirmed_by_actor_id=p.created_by_actor_id
+                WHERE p.id={purchaseId} AND p.tenant_id={tenant.TenantId};
+                """, Token));
+            Assert.Equal(1, await seed.Database.ExecuteSqlInterpolatedAsync($"""
+                INSERT INTO audit_logs (id,tenant_id,actor_id,action,entity_type,entity_id,occurred_at,correlation_id,before_json,after_json)
+                SELECT {Guid.NewGuid()},p.tenant_id,p.confirmed_by_actor_id,'purchase.confirmed','purchase',p.id,p.confirmed_at,{Guid.NewGuid().ToString("N")},
+                  {beforeJson}::jsonb,jsonb_build_object('status','confirmed','lineCount',{additionalLots},'confirmedAt',p.confirmed_at)
+                FROM purchases p WHERE p.id={purchaseId} AND p.tenant_id={tenant.TenantId};
+                """, Token));
+            await transaction.CommitAsync(Token);
+        }
         await using var services = OwnerOverviewTestData.CreateServices(fixture, clock); await using var scope = services.CreateAsyncScope(); var source = scope.ServiceProvider;
         await OwnerOverviewTestData.SelectOwnerAsync(source, tenant.TenantId, data.Owner.UserId);
         var query = Query(tenant.TenantId, OwnerReportType.Expirations);

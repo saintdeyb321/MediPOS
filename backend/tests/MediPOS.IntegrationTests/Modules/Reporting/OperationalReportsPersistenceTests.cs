@@ -75,8 +75,8 @@ public sealed class OperationalReportsPersistenceTests(PostgreSqlFixture fixture
         Assert.Equal(3, risks.Totals.CriticalStockProductCount);
         var medicine = Assert.Single(risks.Rows, row => row.BusinessProductId == data.MedicineA && row.BranchId == tenant.Identity.BranchId);
         Assert.Equal(8m, medicine.PhysicalStockBase); Assert.Equal(5m, medicine.SellableStockBase); Assert.True(medicine.IsCritical);
-        Assert.True(Assert.Single(risks.Rows, row => row.BusinessProductId == data.EmptyProduct).IsCritical);
-        Assert.Equal("not_configured", Assert.Single(risks.Rows, row => row.BusinessProductId == tenant.BusinessProductId).ThresholdStatus);
+        Assert.True(Assert.Single(risks.Rows, row => row.BusinessProductId == data.EmptyProduct && row.BranchId == tenant.Identity.BranchId).IsCritical);
+        Assert.Equal("not_configured", Assert.Single(risks.Rows, row => row.BusinessProductId == tenant.BusinessProductId && row.BranchId == tenant.Identity.BranchId).ThresholdStatus);
 
         var expirations = await source.GetRequiredService<GetOwnerExpirationReportHandler>().HandleAsync(new(tenant.TenantId, null,
             OperationalReportTestData.Today.AddDays(-30), OperationalReportTestData.Today.AddDays(31)), OperationalReportTestData.Token);

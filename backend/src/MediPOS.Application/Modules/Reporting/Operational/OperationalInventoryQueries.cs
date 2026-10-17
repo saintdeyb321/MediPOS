@@ -138,7 +138,7 @@ public static class OperationalInventoryQueries
                    from sale in saleRows.DefaultIfEmpty()
                    join stock in stocks on product.Id equals stock.BusinessProductId into stockRows
                    from stock in stockRows.DefaultIfEmpty()
-                   where request.Mode == OwnerProductRotationMode.LowActivity ? product.IsActive && ((decimal?)stock.Sellable ?? 0m) > 0 : sale.BusinessProductId != Guid.Empty
+                   where request.Mode == OwnerProductRotationMode.LowActivity ? product.IsActive && ((decimal?)stock.Sellable ?? 0m) > 0 : ((long?)sale.SalesCount ?? 0) > 0
                    select new OwnerProductRotationRow
                    {
                        BusinessProductId = product.Id,

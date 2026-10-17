@@ -96,7 +96,7 @@ public sealed class SecurityHardeningTests(PostgreSqlFixture fixture)
 
     [Theory]
     [InlineData("membership", "access.membership_inactive")]
-    [InlineData("license", "license.denied")]
+    [InlineData("license", "license.operation_denied")]
     [InlineData("assignment", "access.branch_unassigned")]
     public async Task AuthorizationChangesDuringLicenseLockWaitRollBackWithoutPurchaseOrStock(string change, string expectedCode)
     {

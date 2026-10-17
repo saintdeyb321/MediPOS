@@ -154,7 +154,7 @@ public sealed class OfficialRefreshPersistenceTests(PostgreSqlFixture fixture)
         var refresh = await Prepare(source, original, next.Batch, next.Candidates[0]);
         await using var admin = fixture.CreateConstraintContext();
         foreach (var sql in new[] { $"DELETE FROM official_catalog_version_history WHERE refresh_id='{refresh.Id}'::uuid", $"DELETE FROM official_catalog_refreshes WHERE id='{refresh.Id}'::uuid" })
-            Assert.Equal("23514", (await Assert.ThrowsAsync<PostgresException>(() => admin.Database.ExecuteSqlRawAsync(sql, Token))).SqlState);
+            Assert.Equal(PostgresErrorCodes.InsufficientPrivilege, (await Assert.ThrowsAsync<PostgresException>(() => admin.Database.ExecuteSqlRawAsync(sql, Token))).SqlState);
         Assert.Single((await History(source, refresh.Id)).Entries);
         Assert.True(await admin.OfficialCatalogPublications.AnyAsync(value => value.Id == refresh.PublicationId, Token));
     }

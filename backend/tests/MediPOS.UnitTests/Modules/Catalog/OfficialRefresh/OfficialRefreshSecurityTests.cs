@@ -57,6 +57,19 @@ public sealed class OfficialRefreshSecurityTests
         Assert.Equal("official_catalog.curation_cancelled", store.FailedCode);
     }
     [Fact]
+    public async Task PersistenceFailureRetainsInternalCauseWithoutChangingThePublicError()
+    {
+        var storageFailure = new InvalidOperationException("Synthetic internal storage details.");
+        var store = new Port { Failure = storageFailure };
+        var error = await Assert.ThrowsAsync<ApplicationErrorException>(() => new ApplyApprovedOfficialCatalogRefreshHandler(new Authority(), store, TimeProvider.System)
+            .HandleAsync(new(Guid.NewGuid(), 3), TestContext.Current.CancellationToken));
+        Assert.Equal("official_catalog.curation_persistence_failed", error.Error.Code);
+        Assert.DoesNotContain(storageFailure.Message, error.Message, StringComparison.Ordinal);
+        Assert.Same(storageFailure, error.InnerException);
+        Assert.Equal(error.Error.Code, store.FailedCode);
+    }
+
+    [Fact]
     public void FilteredQueriesTranslateWithoutOpeningAnyDatabaseConnection()
     {
         using var context = new MediPosDbContext(new DbContextOptionsBuilder<MediPosDbContext>().UseNpgsql("Host=unused;Database=translation;Username=unused").Options, new TenantDataContext());
@@ -82,6 +95,7 @@ public sealed class OfficialRefreshSecurityTests
     {
         internal int Calls { get; private set; }
         internal bool CancelApply { get; init; }
+        internal Exception? Failure { get; init; }
         internal string? FailedAction { get; private set; }
         internal string? FailedCode { get; private set; }
         private Task<T> Called<T>() { Calls++; throw new InvalidOperationException("Unauthorized persistence access."); }
@@ -90,7 +104,7 @@ public sealed class OfficialRefreshSecurityTests
         public Task<OfficialCatalogRefreshPage> QueueAsync(GetOfficialCatalogRefreshQueueCommand command, CancellationToken token) => Called<OfficialCatalogRefreshPage>();
         public Task<OfficialCatalogVersionHistoryPage> HistoryAsync(GetOfficialCatalogRefreshHistoryCommand command, CancellationToken token) => Called<OfficialCatalogVersionHistoryPage>();
         public Task<OfficialCatalogRefreshApplyResult> ApplyAsync(ApplyApprovedOfficialCatalogRefreshCommand command, OfficialCatalogActor actor, DateTimeOffset now, CancellationToken token)
-        { Calls++; if (CancelApply) throw new OperationCanceledException("Synthetic cancellation.", token); throw new InvalidOperationException("Unauthorized persistence access."); }
+        { Calls++; if (CancelApply) throw new OperationCanceledException("Synthetic cancellation.", token); throw Failure ?? new InvalidOperationException("Unauthorized persistence access."); }
         public Task RecordFailureAsync(Guid target, long? version, OfficialCatalogActor actor, string action, string code, DateTimeOffset now, CancellationToken token)
         { FailedAction = action; FailedCode = code; return Task.CompletedTask; }
     }

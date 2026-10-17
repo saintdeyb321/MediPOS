@@ -175,7 +175,10 @@ public sealed class PurchasingIsolationIntegrationTests(PostgreSqlFixture fixtur
         command.CommandText = "SELECT id FROM inventory_lots LIMIT 1";
         var lot = Assert.IsType<Guid>(await command.ExecuteScalarAsync(TestContext.Current.CancellationToken));
         var duplicateLot = await Assert.ThrowsAsync<PostgresException>(() => CloneAsync(connection, "inventory_lots", lot, []));
-        Assert.Equal(PostgresErrorCodes.UniqueViolation, duplicateLot.SqlState);
+        // A source receipt may have multiple lots after transfers; source_purchase_line_id is not a unique lot key.
+        // A copied positive balance without its own append-only ledger is independently forbidden.
+        Assert.Equal(PostgresErrorCodes.CheckViolation, duplicateLot.SqlState);
+        Assert.Equal("ck_inventory_lots_ledger_balance", duplicateLot.ConstraintName);
     }
 
     [Fact]

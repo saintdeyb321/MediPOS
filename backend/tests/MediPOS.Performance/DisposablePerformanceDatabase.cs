@@ -98,8 +98,10 @@ public sealed class DisposablePerformanceDatabase : IAsyncDisposable
             GRANT SELECT, INSERT, UPDATE ON tenants, users, licenses, legal_entities, branches,
                 memberships, purchases, inventory_lots TO {role};
             GRANT SELECT, INSERT ON audit_logs, stock_movements, sale_payments, commission_entries,
+                sale_payment_reversals,
                 license_changes, business_products, product_units, suppliers,
                 branch_catalog_sync_states, branch_catalog_changes TO {role};
+            GRANT SELECT ON cash_transfers TO {role};
             GRANT SELECT, INSERT, UPDATE ON cash_sessions, sales, tenant_commission_settings, commission_rules TO {role};
             GRANT SELECT, INSERT, DELETE ON membership_branches, work_schedules, purchase_lines, sale_lines TO {role};
             GRANT UPDATE (current_version) ON branch_catalog_sync_states TO {role};
