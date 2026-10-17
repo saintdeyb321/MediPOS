@@ -43,7 +43,7 @@ internal static class SupplierUblTestData
             "Medicamento local " + code, category, "Laboratorio", barcode, new MedicineInput([new("Ingrediente sintético", "500 mg")], "Tableta"), 12.50m, 10m, user), Token);
         var input = new List<ProductUnitDefinition> { new("Base", 1, true), new("Caja 20", 20, false) };
         if (ambiguous) input.Add(new("Caja 100", 100, false));
-        await source.GetRequiredService<ReplaceProductUnitsHandler>().HandleAsync(new(tenant, product.Id, input, user), Token); return product.Id;
+        await source.GetRequiredService<VersionedProductUnitsFixture>().HandleAsync(new(tenant, product.Id, input, user), Token); return product.Id;
     }
     internal static async Task<SupplierUblImportDetails> Import(IServiceProvider source, Rows rows, string xml, string filename = "synthetic.xml")
     {

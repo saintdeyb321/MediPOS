@@ -66,6 +66,8 @@ public sealed class PostgreSqlFixture : IAsyncLifetime
             GRANT SELECT, INSERT, UPDATE, DELETE ON tenants, users, licenses, license_changes,
                 legal_entities, branches, memberships, membership_branches, work_schedules TO medipos_test_runtime;
             GRANT SELECT ON "__EFMigrationsHistory" TO medipos_test_runtime;
+            GRANT SELECT, INSERT, UPDATE (accepted_user_id,accepted_at,status,approved_at,result_membership_id,approved_from_version,revoked_at,revoked_by_user_id,revocation_reason)
+                ON employee_invitations TO medipos_test_runtime;
             GRANT SELECT, INSERT ON audit_logs TO medipos_test_runtime;
             GRANT SELECT ON platform_tenant_creation_requests TO medipos_test_runtime;
             GRANT INSERT (actor_id, operation, request_key, payload_hash, created_at) ON platform_tenant_creation_requests TO medipos_test_runtime;

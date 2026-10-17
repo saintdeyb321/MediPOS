@@ -12,6 +12,10 @@ public sealed class PublishedFrontendTests
     [Theory]
     [InlineData("/", "GET", "https", "localhost:7343", 200)]
     [InlineData("/dashboard", "GET", "https", "localhost:7343", 200)]
+    [InlineData("/contingencia", "GET", "https", "localhost:7343", 200)]
+    [InlineData("/aceptar-invitacion", "GET", "https", "localhost:7343", 200)]
+    [InlineData("/sw.js", "GET", "https", "localhost:7343", 200)]
+    [InlineData("/manifest.webmanifest", "GET", "https", "localhost:7343", 200)]
     [InlineData("/missing.js", "GET", "https", "localhost:7343", 404)]
     [InlineData("/dashboard", "POST", "https", "localhost:7343", 404)]
     [InlineData("/", "GET", "http", "localhost:7343", 400)]
@@ -29,6 +33,8 @@ public sealed class PublishedFrontendTests
         try
         {
             await File.WriteAllTextAsync(Path.Combine(directory.FullName, "index.html"), "<html>unit test SPA</html>", TestContext.Current.CancellationToken);
+            await File.WriteAllTextAsync(Path.Combine(directory.FullName, "sw.js"), "/* synthetic shell worker */", TestContext.Current.CancellationToken);
+            await File.WriteAllTextAsync(Path.Combine(directory.FullName, "manifest.webmanifest"), "{\"name\":\"Unit shell\"}", TestContext.Current.CancellationToken);
             await using var app = Create(directory.FullName);
             app.MapPublishedFrontend();
             var pipeline = ((IApplicationBuilder)app).Build();
@@ -38,7 +44,9 @@ public sealed class PublishedFrontendTests
             await using var body = new MemoryStream(); context.Response.Body = body;
             await pipeline(context);
             Assert.Equal(status, context.Response.StatusCode);
-            if (status == 200) Assert.StartsWith("text/html", context.Response.ContentType);
+            if (status == 200 && path == "/sw.js") Assert.Contains("javascript", context.Response.ContentType, StringComparison.Ordinal);
+            else if (status == 200 && path == "/manifest.webmanifest") Assert.Equal("application/manifest+json", context.Response.ContentType);
+            else if (status == 200) Assert.StartsWith("text/html", context.Response.ContentType);
             else Assert.NotEqual("text/html; charset=utf-8", context.Response.ContentType);
         }
         finally { directory.Delete(true); }

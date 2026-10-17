@@ -8,7 +8,7 @@ import { CashPage } from '../../features/cash'
 import { ProductsPage } from '../../features/catalog'
 import { PurchasesPage } from '../../features/purchasing'
 import { InventoryPage } from '../../features/inventory'
-import { EmployeesPage } from '../../features/employees'
+import { AcceptInvitationPage, EmployeesPage } from '../../features/employees'
 import { CashTransfersPage, TransfersPage } from '../../features/transfers'
 import { ReportsPage } from '../../features/reporting'
 import { CommissionsPage } from '../../features/commissions'
@@ -16,6 +16,8 @@ import { NotificationsPage } from '../../features/notifications'
 import { SettingsPage } from '../../features/settings'
 import { AuditPage } from '../../features/audit'
 import { ImportPage } from '../../features/product-import'
+import { ContingencyPage, OfflinePage } from '../../features/offline'
+import { OwnerDashboard } from '../../features/reporting'
 import { useWorkspace } from '../../features/access'
 import { WorkspaceLayout } from '../layouts/WorkspaceLayout'
 import { SelectionLayout } from '../layouts/SelectionLayout'
@@ -25,13 +27,15 @@ import { ModulePage } from './ModulePage'
 function DashboardRoute() {
   const { access } = useWorkspace()
   const shortcuts = availableNavigation(access.role).filter(item => item.id && item.id !== 'ventas')
-  return <DashboardPage shortcuts={shortcuts} />
+  return <><DashboardPage shortcuts={shortcuts} /><OwnerDashboard /></>
 }
 
 export function AppRoutes() {
   return (
     <Routes>
       <Route path="/" element={<LoginPage />} />
+      <Route path="/aceptar-invitacion" element={<AcceptInvitationPage />} />
+      <Route path="/contingencia" element={<ContingencyPage />} />
       <Route element={<SessionGate />}>
         <Route path="/seleccionar-botica" element={<SelectionLayout><TenantSelection /></SelectionLayout>} />
         <Route path="/boticas/:tenantId/sucursales" element={<SelectionLayout><BranchSelection /></SelectionLayout>} />
@@ -51,6 +55,7 @@ export function AppRoutes() {
           <Route path="configuracion" element={<SettingsPage />} />
           <Route path="auditoria" element={<AuditPage />} />
           <Route path="importacion" element={<ImportPage />} />
+          <Route path="sincronizacion" element={<OfflinePage />} />
           <Route path=":module" element={<ModulePage />} />
         </Route>
       </Route>

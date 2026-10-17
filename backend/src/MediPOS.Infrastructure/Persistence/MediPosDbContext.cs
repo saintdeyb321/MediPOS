@@ -77,6 +77,7 @@ public sealed partial class MediPosDbContext(DbContextOptions<MediPosDbContext> 
     public DbSet<Branch> Branches => Set<Branch>();
     public DbSet<User> Users => Set<User>();
     public DbSet<Membership> Memberships => Set<Membership>();
+    public DbSet<EmployeeInvitation> EmployeeInvitations => Set<EmployeeInvitation>();
     public DbSet<MembershipBranch> MembershipBranches => Set<MembershipBranch>();
     public DbSet<WorkSchedule> WorkSchedules => Set<WorkSchedule>();
     public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
@@ -145,6 +146,7 @@ public sealed partial class MediPosDbContext(DbContextOptions<MediPosDbContext> 
         modelBuilder.ApplyConfiguration(new BranchConfiguration());
         modelBuilder.ApplyConfiguration(new UserConfiguration());
         modelBuilder.ApplyConfiguration(new MembershipConfiguration());
+        modelBuilder.ApplyConfiguration(new EmployeeInvitationConfiguration());
         modelBuilder.ApplyConfiguration(new MembershipBranchConfiguration());
         modelBuilder.ApplyConfiguration(new WorkScheduleConfiguration());
         modelBuilder.ApplyConfiguration(new AuditLogConfiguration());
@@ -208,6 +210,7 @@ public sealed partial class MediPosDbContext(DbContextOptions<MediPosDbContext> 
         modelBuilder.Entity<LegalEntity>().HasQueryFilter(value => SelectedTenantId.HasValue && value.TenantId == SelectedTenantId);
         modelBuilder.Entity<Branch>().HasQueryFilter(value => SelectedTenantId.HasValue && value.TenantId == SelectedTenantId);
         modelBuilder.Entity<Membership>().HasQueryFilter(value => SelectedTenantId.HasValue && value.TenantId == SelectedTenantId);
+        modelBuilder.Entity<EmployeeInvitation>().HasQueryFilter(value => SelectedTenantId.HasValue && value.TenantId == SelectedTenantId);
         modelBuilder.Entity<MembershipBranch>().HasQueryFilter(value => SelectedTenantId.HasValue && value.TenantId == SelectedTenantId);
         modelBuilder.Entity<WorkSchedule>().HasQueryFilter(value => SelectedTenantId.HasValue && value.TenantId == SelectedTenantId);
         modelBuilder.Entity<AuditLog>().HasQueryFilter(value => SelectedTenantId.HasValue && value.TenantId == SelectedTenantId);
@@ -536,6 +539,7 @@ public sealed partial class MediPosDbContext(DbContextOptions<MediPosDbContext> 
 
     private void ValidateTenantWrites()
     {
+        ValidateInvitationWrites();
         foreach (var entry in ChangeTracker.Entries().Where(value => value.State is EntityState.Added or EntityState.Modified or EntityState.Deleted))
         {
             if (_officialRefreshWrites != 0)
@@ -584,6 +588,7 @@ public sealed partial class MediPosDbContext(DbContextOptions<MediPosDbContext> 
                 LegalEntity value => value.TenantId,
                 Branch value => value.TenantId,
                 Membership value => value.TenantId,
+                EmployeeInvitation value => value.TenantId,
                 MembershipBranch value => value.TenantId,
                 WorkSchedule value => value.TenantId,
                 AuditLog value => value.TenantId,

@@ -24,13 +24,7 @@ internal sealed class ProductUnitStore(MediPosDbContext context) : IProductUnitS
             units.Count(value => value.IsBaseUnit) != 1 || units.Select(value => value.Name).Distinct(StringComparer.Ordinal).Count() != units.Count)
             throw new InvalidOperationException("A complete unit configuration must belong to the selected product/tenant.");
         context.ValidateAudit(audit, tenantId, AuditAction.BusinessProductUnitsChanged, businessProductId);
-        // The outer licensed transaction and lock serialize complete replacements, including audit insertion.
-        await context.ProductUnits.Where(value => value.TenantId == tenantId && value.BusinessProductId == businessProductId)
-            .ExecuteDeleteAsync(cancellationToken).ConfigureAwait(false);
-        context.ProductUnits.AddRange(units);
-        context.AddAudit(audit, tenantId, AuditAction.BusinessProductUnitsChanged, businessProductId);
-        await context.SaveAuditedChangesAsync(cancellationToken).ConfigureAwait(false);
-        foreach (var unit in units)
-            context.Entry(unit).State = EntityState.Detached;
+        await Task.CompletedTask.ConfigureAwait(false);
+        throw new InvalidOperationException("Legacy destructive unit writes are disabled; use the versioned configuration store.");
     }
 }

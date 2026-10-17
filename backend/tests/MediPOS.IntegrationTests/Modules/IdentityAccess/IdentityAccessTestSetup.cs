@@ -17,25 +17,26 @@ internal static class IdentityAccessTestSetup
 {
     internal static readonly DateTimeOffset Now = new(2026, 10, 6, 14, 0, 0, TimeSpan.Zero);
 
-    internal static ServiceProvider CreateServices(PostgreSqlFixture fixture)
+    internal static ServiceProvider CreateServices(PostgreSqlFixture fixture, TimeProvider? clock = null)
     {
         var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
         {
             ["ConnectionStrings:MediPosDatabase"] = fixture.ConnectionString,
         }).Build();
         var services = new ServiceCollection();
-        services.AddSingleton<TimeProvider>(new Clock());
+        services.AddSingleton<TimeProvider>(clock ?? new Clock());
         services.AddInfrastructure(configuration);
         services.AddIdentityAuthentication<TestGoogleIdentitySource, TestServerSession>();
         services.AddPersistenceFixtureAuthorization();
         return services.BuildServiceProvider(new ServiceProviderOptions { ValidateOnBuild = true, ValidateScopes = true });
     }
 
-    internal static async Task<Setup> CreateAsync(IServiceProvider services, TenantRole role = TenantRole.Cashier)
+    internal static async Task<Setup> CreateAsync(IServiceProvider services, TenantRole role = TenantRole.Cashier, DateTimeOffset? at = null)
     {
         var actor = await CreateUserAsync(services);
+        var timestamp = at ?? Now;
         var tenant = await services.WithPlatformActor(actor.Id).GetRequiredService<CreateTenantHandler>().HandleAsync(
-            new("Botica", Now.AddDays(-1), Now.AddMonths(1), 3, LicenseStatus.Active, actor.Id), TestContext.Current.CancellationToken);
+            new("Botica", timestamp.AddDays(-1), timestamp.AddMonths(1), 3, LicenseStatus.Active, actor.Id), TestContext.Current.CancellationToken);
         var legal = await services.GetRequiredService<CreateLegalEntityHandler>().HandleAsync(
             new(tenant.TenantId, "Botica SAC", "123", actor.Id), TestContext.Current.CancellationToken);
         var branch = await services.GetRequiredService<CreateBranchHandler>().HandleAsync(

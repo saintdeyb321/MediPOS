@@ -645,5 +645,7 @@ Before a milestone is marked DONE:
 - no unresolved P0 defect for that milestone.
 
 ## Completion definition
+
+**Frontend integration source extension, 2026-10-17:** explicit user authorization supersedes the presentation/invitation approval blockers in historical Stabilization A. Implemented GET/PUT presentation configuration with product xmin, stable IDs and no destructive replacement; closed legacy destructive writes and arbitrary-user HTTP membership creation. Invitations add only source migration `20261017044923_AddTenantEmployeeInvitations`, with hash-only secret, 15-minute lifetime, independent original-Owner approval, audit and FORCE RLS. Added bounded own-device GET for B5 registration reconciliation and actual session-expiry metadata to `/auth/me`; frontend PWA/outbox reuses B5. No persistent migration, deployment, privileged configuration or business operation occurred. PostgreSQL concurrency/RLS/rollback, browser acceptance, A18/A20 and external B8.2/B8.3/B8.4 remain pending; Owner deactivation UI stays blocked. Evidence/next operation: `FRONTEND_INTEGRATION_PLAN.md`. M8 and production readiness are not declared complete.
 “Backend v1 complete” means M0–M5 and M8 are DONE, plus the M6/M7 portions explicitly selected for the commercial release. M9 is evidence-driven scaling, not a prerequisite for initial sale.
 

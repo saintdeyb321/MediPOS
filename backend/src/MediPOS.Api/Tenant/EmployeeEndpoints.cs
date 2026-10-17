@@ -15,10 +15,11 @@ public static partial class TenantEndpoints
     {
         tenants.MapGet("/employees", async (HttpContext c, EmployeeDirectoryQueries queries) => TenantHttp.Response(await queries.HandleAsync(TenantHttp.Tenant(c), TenantHttp.Offset(c), TenantHttp.Limit(c), c.RequestAborted)))
             .Produces<IReadOnlyList<EmployeeSummary>>().WithName("tenant.employees.list").WithQuery<TenantOpenApi.Page>();
-        tenants.MapPost("/employees", async (HttpContext c, CreateMembershipHandler handler) =>
+        tenants.MapPost("/employees", async Task<IResult> (HttpContext c, MediPOS.Application.Modules.IdentityAccess.OperationalAccess.ITenantOperationAuthorizer authorization) =>
         {
-            var input = await TenantHttp.Read<EmployeeRequest>(c);
-            return TenantHttp.Response(await handler.CreateTenantMembershipAsync(new(TenantHttp.Tenant(c), input.UserId, input.Role, TenantHttp.Actor(c)), c.RequestAborted), 201);
+            await TenantHttp.Read<EmployeeRequest>(c);
+            await authorization.RequireAsync(TenantHttp.Tenant(c), null, TenantHttp.Actor(c), MediPOS.Application.Modules.IdentityAccess.OperationalAccess.TenantOperation.Administration, c.RequestAborted);
+            throw new MediPOS.Application.Errors.ApplicationErrorException(MediPOS.Application.Modules.IdentityAccess.Invitations.InvitationErrors.Required);
         }).Accepts<EmployeeRequest>("application/json").Produces<MembershipDetails>(201).WithName("tenant.employees.create");
         tenants.MapPost("/employees/{membershipId}/deactivate", async (HttpContext c, DeactivateMembershipHandler handler) =>
         {

@@ -44,6 +44,17 @@ public sealed class ProductUnit
         return ConvertExactly(quantity, ConversionToBase);
     }
 
+    public ProductUnit WithPresentation(string name, bool isActive) => new()
+    {
+        Id = Id,
+        TenantId = TenantId,
+        BusinessProductId = BusinessProductId,
+        Name = CatalogFields.Required(name, 128, nameof(name)),
+        ConversionToBase = ConversionToBase,
+        IsBaseUnit = IsBaseUnit,
+        IsActive = isActive,
+    };
+
     // Also validates historical presentation snapshots without requiring a surviving ProductUnit entity.
     public static decimal ConvertExactly(decimal quantity, decimal conversionToBase)
     {

@@ -106,17 +106,17 @@ public sealed class SaleDraftPersistenceTests(PostgreSqlFixture fixture)
         var initial = await source.GetRequiredService<ReplaceSaleLinesHandler>().HandleAsync(SaleDraftTestData.Command(rows), TestContext.Current.CancellationToken);
         await source.GetRequiredService<UpdateBusinessProductPricesHandler>().HandleAsync(
             new(tenant.TenantId, tenant.BusinessProductId, 500m, 400m, tenant.Identity.ActorId), TestContext.Current.CancellationToken);
-        var newUnits = await source.GetRequiredService<ReplaceProductUnitsHandler>().HandleAsync(new(tenant.TenantId, tenant.BusinessProductId,
-            [new("Base", 1m, true), new("Caja", 20m, false)], tenant.Identity.ActorId), TestContext.Current.CancellationToken);
+        var newUnits = await source.GetRequiredService<VersionedProductUnitsFixture>().HandleAsync(new(tenant.TenantId, tenant.BusinessProductId,
+            [new("Base", 1m, true), new("Caja nueva", 20m, false)], tenant.Identity.ActorId), TestContext.Current.CancellationToken);
         await using (var rename = fixture.CreateConstraintContext())
             await rename.Database.ExecuteSqlInterpolatedAsync($"UPDATE business_products SET name = 'Nombre nuevo' WHERE id = {tenant.BusinessProductId}", TestContext.Current.CancellationToken);
         var read = await source.GetRequiredService<GetSaleDraftHandler>().HandleAsync(new(tenant.TenantId, tenant.Identity.BranchId, rows.Draft.SaleId), TestContext.Current.CancellationToken);
         Assert.Equal(Assert.Single(initial.Lines), Assert.Single(read.Lines));
         Assert.Equal(initial.TotalAmount, read.TotalAmount);
         Assert.Equal(initial.Version, read.Version);
-        Assert.DoesNotContain(newUnits, value => value.Id == read.Lines[0].ProductUnitIdSnapshot);
+        Assert.Contains(newUnits, value => value.Id == read.Lines[0].ProductUnitIdSnapshot);
         var context = source.GetRequiredService<MediPosDbContext>();
-        Assert.False(await context.ProductUnits.AnyAsync(value => value.Id == rows.UnitId, TestContext.Current.CancellationToken));
+        Assert.True(await context.ProductUnits.AnyAsync(value => value.Id == rows.UnitId, TestContext.Current.CancellationToken));
     }
 
     [Fact]

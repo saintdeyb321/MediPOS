@@ -27,7 +27,7 @@ internal static class NotificationTestData
         var owner = await OwnerOverviewTestData.AddOwnerAsync(source, tenant);
         var product = await source.GetRequiredService<CreateLocalBusinessProductHandler>().HandleAsync(new(tenant.TenantId, "EXP-MED", ProductType.Medicine,
             "Paracetamol", tenant.CategoryId, "Lab", null, new MedicineInput([new("Paracetamol", "500 mg")], "Tableta", "Oral"), 2m, null, owner.UserId), Token);
-        await source.GetRequiredService<ReplaceProductUnitsHandler>().HandleAsync(new(tenant.TenantId, product.Id, [new("Base", 1m, true)], owner.UserId), Token);
+        await source.GetRequiredService<VersionedProductUnitsFixture>().HandleAsync(new(tenant.TenantId, product.Id, [new("Base", 1m, true)], owner.UserId), Token);
         var unit = await OwnerOverviewTestData.BaseUnitAsync(source, product.Id);
         foreach (var branch in new[] { owner.BranchId, tenant.SpareBranchId })
             await SaleCheckoutTestData.ReceiveAsync(source, tenant with { Identity = tenant.Identity with { BranchId = branch } }, product.Id, unit,

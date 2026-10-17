@@ -32,7 +32,7 @@ internal static class ProductSearchTestData
             new(tenant.TenantId, code ?? Guid.NewGuid().ToString("N"), medicine is null ? ProductType.Retail : ProductType.Medicine,
                 name, tenant.CategoryId, brand, barcode, medicine, 2.5m, 2m, tenant.Identity.ActorId, isActive),
             TestContext.Current.CancellationToken);
-        var units = await source.GetRequiredService<ReplaceProductUnitsHandler>().HandleAsync(
+        var units = await source.GetRequiredService<VersionedProductUnitsFixture>().HandleAsync(
             new(tenant.TenantId, product.Id, [new("Base", 1m, true), new("Caja", 10m, false), new("Inactiva", 2m, false, false)],
                 tenant.Identity.ActorId), TestContext.Current.CancellationToken);
         return new(product.Id, units.Single(value => value.IsBaseUnit).Id);

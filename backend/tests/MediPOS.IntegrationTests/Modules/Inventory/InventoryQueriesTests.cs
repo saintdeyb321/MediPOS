@@ -36,7 +36,7 @@ public sealed class InventoryQueriesTests(PostgreSqlFixture fixture)
             new(tenant.TenantId, "M1", ProductType.Medicine, "Medicamento", tenant.CategoryId, "Lab", null,
                 new MedicineInput([new("Paracetamol", "500 mg")], "Tableta", "Oral"), 2.25m, null, tenant.Identity.ActorId),
                 TestContext.Current.CancellationToken);
-        var units = await source.GetRequiredService<ReplaceProductUnitsHandler>().HandleAsync(
+        var units = await source.GetRequiredService<VersionedProductUnitsFixture>().HandleAsync(
             new(tenant.TenantId, product.Id, [new("Base", 1m, true), new("Caja", 10m, false)], tenant.Identity.ActorId),
             TestContext.Current.CancellationToken);
         var presentation = units.Single(value => value.Name == "Caja");
@@ -79,7 +79,7 @@ public sealed class InventoryQueriesTests(PostgreSqlFixture fixture)
         var retail = await Assert.ThrowsAsync<ApplicationErrorException>(() => source.GetRequiredService<PlanFefoAllocationHandler>().HandleAsync(
             new(tenant.TenantId, tenant.Identity.BranchId, tenant.BusinessProductId, 1m), TestContext.Current.CancellationToken));
         Assert.Equal(InventoryErrors.MedicineRequired, retail.Error);
-        await source.GetRequiredService<ReplaceProductUnitsHandler>().HandleAsync(
+        await source.GetRequiredService<VersionedProductUnitsFixture>().HandleAsync(
             new(tenant.TenantId, product.Id, [new("Base", 1m, true), new("Nueva caja", 20m, false)], tenant.Identity.ActorId),
             TestContext.Current.CancellationToken);
         await source.GetRequiredService<UpdateBusinessProductPricesHandler>().HandleAsync(

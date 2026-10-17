@@ -20,13 +20,19 @@ public sealed partial class TenantHttpTestState
     private static readonly JsonSerializerOptions CursorJson = new(JsonSerializerDefaults.Web);
     private void ConfigureSync(IServiceCollection services)
     {
-        Type[] ports = [typeof(ISyncDeviceStore), typeof(ISyncEventInbox), typeof(IOfflineSaleCheckoutTransaction), typeof(IOfflineSaleConflictStore), typeof(IBranchCatalogSyncReader)];
+        Type[] ports = [typeof(ISyncDeviceStore), typeof(ISyncDeviceDirectory), typeof(ISyncEventInbox), typeof(IOfflineSaleCheckoutTransaction), typeof(IOfflineSaleConflictStore), typeof(IBranchCatalogSyncReader)];
         foreach (var port in ports)
             services.AddScoped(port, _ => { var proxy = DispatchProxy.Create(port, typeof(Port)); ((Port)proxy).State = this; return proxy; });
     }
     private bool InvokeSync(Type type, string method, object?[] args, out object? result)
     {
         result = null;
+        if (type == typeof(ISyncDeviceDirectory))
+        {
+            result = Task.FromResult<IReadOnlyList<SyncDeviceDetails>>(Devices.Where(d => d.TenantId == (Guid)args[0]! && d.BranchId == (Guid)args[1]! && d.RegisteredByMembershipId == (Guid)args[2]!)
+                .OrderBy(d => d.Id).Skip((int)args[3]!).Take((int)args[4]!).Select(SyncDeviceDetails.From).ToArray());
+            return true;
+        }
         if (type == typeof(ISyncDeviceStore))
         {
             var device = args[1] is Guid id ? Devices.SingleOrDefault(d => d.TenantId == (Guid)args[0]! && d.Id == id) : null;

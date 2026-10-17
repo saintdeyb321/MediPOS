@@ -37,11 +37,11 @@ it('blocks Owner deactivation regardless of apparent owner count and never dispa
   for (const current of [owner, { ...owner, membershipId: id(98), userId: id(99) }]) await expect(api.deactivate(workspace, current)).rejects.toThrow('employees.owner_deactivation_blocked')
   expect(fake.fetcher).not.toHaveBeenCalled()
 })
-it('decodes deactivation and prepared creation contracts without inventing identity discovery', async () => {
+it('decodes deactivation while blocking arbitrary UserId creation without an invitation', async () => {
   const fake = employeeServer(); const api = employeesApi(new HttpClient(fake.fetcher))
   expect((await api.deactivate(workspace, worker)).isActive).toBe(false)
-  await api.create(workspace, { userId: id(50), role: 'cashier' })
-  expect(fake.writes()[1]?.[1]?.body).toBe(`{"userId":"${id(50)}","role":"cashier"}`)
+  await expect(api.create(workspace, { userId: id(50), role: 'cashier' })).rejects.toThrow('membership.invitation_required')
+  expect(fake.writes()).toHaveLength(1)
   expect(fake.fetcher.mock.calls.some(([path]) => /email|invite|users/.test(String(path)))).toBe(false)
 })
 it('does not accept another tenant/member or an invented 204 body as a verified write', async () => {

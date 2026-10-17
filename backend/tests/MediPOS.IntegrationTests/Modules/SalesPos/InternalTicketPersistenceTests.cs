@@ -87,7 +87,7 @@ public sealed class InternalTicketPersistenceTests(PostgreSqlFixture fixture)
         var before = await InternalTicketTestData.ReadAsync(source, rows);
         await source.GetRequiredService<UpdateBusinessProductPricesHandler>().HandleAsync(
             new(tenant.TenantId, rows.ProductId, 999m, 888m, tenant.Identity.ActorId), TestContext.Current.CancellationToken);
-        await source.GetRequiredService<ReplaceProductUnitsHandler>().HandleAsync(
+        await source.GetRequiredService<VersionedProductUnitsFixture>().HandleAsync(
             new(tenant.TenantId, rows.ProductId, [new("Nueva base", 1m, true), new("Nueva caja", 20m, false)], tenant.Identity.ActorId), TestContext.Current.CancellationToken);
         Assert.False(await context.ProductUnits.AnyAsync(u => u.Id == oldUnit, TestContext.Current.CancellationToken));
         await using (var admin = fixture.CreateConstraintContext())

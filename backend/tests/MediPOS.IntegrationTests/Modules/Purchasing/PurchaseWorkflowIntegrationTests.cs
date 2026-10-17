@@ -72,7 +72,7 @@ public sealed class PurchaseWorkflowIntegrationTests(PostgreSqlFixture fixture)
         Assert.Equal(3, after.RootElement.EnumerateObject().Count());
         await using var services = IdentityAccessTestSetup.CreateServices(fixture);
         await using var scope = services.CreateAsyncScope();
-        await scope.ServiceProvider.GetRequiredService<ReplaceProductUnitsHandler>().HandleAsync(
+        await scope.ServiceProvider.GetRequiredService<VersionedProductUnitsFixture>().HandleAsync(
             new(rows.TenantId, tenant.BusinessProductId, [new("Nueva base", 1m, true), new("Caja", 100m, false)], rows.ActorId),
             TestContext.Current.CancellationToken);
         context.ChangeTracker.Clear();
@@ -217,7 +217,7 @@ public sealed class PurchaseWorkflowIntegrationTests(PostgreSqlFixture fixture)
         var product = await source.GetRequiredService<CreateLocalBusinessProductHandler>().HandleAsync(
             new(tenant.TenantId, "M1", ProductType.Medicine, "Medicine", tenant.CategoryId, "Lab", null,
                 new MedicineInput([new("Paracetamol", "500 mg")], "Tableta", "Oral"), 0m, null, rows.ActorId), TestContext.Current.CancellationToken);
-        var units = await source.GetRequiredService<ReplaceProductUnitsHandler>().HandleAsync(
+        var units = await source.GetRequiredService<VersionedProductUnitsFixture>().HandleAsync(
             new(tenant.TenantId, product.Id, [new("Base", 1m, true)], rows.ActorId), TestContext.Current.CancellationToken);
         var input = new PurchaseLineInput(product.Id, units[0].Id, 1m, 0m, null, null);
         var replace = source.GetRequiredService<ReplacePurchaseLinesHandler>();

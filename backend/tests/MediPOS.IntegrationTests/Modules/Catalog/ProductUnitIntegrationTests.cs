@@ -1,4 +1,5 @@
 using System.Text.Json;
+using MediPOS.Application.Errors;
 using MediPOS.Application.Modules.Catalog.CreateLocalBusinessProduct;
 using MediPOS.Application.Modules.Catalog.ReplaceProductUnits;
 using MediPOS.Application.Tenancy;
@@ -33,7 +34,7 @@ public sealed class ProductUnitIntegrationTests(PostgreSqlFixture fixture)
         Guid[] ids;
         await using (var scope = services.CreateAsyncScope())
         {
-            var handler = scope.ServiceProvider.GetRequiredService<ReplaceProductUnitsHandler>();
+            var handler = scope.ServiceProvider.GetRequiredService<VersionedProductUnitsFixture>();
             ids = (await handler.HandleAsync(command, TestContext.Current.CancellationToken)).Select(value => value.Id).Order().ToArray();
             var repeated = await handler.HandleAsync(command with
             {
@@ -48,7 +49,7 @@ public sealed class ProductUnitIntegrationTests(PostgreSqlFixture fixture)
         var rows = await verification.ProductUnits.Where(value => value.BusinessProductId == first.BusinessProductId)
             .ToListAsync(TestContext.Current.CancellationToken);
         Assert.Equal(ids, rows.Select(value => value.Id).Order());
-        Assert.Equal(3, rows.Count);
+        Assert.Equal(4, rows.Count); // Previously referenced Blíster is retained.
         Assert.Single(rows, value => value.IsBaseUnit);
         Assert.All(rows, value => Assert.Equal(first.TenantId, value.TenantId));
         var fraction = Assert.Single(rows, value => value.Name == "Fracción");
@@ -58,7 +59,7 @@ public sealed class ProductUnitIntegrationTests(PostgreSqlFixture fixture)
         var audits = await verification.AuditLogs.Where(value => value.EntityId == first.BusinessProductId &&
             value.Action == AuditAction.BusinessProductUnitsChanged).ToListAsync(TestContext.Current.CancellationToken);
         Assert.Equal(2, audits.Count); // Seed configuration + one real replacement, no duplicate no-op event.
-        var replacement = Assert.Single(audits, value => Snapshot(value.AfterJson!).Length == 3);
+        var replacement = Assert.Single(audits, value => Snapshot(value.AfterJson!).Length == 4);
         Assert.Equal(2, Snapshot(replacement.BeforeJson!).Length);
         Assert.Equal(first.Identity.ActorId, replacement.ActorId);
         await using var foreign = fixture.CreateContext(second.TenantId);
@@ -100,7 +101,7 @@ public sealed class ProductUnitIntegrationTests(PostgreSqlFixture fixture)
         var product = await source.GetRequiredService<CreateLocalBusinessProductHandler>().HandleAsync(
             new(first.TenantId, "R2", ProductType.Retail, "Second product", first.CategoryId, "Brand", null, null,
                 0m, null, first.Identity.ActorId), TestContext.Current.CancellationToken);
-        await source.GetRequiredService<ReplaceProductUnitsHandler>().HandleAsync(
+        await source.GetRequiredService<VersionedProductUnitsFixture>().HandleAsync(
             new(first.TenantId, product.Id, [new("Base", 1m, true), new("Blíster", 5m, false)], first.Identity.ActorId),
             TestContext.Current.CancellationToken);
         await using var verification = fixture.CreateContext(first.TenantId);
@@ -109,7 +110,7 @@ public sealed class ProductUnitIntegrationTests(PostgreSqlFixture fixture)
     }
 
     [Fact]
-    public async Task AuditFailureRollsBackBulkDeletionAndInsertedUnitsAndClearsStaging()
+    public async Task AuditFailureRollsBackVersionedEditsAndInsertedUnitsAndClearsStaging()
     {
         var (first, _) = await TenantIsolationTestData.CreatePairAsync(fixture);
         Guid[] originalIds;
@@ -125,6 +126,7 @@ public sealed class ProductUnitIntegrationTests(PostgreSqlFixture fixture)
         { ["ConnectionStrings:MediPosDatabase"] = fixture.ConnectionString }).Build();
         registrations.AddSingleton<TimeProvider>(new IdentityAccessTestSetup.Clock());
         registrations.AddInfrastructure(configuration);
+        registrations.AddPersistenceFixtureAuthorization();
         registrations.AddScoped(source =>
         {
             var tenant = source.GetRequiredService<ITenantDataContext>();
@@ -136,7 +138,7 @@ public sealed class ProductUnitIntegrationTests(PostgreSqlFixture fixture)
         await using (var scope = services.CreateAsyncScope())
         {
             var source = scope.ServiceProvider;
-            var error = await Assert.ThrowsAsync<DbUpdateException>(() => source.GetRequiredService<ReplaceProductUnitsHandler>().HandleAsync(
+            var error = await Assert.ThrowsAsync<DbUpdateException>(() => source.GetRequiredService<VersionedProductUnitsFixture>().HandleAsync(
                 new(first.TenantId, first.BusinessProductId, [new("Base", 1m, true), new("Caja", 100m, false)], first.Identity.ActorId),
                 TestContext.Current.CancellationToken));
             var postgres = Assert.IsType<PostgresException>(error.InnerException);
@@ -153,32 +155,42 @@ public sealed class ProductUnitIntegrationTests(PostgreSqlFixture fixture)
     }
 
     [Fact]
-    public async Task ConcurrentReplacementsSerializeCompleteConfigurationsAndBeforeAfterHistory()
+    public async Task ConcurrentVersionedEditsHaveOneWinnerAndPreserveOriginalIdentities()
     {
         var (first, _) = await TenantIsolationTestData.CreatePairAsync(fixture);
         await using var services = IdentityAccessTestSetup.CreateServices(fixture);
         await using var initial = fixture.CreateContext(first.TenantId);
-        var original = Values(await initial.ProductUnits.ToListAsync(TestContext.Current.CancellationToken));
-        async Task ReplaceAsync(string name, decimal factor)
+        var originalUnits = await initial.ProductUnits.ToListAsync(TestContext.Current.CancellationToken);
+        var original = Values(originalUnits);
+        await using var readScope = services.CreateAsyncScope();
+        var current = await readScope.ServiceProvider.GetRequiredService<ProductUnitConfigurationHandler>()
+            .ReadAsync(first.TenantId, first.BusinessProductId, TestContext.Current.CancellationToken);
+        async Task<bool> ReplaceAsync(string name, decimal factor)
         {
             await using var scope = services.CreateAsyncScope();
-            await scope.ServiceProvider.GetRequiredService<ReplaceProductUnitsHandler>().HandleAsync(
-                new(first.TenantId, first.BusinessProductId, [new("Base", 1m, true), new(name, factor, false)], first.Identity.ActorId),
-                TestContext.Current.CancellationToken);
+            var changes = originalUnits.Select(unit => new ProductUnitChange(unit.Id, unit.Name,
+                unit.ConversionToBase, unit.IsBaseUnit, unit.IsActive)).Append(new(null, name, factor, false, true)).ToArray();
+            try
+            {
+                await scope.ServiceProvider.GetRequiredService<ProductUnitConfigurationHandler>().HandleAsync(
+                    new(first.TenantId, first.BusinessProductId, current.Version, changes, first.Identity.ActorId), TestContext.Current.CancellationToken);
+                return true;
+            }
+            catch (ApplicationErrorException error) when (error.Error.Code == "catalog.concurrent_change") { return false; }
         }
-        await Task.WhenAll(ReplaceAsync("Caja A", 100m), ReplaceAsync("Caja B", 50m));
+        var outcomes = await Task.WhenAll(ReplaceAsync("Caja A", 100m), ReplaceAsync("Caja B", 50m));
+        Assert.Single(outcomes, value => value); Assert.Single(outcomes, value => !value);
         await using var verification = fixture.CreateContext(first.TenantId);
         var final = await verification.ProductUnits.ToListAsync(TestContext.Current.CancellationToken);
-        Assert.Equal(2, final.Count);
+        Assert.Equal(3, final.Count);
+        Assert.All(originalUnits, unit => Assert.Contains(final, row => row.Id == unit.Id && row.ConversionToBase == unit.ConversionToBase));
         Assert.Single(final, value => value.IsBaseUnit);
         var audits = await verification.AuditLogs.Where(value => value.EntityId == first.BusinessProductId &&
             value.Action == AuditAction.BusinessProductUnitsChanged).ToListAsync(TestContext.Current.CancellationToken);
         var replacements = audits.Where(value => Snapshot(value.BeforeJson!).Length != 0).ToArray();
-        Assert.Equal(2, replacements.Length);
+        Assert.Single(replacements);
         var firstEvent = Assert.Single(replacements, value => Snapshot(value.BeforeJson!).SequenceEqual(original));
-        var secondEvent = Assert.Single(replacements, value => value.Id != firstEvent.Id);
-        Assert.Equal(Snapshot(firstEvent.AfterJson!), Snapshot(secondEvent.BeforeJson!));
-        Assert.Equal(Values(final), Snapshot(secondEvent.AfterJson!));
+        Assert.Equal(Values(final), Snapshot(firstEvent.AfterJson!));
     }
 
     [Fact]

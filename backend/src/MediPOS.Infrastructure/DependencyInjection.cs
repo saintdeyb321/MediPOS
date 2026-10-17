@@ -31,6 +31,7 @@ using MediPOS.Application.Modules.IdentityAccess;
 using MediPOS.Application.Modules.IdentityAccess.Authentication;
 using MediPOS.Application.Modules.IdentityAccess.CreateMembership;
 using MediPOS.Application.Modules.IdentityAccess.DeactivateMembership;
+using MediPOS.Application.Modules.IdentityAccess.Invitations;
 using MediPOS.Application.Modules.IdentityAccess.OperationalAccess;
 using MediPOS.Application.Modules.IdentityAccess.ReplaceWorkSchedule;
 using MediPOS.Application.Modules.IdentityAccess.SetMembershipBranches;
@@ -131,6 +132,7 @@ public static class DependencyInjection
         services.AddLogging();
         services.AddScoped<NotificationStore>();
         services.AddScoped<ISyncDeviceStore, SyncDeviceStore>();
+        services.AddScoped<ISyncDeviceDirectory, SyncDeviceDirectory>();
         services.AddScoped<ISyncEventInbox, SyncEventInbox>();
         services.AddScoped<IBranchCatalogSyncReader, BranchCatalogSyncReader>();
         services.AddScoped<IOfflineSaleConflictStore, OfflineSaleConflictStore>();
@@ -199,6 +201,7 @@ public static class DependencyInjection
         services.AddScoped<ITransferDirectoryReader, TransferDirectoryReader>();
         services.AddScoped<ITransferTransaction, TransferTransaction>();
         services.AddScoped<CreateMembershipHandler>();
+        services.AddScoped<IEmployeeInvitationStore, EmployeeInvitationStore>();
         services.AddScoped<SetMembershipBranchesHandler>();
         services.AddScoped<ReplaceWorkScheduleHandler>();
         services.AddScoped<DeactivateMembershipHandler>();
@@ -216,6 +219,8 @@ public static class DependencyInjection
         services.AddScoped<SetBusinessProductStatusHandler>();
         services.AddScoped<IProductUnitStore, ProductUnitStore>();
         services.AddScoped<ReplaceProductUnitsHandler>();
+        services.AddScoped<IProductUnitConfigurationStore, ProductUnitConfigurationStore>();
+        services.AddScoped<ProductUnitConfigurationHandler>();
         services.AddScoped<IProductImportStore, ProductImportStore>();
         services.AddSingleton<IProductImportWorkbookReader, MediPOS.Infrastructure.Modules.Catalog.ProductImport.ProductImportWorkbook>();
         services.AddSingleton<IProductImportTemplateWriter, MediPOS.Infrastructure.Modules.Catalog.ProductImport.ProductImportWorkbook>();
@@ -259,6 +264,8 @@ public static class DependencyInjection
     {
         services.AddScoped<IVerifiedGoogleIdentitySource, TGoogleIdentitySource>();
         services.AddScoped<IAuthenticatedMediPosUser, TAuthenticatedUser>();
+        services.AddScoped<EmployeeInvitationHandler>();
+        services.AddScoped<GetSyncDevicesHandler>();
         services.AddScoped<MediPOS.Application.Modules.IdentityAccess.Directory.ListMyTenantsHandler>();
         services.AddScoped<UpsertGoogleUserHandler>();
         services.AddScoped<ResolveAccessContextHandler>();

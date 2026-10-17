@@ -1,0 +1,12 @@
+{
+  "id": "/",
+  "name": "MediPOS — contingencia",
+  "short_name": "MediPOS",
+  "lang": "es-PE",
+  "start_url": "/contingencia",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#067a67",
+  "icons": [{ "src": "/favicon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }]
+}

@@ -6,6 +6,7 @@ public enum AuditAction
     TenantCreated, LicenseRenewed, LicenseSuspended, LicenseReactivated, TenantPurgeRequested,
     LegalEntityCreated, BranchCreated, BranchMainHubChanged,
     MembershipCreated, MembershipBranchesReplaced, MembershipScheduleReplaced, MembershipDeactivated,
+    EmployeeInvitationCreated, EmployeeInvitationAccepted, EmployeeInvitationApproved, EmployeeInvitationRevoked,
     BusinessProductCreated, BusinessProductPriceChanged, BusinessProductStatusChanged,
     BusinessProductUnitsChanged, PurchaseConfirmed, InventoryAdjusted, CatalogProductsImported, CashSessionOpened, SaleConfirmed, SaleVoided, CashSessionClosed,
     TransferRequested, TransferApproved, TransferDispatched, TransferReceived, TransferCancelled,
@@ -15,7 +16,7 @@ public enum AuditAction
     SupplierUblImported, SupplierUblReviewed, SupplierUblRejected, SupplierUblConverted, SupplierUblFileRejected,
 }
 
-public enum AuditEntityType { ElectronicSeries, ElectronicDocument, Tenant, License, LegalEntity, Branch, Membership, BusinessProduct, Purchase, InventoryLot, ImportJob, CashSession, Sale, Transfer, CashTransfer, TenantCommissionSettings, CommissionRule, BranchStockThreshold, SyncDevice, OfflineSaleConflict, SupplierUblImport }
+public enum AuditEntityType { ElectronicSeries, ElectronicDocument, Tenant, License, LegalEntity, Branch, Membership, BusinessProduct, Purchase, InventoryLot, ImportJob, CashSession, Sale, Transfer, CashTransfer, TenantCommissionSettings, CommissionRule, BranchStockThreshold, SyncDevice, OfflineSaleConflict, SupplierUblImport, EmployeeInvitation }
 
 public static class AuditCodes
 {
@@ -40,6 +41,10 @@ public static class AuditCodes
         AuditAction.BranchCreated => "branch.created",
         AuditAction.BranchMainHubChanged => "branch.main_hub_changed",
         AuditAction.MembershipCreated => "membership.created",
+        AuditAction.EmployeeInvitationCreated => "employee_invitation.created",
+        AuditAction.EmployeeInvitationAccepted => "employee_invitation.accepted",
+        AuditAction.EmployeeInvitationApproved => "employee_invitation.approved",
+        AuditAction.EmployeeInvitationRevoked => "employee_invitation.revoked",
         AuditAction.MembershipBranchesReplaced => "membership.branches_replaced",
         AuditAction.MembershipScheduleReplaced => "membership.schedule_replaced",
         AuditAction.MembershipDeactivated => "membership.deactivated",
@@ -92,6 +97,10 @@ public static class AuditCodes
         "branch.created" => AuditAction.BranchCreated,
         "branch.main_hub_changed" => AuditAction.BranchMainHubChanged,
         "membership.created" => AuditAction.MembershipCreated,
+        "employee_invitation.created" => AuditAction.EmployeeInvitationCreated,
+        "employee_invitation.accepted" => AuditAction.EmployeeInvitationAccepted,
+        "employee_invitation.approved" => AuditAction.EmployeeInvitationApproved,
+        "employee_invitation.revoked" => AuditAction.EmployeeInvitationRevoked,
         "membership.branches_replaced" => AuditAction.MembershipBranchesReplaced,
         "membership.schedule_replaced" => AuditAction.MembershipScheduleReplaced,
         "membership.deactivated" => AuditAction.MembershipDeactivated,
@@ -133,6 +142,7 @@ public static class AuditCodes
         AuditAction.LicenseRenewed or AuditAction.LicenseSuspended or AuditAction.LicenseReactivated => AuditEntityType.License,
         AuditAction.LegalEntityCreated => AuditEntityType.LegalEntity,
         AuditAction.BranchCreated or AuditAction.BranchMainHubChanged => AuditEntityType.Branch,
+        AuditAction.EmployeeInvitationCreated or AuditAction.EmployeeInvitationAccepted or AuditAction.EmployeeInvitationApproved or AuditAction.EmployeeInvitationRevoked => AuditEntityType.EmployeeInvitation,
         AuditAction.MembershipCreated or AuditAction.MembershipBranchesReplaced or
             AuditAction.MembershipScheduleReplaced or AuditAction.MembershipDeactivated => AuditEntityType.Membership,
         AuditAction.BusinessProductCreated or AuditAction.BusinessProductPriceChanged or
@@ -176,6 +186,7 @@ public static class AuditCodes
         AuditEntityType.BranchStockThreshold => "branch_stock_threshold",
         AuditEntityType.OfflineSaleConflict => "offline_sale_conflict",
         AuditEntityType.SyncDevice => "sync_device",
+        AuditEntityType.EmployeeInvitation => "employee_invitation",
         _ => throw new ArgumentOutOfRangeException(nameof(entityType)),
     };
 
@@ -203,6 +214,7 @@ public static class AuditCodes
         "branch_stock_threshold" => AuditEntityType.BranchStockThreshold,
         "offline_sale_conflict" => AuditEntityType.OfflineSaleConflict,
         "sync_device" => AuditEntityType.SyncDevice,
+        "employee_invitation" => AuditEntityType.EmployeeInvitation,
         _ => throw new InvalidOperationException("Unknown persisted audit entity type."),
     };
 }

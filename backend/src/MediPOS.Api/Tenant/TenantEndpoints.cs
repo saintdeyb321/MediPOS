@@ -44,6 +44,7 @@ public static partial class TenantEndpoints
         MapPos(tenants);
         MapInventory(tenants);
         MapEmployees(tenants);
+        MapEmployeeInvitations(api, tenants);
         MapReports(tenants);
         MapImports(tenants);
         MapTransfers(tenants);

@@ -14,6 +14,7 @@ internal static class PersistenceAuthorizationFixtures
     internal static IServiceCollection AddPersistenceFixtureAuthorization(this IServiceCollection services)
     {
         services.AddScoped<ITenantOperationAuthorizer, BusinessRuleAuthorizationStub>();
+        services.AddScoped<VersionedProductUnitsFixture>();
         services.AddScoped<IPlatformAdministration>(_ => new PlatformAdministrationStub(Guid.NewGuid()));
         services.AddScoped(provider => new CreateMembershipHandler(provider.GetRequiredService<IIdentityAccessStore>(),
             provider.GetRequiredService<ITenantLicenseProvisioning>(), provider.GetRequiredService<TimeProvider>(),

@@ -26,6 +26,7 @@ public static class GoogleAuthenticationRegistration
         var certificate = settings.LoadKeyEncryptionCertificate();
         builder.Services.AddSingleton<System.Security.Cryptography.X509Certificates.X509Certificate2>(_ => certificate);
         builder.Services.AddSingleton(settings);
+        builder.Services.AddScoped<EmployeeInvitationTickets>();
         builder.Services.AddDataProtection().SetApplicationName("MediPOS.Authentication")
             .PersistKeysToFileSystem(new DirectoryInfo(settings.KeyRingPath)).ProtectKeysWithCertificate(certificate);
         builder.Services.AddHttpContextAccessor();
@@ -195,7 +196,11 @@ public static class GoogleAuthenticationRegistration
         }).WithName("medipos.auth.login");
         app.MapGet(GoogleAuthenticationSettings.CallbackPath, (HttpContext context) => AuthProblem.WriteAsync(context, 401, "auth.google_failed"))
             .WithName("medipos.auth.callback");
-        app.MapGet("/auth/me", (MediPOS.Application.Modules.IdentityAccess.Authentication.IAuthenticatedMediPosUser user) => Results.Json(new { userId = user.UserId }))
+        app.MapGet("/auth/me", async (HttpContext context, MediPOS.Application.Modules.IdentityAccess.Authentication.IAuthenticatedMediPosUser user, TimeProvider clock) =>
+        {
+            var session = await context.AuthenticateAsync(SessionScheme);
+            return Results.Json(new { userId = user.UserId, expiresAtUtc = session.Properties?.ExpiresUtc, serverTimeUtc = clock.GetUtcNow() });
+        })
             .RequireAuthorization().WithName("medipos.auth.me");
         app.MapPost("/auth/logout", async (HttpContext context, IAntiforgery csrf) =>
         {

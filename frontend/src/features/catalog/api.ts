@@ -1,5 +1,5 @@
 import { ApiError, HttpClient } from '../../shared/api/http'
-import { array, boolean, branchPath, decimal, nullable, object, oneOf, requireScope, text, utc, uuid } from '../../shared/api/contracts'
+import { array, boolean, branchPath, decimal, nullable, object, oneOf, requireScope, text, uint, utc, uuid } from '../../shared/api/contracts'
 import type { BranchScope } from '../../shared/api/contracts'
 import type { JsonNumber } from '../../shared/api/exactJson'
 
@@ -32,6 +32,9 @@ export interface PricesInput { retailPrice: JsonNumber; wholesalePrice: JsonNumb
 export interface LocalProductInput extends PricesInput { internalCode: string; productType: 'medicine' | 'retail'; name: string; categoryId: string; brandOrLaboratory: string; barcode: string | null; medicine: MedicineInput | null; isActive: boolean }
 export interface FromGlobalInput extends PricesInput { globalProductId: string; internalCode: string; isActive: boolean }
 export type UnitInput = Omit<ProductUnit, 'id'>
+export interface UnitConfiguration { version: number; units: ProductUnit[] }
+export type UnitChange = UnitInput & { id: string | null }
+const unitConfiguration = object<UnitConfiguration>({ version: uint, units: array(productUnit) })
 const medicine = nullable(object<Medicine>({ components: array(object({ ingredient: text, strengthNormalized: text })), dosageForm: text,
   route: nullable(text), sanitaryRegistration: nullable(text), activeIngredients: array(text), normalizedStrength: text }))
 const globalShape = { id: uuid, productType: oneOf('medicine', 'retail'), name: text, categoryId: uuid, brandOrLaboratory: text, barcode: nullable(text), medicine }
@@ -75,13 +78,18 @@ export function catalogApi(http: HttpClient) {
     fromGlobal: (scope: BranchScope, input: FromGlobalInput, signal?: AbortSignal) => write(scope, '/products/from-global', input, 'POST', signal),
     prices: (scope: BranchScope, id: string, input: PricesInput, signal?: AbortSignal) => write(scope, `/products/${uuid(id)}/prices`, input, 'PUT', signal, id),
     status: (scope: BranchScope, id: string, isActive: boolean, signal?: AbortSignal) => write(scope, `/products/${uuid(id)}/status`, { isActive }, 'PUT', signal, id),
-    async initializeUnits(scope: BranchScope, id: string, _units: UnitInput[], signal?: AbortSignal): Promise<ProductUnit[]> {
-      // This endpoint destroys/recreates changed sets. Never send an existing configuration from this UI.
-      const current = await this.detail(scope, id, signal)
-      if (current.units.length) throw new ApiError(409, 'catalog.units_replacement_blocked')
-      // GET-empty + PUT is not atomic: a competing initialization can commit between them.
-      // No client condition is honored by the current endpoint. Do not expose a destructive write.
-      throw new ApiError(409, 'catalog.units_atomic_contract_required')
+    async unitConfiguration(scope: BranchScope, id: string, signal?: AbortSignal) {
+      return unitConfiguration(await http.request(`${root(scope)}/products/${uuid(id)}/unit-configuration`, { signal, exactNumbers: true }))
+    },
+    async configureUnits(scope: BranchScope, id: string, expectedVersion: number, units: UnitChange[], signal?: AbortSignal) {
+      if (!Number.isInteger(expectedVersion) || expectedVersion <= 0 || expectedVersion > 4294967295) throw new ApiError(400, 'request.invalid')
+      const data = await http.request(`${root(scope)}/products/${uuid(id)}/unit-configuration`, { method: 'PUT', body: { expectedVersion, units }, signal, exactNumbers: true })
+      try { return unitConfiguration(data) } catch { throw new ApiError(0, 'client.outcome_unknown', undefined, true) }
+    },
+    async initializeUnits(_scope: BranchScope, _id: string, _units: UnitInput[], _signal?: AbortSignal): Promise<ProductUnit[]> {
+      void [_scope, _id, _units, _signal]
+      // Compatibility guard: callers must obtain a version and use configureUnits. Never fallback to old PUT.
+      throw new ApiError(409, 'catalog.units_legacy_write_blocked')
     },
     async search(scope: BranchScope, query: string, limit = 20, signal?: AbortSignal) {
     if (!Number.isInteger(limit) || limit < 1 || limit > 50) throw new RangeError('Search limit must be 1–50')

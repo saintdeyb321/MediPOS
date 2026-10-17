@@ -16,6 +16,8 @@ public sealed class TenantSyncHttpTests
     {
         var state = TenantCommercialContractTests.SeedStock(); await using var host = await Host(state); await PlatformLicenseHttpTests.Login(host); var csrf = await host.Csrf(); var root = $"/api/tenants/{state.TenantId:D}";
         using var device = await Json(host, "POST", root + $"/branches/{state.Branches[0].Id:D}/sync/devices", new { deviceLabel = "POS mostrador" }, csrf, 201); var deviceId = device.RootElement.GetProperty("deviceId").GetGuid();
+        using var directory = await Json(host, "GET", root + $"/branches/{state.Branches[0].Id:D}/sync/devices?offset=0&limit=100");
+        Assert.Equal(deviceId, Assert.Single(directory.RootElement.EnumerateArray()).GetProperty("deviceId").GetGuid());
         using var cash = await Json(host, "POST", root + $"/branches/{state.Branches[0].Id:D}/cash-sessions", new { openingAmount = 0m }, csrf, 201);
         var envelope = Envelope(state, deviceId, cash.RootElement.GetProperty("cashSessionId").GetGuid()); var batch = new { deviceId, protocolVersion = 1, events = new[] { envelope } };
         using var accepted = await Json(host, "POST", root + "/sync/batches", batch, csrf); Assert.Equal(1, accepted.RootElement.GetProperty("acceptedCount").GetInt32());

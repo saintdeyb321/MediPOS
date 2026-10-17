@@ -241,12 +241,12 @@ public sealed class SaleCheckoutPersistenceTests(PostgreSqlFixture fixture)
         var source = scope.ServiceProvider;
         var rows = await SaleCheckoutTestData.CreateAsync(source, tenant);
         await source.GetRequiredService<UpdateBusinessProductPricesHandler>().HandleAsync(new(tenant.TenantId, rows.ProductId, 500m, 400m, tenant.Identity.ActorId), TestContext.Current.CancellationToken);
-        await source.GetRequiredService<ReplaceProductUnitsHandler>().HandleAsync(new(tenant.TenantId, rows.ProductId, [new("Unidad nueva", 1m, true)], tenant.Identity.ActorId), TestContext.Current.CancellationToken);
+        await source.GetRequiredService<VersionedProductUnitsFixture>().HandleAsync(new(tenant.TenantId, rows.ProductId, [new("Unidad nueva", 1m, true)], tenant.Identity.ActorId), TestContext.Current.CancellationToken);
         var confirmed = await SaleCheckoutTestData.ConfirmAsync(source, rows);
         Assert.Equal(rows.Draft.TotalAmount, confirmed.TotalAmount);
         var draft = await source.GetRequiredService<CreateSaleDraftHandler>().HandleAsync(new(tenant.TenantId, tenant.Identity.BranchId), TestContext.Current.CancellationToken);
         var context = source.GetRequiredService<MediPosDbContext>();
-        var unit = await context.ProductUnits.Where(unit => unit.BusinessProductId == rows.ProductId).Select(unit => unit.Id).SingleAsync(TestContext.Current.CancellationToken);
+        var unit = await context.ProductUnits.Where(unit => unit.BusinessProductId == rows.ProductId && unit.IsBaseUnit).Select(unit => unit.Id).SingleAsync(TestContext.Current.CancellationToken);
         await source.GetRequiredService<ReplaceSaleLinesHandler>().HandleAsync(new(tenant.TenantId, tenant.Identity.BranchId, draft.SaleId, draft.Version, [new(rows.ProductId, unit, 2m, PriceKind.Retail)]), TestContext.Current.CancellationToken);
         var edit = await Assert.ThrowsAsync<ApplicationErrorException>(() => source.GetRequiredService<ReplaceSaleLinesHandler>().HandleAsync(new(tenant.TenantId, tenant.Identity.BranchId, confirmed.SaleId, confirmed.Version, []), TestContext.Current.CancellationToken));
         Assert.Equal(SalesPosErrors.NotDraft, edit.Error);

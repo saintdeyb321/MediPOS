@@ -19,7 +19,7 @@ export function ReceiptEditor({ disabled, replacing, save }: { disabled: boolean
     <fieldset disabled={disabled}><legend>Agregar línea</legend>
       <ProductLookup disabled={disabled} onSelect={value => { setDetail(value); setUnitId(''); setQuantity(''); setCost(''); setBatch(''); setExpiration('') }} />
       {detail && <><p>Producto: {detail.product.name} · {detail.product.productType === 'medicine' ? 'Medicamento: lote y vencimiento obligatorios.' : 'Venta general.'}</p>
-        {!units.length && <p role="alert">Sin presentaciones activas. La inicialización atómica de unidades sigue bloqueada por contrato; no puede recibirse este producto todavía.</p>}
+        {!units.length && <p role="alert">Sin presentaciones activas. Owner debe configurar o activar una presentación desde Productos antes de recibir este producto.</p>}
         <label htmlFor={selectId}>Presentación de compra</label><select id={selectId} value={unitId} onChange={event => setUnitId(event.target.value)}><option value="">Elige una presentación</option>{units.map(row => <option key={row.id} value={row.id}>{row.name} · {decimalLabel(row.conversionToBase)} unidades base</option>)}</select>
         <TextField label="Cantidad de presentaciones" inputMode="decimal" value={quantity} maxLength={90} onChange={event => setQuantity(event.target.value)} />
         <TextField label="Costo por presentación (S/)" hint="Costo de la presentación elegida, no precio de venta ni costo por unidad base si eliges caja." inputMode="decimal" value={cost} maxLength={90} onChange={event => setCost(event.target.value)} />

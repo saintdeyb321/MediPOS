@@ -21,10 +21,11 @@ it.each(['owner', 'pharmacist', 'cashier'] as const)('shows implemented or parti
   }
   expect(nav.queryByText(/Pronto|Próximamente/)).not.toBeInTheDocument(); expect(fake.writes()).toHaveLength(0)
 })
-it('uses the same availability on dashboard shortcuts and distinguishes unstarted Offline without enabling it', () => {
+it('uses the same availability on dashboard shortcuts and exposes the authorized contingency feature', () => {
   const fake = managementServer(); const shortcuts = availableNavigation('owner').filter(row => row.id && row.id !== 'ventas'); mountTransfers(fake, <DashboardPage shortcuts={shortcuts} />)
   for (const item of shortcuts) { const row = screen.getByRole('link', { name: new RegExp('^' + item.label) }); expect(within(row).getByText(availabilityLabels[item.availability])).toBeInTheDocument() }
-  expect(screen.getByText(/Offline Sync: no iniciado/)).toBeInTheDocument(); expect(screen.queryByRole('link', { name: /Offline/ })).not.toBeInTheDocument(); expect(screen.getByText(/Implementado no significa aceptación comercial aprobada/)).toBeInTheDocument()
+  expect(screen.getByRole('link', { name: /^Contingencia/ })).toHaveAttribute('href', workspace.base + '/sincronizacion')
+  expect(screen.queryByText(/Offline Sync: no iniciado/)).not.toBeInTheDocument(); expect(screen.getByText(/Implementado no significa aceptación comercial aprobada/)).toBeInTheDocument()
   expect(screen.queryByText(/Vista inicial · F1.1|habilitarán en F2|Próximamente/)).not.toBeInTheDocument(); expect(fake.writes()).toHaveLength(0)
 })
 it('translates the new last-Owner error without revealing internal state or treating conflict as success', () => {

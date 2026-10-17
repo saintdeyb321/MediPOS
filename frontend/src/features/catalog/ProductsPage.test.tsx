@@ -8,7 +8,7 @@ import { createPreviewService } from '../../development/fixtures'
 import { HttpClient } from '../../shared/api/http'
 import { JsonNumber, parseExactJson, stringifyExactJson } from '../../shared/api/exactJson'
 import { ProductsPage } from './ProductsPage'
-import type { BusinessProduct, GlobalProduct, LocalProductInput, PricesInput, ProductUnit, UnitInput } from './api'
+import type { BusinessProduct, GlobalProduct, LocalProductInput, PricesInput, ProductUnit, UnitChange } from './api'
 
 // Synthetic transport/component data only. No PostgreSQL, OIDC or commercial operation is executed here.
 const id = (value: string) => `019a0162-0000-7000-8000-${value.padStart(12, '0')}`
@@ -24,7 +24,7 @@ const workspace: Workspace = { tenantId, branchId, tenantName: 'Negocio unitario
     licenseStatus: 'trial', licenseStartsAt: null, licenseExpiresAt: null, evaluatedAtUtc: timestamp } }
 function json(data: unknown, status = 200) { return new Response(stringifyExactJson(data), { status, headers: { 'Content-Type': 'application/json' } }) }
 function server() {
-  const state = { products: [{ ...record }], units: [base, box], globals: [] as GlobalProduct[], loseCreate: false, losePrices: false, rejectStatus: false, failList: false, failCategories: false }
+  const state = { products: [{ ...record }], units: [base, box], unitVersion: 17, loseUnits: false, globals: [] as GlobalProduct[], loseCreate: false, losePrices: false, rejectStatus: false, failList: false, failCategories: false }
   const fetcher = vi.fn<typeof fetch>().mockImplementation(async (input, init) => {
     const path = String(input); const method = init?.method ?? 'GET'
     if (path === '/auth/csrf') return json({ requestToken: 'unit-csrf' })
@@ -48,11 +48,11 @@ function server() {
       const created = { ...source, ...data, id: id('20'), tenantId, createdAt: timestamp }
       state.products.push(created); return json(created, 201)
     }
-    const match = /\/products\/([^/?]+)(?:\/(prices|status|units))?$/.exec(path)
+    const match = /\/products\/([^/?]+)(?:\/(prices|status|unit-configuration))?$/.exec(path)
     if (match) {
       const current = state.products.find(row => row.id === match[1])
       if (!current) return json({ code: 'catalog.product_not_found' }, 404)
-      if (method === 'GET') return json({ product: current, units: current.id === record.id ? state.units : [] })
+      if (method === 'GET') return match[2] === 'unit-configuration' ? json({ version: state.unitVersion, units: current.id === record.id ? state.units : [] }) : json({ product: current, units: current.id === record.id ? state.units : [] })
       if (match[2] === 'prices') {
         Object.assign(current, parseExactJson(String(init?.body)) as PricesInput)
         if (state.losePrices) throw new TypeError('Unit-test lost price response')
@@ -63,10 +63,12 @@ function server() {
         current.isActive = (parseExactJson(String(init?.body)) as { isActive: boolean }).isActive
         return json(current)
       }
-      if (match[2] === 'units') {
-        const data = parseExactJson(String(init?.body)) as { units: UnitInput[] }
-        state.units = data.units.map((row, index) => ({ ...row, id: id(String(30 + index)) }))
-        return json(state.units)
+      if (match[2] === 'unit-configuration') {
+        const data = parseExactJson(String(init?.body)) as { expectedVersion: JsonNumber; units: UnitChange[] }
+        if (data.expectedVersion.literal !== String(state.unitVersion)) return json({ code: 'catalog.concurrent_change' }, 409)
+        state.units = data.units.map((row, index) => ({ ...row, id: row.id ?? id(String(30 + index)) })); state.unitVersion++
+        if (state.loseUnits) throw new TypeError('Synthetic lost unit response')
+        return json({ version: state.unitVersion, units: state.units })
       }
     }
     throw new Error('Unexpected catalog test route')
@@ -99,8 +101,9 @@ it('lists real-shaped records without inventing stock and reads presentations/pr
   expect(await screen.findByRole('cell', { name: /Categoría unitaria.*Venta general/ })).toBeInTheDocument()
   const detail = within(await selectProduct())
   expect(detail.getByText(/Precio minorista por presentación: S\/ 10.00/)).toBeInTheDocument()
-  expect(detail.getByText(/Reconfiguración bloqueada/)).toBeInTheDocument()
-  expect(screen.queryByRole('form', { name: 'Configurar presentaciones iniciales' })).not.toBeInTheDocument()
+  const form = within(await screen.findByRole('form', { name: 'Guardar configuración de presentaciones' }))
+  expect(form.getByRole('textbox', { name: 'Conversión a base 2' })).toBeDisabled()
+  expect(form.getByRole('button', { name: 'Quitar presentación nueva 2' })).toBeDisabled()
   expect(screen.queryByText('1.0000')).not.toBeInTheDocument()
   expect(fake.writes()).toHaveLength(0)
 })
@@ -201,18 +204,35 @@ it('does not retry uncertain prices or unlock after an early read without operat
   await screen.findByText(/El operador revisó el estado consultado/)
   expect(fake.writes()).toHaveLength(1)
 })
-it('validates a proposed initial configuration but blocks its destructive endpoint without an atomic contract', async () => {
+it('initializes units with the version observed from the server and generated ids, never old PUT', async () => {
   const fake = server(); fake.state.units = []; mount(fake); await selectProduct()
-  const form = within(screen.getByRole('form', { name: 'Configurar presentaciones iniciales' }))
+  const form = within(await screen.findByRole('form', { name: 'Guardar configuración de presentaciones' }))
   fireEvent.change(form.getByRole('textbox', { name: 'Nombre de presentación 1' }), { target: { value: 'Unidad' } })
   fireEvent.click(form.getByRole('button', { name: 'Agregar presentación' }))
   fireEvent.change(form.getByRole('textbox', { name: 'Nombre de presentación 2' }), { target: { value: 'Caja' } })
   fireEvent.change(form.getByRole('textbox', { name: 'Conversión a base 2' }), { target: { value: '10' } })
-  fireEvent.click(form.getByRole('checkbox', { name: /Revisé el conjunto completo/ }))
-  expect(form.getByRole('button', { name: 'Guardar presentaciones iniciales (bloqueado por contrato)' })).toBeDisabled()
+  fireEvent.click(form.getByRole('checkbox', { name: /Revisé nombres, actividad/ }))
+  expect(form.getByRole('button', { name: 'Guardar presentaciones' })).toBeEnabled()
   expect(form.getByRole('textbox', { name: 'Conversión a base 2' })).toHaveValue('10')
-  expect(fake.writes()).toHaveLength(0)
-  expect(fake.state.units).toHaveLength(0)
+  fireEvent.click(form.getByRole('button', { name: 'Guardar presentaciones' }))
+  await screen.findByText(/Operación guardada/)
+  expect(fake.writes()).toHaveLength(1)
+  expect(String(fake.writes()[0]?.[0])).toMatch(/\/unit-configuration$/)
+  expect(fake.writes()[0]?.[1]?.body).toContain('"expectedVersion":17')
+  expect(fake.state.units).toHaveLength(2)
+})
+it('preserves ids on rename/deactivation and reconciles lost unit responses without resending', async () => {
+  const fake = server(); fake.state.loseUnits = true; mount(fake); await selectProduct()
+  const form = within(await screen.findByRole('form', { name: 'Guardar configuración de presentaciones' }))
+  fireEvent.change(form.getByRole('textbox', { name: 'Nombre de presentación 2' }), { target: { value: 'Caja LAB' } })
+  fireEvent.click(form.getByRole('checkbox', { name: 'Presentación activa 2' }))
+  fireEvent.click(form.getByRole('checkbox', { name: /Revisé nombres, actividad/ }))
+  fireEvent.click(form.getByRole('button', { name: 'Guardar presentaciones' }))
+  await screen.findByRole('heading', { name: 'Operación pendiente de conciliación' })
+  await waitFor(() => expect(fake.state.units[1]?.name).toBe('Caja LAB'))
+  expect(fake.state.units[1]?.id).toBe(box.id); expect(fake.state.units[1]?.isActive).toBe(false)
+  expect(fake.writes()).toHaveLength(1)
+  expect(screen.getByTestId('location')).toHaveTextContent('catalogPending=units')
 })
 it('denies a non-owner route without issuing catalog requests', async () => {
   const fake = server(); mount(fake, '', { ...workspace, access: { ...workspace.access, role: 'cashier' } })

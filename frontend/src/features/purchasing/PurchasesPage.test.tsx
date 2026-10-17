@@ -132,7 +132,7 @@ it.each([true, false])('reconciles lost confirmation only after observing confir
 it('blocks medicines without lots and new products without presentations, never calling units PUT', async () => {
   const fake = operationServer(); fake.state.detail.units = []; mountOperation(fake, <PurchasesPage />)
   await begin(fake); await pickProduct()
-  expect(screen.getByText(/inicialización atómica de unidades sigue bloqueada/)).toBeInTheDocument()
+  expect(screen.getByText(/Owner debe configurar o activar una presentación/)).toBeInTheDocument()
   expect(screen.getByRole('button', { name: 'Agregar línea a la recepción' })).toBeDisabled()
   expect(fake.writes()).toHaveLength(1)
 })

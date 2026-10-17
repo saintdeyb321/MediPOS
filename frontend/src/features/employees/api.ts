@@ -31,10 +31,9 @@ export function employeesApi(http: HttpClient) {
       return result
     },
     async create(scope: BranchScope, input: CreateEmployeeInput, signal?: AbortSignal) {
-      // Transport ready; UI creation stays blocked until an official identity-association flow exists.
-      const data = await http.request(root(scope), { method: 'POST', body: { userId: uuid(input.userId), role: role(input.role) }, signal })
-      try { const result = scoped(data, scope); if (!sameId(result.userId, input.userId) || result.role !== input.role || !result.isActive) throw new Error(); return result }
-      catch { throw new ApiError(0, 'client.outcome_unknown', undefined, true) }
+      // No arbitrary identity input may bypass the invitation's Google acceptance and Owner approval.
+      void scope; void input; void signal
+      throw new ApiError(409, 'membership.invitation_required')
     },
     async branches(scope: BranchScope, employee: Employee, branchIds: string[], availableIds: readonly string[], signal?: AbortSignal) {
       if (!employee.isActive || !uniqueIds(branchIds) || branchIds.some(id => !availableIds.some(available => sameId(id, available)))) throw new ApiError(400, 'employees.invalid_branches')

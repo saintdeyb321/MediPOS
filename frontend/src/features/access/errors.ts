@@ -9,6 +9,7 @@ const messages: Record<string, string> = {
   'catalog.concurrent_change': 'El producto cambió durante la operación. Consulta el detalle antes de continuar.',
   'catalog.units_replacement_blocked': 'Ya existen presentaciones. Se bloqueó el reemplazo para conservar sus identificadores y referencias.',
   'catalog.units_atomic_contract_required': 'No se enviaron presentaciones: el contrato necesita una condición atómica para evitar reemplazar una configuración concurrente.',
+  'catalog.units_legacy_write_blocked': 'Esta operación requiere la configuración versionada de presentaciones. Recarga el producto y revisa el conjunto vigente.',
   'catalog.category_page_limit': 'El catálogo de categorías supera el límite consultable. No se mostrará una selección incompleta como si fuera completa.',
   'client.https_required': 'La conexión necesita HTTPS y el mismo origen que MediPOS. Contacta al administrador para configurar el acceso.',
   'client.timeout': 'El servidor no respondió a tiempo. Comprueba el estado antes de repetir una operación.',
@@ -52,6 +53,10 @@ const messages: Record<string, string> = {
   'access.role_denied': 'Tu rol actual no permite acceder a esta sección.',
   'access.context_changed': 'Tu acceso cambió. Vuelve a seleccionar una sucursal.',
   'membership.last_active_owner': 'No se puede desactivar al último propietario activo de la botica.',
+  'membership.invitation_required': 'La incorporación requiere una invitación aceptada con Google y aprobada por el propietario.',
+  'invitations.unavailable': 'La invitación no está disponible para esta cuenta, venció o fue revocada. Solicita al propietario que la revise.',
+  'invitations.concurrent_change': 'La invitación cambió. Consulta su estado antes de decidir otra operación.',
+  'invitations.intention_conflict': 'Esta intención ya corresponde a otra invitación. Consulta la original antes de continuar.',
   'api.rate_limited': 'Has realizado varias solicitudes. Espera un momento y vuelve a intentarlo.',
 }
 export function errorMessage(error: unknown) {

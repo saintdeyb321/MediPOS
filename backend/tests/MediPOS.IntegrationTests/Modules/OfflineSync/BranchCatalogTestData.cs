@@ -48,7 +48,7 @@ internal static class BranchCatalogTestData
         CashSessionTestData.Authenticate(source, rows.Tenant.Identity.UserId);
         var product = await source.GetRequiredService<CreateLocalBusinessProductHandler>().HandleAsync(new(rows.Tenant.TenantId, code,
             ProductType.Retail, "Nuevo", rows.Tenant.CategoryId, "Marca", null, null, 2m, 1m, rows.Tenant.Identity.UserId), Token);
-        await source.GetRequiredService<ReplaceProductUnitsHandler>().HandleAsync(new(rows.Tenant.TenantId, product.Id,
+        await source.GetRequiredService<VersionedProductUnitsFixture>().HandleAsync(new(rows.Tenant.TenantId, product.Id,
             [new("Base", 1m, true), new("Caja", 10m, false)], rows.Tenant.Identity.UserId), Token);
         return product.Id;
     }

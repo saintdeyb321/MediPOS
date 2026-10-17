@@ -419,6 +419,7 @@ describe('POS local cart, cash and persisted draft', () => {
     await createDraft()
     fireEvent.click(screen.getByRole('button', { name: 'Cobrar' }))
     await screen.findByText('Total a cobrar: S/ 1.20')
+    await waitFor(() => expect(screen.getByTestId('location')).toHaveTextContent('sale=' + saleId))
     const search = screen.getByTestId('location').textContent!
     view.unmount(); mount(fake, search)
     await screen.findByText(/Venta recuperada del servidor/)

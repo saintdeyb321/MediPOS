@@ -52,20 +52,8 @@ public sealed class CreateMembershipHandler(IIdentityAccessStore store, ITenantL
         }
         else
             await authorization.RequireAsync(command.TenantId, null, command.ActorId, TenantOperation.Administration, cancellationToken).ConfigureAwait(false);
-        if (!await store.UserExistsAsync(command.UserId, cancellationToken).ConfigureAwait(false))
-            throw new ApplicationErrorException(ApplicationErrors.UserNotFound);
-        var duplicate = await store.HasActiveMembershipAsync(command.TenantId, command.UserId, cancellationToken).ConfigureAwait(false);
-        var owners = await store.CountActiveOwnersAsync(command.TenantId, cancellationToken).ConfigureAwait(false);
-        try { Membership.EnsureCreationAllowed(command.Role, duplicate, owners); }
-        catch (InvalidOperationException)
-        {
-            throw new ApplicationErrorException(duplicate ? ApplicationErrors.MembershipDuplicate : ApplicationErrors.OwnerLimitReached);
-        }
         var now = timeProvider.GetUtcNow();
-        var membership = Membership.Create(command.TenantId, command.UserId, command.Role, now);
-        var audit = AuditTrail.Record(command.TenantId, command.ActorId, AuditAction.MembershipCreated, membership.Id, now,
-            null, AuditTrail.MembershipState(membership));
-        await store.AddMembershipAsync(membership, audit, cancellationToken).ConfigureAwait(false);
+        var membership = await MembershipProvisioning.CreateAsync(store, command, now, cancellationToken).ConfigureAwait(false);
         if (bootstrap)
         {
             await PlatformAdministrationAccess.RequireAsync(administration, command.ActorId, cancellationToken).ConfigureAwait(false);

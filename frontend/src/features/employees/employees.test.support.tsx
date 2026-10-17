@@ -26,6 +26,7 @@ export function employeeServer() {
   const fetcher = vi.fn<typeof fetch>().mockImplementation(async (input, init) => {
     const path = String(input); const method = init?.method ?? 'GET'; const url = new URL(path, 'https://unit.test')
     if (path === '/auth/csrf') return json({ requestToken: 'unit-csrf' })
+    if (method === 'GET' && url.pathname.endsWith('/employee-invitations')) return json([])
     if (method === 'GET' && path.includes('/branches?')) return state.failBranches ? json({ code: 'unit.unavailable' }, 503) : json(state.branches)
     if (method === 'GET' && url.pathname.endsWith('/employees')) {
       if (state.failList) return json({ code: 'unit.unavailable' }, 503)

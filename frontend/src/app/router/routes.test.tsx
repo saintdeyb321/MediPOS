@@ -10,6 +10,7 @@ import type { Scenario } from '../../types/development'
 import { HttpClient } from '../../shared/api/http'
 import { ApiError } from '../../shared/api/http'
 import { createMediPosService } from '../../features/access'
+import { offlineStorage } from '../../features/offline'
 
 const tenantId = '019a0162-0000-7000-8000-000000000002'
 const branchId = '019a0162-0000-7000-8000-000000000005'
@@ -20,6 +21,17 @@ function mount(scenario: Scenario = 'owner', path = '/', overrides?: Partial<Run
   return runtime.service
 }
 describe('F1 navigation and access boundaries', () => {
+  it('revokes the server session even if local IndexedDB cleanup never completes', async () => {
+    const blocked = vi.spyOn(offlineStorage, 'lock').mockImplementation(() => new Promise<void>(() => undefined))
+    try {
+      const service = createPreviewService('owner'); const logout = vi.spyOn(service, 'logout'); const user = userEvent.setup()
+      mount('owner', workspace, { service }); await screen.findByRole('heading', { name: 'Todo listo para empezar.' })
+      await user.click(screen.getByText('Propietario', { selector: '.account-label' }))
+      await user.click(screen.getByRole('button', { name: 'Cerrar sesión' }))
+      await screen.findByRole('heading', { name: 'Un buen día empieza aquí.' })
+      expect(logout).toHaveBeenCalledTimes(1); expect(blocked).toHaveBeenCalledTimes(1)
+    } finally { blocked.mockRestore() }
+  })
   it.each([['notificaciones', 'Notificaciones'], ['configuracion', 'Configuración'], ['auditoria', 'Auditoría'], ['importacion', 'Importación de productos Excel']])('connects block 08 route %s to its functional page', async (path, heading) => {
     mount('owner', workspace + '/' + path)
     expect(await screen.findByRole('heading', { name: heading, level: 1 })).toBeInTheDocument()

@@ -81,7 +81,7 @@ public sealed partial class TenantHttpTestState
     internal void Configure(IServiceCollection services)
     {
         Type[] ports = [typeof(IOperationalAccessReader), typeof(IMyTenantDirectoryReader), typeof(IBranchDirectoryReader), typeof(ICatalogDirectoryReader),
-            typeof(IGlobalCatalogStore), typeof(IBranchesStore), typeof(ITenantLicenseProvisioning), typeof(IBusinessProductStore), typeof(IProductUnitStore),
+            typeof(IGlobalCatalogStore), typeof(IBranchesStore), typeof(ITenantLicenseProvisioning), typeof(IBusinessProductStore), typeof(IProductUnitStore), typeof(IProductUnitConfigurationStore),
             typeof(IPurchasingStore), typeof(IPurchaseReceiptWriter), typeof(IPurchaseDirectoryReader), typeof(IInventoryDirectoryReader), typeof(IProductSearchStore),
             typeof(IOpenCashSessionWriter), typeof(IFindOpenCashSession), typeof(ISaleDraftStore), typeof(ISaleCheckoutTransaction), typeof(IInternalTicketReader),
             typeof(ICashCloseTransaction), typeof(ICashSessionReconciliationReader), typeof(IOwnerBranchOverviewReader), typeof(ISaleVoidTransaction),
@@ -208,7 +208,25 @@ public sealed partial class TenantHttpTestState
         if (type == typeof(IProductUnitStore))
         {
             if (method == "FindAsync") return Task.FromResult<IReadOnlyList<ProductUnit>>(Units.Where(value => value.BusinessProductId == (Guid)a[1]!).ToArray());
-            return Save(() => { Units.RemoveAll(value => value.BusinessProductId == (Guid)a[1]!); Units.AddRange((IReadOnlyList<ProductUnit>)a[2]!); Audits.Add((AuditLog)a[3]!); });
+            throw new InvalidOperationException("Legacy unit writes must never be called.");
+        }
+        if (type == typeof(IProductUnitConfigurationStore))
+        {
+            var tenant = (Guid)a[0]!; var product = (Guid)a[1]!;
+            var version = Versions.GetValueOrDefault(product, 1u);
+            if (method == "SaveAsync")
+            {
+                if (version != (uint)a[2]!) throw new MediPOS.Application.Errors.ApplicationErrorException(CatalogErrors.ConcurrentChange);
+                foreach (var desired in (IReadOnlyList<ProductUnit>)a[3]!)
+                {
+                    var position = Units.FindIndex(value => value.Id == desired.Id);
+                    if (position < 0) Units.Add(desired); else Units[position] = desired;
+                }
+                Audits.Add((AuditLog)a[4]!); Versions[product] = ++version;
+            }
+            var state = Products.Any(value => value.TenantId == tenant && value.Id == product)
+                ? new ProductUnitState(version, Units.Where(value => value.TenantId == tenant && value.BusinessProductId == product).ToArray()) : null;
+            return Task.FromResult(state);
         }
         if (type == typeof(ICatalogDirectoryReader))
             return method switch

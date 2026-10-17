@@ -45,7 +45,7 @@ export function EmployeeScheduleForm({ employee, write }: { employee: Employee; 
 }
 export function EmployeeDeactivation({ employee, write }: { employee: Employee; write: EmployeeWrite }) {
   const [reviewed, setReviewed] = useState(false)
-  if (employee.role === 'owner') return <section aria-label="Desactivación de Owner bloqueada"><h3>Desactivación Owner: BLOCKED</h3><p>La protección del último Owner está pendiente de despliegue y validación segura en LAB. Hasta entonces se mantiene bloqueada toda desactivación de Owner, incluida la propia; contar una página de empleados no demuestra que sea segura.</p><Button disabled>Desactivar Owner · bloqueado</Button></section>
+  if (employee.role === 'owner') return <section aria-label="Desactivación de Owner bloqueada"><h3>Desactivación Owner: BLOCKED</h3><p>El servidor incorpora la protección del último Owner, pero su validación crítica de concurrencia PostgreSQL sigue pendiente. Se mantiene bloqueada toda desactivación de Owner, incluida la propia; contar una página de empleados no demuestra que sea segura.</p><Button disabled>Desactivar Owner · bloqueado</Button></section>
   if (!employee.isActive) return <p>Esta membresía está inactiva. Se conserva su historial; no hay endpoint de reactivación de esta membresía.</p>
   return <form aria-label="Desactivar empleado" onSubmit={event => { event.preventDefault(); if (reviewed && canDeactivate(employee)) void write.deactivate(employee) }}><h3>Desactivación segura de trabajador</h3>
     <p>Empleado: {employee.displayName}. Desactivar impide nuevas operaciones autorizadas y conserva el historial. La aplicación del trabajador deberá volver a verificar su acceso; el backend lo valida en cada operación.</p>

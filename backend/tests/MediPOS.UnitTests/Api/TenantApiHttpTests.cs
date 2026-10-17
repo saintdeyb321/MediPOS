@@ -48,8 +48,14 @@ public sealed class TenantApiHttpTests
         using var product = await Json(host, "POST", tenant + "/products/local", new { internalCode = "P-001", productType = "retail", name = "Jabón", categoryId = category.RootElement.GetProperty("id").GetGuid(), brandOrLaboratory = "Marca", retailPrice = 2m }, csrf, 201);
         var productId = product.RootElement.GetProperty("id").GetGuid();
         Assert.False(product.RootElement.TryGetProperty("equivalenceKey", out _));
-        using var units = await Json(host, "PUT", tenant + $"/products/{productId:D}/units", new { units = new[] { new { name = "unidad", conversionToBase = 1m, isBaseUnit = true } } }, csrf);
-        var unitId = units.RootElement[0].GetProperty("id").GetGuid();
+        using (var legacy = await Send(host, "PUT", tenant + $"/products/{productId:D}/units", new { units = new[] { new { name = "unidad", conversionToBase = 1m, isBaseUnit = true } } }, csrf))
+            await Problem(legacy, 409, "catalog.units_legacy_write_blocked");
+        using var configuration = await Json(host, "GET", tenant + $"/products/{productId:D}/unit-configuration");
+        var unitRequest = new { expectedVersion = configuration.RootElement.GetProperty("version").GetUInt32(), units = new[] { new { id = (Guid?)null, name = "unidad", conversionToBase = 1m, isBaseUnit = true, isActive = true } } };
+        using var units = await Json(host, "PUT", tenant + $"/products/{productId:D}/unit-configuration", unitRequest, csrf);
+        var unitId = units.RootElement.GetProperty("units")[0].GetProperty("id").GetGuid();
+        using (var stale = await Send(host, "PUT", tenant + $"/products/{productId:D}/unit-configuration", unitRequest, csrf))
+            await Problem(stale, 409, "catalog.concurrent_change");
         using var supplier = await Json(host, "POST", tenant + "/suppliers", new { name = "Proveedor" }, csrf, 201);
         using var purchase = await Json(host, "POST", operational + "/purchases", new { supplierId = supplier.RootElement.GetProperty("id").GetGuid(), documentReference = "F001-123" }, csrf, 201);
         var purchaseId = purchase.RootElement.GetProperty("id").GetGuid();

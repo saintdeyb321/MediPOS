@@ -25,7 +25,7 @@ public sealed class BranchCatalogMutationTests(PostgreSqlFixture fixture)
         var product = await AddProduct(source, rows);
         var created = await Changes(source, rows, baseline.NextCursor); Assert.Contains(created.Items, item => item.BusinessProductId == product && item.Product!.Units.Count == 2);
         await source.GetRequiredService<UpdateBusinessProductPricesHandler>().HandleAsync(new(rows.Tenant.TenantId, product, 3.4567m, null, rows.Tenant.Identity.UserId), Token);
-        await source.GetRequiredService<ReplaceProductUnitsHandler>().HandleAsync(new(rows.Tenant.TenantId, product, [new("Nueva base", 1m, true)], rows.Tenant.Identity.UserId), Token);
+        await source.GetRequiredService<VersionedProductUnitsFixture>().HandleAsync(new(rows.Tenant.TenantId, product, [new("Nueva base", 1m, true)], rows.Tenant.Identity.UserId), Token);
         await source.GetRequiredService<SetBusinessProductStatusHandler>().HandleAsync(new(rows.Tenant.TenantId, product, false, rows.Tenant.Identity.UserId), Token);
         var first = await Changes(source, rows, created.NextCursor, 100); var repeat = await Changes(source, rows, created.NextCursor, 100);
         Assert.Equal(first.NextCursor, repeat.NextCursor);

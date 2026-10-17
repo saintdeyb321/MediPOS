@@ -40,6 +40,7 @@ namespace MediPOS.UnitTests.Api;
 public sealed class GoogleAuthenticationHttpTests
 {
     private static readonly string[] AuthRoutes = ["/auth/csrf", "/auth/google/callback", "/auth/login", "/auth/logout", "/auth/me", "/health", "/health/ready"];
+    private static readonly string[] SessionFields = ["expiresAtUtc", "serverTimeUtc", "userId"];
     private static readonly Action<ILogger, string, string, string, Exception?> SensitiveLogProbe = LoggerMessage.Define<string, string, string>(
         LogLevel.Warning, new EventId(999901), "Token {Token}; cookie {Cookie}; secret {Secret}");
     private static CancellationToken Token => TestContext.Current.CancellationToken;
@@ -104,7 +105,9 @@ public sealed class GoogleAuthenticationHttpTests
         Assert.Equal(HttpStatusCode.OK, me.StatusCode);
         using var json = JsonDocument.Parse(await me.Content.ReadAsStringAsync(Token));
         Assert.Equal(Guid.Parse(claim.Value), json.RootElement.GetProperty("userId").GetGuid());
-        Assert.Single(json.RootElement.EnumerateObject());
+        Assert.Equal(SessionFields, json.RootElement.EnumerateObject().Select(property => property.Name).Order(StringComparer.Ordinal));
+        Assert.Equal(serverTicket.Properties.ExpiresUtc, json.RootElement.GetProperty("expiresAtUtc").GetDateTimeOffset());
+        Assert.InRange(json.RootElement.GetProperty("serverTimeUtc").GetDateTimeOffset(), serverTicket.Properties.IssuedUtc!.Value, serverTicket.Properties.ExpiresUtc!.Value);
         Assert.Equal("no-store", me.Headers.CacheControl!.ToString());
         Assert.DoesNotContain(Provider.AccessToken, cookieHeader, StringComparison.Ordinal);
         Assert.DoesNotContain(Provider.RefreshToken, JsonSerializer.Serialize(serverTicket.Properties.Items), StringComparison.Ordinal);

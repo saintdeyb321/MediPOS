@@ -1,6 +1,6 @@
 // F1 subset of the B8.7 HTTP contracts. UUIDs select resources, never identity or permission.
 export type TenantRole = 'owner' | 'pharmacist' | 'cashier'
-export interface Session { userId: string }
+export interface Session { userId: string; expiresAtUtc?: string | null; serverTimeUtc?: string }
 export interface TenantSummary { tenantId: string; tradingName: string; role: TenantRole }
 export interface TenantPage { items: TenantSummary[]; nextAfterTenantId: string | null }
 export interface Branch {

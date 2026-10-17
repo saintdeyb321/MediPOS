@@ -35,7 +35,7 @@ internal static class ReplenishmentTestData
         var exhaustedUnit = await OwnerOverviewTestData.BaseUnitAsync(source, exhausted);
         await SaleCheckoutTestData.ReceiveAsync(source, tenant, exhausted, exhaustedUnit, [(1.25m, null)]);
         await SellAsync(source, tenant.TenantId, tenant.Identity.BranchId, exhausted, exhaustedUnit, 1.25m);
-        await source.GetRequiredService<ReplaceProductUnitsHandler>().HandleAsync(new(tenant.TenantId, original.MedicineA,
+        await source.GetRequiredService<VersionedProductUnitsFixture>().HandleAsync(new(tenant.TenantId, original.MedicineA,
             [new("Base actual", 1m, true), new("Caja actual", 10m, false)], original.Owner.UserId), Token);
         clock.Now = new(2026, 10, 7, 14, 0, 0, TimeSpan.Zero);
         await source.GetRequiredService<SetBranchProductStockThresholdHandler>().HandleAsync(new(tenant.TenantId, tenant.Identity.BranchId, noSales, 8m), Token);
@@ -61,7 +61,7 @@ internal static class ReplenishmentTestData
     {
         var product = await source.GetRequiredService<CreateLocalBusinessProductHandler>().HandleAsync(new(tenant.TenantId, sku, ProductType.Retail, sku,
             tenant.CategoryId, "Marca", null, null, 1m, null, tenant.Identity.ActorId), Token);
-        await source.GetRequiredService<ReplaceProductUnitsHandler>().HandleAsync(new(tenant.TenantId, product.Id, [new("Base", 1m, true)], tenant.Identity.ActorId), Token);
+        await source.GetRequiredService<VersionedProductUnitsFixture>().HandleAsync(new(tenant.TenantId, product.Id, [new("Base", 1m, true)], tenant.Identity.ActorId), Token);
         return product.Id;
     }
     internal sealed record Scenario(OperationalReportTestData.Scenario Original, Guid NoSalesProduct, Guid ExhaustedProduct);

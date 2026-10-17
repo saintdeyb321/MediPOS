@@ -50,6 +50,14 @@ public static partial class TenantEndpoints
             var input = await TenantHttp.Read<ProductStatusRequest>(c);
             return TenantHttp.Response(ProductResponse.From(await handler.HandleAsync(new(TenantHttp.Tenant(c), TenantHttp.Id(c, "productId"), input.IsActive, TenantHttp.Actor(c)), c.RequestAborted)));
         }).Accepts<ProductStatusRequest>("application/json").Produces<ProductResponse>().WithName("tenant.products.status");
+        tenants.MapGet("/products/{productId}/unit-configuration", async (HttpContext c, ProductUnitConfigurationHandler handler) =>
+            TenantHttp.Response(await handler.ReadAsync(TenantHttp.Tenant(c), TenantHttp.Id(c, "productId"), c.RequestAborted)))
+            .Produces<ProductUnitConfigurationDetails>().WithName("tenant.products.unit_configuration.read");
+        tenants.MapPut("/products/{productId}/unit-configuration", async (HttpContext c, ProductUnitConfigurationHandler handler) =>
+        {
+            var input = await TenantHttp.Read<UnitConfigurationRequest>(c);
+            return TenantHttp.Response(await handler.HandleAsync(new(TenantHttp.Tenant(c), TenantHttp.Id(c, "productId"), input.ExpectedVersion, input.Units, TenantHttp.Actor(c)), c.RequestAborted));
+        }).Accepts<UnitConfigurationRequest>("application/json").Produces<ProductUnitConfigurationDetails>().WithName("tenant.products.unit_configuration.write");
         tenants.MapPut("/products/{productId}/units", async (HttpContext c, ReplaceProductUnitsHandler handler) =>
         {
             var input = await TenantHttp.Read<UnitsRequest>(c);
@@ -65,6 +73,7 @@ public static partial class TenantEndpoints
     public sealed record PricesRequest([property: JsonRequired] decimal RetailPrice, decimal? WholesalePrice = null);
     public sealed record ProductStatusRequest([property: JsonRequired] bool IsActive);
     public sealed record UnitsRequest([property: JsonRequired] IReadOnlyList<ProductUnitDefinition> Units);
+    public sealed record UnitConfigurationRequest([property: JsonRequired] uint ExpectedVersion, [property: JsonRequired] IReadOnlyList<ProductUnitChange> Units);
     public sealed record MedicineResponse(IReadOnlyList<string> ActiveIngredients, string NormalizedStrength, string DosageForm, string? Route, string? SanitaryRegistration,
         IReadOnlyList<MedicineComponentInput> Components)
     {

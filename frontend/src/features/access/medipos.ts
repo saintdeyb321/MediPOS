@@ -11,7 +11,13 @@ const role = (value: unknown): value is TenantRole => value === 'owner' || value
 const date = (value: unknown) => typeof value === 'string' && /Z$|\+00:00$/.test(value) && Number.isFinite(Date.parse(value))
 const optionalDate = (value: unknown) => value === null || date(value)
 export function parseSession(data: unknown): Session {
-  const value = object(data); assert(isUuid(value.userId)); return { userId: value.userId }
+  const value = object(data); assert(isUuid(value.userId))
+  const result: Session = { userId: value.userId }
+  if (value.expiresAtUtc !== undefined || value.serverTimeUtc !== undefined) {
+    assert(optionalDate(value.expiresAtUtc) && date(value.serverTimeUtc))
+    result.expiresAtUtc = value.expiresAtUtc as string | null; result.serverTimeUtc = value.serverTimeUtc as string
+  }
+  return result
 }
 export function parseTenants(data: unknown): TenantPage {
   const value = object(data); assert(Array.isArray(value.items)); assert(value.nextAfterTenantId === null || isUuid(value.nextAfterTenantId))

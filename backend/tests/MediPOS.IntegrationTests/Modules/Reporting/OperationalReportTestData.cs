@@ -40,9 +40,9 @@ internal static class OperationalReportTestData
         var medicineA = await ProductAsync(source, tenant, "MED-A", ProductType.Medicine, 2m);
         var medicineB = await ProductAsync(source, tenant, "MED-B", ProductType.Medicine, 5m);
         var empty = await ProductAsync(source, tenant, "EMPTY", ProductType.Retail, 1m);
-        await source.GetRequiredService<ReplaceProductUnitsHandler>().HandleAsync(new(tenant.TenantId, medicineA,
+        await source.GetRequiredService<VersionedProductUnitsFixture>().HandleAsync(new(tenant.TenantId, medicineA,
             [new("Base", 1m, true), new("Caja de 3", 3m, false)], owner.UserId), Token);
-        await source.GetRequiredService<ReplaceProductUnitsHandler>().HandleAsync(new(tenant.TenantId, medicineB,
+        await source.GetRequiredService<VersionedProductUnitsFixture>().HandleAsync(new(tenant.TenantId, medicineB,
             [new("Base", 1m, true), new("Caja de 10", 10m, false)], owner.UserId), Token);
         var context = source.GetRequiredService<MediPosDbContext>();
         var unitsA = await context.ProductUnits.Where(unit => unit.BusinessProductId == medicineA).ToArrayAsync(Token);

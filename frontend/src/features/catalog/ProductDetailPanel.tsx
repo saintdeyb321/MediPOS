@@ -1,11 +1,14 @@
 import { useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { Button } from '../../shared/ui/Button'
 import { TextField } from '../../shared/ui/TextField'
 import { Notice } from '../../shared/ui/Notice'
-import { useRuntime, useWorkspace } from '../access'
+import { ApiErrorState, useRuntime, useWorkspace } from '../access'
+import { scopedKey } from '../../shared/api/contracts'
+import { ApiError } from '../../shared/api/http'
 import { decimalLabel, multiply } from '../../shared/api/decimal'
 import { catalogApi } from './api'
-import type { ProductDetail } from './api'
+import type { ProductDetail, UnitConfiguration } from './api'
 import { prices, unitInputs } from './forms'
 import type { UnitFields } from './forms'
 import { MedicineView, PriceInputs } from './ProductFields'
@@ -24,7 +27,7 @@ export function ProductDetailPanel({ detail, write }: { detail: ProductDetail; w
     <p>Este detalle no devuelve existencias ni disponibilidad física por sucursal.</p>
     <EditPrices key={`${p.id}/${p.retailPrice.literal}/${p.wholesalePrice?.literal}`} detail={detail} write={write} />
     <EditStatus key={`${p.id}/${p.isActive}`} detail={detail} write={write} />
-    <UnitEditor key={`${p.id}/${detail.units.map(row => row.id).join('/')}`} detail={detail} write={write} />
+    <UnitEditor key={p.id} detail={detail} write={write} />
   </section>
 }
 function EditPrices({ detail, write }: { detail: ProductDetail; write: CatalogWrite }) {
@@ -48,22 +51,34 @@ function EditStatus({ detail, write }: { detail: ProductDetail; write: CatalogWr
   </form>
 }
 function UnitEditor({ detail, write }: { detail: ProductDetail; write: CatalogWrite }) {
+  const w = useWorkspace(); const { http } = useRuntime()
+  const configuration = useQuery({ queryKey: scopedKey(w, 'unit-configuration', w.session.userId, w.access.membershipId, detail.product.id),
+    queryFn: ({ signal }) => { if (!http) throw new ApiError(0, 'client.https_required'); return catalogApi(http).unitConfiguration(w, detail.product.id, signal) },
+    enabled: Boolean(http), retry: false, staleTime: 0, refetchOnWindowFocus: false })
+  return <section aria-label="Configuración versionada de presentaciones"><h3>Editar presentaciones</h3>
+    <p>Las unidades existentes conservan su identidad y factor. Para otro factor agrega una presentación; para retirarla de nuevas operaciones desactívala.</p>
+    {configuration.isPending && <p role="status">Consultando configuración vigente…</p>}
+    {configuration.isError && <ApiErrorState error={configuration.error} title="No pudimos consultar la configuración de presentaciones" />}
+    {configuration.data && !configuration.isError && <UnitConfigurationForm key={configuration.data.version} productId={detail.product.id} configuration={configuration.data} write={write} />}
+    <Button variant="quiet" disabled={configuration.isFetching || write.busy} onClick={() => void configuration.refetch()}>Recargar presentaciones del servidor</Button>
+  </section>
+}
+function UnitConfigurationForm({ productId, configuration, write }: { productId: string; configuration: UnitConfiguration; write: CatalogWrite }) {
   const w = useWorkspace(); const { http } = useRuntime(); const [reviewed, setReviewed] = useState(false)
-  const [rows, setRows] = useState<UnitFields[]>([{ name: '', conversion: '1', base: true, active: true }])
+  const [rows, setRows] = useState<UnitFields[]>(() => configuration.units.length ? configuration.units.map(unit => ({ id: unit.id, name: unit.name, conversion: decimalLabel(unit.conversionToBase), base: unit.isBaseUnit, active: unit.isActive })) : [{ name: '', conversion: '1', base: true, active: true }])
   const input = unitInputs(rows)
   function change(index: number, patch: Partial<UnitFields>) { setReviewed(false); setRows(rows.map((row, position) => position === index ? { ...row, ...patch } : patch.base ? { ...row, base: false } : row)) }
-  if (detail.units.length) return <Notice tone="warning">Reconfiguración bloqueada: el endpoint reemplaza el conjunto completo y cambia sus identificadores. Podría invalidar ventas/compras pendientes que usan esas presentaciones. Aquí se conservan íntegramente; hace falta un contrato backend seguro para editar, desactivar o retirar unidades existentes.</Notice>
-  return <form aria-label="Configurar presentaciones iniciales" onSubmit={event => { event.preventDefault(); if (http && input && reviewed) void write.run('units', detail.product.id, async signal => { await catalogApi(http).initializeUnits(w, detail.product.id, input, signal); return detail.product.id }) }}>
-    <h3>Configuración inicial de presentaciones</h3><Notice tone="warning">Guardado bloqueado: el PUT existente borra y recrea el conjunto. Ni siquiera consultar primero un conjunto vacío garantiza que otra sesión no lo configure antes. Se necesita una precondición atómica y una estrategia de identificadores estables en el backend. Puedes revisar la definición aquí sin enviar cambios.</Notice>
+  return <form aria-label="Guardar configuración de presentaciones" onSubmit={event => { event.preventDefault(); if (http && input && reviewed) void write.run('units', productId, async signal => { await catalogApi(http).configureUnits(w, productId, configuration.version, input.map((unit, index) => ({ ...unit, id: rows[index]?.id ?? null })), signal); return productId }) }}>
+    <Notice tone="info">Se guarda el conjunto completo con la versión consultada. Un conflicto requiere recargar y revisar; nunca se reenvía automáticamente.</Notice>
     <fieldset disabled={write.locked}>{rows.map((row, index) => <div key={index}>
       <TextField label={`Nombre de presentación ${index + 1}`} value={row.name} required maxLength={128} onChange={event => change(index, { name: event.target.value })} />
-      <TextField label={`Conversión a base ${index + 1}`} value={row.conversion} inputMode="decimal" required maxLength={40} disabled={row.base} onChange={event => change(index, { conversion: event.target.value })} />
-      <label><input type="radio" name="base-unit" checked={row.base} onChange={() => change(index, { base: true, conversion: '1' })} /> Unidad base {index + 1}</label>
+      <TextField label={`Conversión a base ${index + 1}`} value={row.conversion} inputMode="decimal" required maxLength={40} disabled={Boolean(row.id) || row.base} onChange={event => change(index, { conversion: event.target.value })} />
+      <label><input type="radio" name="base-unit" checked={row.base} disabled={configuration.units.length > 0} onChange={() => change(index, { base: true, conversion: '1' })} /> Unidad base {index + 1}</label>
       <label><input type="checkbox" checked={row.active} onChange={event => change(index, { active: event.target.checked })} /> Presentación activa {index + 1}</label>
-      <Button variant="quiet" disabled={row.base} onClick={() => { setReviewed(false); setRows(rows.filter((_, position) => position !== index)) }}>Quitar presentación {index + 1}</Button>
-    </div>)}<Button variant="secondary" onClick={() => { setReviewed(false); setRows([...rows, { name: '', conversion: '', base: false, active: true }]) }}>Agregar presentación</Button></fieldset>
+      <Button variant="quiet" disabled={Boolean(row.id) || row.base} onClick={() => { setReviewed(false); setRows(rows.filter((_, position) => position !== index)) }}>Quitar presentación nueva {index + 1}</Button>
+    </div>)}<Button variant="secondary" disabled={rows.length >= 100} onClick={() => { setReviewed(false); setRows([...rows, { name: '', conversion: '', base: false, active: true }]) }}>Agregar presentación</Button></fieldset>
     {!input && <p role="status">Revisa nombres únicos, exactamente una base con factor uno y conversiones positivas de hasta doce decimales.</p>}
-    <label><input type="checkbox" checked={reviewed} disabled={write.locked} onChange={event => setReviewed(event.target.checked)} /> Revisé el conjunto completo; no hay otra configuración u operación en curso con este producto.</label>
-    <Button type="submit" disabled>Guardar presentaciones iniciales (bloqueado por contrato)</Button>
+    <label><input type="checkbox" checked={reviewed} disabled={write.locked} onChange={event => setReviewed(event.target.checked)} /> Revisé nombres, actividad y el conjunto completo; los factores existentes se conservan.</label>
+    <Button type="submit" disabled={write.locked || !input || !reviewed}>Guardar presentaciones</Button>
   </form>
 }

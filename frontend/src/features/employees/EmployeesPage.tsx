@@ -13,6 +13,7 @@ import { employeesApi, sameId } from './api'
 import { windowLabel } from './schedule'
 import { useEmployeeWrite } from './useEmployeeWrite'
 import { EmployeeBranchesForm, EmployeeDeactivation, EmployeeScheduleForm } from './EmployeeForms'
+import { EmployeeInvitationsPanel } from './EmployeeInvitationsPanel'
 import '../../shared/styles/operations.css'
 
 export function EmployeesPage() {
@@ -35,9 +36,7 @@ function EmployeesWorkspace() {
   function page(value: number) { setReviewed(false); setParams(current => { const next = new URLSearchParams(current); next.set('employeePage', String(value)); if (!write.pending) next.delete('employee'); return next }, { replace: true }) }
   return <div className="operations"><PageHeader title="Empleados" description={`${w.tenantName} · administración compartida entre sucursales. Solo Owner; cada cambio se vuelve a autorizar en el servidor.`} />
     {!http && <Notice tone="warning">Esta pantalla requiere conexión HTTPS real.</Notice>}
-    <Panel><div className="operation-body"><h2>Alta de empleado: BLOCKED por asociación de identidad</h2><p>La API requiere un usuario global ya registrado mediante Google. No existe un selector autorizado de usuarios globales ni búsqueda por correo. No se aceptan correos ni UUID escritos manualmente para otorgar acceso.</p>
-      <p>El rol se asigna al crear la membresía: Owner, Pharmacist o Cashier; el backend admite como máximo dos Owners activos. No hay endpoint para cambiar el rol de una membresía existente ni para invitar usuarios.</p><Button disabled>Nuevo empleado · identidad pendiente</Button>
-    </div></Panel>
+    <EmployeeInvitationsPanel />
     {write.error != null && <ApiErrorState error={write.error} title="No pudimos completar el cambio de acceso" />}
     {write.notice && <p role="status">{write.notice}</p>}
     {write.pending && <Panel><div className="operation-body"><h2>Cambio pendiente de conciliación</h2><p>No repitas el POST/PUT. Consulta el empleado original en su página. Una lectura temprana, incluso coincidente, no demuestra que una asignación u horario terminó ni que hubo rollback.</p>

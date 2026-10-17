@@ -73,11 +73,6 @@ public sealed class ReplaceProductUnitsHandler(
             await scope.CompleteAsync(cancellationToken).ConfigureAwait(false);
             return previous.Select(ProductUnitDetails.From).ToArray();
         }
-        var audit = AuditTrail.Record(command.TenantId, command.ActorId, AuditAction.BusinessProductUnitsChanged,
-            product.Id, now, before, after);
-        await store.ReplaceAsync(command.TenantId, product.Id, units, audit, cancellationToken).ConfigureAwait(false);
-        await authorization.RequireAsync(command.TenantId, null, command.ActorId, TenantOperation.Administration, cancellationToken).ConfigureAwait(false);
-        await scope.CompleteAsync(cancellationToken).ConfigureAwait(false);
-        return units.Select(ProductUnitDetails.From).ToArray();
+        throw new ApplicationErrorException(CatalogErrors.LegacyUnitsWriteBlocked);
     }
 }

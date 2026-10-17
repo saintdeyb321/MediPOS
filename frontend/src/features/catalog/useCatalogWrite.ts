@@ -31,6 +31,11 @@ export function useCatalogWrite(select: (id: string) => void) {
     if (!mounted.current) return
     setObserved(result); select(id)
     client.setQueryData(scopedKey(w, 'catalog-detail', w.session.userId, w.access.membershipId, id), result)
+    if (latest.current.get('catalogPending') === 'units') {
+      const configuration = await catalogApi(http).unitConfiguration(w, id, signal)
+      if (!mounted.current) return
+      client.setQueryData(scopedKey(w, 'unit-configuration', w.session.userId, w.access.membershipId, id), configuration)
+    }
     for (const resource of ['catalog-products', 'product-search']) void client.invalidateQueries({ queryKey: scopedKey(w, resource) })
     return result
   }

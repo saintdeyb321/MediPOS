@@ -40,7 +40,7 @@ internal static class TenantIsolationTestData
         var product = await provider.GetRequiredService<CreateLocalBusinessProductHandler>().HandleAsync(
             new(setup.TenantId, "R1", ProductType.Retail, "Local retail", category.Id, "Brand", null, null, 0m, null, setup.ActorId),
             TestContext.Current.CancellationToken);
-        await provider.GetRequiredService<ReplaceProductUnitsHandler>().HandleAsync(
+        await provider.GetRequiredService<VersionedProductUnitsFixture>().HandleAsync(
             new(setup.TenantId, product.Id, [new("Base", 1m, true), new("Blíster", 10m, false)], setup.ActorId), TestContext.Current.CancellationToken);
         return new TenantRows(setup, legalId, spare.Id, windowId, category.Id, product.Id);
     }

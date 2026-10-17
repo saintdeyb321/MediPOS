@@ -13,39 +13,27 @@ public sealed class ReplaceProductUnitsTests
     private static readonly DateTimeOffset Now = new(2026, 10, 6, 14, 0, 0, TimeSpan.Zero);
 
     [Fact]
-    public async Task CompleteReplacementHasDeterministicBeforeAfterAndNoOpKeepsExistingIds()
+    public async Task LegacyNoOpKeepsExistingIdsWithoutWriteOrAudit()
     {
         var setup = new Setup();
-        var result = await setup.Handler.HandleAsync(setup.Command(), TestContext.Current.CancellationToken);
-        var audit = Assert.Single(setup.Units.Audits);
-        Assert.Equal(AuditAction.BusinessProductUnitsChanged, audit.Action);
-        Assert.Equal(AuditEntityType.BusinessProduct, audit.EntityType);
-        Assert.Equal(setup.Product.Id, audit.EntityId);
-        Assert.Equal(setup.Product.TenantId, audit.TenantId);
-        Assert.Equal(setup.Actor, audit.ActorId);
-        using var before = JsonDocument.Parse(audit.BeforeJson!);
-        using var after = JsonDocument.Parse(audit.AfterJson!);
-        Assert.Equal(0, before.RootElement.GetProperty("units").GetArrayLength());
-        Assert.Equal(2, after.RootElement.GetProperty("units").GetArrayLength());
-        Assert.All(after.RootElement.GetProperty("units").EnumerateArray(), value =>
-        {
-            Assert.False(value.TryGetProperty("id", out _));
-            Assert.False(value.TryGetProperty("tenantId", out _));
-        });
-        Assert.True(setup.Licensing.Last!.Committed);
-        Assert.True(setup.Licensing.Last.Disposed);
+        setup.Units.Rows.AddRange(ProductUnitConfiguration.Create(setup.Product.TenantId, setup.Product, setup.Command().Units));
+        var result = setup.Units.Rows.ToArray();
         var noop = await setup.Handler.HandleAsync(setup.Command() with
         {
             Units = [new("Blíster", 10.000000000000m, false), new(" Base ", 1.000000000000m, true)],
         }, TestContext.Current.CancellationToken);
         Assert.Equal(result.Select(value => value.Id).Order(), noop.Select(value => value.Id).Order());
-        Assert.Single(setup.Units.Audits);
-        Assert.Equal(1, setup.Units.Replacements);
-        await setup.Handler.HandleAsync(setup.Command() with
+        Assert.Empty(setup.Units.Audits);
+        Assert.Equal(0, setup.Units.Replacements);
+        Assert.True(setup.Licensing.Last!.Committed);
+        var error = await Assert.ThrowsAsync<ApplicationErrorException>(() => setup.Handler.HandleAsync(setup.Command() with
         {
             Units = [new("Base", 1m, true), new("Blíster", 10m, false, false)],
-        }, TestContext.Current.CancellationToken);
-        Assert.Equal(2, setup.Units.Audits.Count);
+        }, TestContext.Current.CancellationToken));
+        Assert.Equal(CatalogErrors.LegacyUnitsWriteBlocked, error.Error);
+        Assert.Empty(setup.Units.Audits);
+        Assert.Equal(result.Select(value => value.Id), setup.Units.Rows.Select(value => value.Id));
+        Assert.False(setup.Licensing.Last.Committed);
     }
 
     [Theory]
@@ -113,11 +101,12 @@ public sealed class ReplaceProductUnitsTests
     }
 
     [Fact]
-    public async Task FailedWriteIsNotCommittedOrRecordedAsSuccessfulAudit()
+    public async Task LegacyInitializationIsBlockedBeforeAnyPersistenceWrite()
     {
         var setup = new Setup();
         setup.Units.Fail = true;
-        await Assert.ThrowsAsync<InvalidOperationException>(() => setup.Handler.HandleAsync(setup.Command(), TestContext.Current.CancellationToken));
+        var error = await Assert.ThrowsAsync<ApplicationErrorException>(() => setup.Handler.HandleAsync(setup.Command(), TestContext.Current.CancellationToken));
+        Assert.Equal(CatalogErrors.LegacyUnitsWriteBlocked, error.Error);
         Assert.Empty(setup.Units.Audits);
         Assert.Empty(setup.Units.Rows);
         Assert.False(setup.Licensing.Last!.Committed);

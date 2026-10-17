@@ -39,7 +39,7 @@ internal static class SaleCheckoutTestData
                 new(tenant.TenantId, "CHECKOUT-MED", ProductType.Medicine, "Medicamento", tenant.CategoryId, "Lab", null,
                     new MedicineInput([new("Paracetamol", "500 mg")], "Tableta", "Oral"), 2.125m, 1.75m, tenant.Identity.ActorId), TestContext.Current.CancellationToken);
             productId = product.Id;
-            await source.GetRequiredService<ReplaceProductUnitsHandler>().HandleAsync(
+            await source.GetRequiredService<VersionedProductUnitsFixture>().HandleAsync(
                 new(tenant.TenantId, productId, [new("Base", 1m, true), new("Caja", 10m, false)], tenant.Identity.ActorId), TestContext.Current.CancellationToken);
         }
         var context = source.GetRequiredService<MediPosDbContext>();

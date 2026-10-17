@@ -1,6 +1,7 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router'
 import { useAuthState, useRuntime } from '../access'
+import { offlineStorage } from '../offline'
 
 export function useLogout() {
   const { service } = useRuntime()
@@ -8,7 +9,11 @@ export function useLogout() {
   const navigate = useNavigate()
   const auth = useAuthState()
   return useMutation({
-    mutationFn: () => service.logout(),
+    mutationFn: () => {
+      // The deny marker is synchronous. A blocked/failed IDB cleanup must never delay server revocation.
+      void offlineStorage.lock().catch(() => undefined)
+      return service.logout()
+    },
     onSuccess: async () => {
       await client.cancelQueries()
       client.clear()

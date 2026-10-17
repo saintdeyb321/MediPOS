@@ -36,7 +36,7 @@ public sealed partial class TenantCommercialContractTests
         var state = SeedBranch(); await using var host = await Host(state);
         var endpoints = host.App.Services.GetServices<EndpointDataSource>().SelectMany(source => source.Endpoints).OfType<RouteEndpoint>()
             .Where(endpoint => endpoint.RoutePattern.RawText!.StartsWith("/api", StringComparison.Ordinal)).ToArray();
-        Assert.Equal(86, endpoints.Length);
+        Assert.Equal(95, endpoints.Length);
         foreach (var endpoint in endpoints)
         {
             Assert.NotNull(endpoint.Metadata.GetMetadata<IAuthorizeData>());
@@ -131,7 +131,11 @@ public sealed partial class TenantCommercialContractTests
     public async Task OrdinaryEmployeesStayOwnerAdministrationEvenForOwnerWhoIsSuperadmin()
     {
         var state = SeedBranch(); await using var host = await Host(state, platform: true); await PlatformLicenseHttpTests.Login(host); var csrf = await host.Csrf(); var path = $"/api/tenants/{state.TenantId:D}/employees";
-        using var employee = await Json(host, "POST", path, new { userId = Guid.NewGuid(), role = "pharmacist" }, csrf, 201); var id = employee.RootElement.GetProperty("id").GetGuid();
+        using var arbitrary = await Send(host, "POST", path, new { userId = Guid.NewGuid(), role = "pharmacist" }, csrf);
+        await Problem(arbitrary, 409, "membership.invitation_required"); Assert.Empty(state.Employees);
+        // Existing memberships remain manageable; the obsolete arbitrary-user creation path grants nothing.
+        var member = Membership.Create(state.TenantId, Guid.NewGuid(), TenantRole.Pharmacist, DateTimeOffset.UtcNow);
+        state.Employees.Add(member); var id = member.Id;
         using (var branches = await Send(host, "PUT", path + $"/{id:D}/branches", new { branchIds = new[] { state.Branches[0].Id } }, csrf)) Assert.Equal(HttpStatusCode.NoContent, branches.StatusCode);
         using (var schedule = await Send(host, "PUT", path + $"/{id:D}/schedule", new { windows = new[] { new { dayOfWeek = "monday", startTime = "09:00:00", endTime = "18:00:00" } } }, csrf)) Assert.Equal(HttpStatusCode.NoContent, schedule.StatusCode);
         using var list = await Json(host, "GET", path); Assert.Equal("pharmacist", list.RootElement[0].GetProperty("role").GetString());

@@ -10,6 +10,9 @@ public static partial class TenantEndpoints
 {
     private static void MapSync(RouteGroupBuilder tenants)
     {
+        tenants.MapGet("/branches/{branchId}/sync/devices", async (HttpContext c, GetSyncDevicesHandler handler) =>
+            TenantHttp.Response(await handler.HandleAsync(TenantHttp.Tenant(c), TenantHttp.Branch(c), TenantHttp.Offset(c), TenantHttp.Limit(c), c.RequestAborted)))
+            .Produces<IReadOnlyList<SyncDeviceDetails>>().WithName("tenant.sync.devices").WithQuery<TenantOpenApi.Page>();
         tenants.MapPost("/branches/{branchId}/sync/devices", async (HttpContext c, RegisterSyncDeviceHandler handler) =>
         {
             var input = await TenantHttp.Read<RegisterDeviceRequest>(c);

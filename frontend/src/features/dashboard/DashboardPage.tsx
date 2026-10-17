@@ -41,8 +41,7 @@ export function DashboardPage({ shortcuts }: { shortcuts: DashboardShortcut[] })
         </div>
       </Panel>
       <Panel className="activity-panel">
-        <div><h2>Consultas operativas</h2><p>Consulta Caja e Inventario desde los accesos disponibles. Owner puede revisar Reportes para ver los indicadores del servidor. Este inicio no consulta ni calcula métricas.</p><p>Offline Sync: no iniciado; requiere autorización de su bloque.</p></div>
-        <Badge>Sin métricas en este inicio</Badge>
+        <div><h2>Consultas operativas</h2><p>Consulta Caja e Inventario desde los accesos disponibles. Los indicadores Owner se consultan en el servidor con los filtros aplicados. La contingencia se prepara explícitamente con acceso y caja vigentes.</p></div>
       </Panel>
     </>
   )
