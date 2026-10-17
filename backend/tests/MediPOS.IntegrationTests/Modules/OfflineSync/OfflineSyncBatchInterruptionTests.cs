@@ -1,5 +1,6 @@
 using System.Data.Common;
 using MediPOS.Application.Errors;
+using MediPOS.Application.Modules.IdentityAccess.Authentication;
 using MediPOS.Application.Modules.OfflineSync;
 using MediPOS.Infrastructure.Persistence;
 using MediPOS.IntegrationTests.Modules.Cash;
@@ -67,7 +68,7 @@ public sealed class OfflineSyncBatchInterruptionTests(PostgreSqlFixture fixture)
         var pair = await TenantIsolationTestData.CreatePairAsync(fixture); var observer = new CommitObserver();
         await using var services = CreateServices(fixture, observer); await using var scope = services.CreateAsyncScope();
         var device = await Register(scope.ServiceProvider, pair.A); var events = Enumerable.Range(0, 4).Select(_ => Envelope(device)).ToArray();
-        observer.Armed = true; observer.AfterCommit = count => { if (count == 2) scope.ServiceProvider.GetRequiredService<IdentityAccessTestSetup.TestServerSession>().UserId = null; return Task.CompletedTask; };
+        observer.Armed = true; observer.AfterCommit = count => { if (count == 2) ((IdentityAccessTestSetup.TestServerSession)scope.ServiceProvider.GetRequiredService<IAuthenticatedMediPosUser>()).UserId = null; return Task.CompletedTask; };
         Assert.Equal("access.unauthenticated", (await Assert.ThrowsAsync<ApplicationErrorException>(() => Run(scope.ServiceProvider, pair.A, device, events))).Error.Code);
         Assert.Equal("access.unauthenticated", (await Assert.ThrowsAsync<ApplicationErrorException>(() => scope.ServiceProvider.GetRequiredService<ProcessOfflineSyncBatchHandler>()
             .HandleAsync(new(pair.A.TenantId, device, 1, events), Token))).Error.Code);

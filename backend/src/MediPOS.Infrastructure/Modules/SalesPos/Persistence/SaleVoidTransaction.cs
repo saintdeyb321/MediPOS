@@ -46,7 +46,7 @@ internal sealed class SaleVoidTransaction(MediPosDbContext context) : ISaleVoidT
             await context.Entry(sale).Collection(value => value.Lines).LoadAsync(cancellationToken).ConfigureAwait(false);
             return new VoidScope(context, transaction, cash, sale, context.Entry(sale).Property<uint>("Version").CurrentValue);
         }
-        catch (PostgresException error) when (IsLockConflict(error))
+        catch (Exception error) when (IsLockConflict(error))
         {
             await transaction.DisposeAsync().ConfigureAwait(false);
             context.ChangeTracker.Clear();
@@ -60,7 +60,13 @@ internal sealed class SaleVoidTransaction(MediPosDbContext context) : ISaleVoidT
         }
     }
 
-    private static bool IsLockConflict(PostgresException error) => error.SqlState is PostgresErrorCodes.DeadlockDetected or PostgresErrorCodes.SerializationFailure or PostgresErrorCodes.LockNotAvailable;
+    private static bool IsLockConflict(Exception error)
+    {
+        // Npgsql's non-retrying EF strategy wraps transient server errors in InvalidOperationException.
+        // Saving can additionally wrap the server error in DbUpdateException; never retry this transaction.
+        while ((error is InvalidOperationException or DbUpdateException) && error.InnerException is { } inner) error = inner;
+        return error is PostgresException { SqlState: PostgresErrorCodes.DeadlockDetected or PostgresErrorCodes.SerializationFailure or PostgresErrorCodes.LockNotAvailable };
+    }
 
     private sealed class VoidScope(MediPosDbContext context, IDbContextTransaction transaction, CashSession cash, Sale sale, uint version) : ISaleVoidScope
     {
@@ -140,7 +146,7 @@ internal sealed class SaleVoidTransaction(MediPosDbContext context) : ISaleVoidT
                         """).AsNoTracking().SingleOrDefaultAsync(cancellationToken).ConfigureAwait(false)
                         ?? throw new ApplicationErrorException(SalesPosErrors.CorruptedHistory);
                 }
-                catch (PostgresException error) when (IsLockConflict(error)) { throw new ApplicationErrorException(SalesPosErrors.ConcurrentEdit); }
+                catch (Exception error) when (IsLockConflict(error)) { throw new ApplicationErrorException(SalesPosErrors.ConcurrentEdit); }
                 foreach (var tracked in context.ChangeTracker.Entries<InventoryLot>().Where(entry => entry.Entity.Id == lot.Id).ToArray()) tracked.State = EntityState.Detached;
                 context.InventoryLots.Attach(lot);
                 _lots.Add(lot.Id, lot);
@@ -178,7 +184,7 @@ internal sealed class SaleVoidTransaction(MediPosDbContext context) : ISaleVoidT
             catch (DbUpdateException error) when (error.InnerException is PostgresException { SqlState: PostgresErrorCodes.UniqueViolation } unique &&
                 unique.ConstraintName is SalePaymentReversalConfiguration.OriginalPaymentIndex or StockMovementConfiguration.ReversalIndex or CommissionEntryConfiguration.ReversedOriginalIndex)
             { throw new ApplicationErrorException(SalesPosErrors.ReversalAlreadyExists); }
-            catch (Exception error) when ((error is PostgresException postgres ? postgres : error.InnerException as PostgresException) is { } conflict && IsLockConflict(conflict))
+            catch (Exception error) when (IsLockConflict(error))
             { throw new ApplicationErrorException(SalesPosErrors.ConcurrentEdit); }
         }
 

@@ -1,5 +1,3 @@
-using MediPOS.Application.Tenancy;
-using MediPOS.Infrastructure.Persistence;
 using MediPOS.IntegrationTests.Modules.IdentityAccess;
 using MediPOS.IntegrationTests.Modules.TenancyLicensing;
 using Microsoft.EntityFrameworkCore;
@@ -18,15 +16,7 @@ public sealed class InventoryMigrationTests(PostgreSqlFixture fixture)
     [InlineData(true)]
     public async Task UpgradeBackfillsExistingReceiptsExactlyAndFailsClosedForNegativeLegacyLedger(bool corruptLegacy)
     {
-        var schema = "medipos_inventory_upgrade_" + Guid.NewGuid().ToString("N");
-        await using var administrative = fixture.CreateConstraintContext();
-        var adminString = administrative.Database.GetConnectionString()!;
-        await using var admin = new NpgsqlConnection(adminString);
-        await admin.OpenAsync(TestContext.Current.CancellationToken);
-        await using var command = admin.CreateCommand();
-        command.CommandText = $"CREATE SCHEMA \"{schema}\"";
-        await command.ExecuteNonQueryAsync(TestContext.Current.CancellationToken);
-        try
+        await using (var database = await MigrationTestDatabase.CreateAsync(fixture, TestContext.Current.CancellationToken))
         {
             var tenant = Guid.NewGuid();
             var branch = Guid.NewGuid();
@@ -43,9 +33,7 @@ public sealed class InventoryMigrationTests(PostgreSqlFixture fixture)
             var now = IdentityAccessTestSetup.Now;
             var beforeJson = """{"status":"draft"}""";
             var afterJson = """{"status":"confirmed","lineCount":1}""";
-            var connectionString = new NpgsqlConnectionStringBuilder(adminString) { SearchPath = schema }.ConnectionString;
-            await using var upgrade = new MediPosDbContext(new DbContextOptionsBuilder<MediPosDbContext>().UseNpgsql(connectionString,
-                provider => provider.MigrationsHistoryTable("__EFMigrationsHistory", schema)).Options, new TenantDataContext());
+            await using var upgrade = database.CreateContext();
             var migrator = upgrade.GetService<IMigrator>();
             await migrator.MigrateAsync("20261006173701_AddPurchasingAndReceiptFoundation", TestContext.Current.CancellationToken);
             // Seed only the real B1.3 schema with administrator privileges; no current EF model queries yet.
@@ -105,12 +93,6 @@ public sealed class InventoryMigrationTests(PostgreSqlFixture fixture)
                 Assert.Equal(supplier, (await upgrade.Purchases.SingleAsync(TestContext.Current.CancellationToken)).SupplierId);
                 Assert.Equal(audit, (await upgrade.AuditLogs.SingleAsync(TestContext.Current.CancellationToken)).Id);
             }
-        }
-        finally
-        {
-            // Only this generated schema in the isolated integration database is removed.
-            command.CommandText = $"DROP SCHEMA \"{schema}\" CASCADE";
-            await command.ExecuteNonQueryAsync(TestContext.Current.CancellationToken);
         }
     }
 }

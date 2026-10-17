@@ -3,6 +3,7 @@ using MediPOS.Domain.Modules.AuditSupport;
 using MediPOS.Domain.Modules.Commissions;
 using MediPOS.Domain.Modules.Inventory;
 using MediPOS.Domain.Modules.SalesPos;
+using MediPOS.Infrastructure.Persistence;
 using MediPOS.IntegrationTests.Modules.Cash;
 using MediPOS.IntegrationTests.Modules.Reporting;
 using MediPOS.IntegrationTests.Modules.SalesPos;
@@ -41,6 +42,8 @@ public sealed class CommissionAtomicityTests(PostgreSqlFixture fixture)
         try
         {
             await Assert.ThrowsAsync<DbUpdateException>(() => CommissionTestData.ConfirmAsync(source, rows));
+            Assert.Null(source.GetRequiredService<MediPosDbContext>().Database.CurrentTransaction);
+            Assert.Empty(source.GetRequiredService<MediPosDbContext>().ChangeTracker.Entries());
             await using var verify = fixture.CreateContext(tenant.TenantId);
             var sale = await verify.Sales.AsNoTracking().SingleAsync(sale => sale.Id == saleId, CommissionTestData.Token);
             Assert.Equal(SaleStatus.Draft, sale.Status);
@@ -83,6 +86,8 @@ public sealed class CommissionAtomicityTests(PostgreSqlFixture fixture)
         try
         {
             await Assert.ThrowsAsync<DbUpdateException>(() => CommissionTestData.VoidAsync(source, rows, confirmed));
+            Assert.Null(source.GetRequiredService<MediPosDbContext>().Database.CurrentTransaction);
+            Assert.Empty(source.GetRequiredService<MediPosDbContext>().ChangeTracker.Entries());
             await using var verify = fixture.CreateContext(tenant.TenantId);
             var sale = await verify.Sales.AsNoTracking().SingleAsync(sale => sale.Id == confirmed.SaleId, CommissionTestData.Token);
             Assert.Equal(SaleStatus.Confirmed, sale.Status);

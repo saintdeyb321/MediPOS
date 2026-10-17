@@ -1,11 +1,8 @@
-using MediPOS.Application.Tenancy;
-using MediPOS.Infrastructure.Persistence;
 using MediPOS.IntegrationTests.Modules.IdentityAccess;
 using MediPOS.IntegrationTests.Modules.TenancyLicensing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Migrations;
-using Npgsql;
 
 namespace MediPOS.IntegrationTests.Modules.Catalog;
 
@@ -18,21 +15,10 @@ public sealed class ProductSearchMigrationTests(PostgreSqlFixture fixture)
     [Fact]
     public async Task UpgradeBackfillsAllTenantsAndLegacyIngredientsWithoutChangingNamesPricesOrPharmaceuticalData()
     {
-        // Administrator is used solely for migration/backfill in a generated isolated schema, never to prove RLS.
-        var schema = "medipos_search_upgrade_" + Guid.NewGuid().ToString("N");
-        await using var adminContext = fixture.CreateConstraintContext();
-        var adminString = adminContext.Database.GetConnectionString()!;
-        await using var admin = new NpgsqlConnection(adminString);
-        await admin.OpenAsync(TestContext.Current.CancellationToken);
-        await using var command = admin.CreateCommand();
-        command.CommandText = $"CREATE SCHEMA \"{schema}\"";
-        await command.ExecuteNonQueryAsync(TestContext.Current.CancellationToken);
-        try
+        // Separate disposable databases also isolate public-qualified migration objects.
+        await using (var database = await MigrationTestDatabase.CreateAsync(fixture, TestContext.Current.CancellationToken))
         {
-            var connectionString = new NpgsqlConnectionStringBuilder(adminString) { SearchPath = schema }.ConnectionString;
-            var options = new DbContextOptionsBuilder<MediPosDbContext>().UseNpgsql(connectionString,
-                provider => provider.MigrationsHistoryTable("__EFMigrationsHistory", schema)).Options;
-            await using var upgrade = new MediPosDbContext(options, new TenantDataContext());
+            await using var upgrade = database.CreateContext();
             var migrator = upgrade.GetService<IMigrator>();
             await migrator.MigrateAsync("20261006180823_AddInventoryBalancesAdjustmentsAndFefo", TestContext.Current.CancellationToken);
             var first = Guid.NewGuid();
@@ -89,12 +75,6 @@ public sealed class ProductSearchMigrationTests(PostgreSqlFixture fixture)
             Assert.Equal("bar", fields.Barcode);
             Assert.Equal("lab unico", fields.Brand);
             Assert.Equal("acido folico", fields.Ingredients);
-        }
-        finally
-        {
-            // Only this test's generated schema in the isolated integration database is removed.
-            command.CommandText = $"DROP SCHEMA \"{schema}\" CASCADE";
-            await command.ExecuteNonQueryAsync(TestContext.Current.CancellationToken);
         }
     }
 }

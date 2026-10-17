@@ -72,26 +72,15 @@ public sealed class PharmaNormalizationIntegrationTests(PostgreSqlFixture fixtur
     [Fact]
     public async Task UpgradePreservesAmbiguousB11SourceWithoutHeuristicBackfillAndBlocksCopyUntilReview()
     {
-        // Isolated generated schema; administrator is used only to seed the previous schema and apply migrations.
+        // Isolated disposable database; administrator only seeds the previous schema and applies migrations.
         // Reading/applying the copy use case afterward uses the existing NOSUPERUSER/NOBYPASSRLS runtime role.
-        var schema = "medipos_upgrade_" + Guid.NewGuid().ToString("N");
-        await using var adminContext = fixture.CreateConstraintContext();
-        var adminString = adminContext.Database.GetConnectionString()!;
-        await using var admin = new NpgsqlConnection(adminString);
-        await admin.OpenAsync(TestContext.Current.CancellationToken);
-        await using var command = admin.CreateCommand();
-        command.CommandText = $"CREATE SCHEMA \"{schema}\"";
-        await command.ExecuteNonQueryAsync(TestContext.Current.CancellationToken);
-        try
+        await using (var database = await MigrationTestDatabase.CreateAsync(fixture, TestContext.Current.CancellationToken))
         {
             var tenantId = Guid.NewGuid();
             var categoryId = Guid.NewGuid();
             var globalId = Guid.NewGuid();
             var businessId = Guid.NewGuid();
-            var upgradeString = new NpgsqlConnectionStringBuilder(adminString) { SearchPath = schema }.ConnectionString;
-            var options = new DbContextOptionsBuilder<MediPosDbContext>().UseNpgsql(upgradeString,
-                provider => provider.MigrationsHistoryTable("__EFMigrationsHistory", schema)).Options;
-            await using (var upgrade = new MediPosDbContext(options, new TenantDataContext()))
+            await using (var upgrade = database.CreateContext())
             {
                 var migrator = upgrade.GetService<IMigrator>();
                 await migrator.MigrateAsync("20261006152533_AddCatalogFoundation", TestContext.Current.CancellationToken);
@@ -113,18 +102,22 @@ public sealed class PharmaNormalizationIntegrationTests(PostgreSqlFixture fixtur
                 await migrator.MigrateAsync(cancellationToken: TestContext.Current.CancellationToken);
                 Assert.False(upgrade.Database.HasPendingModelChanges());
             }
-            command.CommandText = $"""
-                GRANT USAGE ON SCHEMA "{schema}" TO medipos_test_runtime;
-                GRANT SELECT ON ALL TABLES IN SCHEMA "{schema}" TO medipos_test_runtime;
-                GRANT UPDATE ON "{schema}".licenses TO medipos_test_runtime;
+            await using var admin = new NpgsqlConnection(database.AdministrativeConnectionString);
+            await admin.OpenAsync(TestContext.Current.CancellationToken);
+            await using var command = admin.CreateCommand();
+            command.CommandText = """
+                GRANT USAGE ON SCHEMA public TO medipos_test_runtime;
+                GRANT SELECT ON ALL TABLES IN SCHEMA public TO medipos_test_runtime;
+                GRANT UPDATE ON public.licenses TO medipos_test_runtime;
                 """;
             await command.ExecuteNonQueryAsync(TestContext.Current.CancellationToken);
-            var runtimeString = new NpgsqlConnectionStringBuilder(fixture.ConnectionString) { SearchPath = schema }.ConnectionString;
+            var runtimeString = database.RuntimeConnectionString;
             var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
             { ["ConnectionStrings:MediPosDatabase"] = runtimeString }).Build();
             var registrations = new ServiceCollection();
             registrations.AddSingleton<TimeProvider>(new IdentityAccessTestSetup.Clock());
             registrations.AddInfrastructure(configuration);
+            registrations.AddPersistenceFixtureAuthorization();
             await using var services = registrations.BuildServiceProvider();
             await using var scope = services.CreateAsyncScope();
             var source = scope.ServiceProvider;
@@ -147,12 +140,6 @@ public sealed class PharmaNormalizationIntegrationTests(PostgreSqlFixture fixtur
             Assert.Equal(CatalogErrors.PharmaNormalizationRequired, error.Error);
             Assert.Equal(1, await context.BusinessProducts.CountAsync(TestContext.Current.CancellationToken));
             Assert.Empty(await context.AuditLogs.ToListAsync(TestContext.Current.CancellationToken));
-        }
-        finally
-        {
-            // Only this test's generated schema in its isolated container database.
-            command.CommandText = $"DROP SCHEMA \"{schema}\" CASCADE";
-            await command.ExecuteNonQueryAsync(TestContext.Current.CancellationToken);
         }
     }
 }

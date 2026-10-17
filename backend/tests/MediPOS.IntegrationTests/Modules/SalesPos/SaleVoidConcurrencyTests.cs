@@ -7,6 +7,7 @@ using MediPOS.Domain.Modules.AuditSupport;
 using MediPOS.Domain.Modules.Cash;
 using MediPOS.Domain.Modules.Inventory;
 using MediPOS.Domain.Modules.SalesPos;
+using MediPOS.Infrastructure.Persistence;
 using MediPOS.IntegrationTests.Modules.Cash;
 using MediPOS.IntegrationTests.Modules.IdentityAccess;
 using MediPOS.IntegrationTests.Modules.TenancyLicensing;
@@ -56,6 +57,8 @@ public sealed class SaleVoidConcurrencyTests(PostgreSqlFixture fixture)
             CashSessionTestData.Authenticate(scope.ServiceProvider, tenant.Identity.UserId);
             var error = await Assert.ThrowsAsync<ApplicationErrorException>(() => scope.ServiceProvider.GetRequiredService<VoidSaleHandler>().HandleAsync(SaleVoidTestData.Command(rows), timeout.Token));
             Assert.Equal(SalesPosErrors.ConcurrentEdit, error.Error);
+            Assert.Null(scope.ServiceProvider.GetRequiredService<MediPosDbContext>().Database.CurrentTransaction);
+            Assert.Empty(scope.ServiceProvider.GetRequiredService<MediPosDbContext>().ChangeTracker.Entries());
             await SaleVoidTestData.AssertStillConfirmedAsync(fixture, rows);
             await using var probe = fixture.CreateContext(tenant.TenantId);
             await using var probeTransaction = await probe.Database.BeginTransactionAsync(TestContext.Current.CancellationToken);

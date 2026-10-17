@@ -1,4 +1,5 @@
 using MediPOS.Application.Errors;
+using MediPOS.Application.Modules.IdentityAccess.Authentication;
 using MediPOS.Application.Modules.OfflineSync;
 using MediPOS.Domain.Modules.OfflineSync;
 using MediPOS.Infrastructure.Persistence;
@@ -61,7 +62,7 @@ public sealed class OfflineSyncConcurrencyTests(PostgreSqlFixture fixture)
             var context = scope.ServiceProvider.GetRequiredService<MediPosDbContext>(); Assert.NotNull(context.Database.CurrentTransaction);
             // A bounded test marker in an existing tenant-private row proves enlisting; no sale/payment/stock application.
             await context.Database.ExecuteSqlInterpolatedAsync($"UPDATE branches SET name='sync transaction marker' WHERE id={pair.A.Identity.BranchId}", Token);
-            scope.ServiceProvider.GetRequiredService<IdentityAccessTestSetup.TestServerSession>().UserId = null;
+            ((IdentityAccessTestSetup.TestServerSession)scope.ServiceProvider.GetRequiredService<IAuthenticatedMediPosUser>()).UserId = null;
             await Assert.ThrowsAsync<ApplicationErrorException>(() => reservation.CompleteAsync("accepted", "sync.should_rollback", null, Token));
         }
         await using var fresh = fixture.CreateContext(pair.A.TenantId);
