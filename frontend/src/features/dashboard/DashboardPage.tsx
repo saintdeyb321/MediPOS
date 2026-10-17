@@ -19,7 +19,7 @@ export function DashboardPage({ shortcuts }: { shortcuts: DashboardShortcut[] })
     <>
       <PageHeader eyebrow={w.tenantName} title="Todo listo para empezar." description="Revisa tu sucursal y elige dónde continuar." />
       <Panel className="dashboard-action">
-        <div><Badge tone="info">POS conectado</Badge><h2>Punto de venta</h2><p>Busca productos, prepara el carrito y recupera borradores. Los pagos y el ticket interno requieren confirmación explícita en el servidor.</p></div>
+        <div><Badge tone="info">POS conectado</Badge><h2>Punto de venta</h2><p>Busca productos, prepara la venta y cobra. Después puedes imprimir el ticket interno o seguir vendiendo. El cobro requiere confirmación explícita en el servidor.</p></div>
         <Link className="button primary" to={`${w.base}/ventas`}>Abrir punto de venta <ArrowRight size={20} aria-hidden="true" /></Link>
       </Panel>
       <dl className="workspace-summary">

@@ -30,3 +30,10 @@ it('uses the same availability on dashboard shortcuts and distinguishes unstarte
 it('translates the new last-Owner error without revealing internal state or treating conflict as success', () => {
   const fake = managementServer(); mountTransfers(fake, <ApiErrorState error={new ApiError(409, 'membership.last_active_owner')} />); expect(screen.getByRole('alert')).toHaveTextContent('No se puede desactivar al último propietario activo de la botica.'); expect(fake.writes()).toHaveLength(0)
 })
+it('uses commercial language for selling and receiving without changing pending acceptance', () => {
+  const fake = managementServer(); mountTransfers(fake, <DashboardPage shortcuts={availableNavigation('owner').filter(item => Boolean(item.id))} />)
+  for (const id of ['ventas', 'compras']) expect(navigation.find(item => item.id === id)?.description).not.toMatch(/borrador/i)
+  expect(screen.getByText(/imprimir el ticket interno o seguir vendiendo/)).toBeInTheDocument()
+  expect(screen.getByText('Registrar recepción, revisar y confirmar mercadería')).toBeInTheDocument()
+  expect(screen.getByText(/Implementado no significa aceptación comercial aprobada/)).toBeInTheDocument(); expect(fake.writes()).toHaveLength(0)
+})
