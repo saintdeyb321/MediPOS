@@ -23,6 +23,13 @@ foreach ($name in @('LocalQa.psm1','prepare-local-qa.ps1','start-local-qa.ps1','
 }
 $connection = Assert-QaSettings (Settings) $qaRoot
 Assert-QaCondition ($connection -is [System.Data.Common.DbConnectionStringBuilder] -and $connection['Database'] -ceq 'medipos_qa_unit') 'parsed-connection-type'; $cases++
+Import-Module (Join-Path $PSScriptRoot 'LocalQa.Certificates.psm1') -Force
+$caMetadata=[pscustomobject]@{SourceCommit=('a'*40);CaThumbprint=('B'*40)}
+Assert-QaCondition ((Get-QaCaRemovalPath $caMetadata ('a'*40) ('b'*40) ('B'*40)) -ceq ('Cert:\CurrentUser\Root\'+('B'*40))) 'qa-ca-removal-exact-user-root'; $cases++
+foreach ($change in @(@(('c'*40),('B'*40),('B'*40)),@(('a'*40),'*',('B'*40)),@(('a'*40),('C'*40),('B'*40)),@(('a'*40),('B'*40),('C'*40)))) {
+    $rejected=$false; try { $null=Get-QaCaRemovalPath $caMetadata $change[0] $change[1] $change[2] } catch { $rejected=$true }
+    Assert-QaCondition $rejected 'foreign-ca-removal-was-accepted'; $cases++
+}
 $names=@('PGPASSWORD','PGHOST','PGSSLCERT','ASPNETCORE_URLS','DOTNET_STARTUP_HOOKS','PlatformApi__Enabled','PATH','LOCALAPPDATA')
 Assert-QaCondition ((@(Get-QaInheritedOverrideNames $names) -join ',') -ceq ($names[0..5] -join ',')) 'inherited-postgres-or-authority-override-missed'; $cases++
 Assert-QaCondition (@(Get-QaInheritedOverrideNames @('PATH','LOCALAPPDATA')).Count -eq 0) 'ordinary-environment-was-scrubbed'; $cases++

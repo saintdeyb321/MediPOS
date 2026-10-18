@@ -35,12 +35,66 @@ foreach ($change in @(@('PrivateRoot','C:\Lab'),@('SourceCommit',('b'*40)),@('Jo
 Initialize-QaBoundJobType; $cases++ # Compile only; this creates no job handle and activates nothing.
 Write-Output ('PASS: '+$cases+' admin policy/parser/type regressions; no Google, database or QA process. Real window/revocation NOT EXECUTED.')
 if ($JobSelfTest) {
-    # One disposable sleeping child only; the test never launches an API, pg_ctl or a QA controller.
+    # Disposable sleeping children only; never an API, pg_ctl or a real QA controller/authority.
+    $job=New-Object MediPosQa.BoundJob
+    try {
+        foreach ($expiry in @([DateTime]::UtcNow.AddSeconds(-1),[DateTime]::UtcNow.AddMinutes(31))) {
+            $rejected=$false; try { $job.SetDeadline($expiry) } catch { $rejected=$true }
+            Assert-QaCondition $rejected 'invalid-kernel-deadline-was-accepted'
+        }
+        $rejected=$false; try { $null=$job.Start('not-started.exe','','') } catch { $rejected=$true }
+        Assert-QaCondition $rejected 'unarmed-job-was-accepted'
+        $job.SetDeadline([DateTime]::UtcNow.AddSeconds(30))
+        $rejected=$false; try { $job.SetDeadline([DateTime]::UtcNow.AddSeconds(31)) } catch { $rejected=$true }
+        Assert-QaCondition $rejected 'kernel-deadline-could-be-renewed'
+        Write-Output 'PASS: job rejects missing/expired/overlong/renewed deadlines before launching a process.'
+    } finally { $job.Dispose() }
     $job=New-Object MediPosQa.BoundJob; $child=$null
     try {
+        $job.SetDeadline([DateTime]::UtcNow.AddSeconds(30))
         $child=$job.Start((Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'),'-NoLogo -NoProfile -NonInteractive -Command "Start-Sleep -Seconds 30"',$PSScriptRoot)
         $job.Dispose()
         Assert-QaCondition ($child.WaitForExit(5000)) 'bound-job-did-not-terminate-own-child'
         Write-Output 'PASS: closing Windows job terminated its one disposable test child. Not a real QA/admin revocation test.'
     } finally { $job.Dispose(); if ($child) { if (-not $child.HasExited) { $child.Kill(); $child.WaitForExit() }; $child.Dispose() } }
+    $job=New-Object MediPosQa.BoundJob; $child=$null
+    try {
+        $job.SetDeadline([DateTime]::UtcNow.AddSeconds(2))
+        $child=$job.Start((Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'),'-NoLogo -NoProfile -NonInteractive -Command "Start-Sleep -Seconds 30"',$PSScriptRoot)
+        # Deliberately block the calling PowerShell thread: expiry must not depend on its polling loop.
+        Assert-QaCondition ($child.WaitForExit(8000)) 'blocked-controller-did-not-expire-own-child'
+        Write-Output 'PASS: independent deadline closed the job while its caller was blocked; one sleeping child only, no QA authority.'
+    } finally { $job.Dispose(); if ($child) { if (-not $child.HasExited) { $child.Kill(); $child.WaitForExit() }; $child.Dispose() } }
+    $validation=[IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\obj\validation'))
+    $null=[IO.Directory]::CreateDirectory($validation)
+    $worker=Assert-QaChildPath (Join-Path $validation ('job-crash-'+[Guid]::NewGuid().ToString('N')+'.ps1')) $validation
+    $workerText=@'
+param([string]$ToolsRoot)
+$ErrorActionPreference='Stop'
+Import-Module (Join-Path $ToolsRoot 'LocalQa.Admin.psm1') -Force
+Initialize-QaBoundJobType
+$job=New-Object MediPosQa.BoundJob
+$job.SetDeadline([DateTime]::UtcNow.AddSeconds(30))
+$child=$job.Start((Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'),'-NoLogo -NoProfile -NonInteractive -Command "Start-Sleep -Seconds 30"',$ToolsRoot)
+[Console]::WriteLine($child.Id.ToString())
+Start-Sleep -Seconds 30
+'@
+    $controller=$null; $child=$null
+    try {
+        [IO.File]::WriteAllText($worker,$workerText,(New-Object Text.UTF8Encoding($false)))
+        $info=New-Object Diagnostics.ProcessStartInfo
+        $info.FileName=Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
+        $info.Arguments='-NoLogo -NoProfile -NonInteractive -File "'+$worker+'" -ToolsRoot "'+$PSScriptRoot+'"'
+        $info.UseShellExecute=$false; $info.CreateNoWindow=$true; $info.RedirectStandardOutput=$true; $info.RedirectStandardError=$true
+        $controller=New-Object Diagnostics.Process; $controller.StartInfo=$info
+        $null=$controller.Start(); $null=$controller.Handle; $line=$controller.StandardOutput.ReadLineAsync()
+        Assert-QaCondition ($line.Wait(20000)) 'kernel-crash-test-handshake-timeout'
+        $childId=0; Assert-QaCondition ([int]::TryParse($line.Result,[ref]$childId) -and $childId -gt 0) 'kernel-crash-test-handshake'
+        $child=[Diagnostics.Process]::GetProcessById($childId); $null=$child.Handle
+        $controller.Kill(); Assert-QaCondition ($controller.WaitForExit(5000) -and $child.WaitForExit(5000)) 'controller-crash-left-child-active'
+        Write-Output 'PASS: terminating the disposable controller closed its job and sleeping child without finally; no API or privileged identity.'
+    } finally {
+        foreach ($owned in @($controller,$child)) { if ($owned) { if (-not $owned.HasExited) { $owned.Kill(); $owned.WaitForExit() }; $owned.Dispose() } }
+        if (Test-Path -LiteralPath $worker) { Remove-Item -LiteralPath $worker }
+    }
 }

@@ -1,5 +1,10 @@
 # .NET Framework BCL only, compatible with Windows PowerShell5.1. No external OpenSSL/install needed.
 Set-StrictMode -Version 2.0
+function Get-QaCaRemovalPath($Metadata,[string]$Commit,[string]$ExpectedThumbprint,[string]$CertificateThumbprint) {
+    Assert-QaCondition ($Commit -cmatch '^[0-9a-f]{40}$' -and $Metadata.SourceCommit -ceq $Commit) 'qa-ca-removal-source'
+    Assert-QaCondition ($ExpectedThumbprint -match '^[A-Fa-f0-9]{40}$' -and $ExpectedThumbprint -ieq $Metadata.CaThumbprint -and $ExpectedThumbprint -ieq $CertificateThumbprint) 'qa-ca-removal-thumbprint'
+    return ('Cert:\CurrentUser\Root\'+$ExpectedThumbprint.ToUpperInvariant())
+}
 function New-QaEphemeralRsa {
     # RSACng creates an exportable ephemeral key. Passing $null as a CngKey name via
     # Windows PowerShell's binder becomes an empty persisted name instead.
@@ -74,4 +79,4 @@ function Invoke-QaCertificateMaterial([string]$Root,[string]$Commit,[switch]$Sel
         if ($pgPrivate) { [Array]::Clear($pgPrivate,0,$pgPrivate.Length) }
     }
 }
-Export-ModuleMember -Function Invoke-QaCertificateMaterial
+Export-ModuleMember -Function Invoke-QaCertificateMaterial, Get-QaCaRemovalPath

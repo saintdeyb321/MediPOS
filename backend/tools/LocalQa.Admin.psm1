@@ -30,6 +30,7 @@ using System.ComponentModel;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Text;
+using System.Threading;
 namespace MediPosQa {
   public sealed class BoundJob : IDisposable {
     [StructLayout(LayoutKind.Sequential)] struct Basic {
@@ -53,6 +54,8 @@ namespace MediPosQa {
     [DllImport("kernel32.dll", SetLastError=true)] static extern uint ResumeThread(IntPtr thread);
     [DllImport("kernel32.dll", SetLastError=true)] static extern bool TerminateProcess(IntPtr process, uint code);
     IntPtr handle;
+    readonly object gate = new object(); Timer deadlineTimer; DateTime expiresUtc;
+    Stopwatch lifetime; double maximumMilliseconds; bool deadlineArmed;
     public BoundJob() {
       handle = CreateJobObject(IntPtr.Zero, null);
       if (handle == IntPtr.Zero) throw new Win32Exception();
@@ -63,8 +66,25 @@ namespace MediPosQa {
         if (!SetInformationJobObject(handle, 9, buffer, (uint)Marshal.SizeOf(typeof(Extended)))) { Dispose(); throw new Win32Exception(); }
       } finally { Marshal.FreeHGlobal(buffer); }
     }
-    public void Assign(IntPtr process) { if (!AssignProcessToJobObject(handle, process)) throw new Win32Exception(); }
+    public void SetDeadline(DateTime expiryUtc) {
+      lock (gate) {
+        if (handle==IntPtr.Zero || deadlineArmed) throw new InvalidOperationException("Job deadline is not renewable.");
+        double remaining=(expiryUtc-DateTime.UtcNow).TotalMilliseconds;
+        if (expiryUtc.Kind!=DateTimeKind.Utc || remaining<=0 || remaining>1800000) throw new ArgumentOutOfRangeException("expiryUtc");
+        expiresUtc=expiryUtc; maximumMilliseconds=remaining; lifetime=Stopwatch.StartNew(); deadlineArmed=true;
+        // Thread-pool timer is independent of a blocked PowerShell/HTTP polling thread.
+        deadlineTimer=new Timer(delegate { Dispose(); }, null, TimeSpan.FromMilliseconds(remaining), Timeout.InfiniteTimeSpan);
+      }
+    }
+    void RequireLiveDeadline() {
+      if (handle==IntPtr.Zero || !deadlineArmed) throw new InvalidOperationException("An armed live deadline is required.");
+      if (DateTime.UtcNow>=expiresUtc || lifetime.Elapsed.TotalMilliseconds>=maximumMilliseconds) {
+        Dispose(); throw new TimeoutException("Job deadline has expired.");
+      }
+    }
     public Process Start(string executable, string arguments, string directory) {
+      lock (gate) {
+      RequireLiveDeadline();
       Startup startup = new Startup(); startup.Size=Marshal.SizeOf(typeof(Startup)); ProcessInfo info;
       // The child cannot execute privileged startup before it is bound to the revocation job.
       // A controller crash before assignment leaves only a suspended, non-listening child.
@@ -72,13 +92,21 @@ namespace MediPosQa {
           IntPtr.Zero, false, 0x08000004, IntPtr.Zero, directory, ref startup, out info)) throw new Win32Exception();
       Process child=null;
       try {
-        Assign(info.Process); child=Process.GetProcessById((int)info.Id); IntPtr pinned=child.Handle;
+        if (!AssignProcessToJobObject(handle,info.Process)) throw new Win32Exception();
+        child=Process.GetProcessById((int)info.Id); IntPtr pinned=child.Handle;
+        RequireLiveDeadline(); // Startup cannot resume a child after a slow CreateProcess outlasts the lease.
         if (ResumeThread(info.Thread)==0xffffffff) throw new Win32Exception();
         return child;
       } catch { TerminateProcess(info.Process,1); if (child!=null) child.Dispose(); throw; }
       finally { CloseHandle(info.Thread); CloseHandle(info.Process); }
+      }
     }
-    public void Dispose() { if (handle != IntPtr.Zero) { CloseHandle(handle); handle = IntPtr.Zero; } }
+    public void Dispose() {
+      lock (gate) {
+        if (deadlineTimer!=null) { deadlineTimer.Dispose(); deadlineTimer=null; }
+        if (handle!=IntPtr.Zero) { CloseHandle(handle); handle=IntPtr.Zero; }
+      }
+    }
   }
 }
 '@ | Out-Null
@@ -138,6 +166,7 @@ function Invoke-QaAdministrativeController([string]$Root, [string]$Commit, [stri
         $null = Assert-QaAdminLease $approval $Root $Commit
         Assert-QaCondition ((Get-FileHash -LiteralPath $ApprovalPath -Algorithm SHA256).Hash -ceq $approvalHash) 'admin-approval-changed'
         Initialize-QaBoundJobType; $job = New-Object MediPosQa.BoundJob
+        $job.SetDeadline($expires.UtcDateTime)
         $timer = [Diagnostics.Stopwatch]::StartNew(); $remaining = ($expires-[DateTimeOffset]::UtcNow).TotalSeconds
         Assert-QaCondition ($remaining -gt 0 -and $remaining -le 1800) 'admin-window-expired-before-launch'
         $restore = $true; $child = Start-QaAdministrativeChild $settings $Root $approval.ActorId $job
@@ -152,12 +181,13 @@ function Invoke-QaAdministrativeController([string]$Root, [string]$Commit, [stri
             try { $ready=(Invoke-WebRequest -UseBasicParsing -Uri 'https://localhost:7443/health/ready' -TimeoutSec 2).StatusCode -eq 200 } catch { $ready=$false }
             if ($ready) { break }; Start-Sleep -Milliseconds 500
         }
-        Assert-QaCondition $ready 'admin-readiness'
+        Assert-QaCondition ($ready -and -not $child.HasExited -and [DateTimeOffset]::UtcNow -lt $expires -and $timer.Elapsed.TotalSeconds -lt $remaining) 'admin-readiness-within-lease'
         $listeners=@(Get-NetTCPConnection -State Listen -ErrorAction Stop | Where-Object { $_.LocalPort -eq 7443 -or $_.OwningProcess -eq $child.Id })
         Assert-QaCondition ($listeners.Count -gt 0 -and @($listeners | Where-Object { $_.OwningProcess -ne $child.Id -or $_.LocalPort -ne 7443 -or -not [Net.IPAddress]::IsLoopback([Net.IPAddress]::Parse($_.LocalAddress)) }).Count -eq 0) 'admin-exclusive-loopback'
         $status=0
         try { $response=Invoke-WebRequest -UseBasicParsing -Uri 'https://localhost:7443/platform/session' -Headers @{Origin='https://localhost:7443'} -TimeoutSec 5; $status=[int]$response.StatusCode } catch { if ($_.Exception.Response) { $status=[int]$_.Exception.Response.StatusCode } }
         Assert-QaCondition ($status -eq 401) 'admin-anonymous-must-be-denied'
+        Assert-QaCondition (-not $child.HasExited -and [DateTimeOffset]::UtcNow -lt $expires -and $timer.Elapsed.TotalSeconds -lt $remaining) 'admin-window-ended-before-ready'
         [IO.File]::WriteAllText($readyPath,($record | ConvertTo-Json),(New-Object Text.UTF8Encoding($false)))
         while (-not $child.HasExited -and [DateTimeOffset]::UtcNow -lt $expires -and $timer.Elapsed.TotalSeconds -lt $remaining) {
             if (Test-Path -LiteralPath $closePath) { break }
