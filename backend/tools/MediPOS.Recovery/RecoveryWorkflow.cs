@@ -1,4 +1,5 @@
 using System.Data;
+using System.Diagnostics;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
@@ -13,6 +14,8 @@ public static class RecoveryWorkflow
 {
     public static async Task BackupAsync(RecoveryConfiguration config, string directory, CancellationToken token)
     {
+        var total = Stopwatch.StartNew(); var stage = Stopwatch.StartNew();
+        var timings = new Dictionary<string, long>(StringComparer.Ordinal);
         await PgTools.CheckVersionsAsync(config, token).ConfigureAwait(false);
         var opened = await RecoveryDatabaseGuard.OpenAsync(config, config.Source, null, false, token).ConfigureAwait(false);
         await using var source = opened.Connection;
@@ -24,11 +27,13 @@ public static class RecoveryWorkflow
         var snapshot = await RecoveryInspection.CaptureAsync(source, transaction, token).ConfigureAwait(false);
         await using var model = RecoveryInspection.ModelContext();
         await RecoveryInspection.ValidateAsync(source, transaction, snapshot, snapshot.Migrations.Length == model.Database.GetMigrations().Count(), token).ConfigureAwait(false);
+        timings.Add("SourceSnapshotAndIntegrity", stage.ElapsedMilliseconds); stage.Restart();
         var artifact = Path.Combine(directory, "database.dump");
         if (File.Exists(artifact)) throw new InvalidOperationException("Backup already exists.");
         await PgTools.RunAsync(config, "pg_dump", PgTools.EndpointArguments(config.Source)
             .Concat(new[] { "--format=custom", "--snapshot=" + exported, "--file=" + artifact }).ToArray(), token).ConfigureAwait(false);
         await transaction.RollbackAsync(token).ConfigureAwait(false);
+        timings.Add("Backup", stage.ElapsedMilliseconds); stage.Restart();
         var bytes = new FileInfo(artifact).Length;
         if (bytes <= 0) throw new InvalidOperationException("Empty backup artifact.");
         await RecoveryFiles.WriteNewAsync(Path.Combine(directory, "created.json"), new { State = "CREATED", Utc = DateTimeOffset.UtcNow, Bytes = bytes }, token).ConfigureAwait(false);
@@ -38,6 +43,8 @@ public static class RecoveryWorkflow
             config.ProtectedLocationReference, opened.Cluster, 18, "postgresql18-custom-full", bytes,
             await RecoveryFiles.HashAsync(artifact, token).ConfigureAwait(false), snapshot, PostgreSqlVersionNumber: opened.Version, SnapshotAtUtc: snapshotAt);
         await RecoveryFiles.WriteNewAsync(Path.Combine(directory, "manifest.json"), manifest, token).ConfigureAwait(false);
+        timings.Add("ArchiveVerificationAndManifest", stage.ElapsedMilliseconds);
+        await WriteTimingsAsync(directory, timings, total.ElapsedMilliseconds, token).ConfigureAwait(false);
     }
 
     public static async Task<BackupManifest> VerifyFileAsync(RecoveryConfiguration config, string directory, CancellationToken token)
@@ -76,7 +83,10 @@ public static class RecoveryWorkflow
     public static async Task RestoreAsync(RecoveryConfiguration config, string backupDirectory, string directory,
         bool rehearse, string? approvedMigrationHash, CancellationToken token)
     {
+        var total = Stopwatch.StartNew(); var stage = Stopwatch.StartNew();
+        var timings = new Dictionary<string, long>(StringComparer.Ordinal);
         var manifest = await VerifyFileAsync(config, backupDirectory, token).ConfigureAwait(false);
+        timings.Add("ArchiveVerification", stage.ElapsedMilliseconds); stage.Restart();
         var script = MigrationPlan(manifest); var scriptHash = PlanHash(script);
         if (rehearse && approvedMigrationHash != scriptHash)
             throw new InvalidOperationException("Generate and review the offline migration plan and explicitly approve its exact SHA-256 before rehearsal.");
@@ -88,14 +98,18 @@ public static class RecoveryWorkflow
         RecoveryFiles.AbsolutePath(artifact);
         await using var artifactLease = new FileStream(artifact, FileMode.Open, FileAccess.Read, FileShare.Read);
         RecoveryFiles.ValidateArtifact(manifest, artifactLease.Length, await RecoveryFiles.HashAsync(artifact, token).ConfigureAwait(false));
+        timings.Add("TargetPreflightAndArtifactRecheck", stage.ElapsedMilliseconds); stage.Restart();
         // No --clean, --create, --disable-triggers, --no-acl, DROP DATABASE or automatic retry.
         await PgTools.RunAsync(config, "pg_restore", PgTools.EndpointArguments(config.Target!)
             .Concat(new[] { "--exit-on-error", "--single-transaction", "--no-owner", artifact }).ToArray(), token).ConfigureAwait(false);
+        timings.Add("Restore", stage.ElapsedMilliseconds); stage.Restart();
         RecoveryFiles.ValidateArtifact(manifest, artifactLease.Length, await RecoveryFiles.HashAsync(artifact, token).ConfigureAwait(false));
         var before = await InspectAsync(target, current: false, token).ConfigureAwait(false);
         RecoveryInspection.Compare(manifest.Snapshot, before);
         await RecoveryFiles.WriteNewAsync(Path.Combine(directory, "restore-compared.json"), new { State = "RESTORED_AND_COMPARED", Utc = DateTimeOffset.UtcNow, BeforeMigrations = before.Migrations }, token).ConfigureAwait(false);
+        timings.Add("PreUpgradeIntegrity", stage.ElapsedMilliseconds); stage.Restart();
         RecoverySnapshot after = before;
+        var migrationDataCoverage = "NOT_APPLICABLE_RESTORE_ONLY";
         if (rehearse)
         {
             await RecoveryFiles.WriteNewAsync(Path.Combine(directory, "migration-started.json"), new { State = "MIGRATION_STARTED", BeforeMigrations = before.Migrations, ScriptSha256 = scriptHash }, token).ConfigureAwait(false);
@@ -105,12 +119,11 @@ public static class RecoveryWorkflow
             await checkedTarget.Connection.DisposeAsync().ConfigureAwait(false);
             await using var model = RecoveryInspection.ModelContext(config.Target!.Connection(config.Passfile, config.RootCertificate));
             await model.Database.MigrateAsync(token).ConfigureAwait(false);
+            timings.Add("UpgradeAndIsolationRecheck", stage.ElapsedMilliseconds); stage.Restart();
             await target.OpenAsync(token).ConfigureAwait(false);
             after = await InspectAsync(target, current: true, token).ConfigureAwait(false);
-            // Migration transformations can change row shape. Preserve append-only histories byte-for-byte when their schema is unchanged.
-            foreach (var table in new[] { "audit_logs", "stock_movements", "sale_payments", "sale_payment_reversals", "commission_entries", "official_catalog_revisions", "official_catalog_version_history", "sync_events" })
-                if (before.Tables.TryGetValue(table, out var digest) && (!after.Tables.TryGetValue(table, out var retained) || retained != digest))
-                    throw new InvalidOperationException("Migration changed a protected append-only history; an explicit compatibility strategy is required.");
+            migrationDataCoverage = RecoveryMigrationIntegrity.Verify(before, after);
+            timings.Add("PostUpgradeIntegrity", stage.ElapsedMilliseconds); stage.Restart();
         }
         var runtime = await RuntimeRecoveryProbe.ValidateAsync(config, target, token).ConfigureAwait(false);
         var pending = new Dictionary<string, string>(StringComparer.Ordinal);
@@ -119,12 +132,15 @@ public static class RecoveryWorkflow
             await using var command = new NpgsqlCommand(pair.Value, target);
             pending.Add(pair.Key, (await command.ExecuteScalarAsync(token).ConfigureAwait(false)) as string ?? "{}");
         }
+        timings.Add("RuntimeAndPendingStateValidation", stage.ElapsedMilliseconds);
+        await WriteTimingsAsync(directory, timings, total.ElapsedMilliseconds, token).ConfigureAwait(false);
         await RecoveryFiles.WriteNewAsync(Path.Combine(directory, "result.json"),
-            CreateResult(rehearse, manifest, config.RunId, before.Migrations, after.Migrations, runtime, pending), token).ConfigureAwait(false);
+            CreateResult(rehearse, manifest, config.RunId, before.Migrations, after.Migrations, runtime, pending, migrationDataCoverage), token).ConfigureAwait(false);
     }
 
     public static object CreateResult(bool rehearse, BackupManifest manifest, string runId, string[] beforeMigrations,
-        string[] afterMigrations, RuntimeRecoveryEvidence runtime, Dictionary<string, string> pending) => new
+        string[] afterMigrations, RuntimeRecoveryEvidence runtime, Dictionary<string, string> pending,
+        string migrationDataCoverage = "NOT_RECORDED") => new
         {
             State = rehearse ? "RESTORE_AND_MIGRATION_VERIFIED" : "RESTORE_VERIFIED",
             ProcedureVersion = BackupManifest.Version,
@@ -136,6 +152,7 @@ public static class RecoveryWorkflow
             ArtifactSha256 = manifest.Sha256,
             BeforeMigrations = beforeMigrations,
             AfterMigrations = afterMigrations,
+            MigrationDataCoverage = migrationDataCoverage,
             runtime.RuntimeRole,
             runtime.TenantIsolation,
             runtime.TenantsAvailable,
@@ -147,6 +164,15 @@ public static class RecoveryWorkflow
             RegressionSuite = "PENDING_EXTERNAL_EXECUTION",
             ProductionRecovery = "NOT_AUTHORIZED"
         };
+
+    private static Task WriteTimingsAsync(string directory, Dictionary<string, long> stages, long total, CancellationToken token) =>
+        RecoveryFiles.WriteNewAsync(Path.Combine(directory, "timings.json"), new
+        {
+            Unit = "milliseconds",
+            Stages = stages,
+            Total = total,
+            Scope = "TOOL_OPERATION_ONLY_EXCLUDES_PROVISIONING_TRANSFER_AND_OPERATIONAL_ACCEPTANCE"
+        }, token);
 
     public static async Task<RecoverySnapshot> InspectAsync(NpgsqlConnection connection, bool current, CancellationToken token)
     {

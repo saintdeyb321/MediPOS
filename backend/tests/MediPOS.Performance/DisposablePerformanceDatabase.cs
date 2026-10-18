@@ -1,6 +1,8 @@
 using MediPOS.Application.Tenancy;
 using MediPOS.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Npgsql;
 
 namespace MediPOS.Performance;
@@ -41,7 +43,7 @@ public sealed class DisposablePerformanceDatabase : IAsyncDisposable
             throw new InvalidOperationException("Performance execution requires explicit opt-in, Performance environment, a new marked database and separate migration/runtime credentials on the same server.");
     }
 
-    public static async Task<DisposablePerformanceDatabase> CreateAsync(PerformanceOptions options, CancellationToken token)
+    public static async Task<DisposablePerformanceDatabase> CreateAsync(PerformanceOptions options, CancellationToken token, string? throughMigration = null)
     {
         var control = Environment.GetEnvironmentVariable("MEDIPOS_PERF_CONTROL_CONNECTION") ?? throw new InvalidOperationException("Missing performance control credential.");
         var runtime = Environment.GetEnvironmentVariable("MEDIPOS_PERF_RUNTIME_CONNECTION") ?? throw new InvalidOperationException("Missing performance runtime credential.");
@@ -58,7 +60,11 @@ public sealed class DisposablePerformanceDatabase : IAsyncDisposable
             await database.ExecuteAsync("COMMENT ON DATABASE " + Quote(options.DatabaseName) + " IS '" + Marker(options.RunId) + "'", token).ConfigureAwait(false);
             await using (var migration = new MediPosDbContext(new DbContextOptionsBuilder<MediPosDbContext>()
                 .UseNpgsql(database._migrationConnection).Options, new TenantDataContext()))
-                await migration.Database.MigrateAsync(token).ConfigureAwait(false);
+            {
+                if (throughMigration is not null && !migration.Database.GetMigrations().Contains(throughMigration, StringComparer.Ordinal))
+                    throw new InvalidOperationException("Historical fixture requires an existing official migration.");
+                await migration.GetService<IMigrator>().MigrateAsync(throughMigration, token).ConfigureAwait(false);
+            }
             await database.GrantRuntimeAsync(token).ConfigureAwait(false);
             // Validate the real commercial guard before any generated row; never bypass it for benchmarks.
             await using (var runtimeContext = new MediPosDbContext(new DbContextOptionsBuilder<MediPosDbContext>()

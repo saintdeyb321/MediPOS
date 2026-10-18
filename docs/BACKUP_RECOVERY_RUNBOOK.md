@@ -100,7 +100,7 @@ dotnet run -c Release --project tools/MediPOS.Recovery -- restore --config C:\Me
 
 El guard comprueba cluster real distinto, TLS, ambiente de laboratorio, efectos deshabilitados, base exacta/comentario/propietario, ausencia de otras sesiones, ACL CONNECT restringida y base vacía. Restaura con `--single-transaction --exit-on-error --no-owner`, conserva ACL originales y asigna propiedad al administrador aislado. Las funciones SECURITY DEFINER quedan bajo ese propietario confiable; revisar sus permisos y search paths. Cualquier advertencia falla cerrada. No se desactivan triggers/RLS y no se borran objetos. Un fallo o cancelación queda `FAILED_NOT_VERIFIED`/`CANCELLED_NOT_VERIFIED`; nunca se reintenta automáticamente sobre el destino parcial.
 
-Para ensayar pendientes, generar primero el plan **offline respecto de PostgreSQL** desde el último MigrationId del manifiesto; verificar el archivo usa clientes PostgreSQL sin conexión. Usar un ID distinto para el plan. Revisar su SQL, riesgos de pérdida, backup previo y recuperación, y copiar el SHA-256 de `plan.json` a la autorización del ensayo. La herramienta no modifica migraciones anteriores.
+Para ensayar pendientes, generar primero el plan **offline respecto de PostgreSQL** desde el último MigrationId del manifiesto; verificar el archivo usa clientes PostgreSQL sin conexión. Usar un ID distinto para el plan. Revisar su SQL, riesgos de pérdida, backup previo y recuperación, y copiar **`ScriptSha256` de `plan.json` (SHA-256 del SQL UTF-8 exacto de `migrations.sql`, no del JSON)** a la autorización del ensayo. La herramienta no modifica migraciones anteriores.
 
 ```powershell
 dotnet run -c Release --project tools/MediPOS.Recovery -- plan-migrations --config C:\MediPOSOps\config\plan.json --confirm plan-migrations:RecoveryLab:22222222222222222222222222222222 --backup C:\MediPOSOps\protected\0123456789abcdef0123456789abcdef
@@ -156,6 +156,99 @@ Solo sobre copia sintética y dos clusters descartables. Registrar IDs, UTC, tie
 | Migración fallida o proceso interrumpido | `migration-started.json` sin `result.json`, `failure.json` cuando es posible; no Down automático; origen/productivo intacto |
 
 Si el almacenamiento está lleno incluso `failure.json` puede faltar: ausencia de manifiesto/resultado final y exit del scheduler significan **no verificado**. La salida pública registra solo tipo y código de utilidad; obtener diagnósticos detallados en una sesión protegida de operaciones, sin relanzar un restore en una base parcial. Preservar la evidencia fallida en cuarentena hasta revisión, bajo la misma retención/protección.
+
+## Fase D2-A — preparación del ensayo histórico 34→37 (2026-10-17)
+
+**D1 DONE:** [CI 39091989720](https://github.com/saintdeyb321/MediPOS/actions/runs/39091989720), SHA `6c8ffe95fb45bbe8ba2f42c8d3203dad5cf24ff8`: PostgreSQL 18.6 **866/866**, recuperación **19/19**, unitarias **2516/2516**, arquitectura **8/8**. Es evidencia del código anterior a este delta local; no ejecutó el circuito operativo de dump/restore. **D2 IN_PROGRESS; D2-B BLOCKED; Release D NO-GO.** Ninguna operación de esta sección se ha ejecutado contra PostgreSQL. No se han cambiado LAB/DEV, migraciones ni servicios.
+
+### Cobertura y riesgo pendiente
+
+| Área | Cobertura existente/preparada | Evidencia que D2-B debe obtener en la copia restaurada |
+|---|---|---|
+| Artefacto completo | Snapshot exportado, custom dump, tamaño/SHA-256/decodificación y esquema/ACL completos | Procesos pg_dump/pg_restore 18 reales con TLS verify-full; custodia y transferencia verificadas |
+| Ventas/pagos/anulación/comisiones | Invariantes SQL; nueva regresión histórica con ConfirmSale/VoidSale y ledger de ambas boticas | Filas representativas de ambas empresas; snapshot idéntico tras restore y tras upgrade |
+| Compras/stock/lotes/costos | Generador sintético existente recibe compras mediante handlers, movimientos y lotes; nueva regresión histórica | Recepciones, costos, lotes/vencimientos/saldos exactos; no modificaciones SQL para reparar |
+| Caja/transferencias/licencias | Checks de conciliación e inventario de tablas; no todos esos estados se generan en el nuevo caso | Caja abierta/cerrada, transferencias de mercadería/sencillo y sus eventos, cambios de licencia en ambas empresas |
+| Usuarios/membresías/presentaciones | Generador y fingerprints completos; origen 34 conserva esos contratos | Roles, horarios y presentaciones preservados; denegaciones con runtime, no administrador |
+| Invitaciones | **No existen en 34**; 35 añade tabla vacía; regresión nueva separa Owner y aceptación por ticket después del upgrade | Verificar primero conservación sin escrituras; luego crear invitaciones sintéticas con handlers en destino 37, Owner propio/ajeno, ticket correcto/incorrecto, aceptación idempotente y ninguna membresía antes de aprobación |
+| CPE/UBL | Se incluyen bytes XML, originales, vínculos, estados e intentos; invariantes y huellas disponibles | Crear escenarios sintéticos por contratos de ElectronicDocuments/SupplierUbl; workers sin arrancar, sin proveedor/correo/SUNAT; conservar uncertain/manual_review, XML y todos los intentos |
+| Offline/idempotencia/importaciones | Comparación completa y conteos de pendientes; la mera existencia de tablas no cubre sus estados | Eventos aceptados/rechazados, conflictos, reintentos/receipts y jobs; conservar hashes/estados sin reprocesar ni liberar leases |
+| Catálogo oficial/notificaciones/auditoría | Fingerprints completos; historiales inmutables ampliados en RecoveryMigrationIntegrity | Publicaciones/revisiones/versiones/lecturas/auditorías sintéticas y datos originales; no fabricar atributos clínicos |
+| RLS/runtime | Probe real fail-closed; distingue cobertura incompleta y actor ausente | Filas de ambas empresas en cada tabla aplicable; comprobar lectura/escritura/autorización y Owner/ticket por separado; registrar huecos, nunca borrarlos del resultado |
+
+La regresión nueva `Historical34To37UpgradePreservesTwoTenantCommercialDataAndAddsEmptyInvitationStorage` reutiliza PerformanceDataset y la creación descartable existente, ahora capaz de detener EF en un MigrationId oficial. Usa dos boticas, dos sedes por botica, compras, stock, presentaciones, ventas confirmadas/anuladas, pagos/reversas, comisiones, auditoría y permisos runtime. Compara datos 34→37 y luego prepara comprobaciones independientes Owner/ticket con reloj real de base para las invitaciones. La identidad sintética está limitada al borde de autenticación de pruebas; persistencia/RLS son PostgreSQL real cuando se ejecute externamente. **No es un generador operativo completo D2 ni un ensayo de backup/restore.**
+
+Falta componer y aprobar el generador operativo histórico completo con los escenarios de la matriz (reutilizar handlers y fixtures de transferencias, cierre, UBL/CPE, offline y catálogo). No reutilizar a ciegas `MediPOS.Performance run`: su CLI migra al esquema actual, mide carga y no cubre todos esos estados. No usar su connection string como configuración de Recovery ni aceptar su TLS por inferencia. Si un contrato de refresh no puede producir historia válida en 34 por los defectos corregidos en 36/37, registrar el bloqueo exacto; no parchear la migración 34 ni desactivar el guard para sembrar datos. No certificar historias con conteo cero.
+
+### Prerrequisitos y frontera de autorización D2-B
+
+1. Dos máquinas/VMs/clusters efímeros PostgreSQL 18 independientes, inicializados por separado, con identificadores de sistema diferentes; endpoints e inventario revisados por el operador. Dos bases en una sola instancia, un clon con el mismo system_identifier o dos esquemas no sirven. Ninguna ruta de red/credencial hacia LAB/DEV/producción; no ejecutar containers ni PostgreSQL en esta laptop.
+2. Origen nuevo y marcado, exactamente **34** migraciones oficiales y catálogo sin drift. Generación sintética autorizada, determinista, dos tenants/cuatro sedes, reporte privado de conteos por tabla/tenant y cobertura de estados antes de congelar escrituras. Sin usar clientes ni identidades reales. Workers y efectos externos ausentes, no solo flags en JSON.
+3. Destino con locales/encoding/proveedor y versión de collation iguales, binarios y extensiones `pg_trgm`/`unaccent` disponibles. Cada restore usa una base **vacía** y RunId nuevos, con nombre/comentario y roles/CONNECT del apartado de prerrequisitos. Precrear nombres de roles originales sin copiar sus credenciales; conceder EXECUTE pg_control_system a las identidades técnicas que lo necesiten. Backup reader BYPASSRLS de solo lectura; restore owner separado; runtime NOSUPERUSER/NOBYPASSRLS/NOCREATEDB/NOCREATEROLE/sin propiedad/CREATE ni membresías privilegiadas. Revisar GRANT por tabla/columna y prohibiciones de historias según el esquema correspondiente.
+4. CA privada, certificados de servidor con SAN de cada endpoint y cadena válida, clientes PostgreSQL 18 y .NET 10/proveedor fijados. Passfile privado con entradas exactas por host/puerto/base/usuario, ACL de operador (Unix 0600 o equivalente Windows), sin PGPASSWORD, credenciales en URI/argumentos, trazas SQL ni salida de filas. Verificar TLS desde Npgsql **y** utilidades. Los guards no prueban por sí mismos ACL del passfile, cifrado del almacenamiento ni firewall.
+5. Almacén externo cifrado y privado para dump/manifiesto/planes/evidencias, inmutabilidad/custodia y copia en otro dominio de fallo. Aprobación de consumo, retención y posterior eliminación del entorno efímero, sin que Recovery borre bases o artefactos. Configuraciones fuera del workspace; atestaciones solo después de comprobar los controles.
+6. Cerrar todas las conexiones de siembra antes del backup. El destino debe quedar sin otras sesiones antes del restore y del recheck previo a migrar; terminar el probe antes de pruebas adicionales. No dejar un monitor/host de aplicación conectado durante esas guardas.
+
+Para este ensayo proponer **`medipos_test_runtime`** en ambos clusters externos, con claves diferentes y privadas, sin reutilizar credenciales de CI/LAB/DEV. La migración 35 concede permisos de invitaciones solo a tres nombres conocidos (`medipos_runtime`, `medipos_lab_runtime`, `medipos_test_runtime`); **un runtime con otro nombre no recibe esos GRANT automáticamente**. Si se escoge otro nombre, bloquear hasta revisar/aprobar su aprovisionamiento explícito de SELECT/INSERT y UPDATE solo de columnas autorizadas, conservando la prohibición de UPDATE global, DELETE y cambios al hash/identidad. No modificar 35 ni ampliar permisos para evitar un fallo del probe.
+
+### Ejecución propuesta y revisión exacta del upgrade
+
+Usar binarios Release **del contenido D2 revisado**, identificados con hashes, SDK/EF/Npgsql y delta frente al SHA D1. El CI verde de 6c8ffe9 no certifica estos cambios locales. Compilar/publicar no instala servicios. Comandos desde `backend/`, únicamente en el host operativo autorizado; ejemplos de rutas corresponden al almacén aprovisionado y no son recursos existentes.
+
+```powershell
+# Preparación offline; no abre PostgreSQL. Comparar luego con migrations.sql del manifiesto real.
+dotnet build tools/MediPOS.Recovery -c Release
+dotnet ef migrations script 20261014193402_AddMembershipSelfDiscovery 20261018023355_FixOfficialRefreshJsonProjectionPrecedence --project src/MediPOS.Infrastructure --startup-project src/MediPOS.Infrastructure --output obj/validation/d2-34-to-37.sql
+# EF CLI escribe BOM UTF-8; Recovery escribe UTF-8 sin BOM. Canonicalizar solo este archivo de revisión offline.
+$sqlPath=Join-Path (Get-Location) 'obj\validation\d2-34-to-37.sql'
+[System.IO.File]::WriteAllText($sqlPath, [System.IO.File]::ReadAllText($sqlPath), [System.Text.UTF8Encoding]::new($false))
+Get-FileHash obj/validation/d2-34-to-37.sql -Algorithm SHA256
+```
+
+Orden de revisión: **35** `20261017044923_AddTenantEmployeeInvitations` añade tabla vacía/índices/FKs/checks, extiende códigos de auditoría, instala políticas FORCE RLS/guard y GRANT por columna a runtimes conocidos; no recalcula membresías ni datos anteriores. **36** `20261017215309_FixOfficialRefreshApprovalVersionReference` reemplaza `official_refresh_global_guard`, cualificando la columna `version`. **37** `20261018023355_FixOfficialRefreshJsonProjectionPrecedence` reemplaza `official_refresh_guard`, fijando precedencia JSON. Ambos CREATE OR REPLACE preservan dependencias. Son tres entradas EF nuevas, ninguna reescritura de datos existentes ni cambio del snapshot/modelo por D2.
+
+Evidencia local offline: SQL sin BOM **22212 bytes**, SHA-256 `14595BCFF6E619E77D7F377688216E6FB8E9F27F0E457E62919E8EF38291B39C`; tres INSERT de historial EF, una tabla nueva, dos funciones reemplazadas, cero DROP TABLE y cero UPDATE/DELETE de datos a nivel superior. No es autorización ni ejecución del SQL. El BOM del archivo CLI original producía un hash distinto; aprobar siempre el `ScriptSha256` generado por Recovery con el manifiesto real y el ejecutable revisado. No modificar BOM, saltos de línea ni SQL después de aprobarlo; otro SO/proveedor puede producir bytes distintos y requiere revisión de su propio hash.
+
+Con las configuraciones externas del ejemplo anterior, usar backup ID `0123456789abcdef0123456789abcdef`, restore ID `11111111111111111111111111111111`, plan ID `22222222222222222222222222222222` y rehearsal ID `33333333333333333333333333333333` solo si están libres. Source debe apuntar al cluster **sintético 34**, nunca a `medipos_lab`/`medipos_dev`. El administrador crea dos destinos vacíos diferentes: uno para `restore` y otro para `rehearse` (este último incluye de nuevo restore y comparación previa). **No ejecutar rehearse sobre la base que restore ya pobló.**
+
+```powershell
+$env:MEDIPOS_RECOVERY_OPT_IN='EXTERNAL_OPERATIONS_ONLY'
+$env:MEDIPOS_ENVIRONMENT='RecoveryLab'
+$tool='tools/MediPOS.Recovery/bin/Release/net10.0/MediPOS.Recovery.dll'
+$backup='C:\MediPOSOps\protected\0123456789abcdef0123456789abcdef'
+# Ejecutar secuencialmente; PARAR tras cualquier exit distinto de cero, sin retry automático.
+dotnet $tool backup --config C:\MediPOSOps\config\backup.json --confirm backup:RecoveryLab:0123456789abcdef0123456789abcdef
+if ($LASTEXITCODE -ne 0) { throw 'Backup NOT VERIFIED' }
+$timer=[System.Diagnostics.Stopwatch]::StartNew()
+dotnet $tool verify-file --config C:\MediPOSOps\config\backup.json --confirm verify-file:RecoveryLab:0123456789abcdef0123456789abcdef --backup $backup
+if ($LASTEXITCODE -ne 0) { throw 'Archive NOT VERIFIED' }
+$timer.Stop() # Registrar ElapsedMilliseconds como verificación independiente en evidencia privada.
+dotnet $tool restore --config C:\MediPOSOps\config\restore.json --confirm restore:RecoveryLab:11111111111111111111111111111111 --backup $backup
+if ($LASTEXITCODE -ne 0) { throw 'Restore NOT VERIFIED' }
+dotnet $tool plan-migrations --config C:\MediPOSOps\config\plan.json --confirm plan-migrations:RecoveryLab:22222222222222222222222222222222 --backup $backup
+if ($LASTEXITCODE -ne 0) { throw 'Plan NOT VERIFIED' }
+# DETENER: revisión humana del SQL y autorización de su ScriptSha256 exacto.
+$plan=Get-Content 'C:\MediPOSOps\protected\22222222222222222222222222222222\plan.json' -Raw | ConvertFrom-Json
+# Solo DESPUÉS de aprobar ese hash; no automatizar la aprobación leyendo el JSON.
+dotnet $tool rehearse --config C:\MediPOSOps\config\rehearse.json --confirm rehearse:RecoveryLab:33333333333333333333333333333333 --backup $backup --migration-sha256 $plan.ScriptSha256
+if ($LASTEXITCODE -ne 0) { throw 'Rehearsal NOT VERIFIED' }
+```
+
+`restore-compared.json` acredita igualdad de **todas** las tablas, esquema/ACL/locales y 34 migraciones antes de aplicar pendientes. Tras upgrade, RecoveryMigrationIntegrity exige igualdad de todas las tablas originales salvo `__EFMigrationsHistory`, exactamente 37 migraciones conocidas y solo `employee_invitations` nueva/vacía. Incluye estados mutables, datos UBL, idempotencia e historias anteriormente omitidas (licencias, eventos de transferencia e intentos CPE). Para otros prefijos se conserva una política explícitamente limitada de historiales append-only; una transformación legítima exige una estrategia revisada, nunca omitir comparación silenciosamente. `result.json.MigrationDataCoverage` declara el alcance; no reinterpretar evidencias antiguas sin ese campo.
+
+Conservar snapshots/manifiesto, SQL/hash aprobado, UTC, versiones/hashes del ejecutable, identidad técnica lógica y evidencias de ambos clusters bajo custodia. Las lecturas de validación comprueban constraints/FKs contra datos, FORCE RLS/políticas, índices válidos, funciones/triggers esperados y rol runtime. La comprobación de nombres de funciones/triggers no prueba por sí sola su semántica: comparar las definiciones restauradas con el snapshot y los cambios 35–37 revisados; ejecutar las regresiones de comportamiento pertinentes. No iniciar APIs/cron/entregas para probar estados pendientes. Tras cerrar la comparación, registrar por separado las escrituras sintéticas Owner/ticket y sus denegaciones; no mezclarlas con las huellas del restore. Los tests existentes de invitaciones crean su propia base: su PASS no prueba la copia restaurada.
+
+### Negativos y medición
+
+Ejecutar cada fallo sobre artefacto copiado o **nuevo destino efímero** autorizado; nunca alterar el backup de referencia. Casos mínimos: truncamiento de dump y byte cambiado/hash incorrecto; cluster igual/equivocado; destino no vacío; runtime elevado o sin GRANT/ACL incorrecta; extensión no disponible en servidor; interrupción durante restore/migración; corrupción sintética de pago/stock/historia; FORCE RLS ausente; trigger deshabilitado/CHECK NOT VALID; CA errónea, SAN incorrecto, TLS ausente y passfile inaccesible. Esperar exit no cero/sin `result.json`; inspeccionar migraciones efectivamente confirmadas tras interrupción, sin asumir rollback global de EF ni ejecutar Down/retry en destino parcial. La preparación unitaria cubre hashes/prefijos/roles/confirmaciones; estos fallos operativos aún deben ejecutarse con procesos/servidores reales.
+
+El delta D2 escribe `timings.json` con milisegundos monotónicos por snapshot, backup, verificación de archivo, restore, integridad previa, upgrade/recheck, integridad posterior y runtime, más total hasta terminar esas validaciones (excluye escritura final de evidencia y cierre del proceso). Registrar también la duración del `verify-file` independiente con Stopwatch y el tiempo de pared completo desde aprovisionamiento hasta salida del proceso, siembra, copia externa, revisión, reconciliación y aceptación; las fases no solapadas se suman, no sumar dos veces verificación incluida en restore. Un fallo puede no producir timings finales y nunca constituye medición exitosa. No hay tiempos D2 medidos todavía.
+
+Dimensionamiento inicial **estimado, no benchmark**: dos VMs separadas de 2–4 vCPU/4–8 GiB RAM cada una, SSD y host de operaciones .NET10/clientes18; reserva inicial de 10 GiB por cluster y 10 GiB para artefactos protegidos, ajustada antes del ensayo a tamaño real/WAL/temporales. Presupuestar 2–4 horas de operador para primer aprovisionamiento/ensayo/negativos; no es RTO ni duración pronosticada de restore. Medir tamaño de origen `D`, dump `B`, WAL/temporales `W` y número de destinos retenidos `N`: reservar al menos `D + N*D + W` en bases y `2*B` más evidencias/margen en almacén; los negativos requieren espacio adicional. RPO24h/RTO4h siguen **propuestos/NOT_MEASURED**: una copia puntual sintética no prueba periodicidad ni pérdida de una jornada productiva.
+
+**Gate D2-A local PASS:** restore; build (0 advertencias/errores, integración compilada); **102 unitarias focalizadas de Recovery**, incluidas 25 nuevas (subconjunto de las **2541/2541 unitarias completas, 0 FAIL/SKIP**); arquitectura **8/8**; formato verificado; EF offline sin diferencias. TRX bajo `backend/obj/validation/d2-{recovery-focused,unit,architecture}.trx`; SQL offline `d2-34-to-37.sql`. Nueva prueba PostgreSQL histórica/Owner/ticket **NOT EXECUTED**, ningún pg_dump/pg_restore real ni conexión PostgreSQL local. El delta tiene ocho archivos locales; migraciones/snapshot y módulos comerciales sin cambios, HEAD certificado conservado. No atribuirle el CI anterior.
+
+**Checkpoint:** D2-A entrega procedimiento, política de conservación, temporización y regresiones con brechas explícitas de dataset; ejecución/infraestructura siguen bloqueadas. Autorización mínima propuesta para D2-B: aprovisionar exclusivamente dos clusters externos efímeros identificados y almacenamiento protegido, completar el dataset sintético 34 y ejecutar una secuencia backup/verify/restore/plan más negativos revisados; aprobar por separado el SHA exacto del SQL antes de rehearse 34→37 y las pruebas Owner/ticket en la copia. Indicar responsable, endpoints, recursos/retención y eliminación autorizada. Excluir expresamente LAB/DEV, credenciales reales, despliegues, D3, publicación Git/CI y cualquier efecto externo. **No se activó ni creó un workflow D2**: el runner D1 de un solo cluster no demuestra TLS verify-full y aislamiento operativo entre dos clusters.
 
 ## Emergencia y recuperación productiva administrada
 

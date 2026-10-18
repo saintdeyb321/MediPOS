@@ -1,7 +1,12 @@
 using System.Data;
 using System.Security.Cryptography;
+using MediPOS.Application.Errors;
+using MediPOS.Application.Modules.IdentityAccess;
+using MediPOS.Application.Modules.IdentityAccess.Authentication;
 using MediPOS.Application.Modules.IdentityAccess.Invitations;
+using MediPOS.Application.Modules.IdentityAccess.OperationalAccess;
 using MediPOS.Application.Modules.SalesPos.VoidSale;
+using MediPOS.Application.Modules.TenancyLicensing;
 using MediPOS.Domain.Modules.IdentityAccess;
 using MediPOS.Domain.Modules.SalesPos;
 using MediPOS.Infrastructure.Persistence;
@@ -21,6 +26,95 @@ namespace MediPOS.IntegrationTests.Recovery;
 public sealed class RecoveryPostgreSqlTests(PostgreSqlFixture fixture)
 {
     private static CancellationToken Token => TestContext.Current.CancellationToken;
+
+    [Fact]
+    public async Task Historical34To37UpgradePreservesTwoTenantCommercialDataAndAddsEmptyInvitationStorage()
+    {
+        // Real migration regression, not a pg_dump/pg_restore or TLS/two-cluster rehearsal.
+        await using var harness = await CreateAsync(throughMigration: RecoveryMigrationIntegrity.Source34, branches: 2);
+        await harness.Dataset.SetCommissionsAsync(true, Token);
+        var runner = new PerformanceRunner(harness.Options, harness.Dataset);
+        foreach (var tenant in harness.Dataset.Tenants)
+        {
+            await using var sale = await runner.PrepareSaleAsync(tenant.Operators[0], new("historical-recovery", Mixed: true, Commissions: true), Token);
+            await sale.ExecuteAsync(Token); await sale.VerifyAsync(Token);
+            await using var reversed = await runner.PrepareSaleAsync(tenant.Operators[0], new("historical-reversal", Commissions: true), Token);
+            await reversed.ExecuteAsync(Token); await reversed.VerifyAsync(Token);
+            await using var scope = harness.Dataset.Scope(tenant.Owner);
+            var context = scope.ServiceProvider.GetRequiredService<MediPosDbContext>(); context.SelectTenant(tenant.Id);
+            var target = await context.Sales.AsNoTracking().OrderByDescending(value => value.CreatedAt).ThenByDescending(value => value.Id)
+                .Select(value => new { value.Id, Version = EF.Property<uint>(value, "Version") }).FirstAsync(Token);
+            await scope.ServiceProvider.GetRequiredService<VoidSaleHandler>().HandleAsync(new(tenant.Id, tenant.Branches[0], target.Id,
+                target.Version, "Synthetic historical recovery reversal"), Token);
+        }
+        await using var owner = new NpgsqlConnection(harness.OwnerConnection); await owner.OpenAsync(Token);
+        var before = await RecoveryWorkflow.InspectAsync(owner, false, Token);
+        Assert.Equal(34, before.Migrations.Length);
+        Assert.Equal(2, before.Tables["tenants"].Rows); Assert.Equal(4, before.Tables["branches"].Rows);
+        Assert.True(before.Tables["sale_payments"].Rows > 0); Assert.True(before.Tables["stock_movements"].Rows > 0);
+        Assert.True(before.Tables["sale_payment_reversals"].Rows > 0);
+        Assert.True(before.Tables["commission_entries"].Rows > 0); Assert.True(before.Tables["purchases"].Rows > 0);
+        Assert.False(before.Tables.ContainsKey("employee_invitations"));
+        await using (var context = RecoveryInspection.ModelContext(harness.OwnerConnection))
+        {
+            await context.Database.MigrateAsync(Token);
+            Assert.False(context.Database.HasPendingModelChanges());
+        }
+        var after = await RecoveryWorkflow.InspectAsync(owner, true, Token);
+        Assert.Equal(37, after.Migrations.Length);
+        Assert.Equal("ALL_EXISTING_TABLES_34_TO_37", RecoveryMigrationIntegrity.Verify(before, after));
+        await GrantProbeReadsAsync(harness);
+        var runtime = await RuntimeRecoveryProbe.ValidateAsync(harness.Database.RuntimeConnection, owner, Token);
+        Assert.Equal("CHECKED", runtime.RuntimeRole);
+        Assert.Equal(2, runtime.TenantsExamined);
+        Assert.Contains("INVITATION_OWNER_AND_TICKET_RLS", runtime.PendingVerifications);
+        // Writes below are post-upgrade authorization regressions, not part of the preservation comparison above.
+        await CheckUpgradedInvitationAccessAsync(harness);
+    }
+
+    private static async Task CheckUpgradedInvitationAccessAsync(Harness harness)
+    {
+        var first = harness.Dataset.Tenants[0]; var other = harness.Dataset.Tenants[1];
+        var hash = SHA256.HashData(RandomNumberGenerator.GetBytes(32));
+        Guid invitation;
+        await using (var scope = harness.Dataset.Scope(first.Owner))
+            invitation = (await InvitationHandler(scope.ServiceProvider).CreateAsync(
+                new(first.Id, Guid.NewGuid(), TenantRole.Cashier, hash, first.Owner), Token)).Invitation.Id;
+        await using (var scope = harness.Dataset.Scope(other.Owner))
+            await InvitationHandler(scope.ServiceProvider).CreateAsync(
+                new(other.Id, Guid.NewGuid(), TenantRole.Cashier, SHA256.HashData(RandomNumberGenerator.GetBytes(32)), other.Owner), Token);
+        await using (var scope = harness.Dataset.Scope(first.Owner))
+        {
+            Assert.Equal(invitation, (await InvitationHandler(scope.ServiceProvider).ReadAsync(first.Id, invitation, Token)).Id);
+            var context = scope.ServiceProvider.GetRequiredService<MediPosDbContext>(); context.SelectTenant(first.Id);
+            await using var transaction = await context.Database.BeginTransactionAsync(Token);
+            await context.Database.ExecuteSqlInterpolatedAsync($"SELECT set_config('medipos.invitation_actor_id', {first.Owner.ToString("D")}, true)", Token);
+            Assert.Equal(invitation, Assert.Single(await context.EmployeeInvitations.IgnoreQueryFilters().ToListAsync(Token)).Id);
+            await transaction.RollbackAsync(Token);
+        }
+        await using (var scope = harness.Dataset.Scope(other.Owner))
+        {
+            var handler = InvitationHandler(scope.ServiceProvider);
+            await Assert.ThrowsAsync<ApplicationErrorException>(() => handler.AcceptAsync(new(first.Id, invitation, new byte[32]), Token));
+            Assert.Equal("accepted_pending_approval", (await handler.AcceptAsync(new(first.Id, invitation, hash), Token)).Status);
+            Assert.Equal("accepted_pending_approval", (await handler.AcceptAsync(new(first.Id, invitation, hash), Token)).Status);
+        }
+        await using (var scope = harness.Dataset.Scope(other.Owner))
+        {
+            var context = scope.ServiceProvider.GetRequiredService<MediPosDbContext>(); context.SelectTenant(first.Id);
+            await using var transaction = await context.Database.BeginTransactionAsync(Token);
+            await context.Database.ExecuteSqlInterpolatedAsync($"SELECT set_config('medipos.invitation_actor_id', {other.Owner.ToString("D")}, true), set_config('medipos.invitation_id', {invitation.ToString("D")}, true), set_config('medipos.invitation_hash', {Convert.ToHexString(hash)}, true)", Token);
+            Assert.Equal(invitation, Assert.Single(await context.EmployeeInvitations.IgnoreQueryFilters().ToListAsync(Token)).Id);
+            Assert.False(await context.Memberships.AnyAsync(row => row.UserId == other.Owner, Token));
+            await transaction.RollbackAsync(Token);
+        }
+    }
+
+    private static EmployeeInvitationHandler InvitationHandler(IServiceProvider services) => new(
+        services.GetRequiredService<IEmployeeInvitationStore>(), services.GetRequiredService<IIdentityAccessStore>(),
+        services.GetRequiredService<ITenantLicenseProvisioning>(),
+        new TenantOperationAuthorizer(services.GetRequiredService<ResolveAccessContextHandler>(), TimeProvider.System),
+        services.GetRequiredService<IAuthenticatedMediPosUser>(), TimeProvider.System);
 
     [Fact]
     public async Task ReadOnlyChecksPreserveConfirmedVoidedPaymentsCommissionsLotsAuditAndPendingJobs()
@@ -256,14 +350,14 @@ public sealed class RecoveryPostgreSqlTests(PostgreSqlFixture fixture)
         await grant.ExecuteNonQueryAsync(Token);
     }
 
-    private async Task<Harness> CreateAsync(int tenants = 2)
+    private async Task<Harness> CreateAsync(int tenants = 2, string? throughMigration = null, int branches = 1)
     {
         var options = new PerformanceOptions
         {
             Products = 128,
             StockedProducts = 128,
             Tenants = Math.Max(1, tenants),
-            Branches = 1,
+            Branches = branches,
             OperatorsPerBranch = 2,
             Samples = 100,
             Warmup = 10,
@@ -285,7 +379,7 @@ public sealed class RecoveryPostgreSqlTests(PostgreSqlFixture fixture)
         var previous = values.Keys.ToDictionary(key => key, Environment.GetEnvironmentVariable, StringComparer.Ordinal);
         DisposablePerformanceDatabase database;
         try
-        { foreach (var pair in values) Environment.SetEnvironmentVariable(pair.Key, pair.Value); database = await DisposablePerformanceDatabase.CreateAsync(options, Token); }
+        { foreach (var pair in values) Environment.SetEnvironmentVariable(pair.Key, pair.Value); database = await DisposablePerformanceDatabase.CreateAsync(options, Token, throughMigration); }
         finally { foreach (var pair in previous) Environment.SetEnvironmentVariable(pair.Key, pair.Value); }
         var observation = new PerformanceObservation(); var dataset = new PerformanceDataset(options, database, observation);
         try
