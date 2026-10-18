@@ -1,4 +1,5 @@
 using MediPOS.Application.Errors;
+using MediPOS.Application.Modules.Catalog;
 using MediPOS.Application.Modules.IdentityAccess.Authentication;
 using MediPOS.Application.Modules.IdentityAccess.CreateMembership;
 using MediPOS.Application.Modules.TenancyLicensing;
@@ -56,6 +57,9 @@ public sealed class PlatformDirectoryPersistenceTests(PostgreSqlFixture fixture)
             var context = scope.ServiceProvider.GetRequiredService<MediPosDbContext>();
             Assert.Empty(await context.Licenses.IgnoreQueryFilters().Where(l => l.TenantId == second.TenantId).ToListAsync(Token));
             var registered = await queries.GoogleIdentityAsync(owner, Token); Assert.Equal(owner, registered.UserId);
+            var categories = await scope.ServiceProvider.GetRequiredService<PlatformCategoryQueries>().ReadAsync(3, Token);
+            var expectedCategories = await context.Categories.AsNoTracking().Where(c => c.IsActive).OrderBy(c => c.Id).Take(3).Select(c => c.Id).ToListAsync(Token);
+            Assert.Equal(expectedCategories, categories.Select(c => c.Id));
         }
         await using var otherServices = Services(other);
         await using (var scope = otherServices.CreateAsyncScope())

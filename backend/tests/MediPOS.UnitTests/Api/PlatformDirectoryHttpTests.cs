@@ -1,6 +1,7 @@
 using System.Net;
 using System.Text.Json;
 using MediPOS.Application.Errors;
+using MediPOS.Application.Modules.Catalog;
 using MediPOS.Application.Modules.IdentityAccess.Authentication;
 using MediPOS.Application.Modules.TenancyLicensing;
 using MediPOS.Domain.Modules.TenancyLicensing;
@@ -18,6 +19,7 @@ public sealed class PlatformDirectoryHttpTests
 
     [Theory]
     [InlineData("/platform/session")]
+    [InlineData("/platform/catalog/categories?limit=100")]
     [InlineData("/platform/tenants?limit=20")]
     [InlineData("/platform/tenants/019a0162-0000-7000-8000-000000000002/details")]
     [InlineData("/platform/identities/019a0162-0000-7000-8000-000000000002")]
@@ -95,13 +97,37 @@ public sealed class PlatformDirectoryHttpTests
         Assert.Equal("access.platform_denied", failure.Error.Code); Assert.Equal(1, reader.Calls);
     }
 
-    private static Task<GoogleHost> Host(Reader reader, bool approved = true, bool enabled = true) => GoogleHost.CreateAsync(
+    [Fact]
+    public async Task CategoriesAreBoundedGlobalReferenceMetadataAndNeverCommercialProducts()
+    {
+        var reader = new Reader(); var categories = new Categories();
+        await using var host = await Host(reader, categories: categories); await PlatformLicenseHttpTests.Login(host);
+        using var invalid = await Get(host, "/platform/catalog/categories?limit=101");
+        Assert.Equal(HttpStatusCode.BadRequest, invalid.StatusCode); Assert.Equal(0, categories.Limit);
+        using var duplicate = await Get(host, "/platform/catalog/categories?limit=1&limit=2");
+        Assert.Equal(HttpStatusCode.BadRequest, duplicate.StatusCode); Assert.Equal(0, categories.Limit);
+        using var result = await Get(host, "/platform/catalog/categories?limit=2");
+        Assert.Equal(HttpStatusCode.OK, result.StatusCode); Assert.True(result.Headers.CacheControl?.NoStore);
+        Assert.Equal(2, categories.Limit);
+        using var data = JsonDocument.Parse(await result.Content.ReadAsStringAsync(Token));
+        Assert.Single(data.RootElement.EnumerateArray());
+        Assert.Equal("Synthetic category", data.RootElement[0].GetProperty("name").GetString());
+        var denied = await Assert.ThrowsAsync<ApplicationErrorException>(() =>
+            new PlatformCategoryQueries(categories, new Authority(reader.Operator.Id)).ReadAsync(20, Token));
+        Assert.Equal("access.platform_denied", denied.Error.Code);
+    }
+
+    private static Task<GoogleHost> Host(Reader reader, bool approved = true, bool enabled = true, Categories? categories = null) => GoogleHost.CreateAsync(
         configure: config =>
         {
             config["PlatformAdministration:Enabled"] = "true"; config["PlatformAdministration:AdministratorUserIds:0"] = (approved ? reader.Operator.Id : Guid.NewGuid()).ToString("D");
             config["PlatformApi:Enabled"] = enabled ? "true" : "false";
         }, seedUsers: users => users.BySubject[reader.Operator.GoogleSubject] = reader.Operator,
-        configureServices: services => services.AddScoped<IPlatformDirectoryReader>(_ => reader));
+        configureServices: services =>
+        {
+            services.AddScoped<IPlatformDirectoryReader>(_ => reader);
+            services.AddScoped<ICatalogDirectoryReader>(_ => categories ?? new Categories());
+        });
     private static async Task<HttpResponseMessage> Get(GoogleHost host, string path)
     {
         using var request = new HttpRequestMessage(HttpMethod.Get, path); request.Headers.Add("Origin", "https://medipos.example.test");
@@ -126,5 +152,14 @@ public sealed class PlatformDirectoryHttpTests
         { Calls++; return Task.FromResult<PlatformGoogleIdentity?>(Missing ? null : new(User, "Synthetic registered user", "qa@example.invalid")); }
         public Task<LicenseDetails?> CreationResultAsync(Guid actorId, Guid requestKey, CancellationToken token)
         { Calls++; ReceiptActor = actorId; return Task.FromResult<LicenseDetails?>(Missing ? null : License); }
+    }
+    private sealed class Categories : ICatalogDirectoryReader
+    {
+        internal int Limit;
+        public Task<IReadOnlyList<CategoryDetails>> CategoriesAsync(int offset, int limit, CancellationToken token)
+        { Assert.Equal(0, offset); Limit = limit; return Task.FromResult<IReadOnlyList<CategoryDetails>>([new(Guid.NewGuid(), "Synthetic category", true, DateTimeOffset.UtcNow)]); }
+        public Task<IReadOnlyList<GlobalProductDetails>> GlobalProductsAsync(int offset, int limit, CancellationToken token) => throw new InvalidOperationException("Not a product directory.");
+        public Task<IReadOnlyList<BusinessProductDetails>> ProductsAsync(Guid tenantId, int offset, int limit, CancellationToken token) => throw new InvalidOperationException("No tenant access.");
+        public Task<CatalogProductView?> ProductAsync(Guid tenantId, Guid productId, CancellationToken token) => throw new InvalidOperationException("No tenant access.");
     }
 }

@@ -11,7 +11,7 @@ const id = (n: number) => `019a0162-0000-7000-8000-${String(n).padStart(12, '0')
 const time = '2026-10-17T12:00:00Z'
 const json = (value: unknown, status = 200) => new Response(JSON.stringify(value), { status, headers: { 'Content-Type': 'application/json' } })
 function fixture() {
-  const state = { allowed: true, lost: false, invisible: false, reject: 0, listFailure: 0, detailFailure: 0, receipt: false, owner: null as string | null, status: 'trial' }
+  const state = { allowed: true, lost: false, invisible: false, reject: 0, listFailure: 0, detailFailure: 0, receipt: false, owner: null as string | null, status: 'trial', categories: [] as { id: string; name: string; isActive: boolean; createdAt: string }[] }
   const license = () => ({ tenantId: id(2), licenseId: id(3), status: state.status, startsAt: time, expiresAt: '2026-11-16T12:00:00Z', maxBranches: 2 })
   const fetcher = vi.fn<typeof fetch>().mockImplementation(async (path, init) => {
     const p = String(path).split('?')[0]; const method = init?.method ?? 'GET'
@@ -19,6 +19,12 @@ function fixture() {
     if (p === '/auth/csrf') return json({ requestToken: 'synthetic-csrf' })
     if (p === '/platform/session') return state.allowed ? json({ allowed: true }) : json({ code: 'access.platform_denied' }, 403)
     if (method === 'POST' && state.reject) return json({ code: 'unit.rejected' }, state.reject)
+    if (p === '/platform/catalog/categories' && method === 'POST') {
+      const name = (JSON.parse(String(init?.body)) as { name: string }).name
+      const created = { id: id(9), name, isActive: true, createdAt: time }; state.categories.push(created)
+      if (state.lost) throw new TypeError('synthetic lost response'); return json(created, 201)
+    }
+    if (p === '/platform/catalog/categories') return json(state.invisible ? [] : state.categories)
     if (p === '/platform/tenants' && method === 'POST') { state.receipt = true; if (state.lost) throw new TypeError('synthetic lost response'); return json(license(), 201) }
     if (p === '/platform/tenants') return state.listFailure ? json({ code: 'unit.read_failed' }, state.listFailure) : json({ items: [{ tenantId: id(2), tradingName: 'Synthetic QA botica', createdAt: time }], nextAfterTenantId: null })
     if (p?.startsWith('/platform/tenant-requests/')) return state.receipt && !state.invisible ? json(license()) : json({ code: 'platform.request_not_found' }, 404)
@@ -109,6 +115,33 @@ it('recovers an uncertain bootstrap after reload by reading the registered Owner
   await waitFor(() => expect(screen.getByRole('button', { name: 'Verificar identidad del Owner inicial' })).toBeEnabled())
   fireEvent.click(screen.getByRole('button', { name: 'Verificar identidad del Owner inicial' }))
   await screen.findByText(/Owner inicial registrado: Synthetic registered Owner · qa-owner@example.invalid/)
+  expect(fake.writes()).toHaveLength(0)
+})
+it('reads before creating a category, prevents double submit and does not recreate an existing name', async () => {
+  const fake = fixture(); mount(fake); await screen.findByRole('heading', { name: 'Categoría global inicial' })
+  expect(screen.getByRole('button', { name: 'Crear categoría global una vez' })).toBeDisabled()
+  fireEvent.click(screen.getByRole('button', { name: 'Consultar categorías globales' })); await screen.findByText('No hay categorías activas.')
+  fireEvent.change(screen.getByRole('textbox', { name: 'Nombre de la categoría global' }), { target: { value: 'Medicamentos' } })
+  fireEvent.click(screen.getByRole('checkbox', { name: 'Confirmo crear esta referencia global, sin productos.' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Crear categoría global una vez' })); fireEvent.click(screen.getByRole('button', { name: 'Crear categoría global una vez' }))
+  await screen.findByText(/Categoría creada mediante el contrato oficial/)
+  expect(fake.writes()).toHaveLength(1); expect(fake.writes()[0]![1]!.body).toBe('{"name":"Medicamentos"}')
+  expect(new Headers(fake.writes()[0]![1]!.headers).get('X-CSRF-TOKEN')).toBe('synthetic-csrf')
+  expect(new Headers(fake.writes()[0]![1]!.headers).has('Idempotency-Key')).toBe(false)
+  expect(screen.getByRole('button', { name: 'Crear categoría global una vez' })).toBeDisabled()
+})
+it('keeps an uncertain category intent across reload and never treats an empty read as failure', async () => {
+  const fake = fixture(); fake.state.lost = true; mount(fake, '?categoryPending=Medicamentos')
+  await screen.findByText(/Alta de categoría pendiente: Medicamentos/); expect(fake.writes()).toHaveLength(0)
+  fireEvent.click(screen.getByRole('button', { name: 'Consultar categorías globales' })); await screen.findByText('No hay categorías activas.')
+  expect(screen.getByRole('button', { name: 'Continuar tras conciliar categoría' })).toBeDisabled()
+  expect(screen.getByTestId('location')).toHaveTextContent('categoryPending=Medicamentos')
+  fake.state.categories.push({ id: id(9), name: 'Medicamentos', isActive: true, createdAt: time })
+  await waitFor(() => expect(screen.getByRole('button', { name: 'Consultar categorías globales' })).toBeEnabled())
+  fireEvent.click(screen.getByRole('button', { name: 'Consultar categorías globales' }))
+  await waitFor(() => expect(screen.getByRole('checkbox', { name: /Verifiqué la categoría registrada/ })).toBeEnabled())
+  fireEvent.click(screen.getByRole('checkbox', { name: /Verifiqué la categoría registrada/ })); fireEvent.click(screen.getByRole('button', { name: 'Continuar tras conciliar categoría' }))
+  await waitFor(() => expect(screen.getByTestId('location')).not.toHaveTextContent('categoryPending'))
   expect(fake.writes()).toHaveLength(0)
 })
 it.each([403, 409, 429, 503])('shows HTTP %i without automatically retrying a platform mutation', async status => {

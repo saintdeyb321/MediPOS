@@ -211,6 +211,7 @@ public static class DependencyInjection
         services.AddScoped<IBusinessProductStore, BusinessProductStore>();
         services.AddScoped<ICatalogDirectoryReader, CatalogDirectoryReader>();
         services.AddScoped<CatalogDirectoryQueries>();
+        services.AddScoped<PlatformCategoryQueries>();
         services.AddScoped<IProductSearchStore, ProductSearchStore>();
         services.AddScoped<SearchProductsHandler>();
         services.AddScoped<CreateCategoryHandler>();

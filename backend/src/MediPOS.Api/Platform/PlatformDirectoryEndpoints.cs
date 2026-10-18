@@ -10,6 +10,15 @@ public static partial class PlatformLicenseEndpoints
     private static void MapPlatformDirectoryEndpoints(this WebApplication app)
     {
         var group = app.MapGroup("/platform").RequireAuthorization();
+        MapRead(group, "/catalog/categories", (HttpContext c) => ReadDirectory(c, ["limit"], async () =>
+        {
+            var limit = 100;
+            if (c.Request.Query.TryGetValue("limit", out var value) &&
+                (!int.TryParse(value, NumberStyles.None, CultureInfo.InvariantCulture, out limit) || limit is < 1 or > 100))
+                throw new HttpBoundaryException(400, "platform.invalid_query");
+            return Results.Json(await c.RequestServices.GetRequiredService<MediPOS.Application.Modules.Catalog.PlatformCategoryQueries>()
+                .ReadAsync(limit, c.RequestAborted));
+        })).WithName("medipos.platform.categories.list");
         MapRead(group, "/session", (HttpContext c) => ReadDirectory(c, [], () => Task.FromResult<IResult>(Results.Json(new { allowed = true }))))
             .WithName("medipos.platform.session");
         MapRead(group, "/tenants", (HttpContext c) => ReadDirectory(c, ["afterTenantId", "limit"], async () =>

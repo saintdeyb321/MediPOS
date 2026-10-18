@@ -27,7 +27,7 @@ public sealed class PlatformLicenseHttpTests
     private static CancellationToken Token => TestContext.Current.CancellationToken;
     private static readonly string[] Operations = ["renew", "suspend", "reactivate"];
     private static readonly string[] BaseRoutes = ["/auth/csrf", "/auth/google/callback", "/auth/login", "/auth/logout", "/auth/me", "/health", "/health/ready"];
-    private static readonly string[] DirectoryRoutes = ["/platform/session", "/platform/tenants", "/platform/tenants/{tenantId:guid}/details", "/platform/identities/{userId}", "/platform/tenant-requests/{requestKey}"];
+    private static readonly string[] DirectoryRoutes = ["/platform/session", "/platform/tenants", "/platform/tenants/{tenantId:guid}/details", "/platform/identities/{userId}", "/platform/tenant-requests/{requestKey}", "/platform/catalog/categories"];
 
     [Theory]
     [InlineData(false)]

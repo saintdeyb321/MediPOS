@@ -5,6 +5,7 @@ const license = object({ tenantId: uuid, licenseId: uuid, status: oneOf('trial',
 const summary = object({ tenantId: uuid, tradingName: text, createdAt: utc })
 const identity = object({ userId: uuid, displayName: text, email: text })
 const details = object({ tenant: summary, license, initialOwnerUserId: nullable(uuid) })
+const category = object({ id: uuid, name: text, isActive: boolean, createdAt: utc })
 export type PlatformTenant = ReturnType<typeof details>
 export type VerifiedIdentity = ReturnType<typeof identity>
 export type TrialInput = { tradingName: string; startsAt: string; expiresAt: string; maxBranches: number; status: 'trial' }
@@ -16,6 +17,11 @@ export function platformApi(http: HttpClient) {
     try { return decode(value) } catch { throw new ApiError(0, 'client.outcome_unknown', undefined, true) }
   }
   return {
+    async categories(signal?: AbortSignal) {
+      const result = array(category)(await http.request('/platform/catalog/categories?limit=100', { signal }))
+      if (result.length > 100) throw new ApiError(0, 'client.unexpected_response'); return result
+    },
+    createCategory: (name: string, signal?: AbortSignal) => mutate('/platform/catalog/categories', { name }, category, signal),
     async admission(signal?: AbortSignal) { const result = object({ allowed: boolean })(await http.request('/platform/session', { signal })); if (!result.allowed) throw new ApiError(403, 'access.platform_denied'); return result },
     async tenants(after?: string, signal?: AbortSignal) {
       const result = object({ items: array(summary), nextAfterTenantId: nullable(uuid) })(await http.request('/platform/tenants?limit=20' + (after ? '&afterTenantId=' + uuid(after) : ''), { signal, exactNumbers: true }))

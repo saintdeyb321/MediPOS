@@ -14,6 +14,8 @@ export function usePlatformConsole(http: HttpClient, userId: string) {
   const key = ['platform', userId] as const
   const list = useQuery({ queryKey: [...key, 'tenants', after], queryFn: ({ signal }) => api.tenants(after, signal), retry: false, refetchOnWindowFocus: false })
   const detail = useQuery({ queryKey: [...key, 'tenant', tenantId], queryFn: ({ signal }) => api.tenant(tenantId, signal), enabled: isUuid(tenantId), retry: false, refetchOnWindowFocus: false })
+  const categories = useQuery({ queryKey: [...key, 'categories'], queryFn: ({ signal }) => api.categories(signal), enabled: false, retry: false })
+  const [categoriesRead, setCategoriesRead] = useState(false)
   const [identity, setIdentity] = useState<VerifiedIdentity | null>(null); const [busy, setBusy] = useState(false); const running = useRef(false)
   const [error, setError] = useState<unknown>(null); const [notice, setNotice] = useState(''); const [denied, setDenied] = useState(false)
   const [reconciliationRead, setReconciliationRead] = useState(false)
@@ -40,13 +42,33 @@ export function usePlatformConsole(http: HttpClient, userId: string) {
     catch (failure) {
       // Only a definitive POST rejection can retire its intent. A later GET 404 never proves absence of a write.
       if (failure instanceof ApiError && !failure.outcomeUnknown && failure.status >= 400 && failure.status < 500 && failure.status !== 409)
-        mark({ platformPending: null, creationKey: null })
+        mark({ platformPending: null, creationKey: null, categoryPending: null })
       throw failure
     }
   }
   const pending = params.get('platformPending'); const creationKey = params.get('creationKey')
+  const categoryPending = params.get('categoryPending')
   const data = detail.isSuccess && !detail.isFetching ? detail.data : null
-  const locked = busy || denied || Boolean(pending || creationKey)
+  const locked = busy || denied || Boolean(pending || creationKey || categoryPending)
+  async function readCategories() {
+    setCategoriesRead(false)
+    await perform(async signal => {
+      const rows = await api.categories(signal); signal.throwIfAborted()
+      client.setQueryData([...key, 'categories'], rows); setCategoriesRead(true)
+    })
+  }
+  async function createCategory(name: string) {
+    if (locked || !categoriesRead || !categories.data || categories.data.length >= 100 ||
+      categories.data.some(row => row.name.trim().toLocaleLowerCase('es-PE') === name.trim().toLocaleLowerCase('es-PE'))) return
+    mark({ categoryPending: name.trim() }); setCategoriesRead(false)
+    await perform(async signal => {
+      const created = await send(() => api.createCategory(name.trim(), signal))
+      const rows = await api.categories(signal); signal.throwIfAborted()
+      client.setQueryData([...key, 'categories'], rows); setCategoriesRead(true)
+      if (!rows.some(row => row.id === created.id && row.name === created.name)) throw new ApiError(0, 'client.outcome_unknown', undefined, true)
+      mark({ categoryPending: null }); setNotice('Categoría creada mediante el contrato oficial y reconsultada. No se creó ningún producto.')
+    })
+  }
   async function create(input: TrialInput) {
     if (locked || latest.current.has('creationKey')) return
     const requestKey = crypto.randomUUID(); mark({ creationKey: requestKey, platformPending: 'create' })
@@ -101,6 +123,8 @@ export function usePlatformConsole(http: HttpClient, userId: string) {
     })
   }
   return { list, detail, data, tenantId, identity, setIdentity, busy, locked, error, notice, pending, creationKey, denied, reconciliationRead, refresh,
+    categories, categoriesRead, categoryPending, readCategories, createCategory,
+    acknowledgeCategory: () => { if (!busy && categoryPending && categoriesRead && categories.data?.filter(row => row.name === categoryPending).length === 1) { mark({ categoryPending: null }); setNotice('Conciliación manual registrada en esta vista. No se repitió el POST ni se afirmó idempotencia de categorías.') } },
     select: (id: string) => { if (!locked) { setIdentity(null); setNotice(''); mark({ tenant: id }) } },
     page: (id: string | null) => { if (!locked) mark({ after: id }) },
     create, reconcileCreation, lookup, bootstrap, change,
