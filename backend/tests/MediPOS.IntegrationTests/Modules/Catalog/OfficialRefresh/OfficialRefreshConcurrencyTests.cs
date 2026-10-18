@@ -108,11 +108,16 @@ public sealed class OfficialRefreshConcurrencyTests(PostgreSqlFixture fixture)
         // SQL identifiers and predicates contain only fixed table names, generated hexadecimal UUIDs and a bounded test lock key.
         var table = target == "history" ? "official_catalog_version_history" : "official_catalog_platform_audits";
         var predicate = target == "history" ? $"NEW.refresh_id='{approved.Id}'::uuid AND NEW.action='applied'" : $"NEW.candidate_id='{approved.Id}'::uuid AND NEW.action='refresh_applied'";
-        var faultSql = $"CREATE FUNCTION {function}() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF {predicate} THEN RAISE EXCEPTION 'Synthetic late refresh failure' USING ERRCODE='23514'; END IF; RETURN NEW; END $$; CREATE TRIGGER {function} BEFORE INSERT ON {table} FOR EACH ROW EXECUTE FUNCTION {function}();";
+        var faultSql = $"CREATE FUNCTION {function}() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF {predicate} THEN RAISE EXCEPTION 'Synthetic late refresh failure' USING ERRCODE='23514', CONSTRAINT='ck_test_refresh_late_write'; END IF; RETURN NEW; END $$; CREATE TRIGGER {function} BEFORE INSERT ON {table} FOR EACH ROW EXECUTE FUNCTION {function}();";
         await admin.Database.ExecuteSqlRawAsync(faultSql, Token);
         try
         {
-            await Assert.ThrowsAsync<ApplicationErrorException>(() => Apply(source, approved));
+            var failure = await Assert.ThrowsAsync<ApplicationErrorException>(() => Apply(source, approved));
+            Exception? cause = failure;
+            while (cause is not null && cause is not PostgresException) cause = cause.InnerException;
+            var postgres = Assert.IsType<PostgresException>(cause);
+            Assert.Equal("23514", postgres.SqlState);
+            Assert.Equal("ck_test_refresh_late_write", postgres.ConstraintName);
             await using var context = fixture.CreateContext(); Assert.Equal(original.Curation.Proposal.Name, (await context.GlobalProducts.SingleAsync(value => value.Id == approved.GlobalProductId, Token)).Name);
             var persisted = await admin.OfficialCatalogRefreshes.AsNoTracking().SingleAsync(value => value.Id == approved.Id, Token);
             Assert.Equal("approved", persisted.Status); Assert.Null(persisted.AppliedProductVersion);

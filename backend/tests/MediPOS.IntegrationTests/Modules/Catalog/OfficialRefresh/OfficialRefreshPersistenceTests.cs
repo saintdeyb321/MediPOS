@@ -19,6 +19,28 @@ namespace MediPOS.IntegrationTests.Modules.Catalog.OfficialRefresh;
 [Trait("Category", "PostgreSql")]
 public sealed class OfficialRefreshPersistenceTests(PostgreSqlFixture fixture)
 {
+    [Theory]
+    [InlineData("unchanged", false)]
+    [InlineData("metadata", true)]
+    [InlineData("clinical", false)]
+    public async Task PostgreSqlMetadataProjectionRequiresGroupedJsonExtraction(string change, bool metadataChanged)
+    {
+        // Scalar parser probe only. Full clinical approval/authorization remains covered by the refresh cases below.
+        const string beforeJson = """{"Proposal":{"Name":"Synthetic original","Components":[1]}}""";
+        var afterJson = JsonSerializer.Serialize(new
+        {
+            Proposal = new { Name = change == "metadata" ? "Synthetic changed" : "Synthetic original", Components = new[] { change == "clinical" ? 2 : 1 } },
+        });
+        await using var connection = new NpgsqlConnection(fixture.CatalogPublicationConnectionString);
+        await connection.OpenAsync(Token);
+        await using var command = connection.CreateCommand();
+        command.Parameters.AddWithValue("before", beforeJson); command.Parameters.AddWithValue("after", afterJson);
+        command.CommandText = "SELECT (@before::jsonb->'Proposal' - ARRAY['Components']) IS DISTINCT FROM (@after::jsonb->'Proposal' - ARRAY['Components'])";
+        Assert.Equal("22P02", (await Assert.ThrowsAsync<PostgresException>(() => command.ExecuteScalarAsync(Token))).SqlState);
+        command.CommandText = "SELECT ((@before::jsonb->'Proposal') - ARRAY['Components']) IS DISTINCT FROM ((@after::jsonb->'Proposal') - ARRAY['Components'])";
+        Assert.Equal(metadataChanged, Assert.IsType<bool>(await command.ExecuteScalarAsync(Token)));
+    }
+
     [Fact]
     public async Task MigrationModelRlsForeignKeysAndMetadataGrantsAreRestricted()
     {
