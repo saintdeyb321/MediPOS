@@ -188,6 +188,23 @@ function Get-QaInheritedOverrideNames([string[]]$Names) {
     # PG* can contain inherited credentials or TLS defaults. Never pass those to a QA API child.
     return @($Names | Where-Object { $_ -match '^(PG|ASPNETCORE_|DOTNET_|ConnectionStrings__|Authentication__|PlatformAdministration__|PlatformApi__|TenantApi__|Kestrel__|LocalFrontend__|PublishedFrontend__|Notifications__|Logging__|AllowedHosts$)' })
 }
+function Invoke-QaBuildCommand([string]$Executable,[string[]]$Arguments,[string]$FailureCode) {
+    $tool=Get-Command -Name $Executable -CommandType Application -ErrorAction Stop
+    $previousPreference=$ErrorActionPreference
+    $exitVariable=Get-Variable -Name LASTEXITCODE -Scope Global -ErrorAction SilentlyContinue
+    $hadExitVariable=$null -ne $exitVariable; $previousExit=if ($hadExitVariable) { $exitVariable.Value } else { $null }
+    try {
+        # Windows PowerShell5.1 wraps native stderr warnings as ErrorRecords. Capture them,
+        # but decide success solely from an actual zero exit code, never from suppressed output.
+        $ErrorActionPreference='Continue'; $global:LASTEXITCODE=-2147483648
+        $null=& $tool.Source @Arguments 2>&1
+        $exitCode=$global:LASTEXITCODE
+    } finally {
+        $ErrorActionPreference=$previousPreference
+        if ($hadExitVariable) { $global:LASTEXITCODE=$previousExit } else { Remove-Variable -Name LASTEXITCODE -Scope Global -ErrorAction SilentlyContinue }
+    }
+    Assert-QaCondition ($exitCode -eq 0) $FailureCode
+}
 
 function Invoke-QaRuntimeProbe($Connection, $Manifest, [string]$PsqlPath, [string]$ExpectedClusterIdentifier, [string]$ApprovedGoogleActor = '') {
     # Executed only by an explicitly approved -Start. No migrations, grants, DDL or business writes.
@@ -268,4 +285,4 @@ function Test-QaProcessIdentity($Record, $Process, [string]$AppPath) {
         ([DateTime]$Record.StartTimeUtc).ToUniversalTime().Ticks -eq ([DateTime]$Process.CreationDate).ToUniversalTime().Ticks
 }
 
-Export-ModuleMember -Function Assert-QaCondition, Assert-QaChildPath, Assert-QaPrivateMaterialPath, Assert-QaPrivateRoot, Assert-QaSettings, Assert-QaPrivateTree, Get-QaFileManifest, Get-QaRlsInventory, Get-QaDatabaseGuards, Assert-QaRelease, Assert-QaCertificates, Assert-QaClusterRecord, Get-QaFailureCode, Get-QaInheritedOverrideNames, Invoke-QaRuntimeProbe, Test-QaProcessIdentity
+Export-ModuleMember -Function Assert-QaCondition, Assert-QaChildPath, Assert-QaPrivateMaterialPath, Assert-QaPrivateRoot, Assert-QaSettings, Assert-QaPrivateTree, Get-QaFileManifest, Get-QaRlsInventory, Get-QaDatabaseGuards, Assert-QaRelease, Assert-QaCertificates, Assert-QaClusterRecord, Get-QaFailureCode, Get-QaInheritedOverrideNames, Invoke-QaBuildCommand, Invoke-QaRuntimeProbe, Test-QaProcessIdentity

@@ -1,4 +1,5 @@
-# Pure/static regressions. Never reads private settings, connects PostgreSQL/HTTP or starts/stops a process.
+param([switch]$BuildCommandSelfTest)
+# Pure/static regressions by default; optional build-command test starts only two disposable shell children.
 $ErrorActionPreference = 'Stop'
 Import-Module (Join-Path $PSScriptRoot 'LocalQa.psm1') -Force
 $qaRoot = 'C:\Users\unit\AppData\Local\MediPOS\QA\unit'
@@ -86,3 +87,13 @@ foreach ($case in @('pid-reuse','foreign-app','extra-arguments','foreign-pid')) 
     Assert-QaCondition (-not (Test-QaProcessIdentity $record $candidate $app)) 'foreign-process-was-accepted'; $cases++
 }
 Write-Output ('PASS: ' + $cases + ' pure/static QA guard regressions on PowerShell ' + $PSVersionTable.PSVersion.ToString() + '; PostgreSQL/HTTPS/process execution NOT EXECUTED.')
+if ($BuildCommandSelfTest) {
+    $shell=Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
+    $global:LASTEXITCODE=73 # Disposable test process only; verifies helper restores its caller's native status.
+    Invoke-QaBuildCommand $shell @('-NoLogo','-NoProfile','-NonInteractive','-Command',"[Console]::Error.WriteLine('synthetic-build-warning'); exit 0") 'synthetic-build-zero'
+    Assert-QaCondition ($ErrorActionPreference -ceq 'Stop' -and $global:LASTEXITCODE -eq 73) 'build-command-preference-not-restored'
+    $rejected=$false
+    try { Invoke-QaBuildCommand $shell @('-NoLogo','-NoProfile','-NonInteractive','-Command',"[Console]::Error.WriteLine('synthetic-build-failure'); exit 9") 'synthetic-build-nonzero' } catch { $rejected=$_.Exception.Message -ceq 'QA NO-GO: synthetic-build-nonzero' }
+    Assert-QaCondition ($rejected -and $ErrorActionPreference -ceq 'Stop' -and $global:LASTEXITCODE -eq 73) 'failed-build-was-accepted'
+    Write-Output 'PASS: native stderr plus exit0 accepted; exit9 rejected; caller error preference preserved. No QA process/database.'
+}

@@ -12,19 +12,17 @@ try {
     Assert-QaCondition (-not (Test-Path -LiteralPath $output)) 'package-already-exists'
     $null = [IO.Directory]::CreateDirectory($output)
     $phase = 'release-build'
-    $null = & dotnet publish (Join-Path $repo 'backend\src\MediPOS.Api\MediPOS.Api.csproj') --configuration Release --no-restore --output (Join-Path $output 'app') "-p:InformationalVersion=1.0.0+$ApprovedCommit" -p:IncludeSourceRevisionInInformationalVersion=false 2>&1
-    Assert-QaCondition ($LASTEXITCODE -eq 0) 'release-build'
+    Invoke-QaBuildCommand 'dotnet.exe' @('publish',(Join-Path $repo 'backend\src\MediPOS.Api\MediPOS.Api.csproj'),'--configuration','Release','--no-restore','--output',(Join-Path $output 'app'),"-p:InformationalVersion=1.0.0+$ApprovedCommit",'-p:IncludeSourceRevisionInInformationalVersion=false') 'release-build'
     $phase = 'frontend-build'
     Push-Location (Join-Path $repo 'frontend')
-    try { $null = & npm.cmd run build -- --outDir (Join-Path $output 'web') 2>&1; Assert-QaCondition ($LASTEXITCODE -eq 0) 'frontend-build' } finally { Pop-Location }
+    try { Invoke-QaBuildCommand 'npm.cmd' @('run','build','--','--outDir',(Join-Path $output 'web')) 'frontend-build' } finally { Pop-Location }
     $index = Join-Path $output 'web\index.html'; $html = [IO.File]::ReadAllText($index)
     Assert-QaCondition ($html.Contains('</head>')) 'frontend-index'
     [IO.File]::WriteAllText($index, $html.Replace('</head>', ('<meta name="medipos-source-commit" content="' + $ApprovedCommit + '"></head>')), (New-Object Text.UTF8Encoding($false)))
     $phase = 'offline-schema'
     Push-Location (Join-Path $repo 'backend')
     try {
-        $null = & dotnet ef migrations script --project src/MediPOS.Infrastructure --startup-project src/MediPOS.Infrastructure --configuration Release --no-build --output (Join-Path $output 'schema.sql') 2>&1
-        Assert-QaCondition ($LASTEXITCODE -eq 0) 'offline-schema'
+        Invoke-QaBuildCommand 'dotnet.exe' @('ef','migrations','script','--project','src/MediPOS.Infrastructure','--startup-project','src/MediPOS.Infrastructure','--configuration','Release','--no-build','--output',(Join-Path $output 'schema.sql')) 'offline-schema'
     } finally { Pop-Location }
     $sql = [IO.File]::ReadAllText((Join-Path $output 'schema.sql'))
     $snapshot = Join-Path $repo 'backend\src\MediPOS.Infrastructure\Modules\TenancyLicensing\Persistence\Migrations\MediPosDbContextModelSnapshot.cs'
