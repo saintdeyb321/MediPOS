@@ -38,6 +38,7 @@ export function BranchSelection() {
       <Steps labels={['Botica', 'Sucursal', 'Tu espacio']} current={1} />
       <PageHeader eyebrow="ELIGE DÓNDE OPERAR" title="Cada sucursal, bajo control." description="Mostramos únicamente las sucursales autorizadas para tu cuenta. Tu horario se valida al ingresar." />
       {content}
+      {valid && <p><Link to={`/boticas/${tenantId}/configuracion`}>Configurar entidades y sucursales (solo Owner)</Link></p>}
     </>
   )
 }

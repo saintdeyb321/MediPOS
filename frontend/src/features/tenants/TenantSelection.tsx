@@ -1,5 +1,5 @@
 import { ArrowRight, Building2, Check, Store } from 'lucide-react'
-import { ApiErrorState, roleLabels } from '../access'
+import { ApiErrorState, roleLabels, useSession } from '../access'
 import { Badge } from '../../shared/ui/Badge'
 import { Button } from '../../shared/ui/Button'
 import { Panel } from '../../shared/ui/Panel'
@@ -10,6 +10,7 @@ import { useTenants } from './useTenants'
 
 export function TenantSelection() {
   const { tenants, rows, select } = useTenants()
+  const session = useSession()
   let content
   if (tenants.isPending) content = <LoadingState label="Buscando tus boticas…" />
   else if (tenants.isError && !rows.length) content = <ApiErrorState error={tenants.error} retry={() => void tenants.refetch()} title="No pudimos recuperar tus boticas" />
@@ -38,6 +39,7 @@ export function TenantSelection() {
       <Steps labels={['Botica', 'Sucursal', 'Tu espacio']} current={0} />
       <PageHeader eyebrow="TU ESPACIO DE TRABAJO" title="¿En qué botica trabajamos hoy?" description="Elige una de las boticas a las que tienes acceso." />
       {content}
+      <details><summary>Mi identidad para el alta de Owner</summary><p>Inicia sesión en este entorno antes del alta. Comparte este identificador solo con el operador autorizado; el servidor verificará la cuenta Google registrada.</p><output>{session.data?.userId}</output></details>
     </>
   )
 }

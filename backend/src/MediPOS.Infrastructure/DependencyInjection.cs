@@ -149,6 +149,8 @@ public static class DependencyInjection
         if (string.Equals(expirationScheduler, "true", StringComparison.OrdinalIgnoreCase))
             services.AddHostedService<ExpirationAlertsScheduler>();
         services.AddScoped<ITenancyLicensingStore, TenancyLicensingStore>();
+        services.AddScoped<IPlatformDirectoryReader, PlatformDirectoryReader>();
+        services.AddScoped<PlatformDirectoryQueries>();
         services.AddScoped<CreateTenantHandler>();
         services.AddScoped<ITenantCreationRequests, TenantCreationRequests>();
         services.AddScoped<CreateTenantIdempotentlyHandler>();

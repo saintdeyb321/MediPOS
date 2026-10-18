@@ -15,7 +15,7 @@ using Microsoft.Net.Http.Headers;
 
 namespace MediPOS.Api.Platform;
 
-public static class PlatformLicenseEndpoints
+public static partial class PlatformLicenseEndpoints
 {
     public const int MaximumBodyBytes = 4096;
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web)
@@ -29,6 +29,7 @@ public static class PlatformLicenseEndpoints
 
     public static void MapPlatformLicenseEndpoints(this WebApplication app)
     {
+        app.MapPlatformDirectoryEndpoints();
         var group = app.MapGroup("/platform/tenants/{tenantId}/licenses/{licenseId}").RequireAuthorization();
         group.MapPost("/renew", (HttpContext context, RenewLicenseHandler handler) => Execute<RenewRequest>(context, async (request, tenant, license, actor, token) =>
         {

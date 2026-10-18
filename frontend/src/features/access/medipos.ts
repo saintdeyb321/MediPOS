@@ -35,7 +35,7 @@ export function parseBranches(data: unknown, tenantId: string): Branch[] {
     return { id: v.id, tenantId, legalEntityId: v.legalEntityId, name: v.name, isMainHub: v.isMainHub, createdAt: v.createdAt as string }
   })
 }
-export function parseAccess(data: unknown, tenantId: string, branchId: string): OperationalAccess {
+export function parseAccess(data: unknown, tenantId: string, branchId: string | null): OperationalAccess {
   const value = object(data); assert(typeof value.isAllowed === 'boolean' && typeof value.code === 'string')
   let context: AccessContext | null = null
   if (value.context !== null) {

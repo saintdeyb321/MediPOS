@@ -3,6 +3,22 @@ import { waitFor } from '@testing-library/react'
 import { HttpClient } from './http'
 
 const response = (body: unknown = {}) => new Response(JSON.stringify(body), { headers: { 'Content-Type': 'application/json' } })
+it('serializes platform requests within its stricter budget without blocking tenant reads', async () => {
+  const finishes: (() => void)[] = []
+  const fetcher = vi.fn<typeof fetch>().mockImplementation(() => new Promise(resolve => finishes.push(() => resolve(response()))))
+  const http = new HttpClient(fetcher)
+  const first = http.request('/platform/session'); const second = http.request('/platform/tenants'); const tenant = http.request('/api/me/tenants')
+  await waitFor(() => expect(fetcher).toHaveBeenCalledTimes(2))
+  expect(fetcher.mock.calls.map(([path]) => path)).toEqual(['/platform/session', '/api/me/tenants'])
+  finishes.shift()!(); await waitFor(() => expect(fetcher).toHaveBeenCalledTimes(3))
+  finishes.splice(0).forEach(finish => finish()); await Promise.all([first, second, tenant])
+})
+it('rejects malformed or misplaced idempotency headers before CSRF and any network request', async () => {
+  const fetcher = vi.fn<typeof fetch>(); const http = new HttpClient(fetcher)
+  await expect(http.request('/platform/tenants', { method: 'POST', body: {}, idempotencyKey: 'bad' })).rejects.toMatchObject({ code: 'client.invalid_request' })
+  await expect(http.request('/api/operation', { method: 'POST', body: {}, idempotencyKey: '019a0162-0000-7000-8000-000000000001' })).rejects.toMatchObject({ code: 'client.invalid_request' })
+  expect(fetcher).not.toHaveBeenCalled()
+})
 it('does not dispatch a request whose signal was already aborted', async () => {
   const fetcher = vi.fn<typeof fetch>(); const controller = new AbortController(); controller.abort()
   await expect(new HttpClient(fetcher).request('/api/tenants', { signal: controller.signal })).rejects.toBe(controller.signal.reason)

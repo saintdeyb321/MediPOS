@@ -1,12 +1,12 @@
 import { useEffect, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router'
-import { useRuntime, useWorkspace } from '../access'
+import { useRuntime } from '../access'
 import { ApiError } from '../../shared/api/http'
 import { settingsApi } from './api'
-import type { BranchInput, LegalInput } from './api'
+import type { BranchInput, LegalInput, TenantSettingsScope } from './api'
 
-export function useSettingsCreation(refresh: () => Promise<unknown>) {
-  const w = useWorkspace(); const { http } = useRuntime(); const [params, setParams] = useSearchParams(); const latest = useRef(params); useEffect(() => { latest.current = params }, [params])
+export function useSettingsCreation(w: TenantSettingsScope, refresh: () => Promise<unknown>) {
+  const { http } = useRuntime(); const [params, setParams] = useSearchParams(); const latest = useRef(params); useEffect(() => { latest.current = params }, [params])
   const [busy, setBusy] = useState(false); const running = useRef(false); const abort = useRef<AbortController | null>(null); const [error, setError] = useState<unknown>(null); const [denied, setDenied] = useState(false); const [notice, setNotice] = useState('')
   useEffect(() => () => abort.current?.abort(), [])
   const pending = params.get('settingsPending'); const createdId = params.get('settingsCreated') ?? ''

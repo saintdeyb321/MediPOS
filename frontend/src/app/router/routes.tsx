@@ -13,7 +13,8 @@ import { CashTransfersPage, TransfersPage } from '../../features/transfers'
 import { ReportsPage } from '../../features/reporting'
 import { CommissionsPage } from '../../features/commissions'
 import { NotificationsPage } from '../../features/notifications'
-import { SettingsPage } from '../../features/settings'
+import { SettingsPage, TenantOnboardingPage } from '../../features/settings'
+import { PlatformPage } from '../../features/platform'
 import { AuditPage } from '../../features/audit'
 import { ImportPage } from '../../features/product-import'
 import { ContingencyPage, OfflinePage } from '../../features/offline'
@@ -37,8 +38,10 @@ export function AppRoutes() {
       <Route path="/aceptar-invitacion" element={<AcceptInvitationPage />} />
       <Route path="/contingencia" element={<ContingencyPage />} />
       <Route element={<SessionGate />}>
+        <Route path="/plataforma" element={<SelectionLayout><PlatformPage /></SelectionLayout>} />
         <Route path="/seleccionar-botica" element={<SelectionLayout><TenantSelection /></SelectionLayout>} />
         <Route path="/boticas/:tenantId/sucursales" element={<SelectionLayout><BranchSelection /></SelectionLayout>} />
+        <Route path="/boticas/:tenantId/configuracion" element={<SelectionLayout><TenantOnboardingPage /></SelectionLayout>} />
         <Route path="/boticas/:tenantId/sucursales/:branchId" element={<WorkspaceLayout />}>
           <Route index element={<DashboardRoute />} />
           <Route path="ventas" element={<PosPage />} />

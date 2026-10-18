@@ -19,6 +19,23 @@ public sealed class TenantApiHttpTests
     private static readonly JsonSerializerOptions RequestJson = new(JsonSerializerDefaults.Web);
 
     [Fact]
+    public async Task OwnerCanConfigureItsFirstEntityAndBranchWithoutAnExistingWorkspace()
+    {
+        var state = new TenantHttpTestState(); state.Branches.Clear();
+        await using var host = await Host(state); await PlatformLicenseHttpTests.Login(host); var csrf = await host.Csrf();
+        var root = $"/api/tenants/{state.TenantId:D}";
+        using var access = await Json(host, "GET", root + "/access");
+        Assert.True(access.RootElement.GetProperty("isAllowed").GetBoolean());
+        Assert.Equal(JsonValueKind.Null, access.RootElement.GetProperty("context").GetProperty("branchId").ValueKind);
+        using var license = await Json(host, "GET", root + "/license");
+        using var legal = await Json(host, "POST", root + "/legal-entities", new { legalName = "Synthetic QA entity", ruc = "QA-NO-FISCAL" }, csrf, 201);
+        using var branch = await Json(host, "POST", root + "/branches", new { legalEntityId = legal.RootElement.GetProperty("id").GetGuid(), name = "Synthetic QA first branch" }, csrf, 201);
+        using var directory = await Json(host, "GET", root + "/branches");
+        Assert.Single(directory.RootElement.EnumerateArray());
+        Assert.Equal(branch.RootElement.GetProperty("id").GetGuid(), directory.RootElement[0].GetProperty("id").GetGuid());
+    }
+
+    [Fact]
     public async Task TenantActivationIsDefaultOffAndIndependentOfPlatform()
     {
         var state = new TenantHttpTestState();

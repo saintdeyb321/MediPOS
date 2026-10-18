@@ -14,7 +14,7 @@ it('loads actual license and entity/branch relationships and disables creation a
   expect(screen.getByRole('button', { name: 'Crear sucursal' })).toBeDisabled(); expect(screen.getByText(/Límite de sucursales de la licencia alcanzado/)).toBeInTheDocument(); expect(fake.writes()).toHaveLength(0)
   expect(screen.queryByRole('button', { name: /Renovar|Activar|Editar|Eliminar/ })).not.toBeInTheDocument()
 })
-async function prepareLegal() { fireEvent.change(screen.getByRole('textbox', { name: 'Razón social' }), { target: { value: 'Nueva entidad unitaria' } }); fireEvent.change(screen.getByRole('textbox', { name: 'RUC de la entidad' }), { target: { value: 'UNIT-LEGAL-ONLY' } }); fireEvent.click(screen.getByRole('checkbox', { name: /Confirmo la creación persistente/ })) }
+async function prepareLegal() { fireEvent.change(screen.getByRole('textbox', { name: 'Razón social' }), { target: { value: 'Nueva entidad unitaria' } }); fireEvent.change(screen.getByRole('textbox', { name: 'Identificador de la entidad' }), { target: { value: 'UNIT-LEGAL-ONLY' } }); fireEvent.click(screen.getByRole('checkbox', { name: /Confirmo la creación persistente/ })) }
 it('requires explicit confirmation, sends only backend fields and rereads directories without duplicating', async () => {
   const fake = managementServer(); mountTransfers(fake, <SettingsPage />); await screen.findByText('trial'); const button = screen.getByRole('button', { name: 'Crear entidad legal' }); expect(button).toBeDisabled()
   await prepareLegal(); fireEvent.click(button); fireEvent.click(button)
@@ -37,7 +37,7 @@ it.each([400, 403, 409, 429, 503])('preserves HTTP %i without automatic configur
   if (status === 503) expect(screen.getByTestId('location')).toHaveTextContent('settingsPending=legal')
 })
 it('restores an acknowledged creation for review after reload and pages actual legal records', async () => {
-  const fake = managementServer(); fake.management.legal = Array.from({ length: 21 }, (_, i) => ({ ...fake.management.legal[0]!, id: id(600 + i), legalName: 'Entidad ' + i })); mountTransfers(fake, <SettingsPage />, '?settingsPending=legal&settingsCreated=' + id(620)); await screen.findByText('Entidad 0 · RUC UNIT-NO-FISCAL')
+  const fake = managementServer(); fake.management.legal = Array.from({ length: 21 }, (_, i) => ({ ...fake.management.legal[0]!, id: id(600 + i), legalName: 'Entidad ' + i })); mountTransfers(fake, <SettingsPage />, '?settingsPending=legal&settingsCreated=' + id(620)); await screen.findByText('Entidad 0 · Identificador UNIT-NO-FISCAL')
   const area = screen.getByRole('heading', { name: 'Entidades legales' }).closest('section')!; fireEvent.click(within(area).getByRole('button', { name: 'Página siguiente' })); await screen.findByText(/Registro reconsultado: Entidad 20/); expect(fake.writes()).toHaveLength(0)
 })
 it('rejects directories for a foreign tenant and malformed license before showing data', async () => {

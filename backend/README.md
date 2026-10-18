@@ -471,5 +471,23 @@ Final B8.7 local gate (2026-10-14): `dotnet restore` passed; `dotnet build` pass
 
 PostgreSQL 18 tests are prepared/compiled only; none were executed locally. The recording HTTP ports prove composition and application behavior, not database transactions, locks, RLS or connection cleanup. Actual Google OIDC/browser, PostgreSQL 18 (including B8.6.3.1), patched hosting/TLS/reverse proxy/ACL, B8.2/B8.3/B8.4 and external CI acceptance remain pending. A TypeScript client has not been generated. M8 is not DONE and production readiness is not declared.
 
+## QA-0 — platform console and first-branch onboarding (local source only)
+
+D1 certifies **6c8ffe9**, not the later D2/QA delta. The React `/plataforma` console reuses the existing create/renew/suspend/reactivate/bootstrap-owner contracts; five read-only routes are added only under the existing Production/Google/PlatformAdministration/PlatformApi opt-in. They retain session/allowlist, origin/HTTPS, no-store and platform rate/concurrency limits. No configuration was activated, host restarted or database changed.
+
+| GET route | Admission / bounded response |
+|---|---|
+| `/platform/session` | Genuine approved server session; `{ allowed: true }`, no claim/tenant-role grant |
+| `/platform/tenants?limit=20&afterTenantId=...` | Limit 1–100, UUID keyset; tenant name/creation only, no private business data |
+| `/platform/tenants/{tenantId}/details` | One selected tenant/license/initial historical Owner ID through normal runtime/RLS; no global license bypass |
+| `/platform/identities/{userId}` | Exact previously registered Google UUID; name/email for bootstrap verification, no subject or bulk user listing |
+| `/platform/tenant-requests/{requestKey}` | Read-only original create result, scoped to authenticated platform operator under existing receipt RLS; 404 does not prove a concurrent request failed |
+
+Unknown/duplicate query parameters are rejected; authority is checked before and after reads. Creation still requires CSRF and Idempotency-Key, and all writes retain their existing application audit/history/locking. Bootstrap remains closed after any historical Owner. The new detail route uses a separate `/details` suffix and GUID constraint to preserve 404 on absent purge POST routes. React can reconcile a lost create response with GET instead of another POST, and reads license/Owner before acknowledging other uncertain operations. A tenant Owner alone cannot use this console.
+
+`/boticas/:tenantId/configuracion` allows first-branch setup outside WorkspaceLayout after real branchless access resolution confirms the same session's active Owner membership and valid license. It reuses the existing license/legal-entity/branch APIs, tenant-scoped cache and uncertain-write safeguards; no branch ID fabrication or backend permission change. The global-category creation endpoint already exists but its React administration is still a QA setup gap.
+
+QA is **proposed, not installed**: independent fresh PostgreSQL18 schema37/runtime, same approved source SHA for API/static React, loopback HTTPS `https://localhost:7443`, private Google test client/DP/TLS, separate Chrome profiles and temporary independent allowlist approval. Cookies share localhost across ports; profiles/keyrings must remain separate. Production does not automatically load User Secrets. No LAB34 upgrade, credential copy or effects against SUNAT/mail/payment providers. See the QA-0 matrix, approval boundaries and manual procedure in [the existing integration plan](../docs/FRONTEND_INTEGRATION_PLAN.md#qa-0--integración-funcional-y-preparación-ux-código-local-2026-10-17). D2, physical purge A18 and real browser/device acceptance remain release blockers.
+
 
 

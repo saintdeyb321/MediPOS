@@ -14,6 +14,7 @@ export function SelectionLayout({ children }: { children: ReactNode }) {
       <header className="selection-header">
         <Link to="/seleccionar-botica" aria-label="MediPOS, elegir botica"><Brand /></Link>
         <div className="selection-account">
+          <Link to="/plataforma">Plataforma</Link>
           <span><UserRound size={18} aria-hidden="true" />{preview ? 'Sesión de ejemplo' : 'Mi cuenta'}</span>
           <LogoutButton />
         </div>

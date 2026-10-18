@@ -14,42 +14,54 @@ export class HttpClient {
   private readonly listeners = new Set<UnauthorizedListener>()
   private readonly fetcher: typeof fetch
   private activeRequests = 0
-  private readonly waiting: (() => void)[] = []
+  private activePlatformRequests = 0
+  private readonly waiting: { platform: boolean; enter: () => void }[] = []
   constructor(fetcher: typeof fetch = (...args) => fetch(...args)) { this.fetcher = fetcher }
-  private admit(signal: AbortSignal): Promise<() => void> {
+  private admit(signal: AbortSignal, platform: boolean): Promise<() => void> {
     // Focus can refresh directory/access/cash/search together. Respect the existing
     // server budgets (4 tenant requests, 2 auth requests) without retrying anything.
     return new Promise((resolve, reject) => {
       const cancel = () => {
-        const index = this.waiting.indexOf(enter)
+        const index = this.waiting.indexOf(entry)
         if (index >= 0) this.waiting.splice(index, 1)
-        signal.removeEventListener('abort', cancel); reject(signal.reason)
+        signal.removeEventListener('abort', cancel); reject(signal.reason); this.dispatch()
       }
       const enter = () => {
         if (signal.aborted) { cancel(); return }
-        signal.removeEventListener('abort', cancel); this.activeRequests++
+        signal.removeEventListener('abort', cancel); this.activeRequests++; if (platform) this.activePlatformRequests++
         let released = false
         resolve(() => {
           if (released) return
-          released = true; this.activeRequests--; this.waiting.shift()?.()
+          released = true; this.activeRequests--; if (platform) this.activePlatformRequests--; this.dispatch()
         })
       }
+      const entry = { platform, enter }
       if (signal.aborted) { reject(signal.reason); return }
-      if (this.activeRequests < 2) enter()
-      else { this.waiting.push(enter); signal.addEventListener('abort', cancel, { once: true }) }
+      this.waiting.push(entry); signal.addEventListener('abort', cancel, { once: true }); this.dispatch()
     })
+  }
+  private dispatch() {
+    // Platform keeps its stricter single-request budget; a queued platform request does not block tenant reads.
+    while (this.activeRequests < 2) {
+      const index = this.waiting.findIndex(entry => !entry.platform || this.activePlatformRequests === 0)
+      if (index < 0) return
+      this.waiting.splice(index, 1)[0]!.enter()
+    }
   }
   subscribeUnauthorized(listener: UnauthorizedListener) {
     this.listeners.add(listener)
     return () => { this.listeners.delete(listener) }
   }
-  async request(path: string, options: { method?: 'GET' | 'POST' | 'PUT'; body?: unknown; xlsxBody?: Blob; signal?: AbortSignal; exactNumbers?: boolean; responseType?: 'blob'; timeoutMs?: number } = {}): Promise<unknown> {
+  async request(path: string, options: { method?: 'GET' | 'POST' | 'PUT'; body?: unknown; xlsxBody?: Blob; signal?: AbortSignal; exactNumbers?: boolean; responseType?: 'blob'; timeoutMs?: number; idempotencyKey?: string } = {}): Promise<unknown> {
     // Deliberately relative-only: production uses a single HTTPS origin, not a configurable API host.
-    if (!/^\/(api|auth)\//.test(path) || path.includes('\\') || /[\r\n]/.test(path)) throw new ApiError(0, 'client.invalid_path')
+    if (!/^\/(api|auth|platform)\//.test(path) || path.includes('\\') || /[\r\n]/.test(path)) throw new ApiError(0, 'client.invalid_path')
     if (window.location.protocol !== 'https:') throw new ApiError(0, 'client.https_required')
     const url = new URL(path, window.location.origin)
-    if (url.origin !== window.location.origin || !/^\/(api|auth)\//.test(url.pathname)) throw new ApiError(0, 'client.invalid_path')
+    if (url.origin !== window.location.origin || !/^\/(api|auth|platform)\//.test(url.pathname)) throw new ApiError(0, 'client.invalid_path')
     const method = options.method ?? 'GET'
+    if (options.idempotencyKey !== undefined && (method !== 'POST' || path !== '/platform/tenants' ||
+      !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(options.idempotencyKey) ||
+      options.idempotencyKey === '00000000-0000-0000-0000-000000000000')) throw new ApiError(0, 'client.invalid_request')
     if (method === 'GET' && options.body !== undefined) throw new ApiError(0, 'client.invalid_request')
     // B1.6 accepts raw XLSX bytes only, bounded before CSRF or network I/O.
     if (options.xlsxBody !== undefined && (method !== 'POST' || options.body !== undefined || !(options.xlsxBody instanceof Blob) || options.xlsxBody.size < 1 || options.xlsxBody.size > 5 * 1024 * 1024)) throw new ApiError(0, 'client.invalid_request')
@@ -63,6 +75,7 @@ export class HttpClient {
     let release: (() => void) | undefined
     try {
       const headers = new Headers({ Accept: options.responseType === 'blob' ? 'application/pdf, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, application/problem+json' : 'application/json' })
+      if (options.idempotencyKey !== undefined) headers.set('Idempotency-Key', options.idempotencyKey)
       if (method !== 'GET') {
         headers.set('X-CSRF-TOKEN', await this.csrf(signal))
         if (options.body !== undefined) headers.set('Content-Type', 'application/json')
@@ -71,7 +84,7 @@ export class HttpClient {
       let response: Response
       // CSRF acquisition finishes before taking the mutation's slot, avoiding a
       // nested request deadlock. Cancellation while queued never marks a POST sent.
-      release = await this.admit(signal)
+      release = await this.admit(signal, url.pathname.startsWith('/platform/'))
       try {
         sent = true
         response = await this.fetcher(path, {
