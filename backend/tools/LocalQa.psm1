@@ -20,6 +20,18 @@ function Assert-QaPrivateMaterialPath([string]$Path, [string]$Root) {
     return $full
 }
 
+function Assert-QaPrivateRoot([string]$Path) {
+    $base = [IO.Path]::GetFullPath((Join-Path $env:LOCALAPPDATA 'MediPOS\QA'))
+    $root = Assert-QaChildPath $Path $base
+    Assert-QaCondition ($root.Substring($base.Length+1) -cmatch '^[a-z0-9][a-z0-9_-]{0,31}$') 'qa-root-run-name'
+    $ancestor = Get-Item -LiteralPath $root -Force
+    while ($ancestor -and $ancestor.FullName.Length -ge $env:LOCALAPPDATA.Length) {
+        Assert-QaCondition (-not ($ancestor.Attributes -band [IO.FileAttributes]::ReparsePoint)) 'private-ancestor-reparse-point'
+        $ancestor = $ancestor.Parent
+    }
+    return $root
+}
+
 function Assert-QaSettings([hashtable]$Settings, [string]$PrivateRoot) {
     $required = @{
         'Authentication:Google:Enabled' = 'true'; 'TenantApi:Enabled' = 'true'
@@ -94,9 +106,23 @@ function Get-QaRlsInventory([string]$Sql, [string[]]$Tables) {
     return $names
 }
 
+function Get-QaDatabaseGuards([string]$Sql, [string]$Snapshot) {
+    $state = @{}
+    foreach ($item in [regex]::Matches($Sql,'(?im)\b(?<op>CREATE(?:\s+OR\s+REPLACE)?|DROP)\s+(?:CONSTRAINT\s+)?(?<kind>TRIGGER|FUNCTION)\s+(?:IF\s+EXISTS\s+)?(?:public\.)?"?(?<name>[A-Za-z_][A-Za-z0-9_]*)"?')) {
+        $state[$item.Groups['kind'].Value.ToUpperInvariant()+':'+$item.Groups['name'].Value] = $item.Groups['op'].Value.StartsWith('CREATE',[StringComparison]::OrdinalIgnoreCase)
+    }
+    $constraints = @([regex]::Matches($Snapshot,'(?:HasName|HasConstraintName|HasCheckConstraint)\("([A-Za-z_][A-Za-z0-9_]*)"') | ForEach-Object { $_.Groups[1].Value } | Sort-Object -Unique)
+    return [pscustomobject]@{
+        Constraints=$constraints
+        Triggers=@($state.Keys | Where-Object { $_.StartsWith('TRIGGER:') -and $state[$_] } | ForEach-Object { $_.Substring(8) } | Sort-Object)
+        Functions=@($state.Keys | Where-Object { $_.StartsWith('FUNCTION:') -and $state[$_] } | ForEach-Object { $_.Substring(9) } | Sort-Object)
+    }
+}
+
 function Assert-QaRelease([string]$Root, [string]$ApprovedCommit) {
     Assert-QaCondition ($ApprovedCommit -cmatch '^[0-9a-f]{40}$') 'exact-approved-commit-required'
     $manifest = Get-Content -Raw -LiteralPath (Join-Path $Root 'manifest.json') | ConvertFrom-Json
+    Assert-QaCondition ($manifest.Format -eq 2) 'qa-package-format-review-required'
     Assert-QaCondition ($manifest.SourceCommit -ceq $ApprovedCommit -and $manifest.FrontendCommit -ceq $ApprovedCommit) 'mixed-source-commits'
     $actual = @(Get-QaFileManifest $Root); $expected = @($manifest.Files | Sort-Object Path)
     Assert-QaCondition (@($actual | Where-Object { $_.Path -match '(?i)(\.(pfx|pem|key)$|(^|/)(secrets\.json|pgpass\.conf)$)' }).Count -eq 0) 'private-file-in-release'
@@ -108,6 +134,10 @@ function Assert-QaRelease([string]$Root, [string]$ApprovedCommit) {
     Assert-QaCondition (@($manifest.Migrations).Count -eq 37 -and @($manifest.RlsTables).Count -eq 54 -and @($manifest.Tables).Count -eq 59) 'expected-schema-inventory'
     foreach ($name in @($manifest.Tables) + @($manifest.RlsTables)) { Assert-QaCondition ($name -cmatch '^[a-z_][a-z0-9_]+$') 'schema-identifier' }
     foreach ($name in $manifest.Migrations) { Assert-QaCondition ($name -cmatch '^\d{14}_[A-Za-z0-9]+$') 'migration-identifier' }
+    foreach ($list in @($manifest.Guards.Constraints,$manifest.Guards.Triggers,$manifest.Guards.Functions)) {
+        Assert-QaCondition (@($list).Count -gt 0) 'empty-database-guard-inventory'
+        foreach ($name in $list) { Assert-QaCondition ($name -cmatch '^[A-Za-z_][A-Za-z0-9_]{0,127}$') 'database-guard-identifier' }
+    }
     $rls = @(Get-QaRlsInventory ([IO.File]::ReadAllText((Join-Path $Root 'schema.sql'))) $manifest.Tables)
     Assert-QaCondition (($rls -join ',') -ceq (@($manifest.RlsTables | Sort-Object) -join ',')) 'manifest-rls-inventory'
     $version = [Diagnostics.FileVersionInfo]::GetVersionInfo((Join-Path $Root 'app\MediPOS.Api.dll')).ProductVersion
@@ -141,18 +171,51 @@ function Assert-QaCertificates([hashtable]$Settings) {
     Assert-QaCondition ($thumbprints[0] -cne $thumbprints[1]) 'separate-tls-and-data-protection-certificates-required'
 }
 
-function Invoke-QaRuntimeProbe($Connection, $Manifest, [string]$PsqlPath) {
+function Assert-QaClusterRecord($Record, [string]$Root, [string]$ApprovedCommit, $Connection) {
+    Assert-QaCondition ($Record.Format -eq 1 -and $Record.Discardable -eq $true -and $Record.SourceCommit -ceq $ApprovedCommit) 'cluster-record-source'
+    Assert-QaCondition ($Record.Host -ceq 'localhost' -and $Record.Port -eq 55432 -and $Record.SystemIdentifier -cmatch '^\d{16,20}$') 'cluster-record-identity'
+    Assert-QaCondition ($Record.Database -ceq [string]$Connection['Database'] -and $Record.RuntimeRole -ceq [string]$Connection['Username']) 'cluster-record-database'
+    $data = Assert-QaChildPath $Record.DataDirectory $Root
+    Assert-QaCondition ($data -ieq (Join-Path $Root 'postgres-data')) 'cluster-record-data-directory'
+}
+
+function Get-QaFailureCode($Failure, [string]$Phase) {
+    $code = 'unexpected-error-details-withheld'
+    if ($Failure.Exception.Message -cmatch '^QA NO-GO: ([a-z][a-z0-9_-]{0,100})$') { $code = $Matches[1] }
+    return ('QA NO-GO [' + $Phase + '/' + $code + ']')
+}
+function Get-QaInheritedOverrideNames([string[]]$Names) {
+    # PG* can contain inherited credentials or TLS defaults. Never pass those to a QA API child.
+    return @($Names | Where-Object { $_ -match '^(PG|ASPNETCORE_|DOTNET_|ConnectionStrings__|Authentication__|PlatformAdministration__|PlatformApi__|TenantApi__|Kestrel__|LocalFrontend__|PublishedFrontend__|Notifications__|Logging__|AllowedHosts$)' })
+}
+
+function Invoke-QaRuntimeProbe($Connection, $Manifest, [string]$PsqlPath, [string]$ExpectedClusterIdentifier, [string]$ApprovedGoogleActor = '') {
     # Executed only by an explicitly approved -Start. No migrations, grants, DDL or business writes.
     Assert-QaCondition (Test-Path -LiteralPath $PsqlPath -PathType Leaf) 'psql18-required'
+    Assert-QaCondition ([IO.Path]::GetFullPath($PsqlPath) -ieq 'C:\Program Files\PostgreSQL\18\bin\psql.exe') 'pinned-psql18-executable'
+    Assert-QaCondition ($ExpectedClusterIdentifier -cmatch '^\d{16,20}$') 'expected-cluster-identifier-required'
+    $actorCheck = 'true'
+    if ($ApprovedGoogleActor) {
+        $actor = [Guid]::Empty
+        Assert-QaCondition ([Guid]::TryParseExact($ApprovedGoogleActor,'D',[ref]$actor) -and $actor -ne [Guid]::Empty) 'approved-actor-identifier'
+        $actorCheck = "EXISTS(SELECT 1 FROM users WHERE id='$($actor.ToString('D'))'::uuid AND google_subject<>'')"
+    }
     $database = [string]$Connection['Database']; $role = [string]$Connection['Username']
     Assert-QaCondition ($database -cmatch '^medipos_qa_[a-z0-9_]{1,25}$' -and $role -ceq ($database + '_runtime')) 'probe-qa-identity'
     foreach ($name in @($Manifest.Tables) + @($Manifest.RlsTables)) { Assert-QaCondition ($name -cmatch '^[a-z_][a-z0-9_]+$') 'probe-schema-identifier' }
     $tables = (@($Manifest.Tables) | ForEach-Object { "'" + $_ + "'" }) -join ','
     $rls = (@($Manifest.RlsTables) | ForEach-Object { "'" + $_ + "'" }) -join ','
+    foreach ($name in @($Manifest.Guards.Constraints)+@($Manifest.Guards.Triggers)+@($Manifest.Guards.Functions)) { Assert-QaCondition ($name -cmatch '^[A-Za-z_][A-Za-z0-9_]{0,127}$') 'probe-guard-identifier' }
+    $constraints = (@($Manifest.Guards.Constraints) | ForEach-Object { "'"+$_+"'" }) -join ','
+    $triggers = (@($Manifest.Guards.Triggers) | ForEach-Object { "'"+$_+"'" }) -join ','
+    $functions = (@($Manifest.Guards.Functions) | ForEach-Object { "'"+$_+"'" }) -join ','
     $sql = @"
 BEGIN READ ONLY;
 SET LOCAL statement_timeout = '10s';
 SELECT json_build_object(
+ 'registered_google_actor', $actorCheck,
+ 'cluster', (SELECT system_identifier::text FROM pg_catalog.pg_control_system())='$ExpectedClusterIdentifier'
+   AND inet_server_port()=55432 AND inet_server_addr() IN ('127.0.0.1'::inet,'::1'::inet),
  'identity', current_database()='$database' AND session_user='$role' AND current_user=session_user,
  'postgres18', current_setting('server_version_num')::int BETWEEN 180000 AND 189999,
  'restricted', NOT EXISTS(SELECT 1 FROM pg_roles r WHERE pg_has_role(session_user,r.oid,'MEMBER') AND
@@ -160,6 +223,9 @@ SELECT json_build_object(
    AND NOT EXISTS(SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='public' AND pg_has_role(session_user,c.relowner,'MEMBER'))
    AND NOT has_schema_privilege(session_user,'public','CREATE') AND NOT has_database_privilege(session_user,current_database(),'CREATE'),
  'tables', (SELECT count(*) FROM pg_tables WHERE schemaname='public' AND tablename IN ($tables)) = $(@($Manifest.Tables).Count),
+ 'guards', (SELECT count(*) FROM pg_constraint c JOIN pg_namespace n ON n.oid=c.connamespace WHERE n.nspname='public' AND c.conname IN ($constraints) AND c.convalidated) = $(@($Manifest.Guards.Constraints).Count)
+   AND (SELECT count(*) FROM pg_trigger t JOIN pg_class c ON c.oid=t.tgrelid JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='public' AND t.tgname IN ($triggers) AND NOT t.tgisinternal AND t.tgenabled IN ('O','A')) = $(@($Manifest.Guards.Triggers).Count)
+   AND (SELECT count(DISTINCT p.proname) FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname='public' AND p.proname IN ($functions)) = $(@($Manifest.Guards.Functions).Count),
  'rls', (SELECT count(*) FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='public' AND c.relname IN ($rls) AND c.relrowsecurity AND c.relforcerowsecurity AND EXISTS(SELECT 1 FROM pg_policy p WHERE p.polrelid=c.oid)) = $(@($Manifest.RlsTables).Count),
  'no_ddl', NOT EXISTS(SELECT 1 FROM pg_tables WHERE schemaname='public' AND has_table_privilege(session_user,quote_ident(schemaname)||'.'||quote_ident(tablename),'TRUNCATE,REFERENCES,TRIGGER')),
  'append_only', NOT EXISTS(SELECT 1 FROM pg_tables WHERE schemaname='public' AND tablename IN ('audit_logs','license_changes','transfer_events','electronic_document_attempts','commission_entries','stock_movements') AND
@@ -191,7 +257,7 @@ ROLLBACK;
         if (-not $process.WaitForExit(15000)) { $process.Kill(); throw 'QA NO-GO: runtime-probe-timeout' }
         Assert-QaCondition ($process.ExitCode -eq 0) 'runtime-probe-failed-details-withheld'
         $result = $output.Result | ConvertFrom-Json; $null = $errors.Result
-        foreach ($key in @('identity','postgres18','restricted','tables','rls','no_ddl','append_only','column_grants')) { Assert-QaCondition ($result.$key -eq $true) ('runtime-' + $key) }
+        foreach ($key in @('registered_google_actor','cluster','identity','postgres18','restricted','tables','guards','rls','no_ddl','append_only','column_grants')) { Assert-QaCondition ($result.$key -eq $true) ('runtime-' + $key) }
         Assert-QaCondition ((@($result.migrations) -join ',') -ceq (@($Manifest.Migrations | Sort-Object) -join ',')) 'applied-migration-inventory'
     } finally { $process.Dispose() }
 }
@@ -202,4 +268,4 @@ function Test-QaProcessIdentity($Record, $Process, [string]$AppPath) {
         ([DateTime]$Record.StartTimeUtc).ToUniversalTime().Ticks -eq ([DateTime]$Process.CreationDate).ToUniversalTime().Ticks
 }
 
-Export-ModuleMember -Function Assert-QaCondition, Assert-QaChildPath, Assert-QaSettings, Assert-QaPrivateTree, Get-QaFileManifest, Get-QaRlsInventory, Assert-QaRelease, Assert-QaCertificates, Invoke-QaRuntimeProbe, Test-QaProcessIdentity
+Export-ModuleMember -Function Assert-QaCondition, Assert-QaChildPath, Assert-QaPrivateMaterialPath, Assert-QaPrivateRoot, Assert-QaSettings, Assert-QaPrivateTree, Get-QaFileManifest, Get-QaRlsInventory, Get-QaDatabaseGuards, Assert-QaRelease, Assert-QaCertificates, Assert-QaClusterRecord, Get-QaFailureCode, Get-QaInheritedOverrideNames, Invoke-QaRuntimeProbe, Test-QaProcessIdentity

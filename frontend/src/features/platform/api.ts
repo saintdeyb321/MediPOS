@@ -21,7 +21,9 @@ export function platformApi(http: HttpClient) {
       const result = array(category)(await http.request('/platform/catalog/categories?limit=100', { signal }))
       if (result.length > 100) throw new ApiError(0, 'client.unexpected_response'); return result
     },
-    createCategory: (name: string, signal?: AbortSignal) => mutate('/platform/catalog/categories', { name }, category, signal),
+    createCategory: (name: string, signal?: AbortSignal) => mutate('/platform/catalog/categories', { name }, value => {
+      const result = category(value); if (result.name !== name.trim() || !result.isActive) throw new Error('category response mismatch'); return result
+    }, signal),
     async admission(signal?: AbortSignal) { const result = object({ allowed: boolean })(await http.request('/platform/session', { signal })); if (!result.allowed) throw new ApiError(403, 'access.platform_denied'); return result },
     async tenants(after?: string, signal?: AbortSignal) {
       const result = object({ items: array(summary), nextAfterTenantId: nullable(uuid) })(await http.request('/platform/tenants?limit=20' + (after ? '&afterTenantId=' + uuid(after) : ''), { signal, exactNumbers: true }))

@@ -38,7 +38,7 @@ function PlatformConsole({ http, userId }: { http: HttpClient; userId: string })
   const [categoryName, setCategoryName] = useState(''); const [categoryConfirmed, setCategoryConfirmed] = useState(false); const [categoryReconciled, setCategoryReconciled] = useState(false)
   const categoryExists = p.categories.data?.some(row => row.name.trim().toLocaleLowerCase('es-PE') === categoryName.trim().toLocaleLowerCase('es-PE'))
   const canCreateCategory = !p.locked && p.categoriesRead && p.categories.data && p.categories.data.length < 100 && !categoryExists && categoryName.trim().length > 0 && categoryName.trim().length <= 128
-  const categoryCandidates = p.categoriesRead ? p.categories.data?.filter(row => row.name === p.categoryPending) ?? [] : []
+  const categoryCandidates = p.categoriesRead ? p.categories.data?.filter(row => row.name.trim().toLocaleLowerCase('es-PE') === p.categoryPending?.trim().toLocaleLowerCase('es-PE')) ?? [] : []
   const deniedQuery = [p.list.error, p.detail.error].some(error => error instanceof ApiError && [401, 403].includes(error.status))
   if (p.denied || deniedQuery) return <Notice tone="error">La autoridad de plataforma ya no está disponible. Vuelve a ingresar o solicita su revisión.</Notice>
   return <div className="operations"><PageHeader title="Administración de plataforma" description="Solo negocios, licencias y alta inicial. Sin acceso a ventas, precios, stock o reportes privados globales." />
@@ -57,6 +57,7 @@ function PlatformConsole({ http, userId }: { http: HttpClient; userId: string })
       <Button disabled={p.busy} onClick={() => { setCategoryConfirmed(false); setCategoryReconciled(false); void p.readCategories() }}>Consultar categorías globales</Button>
       {p.categoriesRead && p.categories.data && <><ul>{p.categories.data.map(row => <li key={row.id}>{row.name} · creada {row.createdAt}</li>)}</ul>{!p.categories.data.length && <p>No hay categorías activas.</p>}{p.categories.data.length >= 100 && <Notice tone="warning">La lectura está acotada a 100 categorías. No crees otra sin revisar el catálogo completo.</Notice>}</>}
       {p.categoryPending && <Notice tone="warning">Alta de categoría pendiente: {p.categoryPending}. No repitas el POST. Reconsulta y verifica el resultado original; una lista vacía no demuestra que falló.
+        {categoryCandidates.length > 1 && <p>Hay categorías con el mismo nombre. La conciliación permanece bloqueada; revisa los registros, sin repetir escrituras.</p>}
         <label><input type="checkbox" disabled={p.busy || categoryCandidates.length !== 1} checked={categoryReconciled} onChange={e => setCategoryReconciled(e.target.checked)} /> Verifiqué la categoría registrada y que la petición original terminó.</label><Button disabled={p.busy || !categoryReconciled || categoryCandidates.length !== 1} onClick={() => { p.acknowledgeCategory(); setCategoryReconciled(false) }}>Continuar tras conciliar categoría</Button></Notice>}
       <form onSubmit={e => { e.preventDefault(); if (categoryConfirmed && canCreateCategory) { setCategoryConfirmed(false); void p.createCategory(categoryName) } }}>
         <TextField label="Nombre de la categoría global" value={categoryName} maxLength={128} disabled={p.locked} onChange={e => { setCategoryName(e.target.value); setCategoryConfirmed(false) }} />

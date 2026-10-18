@@ -11,7 +11,7 @@ const id = (n: number) => `019a0162-0000-7000-8000-${String(n).padStart(12, '0')
 const time = '2026-10-17T12:00:00Z'
 const json = (value: unknown, status = 200) => new Response(JSON.stringify(value), { status, headers: { 'Content-Type': 'application/json' } })
 function fixture() {
-  const state = { allowed: true, lost: false, invisible: false, reject: 0, listFailure: 0, detailFailure: 0, receipt: false, owner: null as string | null, status: 'trial', categories: [] as { id: string; name: string; isActive: boolean; createdAt: string }[] }
+  const state = { allowed: true, lost: false, invisible: false, duplicateCategory: false, reject: 0, listFailure: 0, detailFailure: 0, receipt: false, owner: null as string | null, status: 'trial', categories: [] as { id: string; name: string; isActive: boolean; createdAt: string }[] }
   const license = () => ({ tenantId: id(2), licenseId: id(3), status: state.status, startsAt: time, expiresAt: '2026-11-16T12:00:00Z', maxBranches: 2 })
   const fetcher = vi.fn<typeof fetch>().mockImplementation(async (path, init) => {
     const p = String(path).split('?')[0]; const method = init?.method ?? 'GET'
@@ -22,6 +22,7 @@ function fixture() {
     if (p === '/platform/catalog/categories' && method === 'POST') {
       const name = (JSON.parse(String(init?.body)) as { name: string }).name
       const created = { id: id(9), name, isActive: true, createdAt: time }; state.categories.push(created)
+      if (state.duplicateCategory) state.categories.push({ ...created, id: id(10) })
       if (state.lost) throw new TypeError('synthetic lost response'); return json(created, 201)
     }
     if (p === '/platform/catalog/categories') return json(state.invisible ? [] : state.categories)
@@ -142,6 +143,27 @@ it('keeps an uncertain category intent across reload and never treats an empty r
   await waitFor(() => expect(screen.getByRole('checkbox', { name: /Verifiqué la categoría registrada/ })).toBeEnabled())
   fireEvent.click(screen.getByRole('checkbox', { name: /Verifiqué la categoría registrada/ })); fireEvent.click(screen.getByRole('button', { name: 'Continuar tras conciliar categoría' }))
   await waitFor(() => expect(screen.getByTestId('location')).not.toHaveTextContent('categoryPending'))
+  expect(fake.writes()).toHaveLength(0)
+})
+it('does not silently declare success when another operator creates the same category concurrently', async () => {
+  const fake = fixture(); fake.state.duplicateCategory = true; mount(fake)
+  await screen.findByRole('heading', { name: 'Categoría global inicial' })
+  fireEvent.click(screen.getByRole('button', { name: 'Consultar categorías globales' })); await screen.findByText('No hay categorías activas.')
+  fireEvent.change(screen.getByRole('textbox', { name: 'Nombre de la categoría global' }), { target: { value: 'Medicamentos' } })
+  fireEvent.click(screen.getByRole('checkbox', { name: 'Confirmo crear esta referencia global, sin productos.' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Crear categoría global una vez' }))
+  await screen.findAllByText(/Hay categorías con el mismo nombre/)
+  expect(screen.queryByText(/Categoría creada mediante el contrato oficial/)).not.toBeInTheDocument()
+  expect(screen.getByTestId('location')).toHaveTextContent('categoryPending=Medicamentos')
+  expect(screen.getByRole('button', { name: 'Continuar tras conciliar categoría' })).toBeDisabled()
+  expect(fake.writes()).toHaveLength(1)
+})
+it('keeps reconciliation blocked after reload when visually duplicate names differ in case', async () => {
+  const fake = fixture(); fake.state.categories.push({ id: id(9), name: 'Medicamentos', isActive: true, createdAt: time }, { id: id(10), name: 'medicamentos', isActive: true, createdAt: time })
+  mount(fake, '?categoryPending=Medicamentos'); await screen.findByRole('heading', { name: 'Categoría global inicial' })
+  fireEvent.click(screen.getByRole('button', { name: 'Consultar categorías globales' }))
+  await screen.findByText(/La conciliación permanece bloqueada/)
+  expect(screen.getByRole('button', { name: 'Continuar tras conciliar categoría' })).toBeDisabled()
   expect(fake.writes()).toHaveLength(0)
 })
 it.each([403, 409, 429, 503])('shows HTTP %i without automatically retrying a platform mutation', async status => {

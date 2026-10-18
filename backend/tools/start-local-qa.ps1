@@ -6,19 +6,15 @@ $ErrorActionPreference = 'Stop'
 Import-Module (Join-Path $PSScriptRoot 'LocalQa.psm1') -Force
 $phase = 'private-root'; $child = $null; $previous = @{}
 try {
-    $base = Join-Path $env:LOCALAPPDATA 'MediPOS\QA'
-    $PrivateRoot = Assert-QaChildPath $PrivateRoot $base
-    $ancestor = Get-Item -LiteralPath $PrivateRoot -Force
-    while ($ancestor -and $ancestor.FullName.Length -ge $base.Length) {
-        Assert-QaCondition (-not ($ancestor.Attributes -band [IO.FileAttributes]::ReparsePoint)) 'private-ancestor-reparse-point'
-        $ancestor = $ancestor.Parent
-    }
+    $PrivateRoot = Assert-QaPrivateRoot $PrivateRoot
     Assert-QaPrivateTree $PrivateRoot
     $settings = @{}
     foreach ($property in (Get-Content -Raw -LiteralPath (Join-Path $PrivateRoot 'settings.json') | ConvertFrom-Json).PSObject.Properties) {
         Assert-QaCondition ($property.Value -is [string]) 'flat-string-settings-required'; $settings[$property.Name] = $property.Value
     }
     $phase = 'configuration'; $connection = Assert-QaSettings $settings $PrivateRoot
+    $cluster = Get-Content -Raw -LiteralPath (Join-Path $PrivateRoot 'cluster.json') | ConvertFrom-Json
+    Assert-QaClusterRecord $cluster $PrivateRoot $ApprovedCommit $connection
     foreach ($key in @('Passfile', 'Root Certificate')) { Assert-QaCondition (Test-Path -LiteralPath ([string]$connection[$key]) -PathType Leaf) 'postgresql-private-file' }
     $passEntries = @(Get-Content -LiteralPath ([string]$connection['Passfile']) | Where-Object { $_.Trim().Length -gt 0 -and -not $_.StartsWith('#') })
     $passPattern = '^localhost:55432:' + [regex]::Escape([string]$connection['Database']) + ':' + [regex]::Escape([string]$connection['Username']) + ':[A-Za-z0-9_-]{32,256}$'
@@ -28,16 +24,16 @@ try {
     $phase = 'source-and-certificates'; $release = Join-Path $PrivateRoot 'release'
     $manifest = Assert-QaRelease $release $ApprovedCommit; Assert-QaCertificates $settings
     $phase = 'port'; $listeners = @(Get-NetTCPConnection -State Listen -ErrorAction Stop | Where-Object LocalPort -eq 7443)
-    Assert-QaCondition ($listeners.Count -eq 0 -and -not (Test-Path -LiteralPath (Join-Path $PrivateRoot 'process.json'))) 'qa-port-or-process-record-occupied'
+    Assert-QaCondition ($listeners.Count -eq 0 -and -not (Test-Path -LiteralPath (Join-Path $PrivateRoot 'process.json')) -and -not (Test-Path -LiteralPath (Join-Path $PrivateRoot 'admin-process.json'))) 'qa-port-or-process-record-occupied'
     if (-not $Start) {
         Write-Output 'PASS: static/private QA preflight; no database, process or HTTP connection. PostgreSQL, Google registration and HTTPS runtime NOT EXECUTED.'
         return
     }
-    $phase = 'read-only-postgresql'; Invoke-QaRuntimeProbe $connection $manifest $PsqlPath
+    $phase = 'read-only-postgresql'; Invoke-QaRuntimeProbe $connection $manifest $PsqlPath $cluster.SystemIdentifier
     $phase = 'process-environment'
     # Scrub inherited application overrides and hosting hooks, then apply only the reviewed private allowlist.
-    foreach ($entry in Get-ChildItem Env: | Where-Object { $_.Name -match '^(ASPNETCORE_|DOTNET_|ConnectionStrings__|Authentication__|PlatformAdministration__|PlatformApi__|TenantApi__|Kestrel__|LocalFrontend__|PublishedFrontend__|Notifications__|Logging__|AllowedHosts$)' }) {
-        $previous[$entry.Name] = $entry.Value; [Environment]::SetEnvironmentVariable($entry.Name, $null, 'Process')
+    foreach ($name in @(Get-QaInheritedOverrideNames @(Get-ChildItem Env: | ForEach-Object { $_.Name }))) {
+        $previous[$name] = [Environment]::GetEnvironmentVariable($name,'Process'); [Environment]::SetEnvironmentVariable($name, $null, 'Process')
     }
     foreach ($key in $settings.Keys) {
         $name = $key.Replace(':', '__'); if (-not $previous.ContainsKey($name)) { $previous[$name] = [Environment]::GetEnvironmentVariable($name, 'Process') }
@@ -81,5 +77,5 @@ try {
     $child = $null # Ownership retained in the checked private process record, never in a broad process-name filter.
 } catch {
     if ($child -and -not $child.HasExited) { $child.Kill(); $child.WaitForExit() }
-    throw ('QA NO-GO at ' + $phase + '; only this newly started QA child, if any, was closed; details withheld.')
+    throw ((Get-QaFailureCode $_ $phase) + '; only this newly started QA child, if any, was closed.')
 } finally { foreach ($key in $previous.Keys) { [Environment]::SetEnvironmentVariable($key, $previous[$key], 'Process') } }

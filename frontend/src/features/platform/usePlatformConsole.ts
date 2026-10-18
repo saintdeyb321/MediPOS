@@ -65,6 +65,8 @@ export function usePlatformConsole(http: HttpClient, userId: string) {
       const created = await send(() => api.createCategory(name.trim(), signal))
       const rows = await api.categories(signal); signal.throwIfAborted()
       client.setQueryData([...key, 'categories'], rows); setCategoriesRead(true)
+      if (rows.filter(row => row.name.trim().toLocaleLowerCase('es-PE') === name.trim().toLocaleLowerCase('es-PE')).length > 1)
+        throw new ApiError(409, 'client.category_ambiguous', undefined, true)
       if (!rows.some(row => row.id === created.id && row.name === created.name)) throw new ApiError(0, 'client.outcome_unknown', undefined, true)
       mark({ categoryPending: null }); setNotice('Categoría creada mediante el contrato oficial y reconsultada. No se creó ningún producto.')
     })
@@ -124,7 +126,7 @@ export function usePlatformConsole(http: HttpClient, userId: string) {
   }
   return { list, detail, data, tenantId, identity, setIdentity, busy, locked, error, notice, pending, creationKey, denied, reconciliationRead, refresh,
     categories, categoriesRead, categoryPending, readCategories, createCategory,
-    acknowledgeCategory: () => { if (!busy && categoryPending && categoriesRead && categories.data?.filter(row => row.name === categoryPending).length === 1) { mark({ categoryPending: null }); setNotice('Conciliación manual registrada en esta vista. No se repitió el POST ni se afirmó idempotencia de categorías.') } },
+    acknowledgeCategory: () => { if (!busy && categoryPending && categoriesRead && categories.data?.filter(row => row.name.trim().toLocaleLowerCase('es-PE') === categoryPending.trim().toLocaleLowerCase('es-PE')).length === 1) { mark({ categoryPending: null }); setNotice('Conciliación manual registrada en esta vista. No se repitió el POST ni se afirmó idempotencia de categorías.') } },
     select: (id: string) => { if (!locked) { setIdentity(null); setNotice(''); mark({ tenant: id }) } },
     page: (id: string | null) => { if (!locked) mark({ after: id }) },
     create, reconcileCreation, lookup, bootstrap, change,

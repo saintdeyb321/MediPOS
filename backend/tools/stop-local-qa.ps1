@@ -2,7 +2,7 @@ param([Parameter(Mandatory = $true)][string]$PrivateRoot, [Parameter(Mandatory =
 $ErrorActionPreference = 'Stop'
 Import-Module (Join-Path $PSScriptRoot 'LocalQa.psm1') -Force
 try {
-    $PrivateRoot = Assert-QaChildPath $PrivateRoot (Join-Path $env:LOCALAPPDATA 'MediPOS\QA')
+    $PrivateRoot = Assert-QaPrivateRoot $PrivateRoot
     Assert-QaPrivateTree $PrivateRoot
     $path = Join-Path $PrivateRoot 'process.json'; $record = Get-Content -Raw -LiteralPath $path | ConvertFrom-Json
     Assert-QaCondition ($ApprovedCommit -cmatch '^[0-9a-f]{40}$' -and $record.SourceCommit -ceq $ApprovedCommit) 'approved-process-source'

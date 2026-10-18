@@ -1,5 +1,6 @@
 import { ApiError } from '../../shared/api/http'
 const messages: Record<string, string> = {
+  'client.category_ambiguous': 'Hay categorías con el mismo nombre. No repitas el alta ni la des por conciliada; solicita revisar los registros antes de continuar.',
   'access.platform_denied': 'Esta cuenta no tiene aprobación independiente para administrar la plataforma.',
   'platform.identity_not_found': 'La cuenta destino debe iniciar sesión con Google en este mismo entorno antes de asignarle Owner.',
   'platform.request_not_found': 'La constancia aún no está visible para este operador. Conserva la clave original y reconsulta; no crees otra botica.',

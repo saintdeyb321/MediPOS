@@ -16,19 +16,36 @@ function Settings {
     }
 }
 $cases = 0
-foreach ($name in @('LocalQa.psm1','prepare-local-qa.ps1','start-local-qa.ps1','stop-local-qa.ps1','test-local-qa.ps1')) {
+foreach ($name in @('LocalQa.psm1','prepare-local-qa.ps1','start-local-qa.ps1','stop-local-qa.ps1','test-local-qa.ps1','LocalQa.Cluster.psm1','manage-local-qa-cluster.ps1','LocalQa.Certificates.psm1','prepare-local-qa-certificates.ps1')) {
     $tokens = $null; $errors = $null
     $null = [Management.Automation.Language.Parser]::ParseFile((Join-Path $PSScriptRoot $name), [ref]$tokens, [ref]$errors)
     Assert-QaCondition ($errors.Count -eq 0) 'script-parser'; $cases++
 }
 $connection = Assert-QaSettings (Settings) $qaRoot
 Assert-QaCondition ($connection -is [System.Data.Common.DbConnectionStringBuilder] -and $connection['Database'] -ceq 'medipos_qa_unit') 'parsed-connection-type'; $cases++
+$names=@('PGPASSWORD','PGHOST','PGSSLCERT','ASPNETCORE_URLS','DOTNET_STARTUP_HOOKS','PlatformApi__Enabled','PATH','LOCALAPPDATA')
+Assert-QaCondition ((@(Get-QaInheritedOverrideNames $names) -join ',') -ceq ($names[0..5] -join ',')) 'inherited-postgres-or-authority-override-missed'; $cases++
+Assert-QaCondition (@(Get-QaInheritedOverrideNames @('PATH','LOCALAPPDATA')).Count -eq 0) 'ordinary-environment-was-scrubbed'; $cases++
 $sql = "ALTER TABLE licenses FORCE ROW LEVEL SECURITY; BEGIN FOREACH target IN ARRAY ARRAY['electronic_documents'] LOOP EXECUTE format('ALTER TABLE %I FORCE ROW LEVEL SECURITY',target); END LOOP; END"
 $inventory = @(Get-QaRlsInventory $sql @('tenants','licenses','electronic_documents'))
 Assert-QaCondition (($inventory -join ',') -ceq 'electronic_documents,licenses') 'static-foreach-rls-inventory'; $cases++
 $rejected = $false
 try { $null = Get-QaRlsInventory $sql @('tenants','licenses','electronic_documents','employee_invitations') } catch { $rejected = $true }
 Assert-QaCondition $rejected 'missing-rls-was-accepted'; $cases++
+$guards=Get-QaDatabaseGuards 'CREATE TRIGGER old_guard BEFORE INSERT ON t; DROP TRIGGER old_guard ON t; CREATE CONSTRAINT TRIGGER final_guard AFTER INSERT ON t; CREATE OR REPLACE FUNCTION guard_final() RETURNS trigger;' 'x.HasName("PK_t"); y.HasCheckConstraint("ck_t"); z.HasConstraintName("FK_t");'
+Assert-QaCondition (($guards.Triggers -join ',') -ceq 'final_guard' -and ($guards.Functions -join ',') -ceq 'guard_final' -and $guards.Constraints.Count -eq 3) 'final-database-guard-inventory'; $cases++
+$cluster=[pscustomobject]@{Format=1;Discardable=$true;SourceCommit=('a'*40);Host='localhost';Port=55432;SystemIdentifier='1234567890123456789';Database='medipos_qa_unit';RuntimeRole='medipos_qa_unit_runtime';DataDirectory=(Join-Path $qaRoot 'postgres-data')}
+Assert-QaClusterRecord $cluster $qaRoot ('a'*40) $connection; $cases++
+foreach ($change in @(@('Port',5432),@('DataDirectory','C:\Lab\postgres-data'),@('SystemIdentifier','not-a-server-id'),@('Discardable',$false),@('SourceCommit',('b'*40)))) {
+    $candidate=$cluster.PSObject.Copy(); $candidate.($change[0])=$change[1]; $rejected=$false
+    try { Assert-QaClusterRecord $candidate $qaRoot ('a'*40) $connection } catch { $rejected=$true }
+    Assert-QaCondition $rejected 'foreign-cluster-record-was-accepted'; $cases++
+}
+Import-Module (Join-Path $PSScriptRoot 'LocalQa.Cluster.psm1') -Force
+$native=$cluster.PSObject.Copy(); $native | Add-Member ProvisionerRole 'medipos_qa_unit_provisioner'; $native | Add-Member PostgresConfSha256 ('A'*64); $native | Add-Member HbaConfSha256 ('B'*64)
+Assert-QaNativeClusterRecord $native $qaRoot ('a'*40); $cases++
+$conf=Get-QaPostgresConfiguration $qaRoot 'medipos_qa_unit'
+Assert-QaCondition ($conf.Conf.Contains("listen_addresses = '127.0.0.1,::1'") -and $conf.Conf.Contains('ssl = on') -and $conf.Conf.Contains("log_min_error_statement = 'panic'") -and $conf.Hba -notmatch '\btrust\b' -and $conf.Hba.Contains('host all all 0.0.0.0/0 reject')) 'native-loopback-scram-tls-template'; $cases++
 $invalid = @(
     @{ Key = 'PlatformApi:Enabled'; Value = 'true' }, @{ Key = 'PlatformAdministration:Enabled'; Value = 'true' },
     @{ Key = 'PlatformAdministration:AdministratorUserIds:0'; Value = 'synthetic' }, @{ Key = 'AllowedHosts'; Value = '*' },
