@@ -20,10 +20,41 @@ function Assert-QaPrivateMaterialPath([string]$Path, [string]$Root) {
     return $full
 }
 
+function Get-QaPhysicalDirectoryPath([string]$Path) {
+    if (-not ('MediPosQaDirectoryProbe' -as [type])) {
+        Add-Type -TypeDefinition @'
+using System;
+using System.Text;
+using System.Runtime.InteropServices;
+using Microsoft.Win32.SafeHandles;
+public static class MediPosQaDirectoryProbe {
+    [DllImport("kernel32.dll", CharSet=CharSet.Unicode, SetLastError=true)]
+    public static extern SafeFileHandle CreateFileW(string path, uint access, uint share, IntPtr security, uint creation, uint flags, IntPtr template);
+    [DllImport("kernel32.dll", CharSet=CharSet.Unicode, SetLastError=true)]
+    public static extern uint GetFinalPathNameByHandleW(SafeFileHandle handle, StringBuilder path, uint capacity, uint flags);
+}
+'@
+    }
+    $handle=[MediPosQaDirectoryProbe]::CreateFileW($Path,0x80,7,[IntPtr]::Zero,3,0x02000000,[IntPtr]::Zero)
+    try {
+        Assert-QaCondition (-not $handle.IsInvalid) 'qa-physical-directory-unavailable'
+        $buffer=New-Object Text.StringBuilder(32768)
+        $length=[MediPosQaDirectoryProbe]::GetFinalPathNameByHandleW($handle,$buffer,32768,0)
+        Assert-QaCondition ($length -gt 0 -and $length -lt 32768) 'qa-physical-directory-unavailable'
+        $resolved=$buffer.ToString()
+        if ($resolved.StartsWith('\\?\',[StringComparison]::Ordinal)) { $resolved=$resolved.Substring(4) }
+        return [IO.Path]::GetFullPath($resolved).TrimEnd('\')
+    } finally { $handle.Dispose() }
+}
+function Assert-QaPhysicalRoot([string]$Expected,[string]$Actual) {
+    Assert-QaCondition ([IO.Path]::GetFullPath($Expected).TrimEnd('\') -ieq [IO.Path]::GetFullPath($Actual).TrimEnd('\')) 'qa-private-root-redirected-use-normal-powershell'
+}
 function Assert-QaPrivateRoot([string]$Path) {
     $base = [IO.Path]::GetFullPath((Join-Path $env:LOCALAPPDATA 'MediPOS\QA'))
     $root = Assert-QaChildPath $Path $base
     Assert-QaCondition ($root.Substring($base.Length+1) -cmatch '^[a-z0-9][a-z0-9_-]{0,31}$') 'qa-root-run-name'
+    Assert-QaCondition (Test-Path -LiteralPath $root -PathType Container) 'qa-private-root-missing'
+    Assert-QaPhysicalRoot $root (Get-QaPhysicalDirectoryPath $root)
     $ancestor = Get-Item -LiteralPath $root -Force
     while ($ancestor -and $ancestor.FullName.Length -ge $env:LOCALAPPDATA.Length) {
         Assert-QaCondition (-not ($ancestor.Attributes -band [IO.FileAttributes]::ReparsePoint)) 'private-ancestor-reparse-point'
@@ -32,6 +63,15 @@ function Assert-QaPrivateRoot([string]$Path) {
     return $root
 }
 
+function Assert-QaGoogleWebClient($OAuth) {
+    Assert-QaCondition ($null -ne $OAuth) 'oauth-web-client-required'
+    $webProperty=$OAuth.PSObject.Properties['web'];$installedProperty=$OAuth.PSObject.Properties['installed']
+    Assert-QaCondition ($null -ne $webProperty -and $null -ne $webProperty.Value -and ($null -eq $installedProperty -or $null -eq $installedProperty.Value)) 'oauth-web-client-required'
+    $redirectProperty=$webProperty.Value.PSObject.Properties['redirect_uris'];$originProperty=$webProperty.Value.PSObject.Properties['javascript_origins']
+    Assert-QaCondition ($null -ne $redirectProperty -and $null -ne $originProperty) 'qa-google-client-not-exclusive-or-wrong-callback'
+    $redirects=@($redirectProperty.Value);$origins=@($originProperty.Value)
+    Assert-QaCondition ($redirects.Count -eq 1 -and $redirects[0] -ceq 'https://localhost:7443/auth/google/callback' -and $origins.Count -eq 1 -and $origins[0] -ceq 'https://localhost:7443') 'qa-google-client-not-exclusive-or-wrong-callback'
+}
 function Assert-QaSettings([hashtable]$Settings, [string]$PrivateRoot) {
     $required = @{
         'Authentication:Google:Enabled' = 'true'; 'TenantApi:Enabled' = 'true'
@@ -69,12 +109,24 @@ function Assert-QaSettings([hashtable]$Settings, [string]$PrivateRoot) {
     return $connection
 }
 
+function Get-QaPrivateItemAcl($Item,[string]$Root) {
+    try { return Get-Acl -LiteralPath $Item.FullName -ErrorAction Stop }
+    catch [System.Management.Automation.ItemNotFoundException] {
+        # PostgreSQL replaces internal/temp files while running. A vanished file has
+        # no readable material; do not forgive missing config/release/secrets or ACL failures.
+        $data=[IO.Path]::GetFullPath((Join-Path $Root 'postgres-data')).TrimEnd('\')
+        $path=[IO.Path]::GetFullPath($Item.FullName)
+        if ($path.StartsWith($data+'\',[StringComparison]::OrdinalIgnoreCase) -and -not (Test-Path -LiteralPath $path -ErrorAction Stop)) { return $null }
+        throw
+    }
+}
 function Assert-QaPrivateTree([string]$Root) {
     $allowed = @([Security.Principal.WindowsIdentity]::GetCurrent().User.Value, 'S-1-5-18')
     $items = @((Get-Item -LiteralPath $Root -Force)) + @(Get-ChildItem -LiteralPath $Root -Recurse -Force)
     foreach ($item in $items) {
         Assert-QaCondition (-not ($item.Attributes -band [IO.FileAttributes]::ReparsePoint)) 'private-reparse-point'
-        $acl = Get-Acl -LiteralPath $item.FullName
+        $acl = Get-QaPrivateItemAcl $item $Root
+        if ($null -eq $acl) { continue }
         foreach ($rule in $acl.Access) {
             if ($rule.AccessControlType -eq 'Allow') {
                 Assert-QaCondition ($rule.IdentityReference.Translate([Security.Principal.SecurityIdentifier]).Value -in $allowed) 'private-acl-too-broad'
@@ -285,4 +337,4 @@ function Test-QaProcessIdentity($Record, $Process, [string]$AppPath) {
         ([DateTime]$Record.StartTimeUtc).ToUniversalTime().Ticks -eq ([DateTime]$Process.CreationDate).ToUniversalTime().Ticks
 }
 
-Export-ModuleMember -Function Assert-QaCondition, Assert-QaChildPath, Assert-QaPrivateMaterialPath, Assert-QaPrivateRoot, Assert-QaSettings, Assert-QaPrivateTree, Get-QaFileManifest, Get-QaRlsInventory, Get-QaDatabaseGuards, Assert-QaRelease, Assert-QaCertificates, Assert-QaClusterRecord, Get-QaFailureCode, Get-QaInheritedOverrideNames, Invoke-QaBuildCommand, Invoke-QaRuntimeProbe, Test-QaProcessIdentity
+Export-ModuleMember -Function Assert-QaCondition, Assert-QaChildPath, Assert-QaPrivateMaterialPath, Get-QaPhysicalDirectoryPath, Assert-QaPrivateRoot, Assert-QaGoogleWebClient, Assert-QaSettings, Assert-QaPrivateTree, Get-QaFileManifest, Get-QaRlsInventory, Get-QaDatabaseGuards, Assert-QaRelease, Assert-QaCertificates, Assert-QaClusterRecord, Get-QaFailureCode, Get-QaInheritedOverrideNames, Invoke-QaBuildCommand, Invoke-QaRuntimeProbe, Test-QaProcessIdentity

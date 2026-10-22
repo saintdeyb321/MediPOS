@@ -39,6 +39,28 @@ host all all ::/0 reject
 "@
     return [pscustomobject]@{Conf=$conf;Hba=$hba}
 }
+function Invoke-QaControlProcess([Diagnostics.ProcessStartInfo]$Info,[bool]$StartsPostmaster) {
+    $process=New-Object Diagnostics.Process; $process.StartInfo=$info
+    try {
+        $null=$process.Start()
+        # On Windows the background postmaster can inherit the redirected pipe handles.
+        # pg_ctl has exited successfully, but ReadToEnd then waits for the SERVER to exit.
+        # Start output is deliberately discarded: exit status, PID/control identity and
+        # exclusive listeners are verified by the caller. No background reader survives.
+        if (-not $StartsPostmaster) { $output=$process.StandardOutput.ReadToEndAsync(); $errors=$process.StandardError.ReadToEndAsync() }
+        if (-not $process.WaitForExit(45000)) {
+            # Only this helper's pinned handle is ours; never stop a postmaster by name/PID here.
+            $process.Kill(); $process.WaitForExit()
+            throw 'QA NO-GO: native-control-timeout-reconcile-cluster-before-retry'
+        }
+        Assert-QaCondition ($process.ExitCode -eq 0) 'native-control-failed-details-withheld'
+        if ($StartsPostmaster) { return '' }
+        $null=$errors.Result; return $output.Result
+    } finally {
+        if ($StartsPostmaster) { $process.StandardOutput.Close(); $process.StandardError.Close() }
+        $process.Dispose()
+    }
+}
 function Invoke-QaNativeControl([string]$Executable, [string]$Arguments) {
     Assert-QaCondition ($Executable -in @('pg_controldata.exe','pg_ctl.exe')) 'native-control-command'
     $info=New-Object Diagnostics.ProcessStartInfo
@@ -47,17 +69,8 @@ function Invoke-QaNativeControl([string]$Executable, [string]$Arguments) {
     $info.RedirectStandardOutput=$true; $info.RedirectStandardError=$true
     foreach ($key in @($info.EnvironmentVariables.Keys)) { if ($key -like 'PG*') { $info.EnvironmentVariables.Remove($key) } }
     $info.EnvironmentVariables['LC_ALL']='C'
-    $process=New-Object Diagnostics.Process; $process.StartInfo=$info
-    try {
-        $null=$process.Start(); $output=$process.StandardOutput.ReadToEndAsync(); $errors=$process.StandardError.ReadToEndAsync()
-        if (-not $process.WaitForExit(45000)) {
-            # Only this helper's pinned handle is ours; never stop a postmaster by name/PID here.
-            $process.Kill(); $process.WaitForExit()
-            throw 'QA NO-GO: native-control-timeout-reconcile-cluster-before-retry'
-        }
-        Assert-QaCondition ($process.ExitCode -eq 0) 'native-control-failed-details-withheld'
-        $null=$errors.Result; return $output.Result
-    } finally { $process.Dispose() }
+    $startsPostmaster=$Executable -ceq 'pg_ctl.exe' -and $Arguments -cmatch '\sstart\s*$'
+    return Invoke-QaControlProcess $info $startsPostmaster
 }
 function Assert-QaNativeControlIdentity($Record, [string]$Root) {
     $data=Assert-QaChildPath $Record.DataDirectory $Root
@@ -73,9 +86,13 @@ function Assert-QaNativeControlIdentity($Record, [string]$Root) {
     Assert-QaCondition ($output -match '(?m)^Database system identifier:\s*(\d+)\s*$' -and $Matches[1] -ceq $Record.SystemIdentifier) 'native-control-system-identifier'
 }
 function Test-QaPostmasterIdentity($Record, $Process, [string]$DataDirectory) {
+    if ($null -eq $Process) { return $false }
+    $data=[IO.Path]::GetFullPath($DataDirectory).TrimEnd('\')
+    $executable='C:\Program Files\PostgreSQL\18\bin\postgres.exe'
+    $command=([string]$Process.CommandLine).Replace('/','\')
+    $pattern='^"?'+[regex]::Escape($executable)+'"?\s+-D\s+"?'+[regex]::Escape($data)+'"?\s*$'
     return $null -ne $Process -and $Record.ProcessId -eq $Process.ProcessId -and $Process.Name -ceq 'postgres.exe' -and
-        $Process.ExecutablePath -ieq 'C:\Program Files\PostgreSQL\18\bin\postgres.exe' -and
-        $Process.CommandLine -match ('(?:^|\s)-D\s+"?'+[regex]::Escape($DataDirectory)+'"?(?:\s|$)') -and
+        $Process.ExecutablePath -ieq $executable -and $command -match $pattern -and
         ([DateTime]$Record.StartTimeUtc).ToUniversalTime().Ticks -eq ([DateTime]$Process.CreationDate).ToUniversalTime().Ticks
 }
 Export-ModuleMember -Function Assert-QaNativeClusterRecord, Get-QaPostgresConfiguration, Invoke-QaNativeControl, Assert-QaNativeControlIdentity, Test-QaPostmasterIdentity

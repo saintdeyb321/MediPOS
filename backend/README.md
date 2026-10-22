@@ -1,6 +1,6 @@
 # MediPOS backend
 
-**Integration source update (2026-10-17), NOT deployed:** versioned presentations and employee invitations are implemented with the React contingency PWA. Source has a 35th migration, `20261017044923_AddTenantEmployeeInvitations`; it has not been applied to LAB/DEV. Historical LAB evidence below still describes the installed 34-migration release. See [FRONTEND_INTEGRATION_PLAN.md](../docs/FRONTEND_INTEGRATION_PLAN.md). No startup migration or production-readiness claim is added.
+**Integration source update (2026-10-17), NOT deployed:** versioned presentations and employee invitations are implemented with the React contingency PWA. Historical LAB evidence below still describes the installed 34-migration release. **DEV exception2026-10-22:** explicit approval completed official35–37 with private backup and minimum invitation grants; see the DEV section below. No LAB/QA upgrade, startup migration or production-readiness claim is added. See [FRONTEND_INTEGRATION_PLAN.md](../docs/FRONTEND_INTEGRATION_PLAN.md).
 
 Requires the .NET 10 SDK. Do not check/start/install Docker or run Testcontainers locally. The explicitly authorized F2.0 development exception below permits only the existing local PostgreSQL 18 database `medipos_dev`; it does not authorize running the container integration suite.
 
@@ -16,6 +16,56 @@ Alternatively, set the environment variable `ConnectionStrings__MediPosDatabase`
 The optional `http` launch profile uses `http://localhost:5080`; integration uses `https-local` below. `GET /health` reports process health; `GET /health/ready` checks the guarded runtime PostgreSQL dependency. Neither authorizes a production pilot. The OpenAPI document is served at `/openapi/v1.json` only in Development.
 
 ### Local PostgreSQL / same-origin HTTPS — F2.0 (2026-10-15)
+
+#### Superadmin temporal sobre DEV existente — esquema actualizado, mantener DEV ordinario (2026-10-22)
+
+**Decisión vigente del propietario:** mantener DEV ordinario. No activar el candidato corregido, reiniciar ni abrir una ventana administrativa. Verificación posterior a esta decisión: mismo PID22788, solo loopback7243, readiness200 y `/platform/session` + `/platform/tenants`404. Los comandos de activación siguientes quedan como referencia; requieren una futura solicitud y autorización explícitas, no una aprobación pendiente.
+
+Se reutilizan `medipos_dev`/`medipos_runtime`, Google DEV, su Data Protection y el certificado TLS ya confiable de7243. **Production-only permanece intacto:** la ventana usa Production temporalmente; el cierre restaura un host Development ordinario con ambas flags de plataforma=false. No se crea otra base, cliente Google, autoridad SQL ni permiso por Owner/email. El404 actual de `/platform/session` corresponde a plataforma deshabilitada. Separadamente, se reprodujo/corrigió el403 de GET de plataforma sin Origin: solo GET con `Sec-Fetch-Site: same-origin|none` puede usar esa evidencia nativa; Origin externo o ausente sin metadata sigue rechazado, y POST/PUT conservan Origin exacto+CSRF+autorización.
+
+Preflight inicial: proceso19796, localhost7243/readiness200, conexión del PID correlacionada con PostgreSQL `medipos_dev`/`medipos_runtime`, identidad Google interna indicada registrada, rol sin elevación/propiedad/membresías/DDL y53 FORCE-RLS. Con autorización explícita se detuvo exclusivamente ese proceso y se aplicaron estas tres migraciones oficiales, pasando **34→37**:
+
+- `20261017044923_AddTenantEmployeeInvitations`: tabla de invitaciones, auditoría y controles RLS/historial oficiales.
+- `20261017215309_FixOfficialRefreshApprovalVersionReference`: corrección de la función de aprobación de catálogo.
+- `20261018023355_FixOfficialRefreshJsonProjectionPrecedence`: corrección de precedencia JSON en los guardas del catálogo.
+
+**Ejecutado en el Windows real:** respaldo custom privado en `C:\Users\deyvi\AppData\Roaming\MediPOS\DevAdministration\maintenance-20261022`, SHA-256/TOC/decodificación completa comprobados; no se afirma una restauración a otra base. EF utilizó el assembly Release del candidato y autoridad postgres temporal por pgpass. Todas las tablas preexistentes conservan recuentos y huellas de contenido idénticos; invitaciones está vacía. `tools/dev-invitation-runtime-grants.sql` fue ejecutado: SELECT/INSERT y UPDATE solo de nueve columnas, sin UPDATE global/DELETE/DDL. Los GRANT automáticos de la migración35 a roles LAB/test sobre la tabla nueva de DEV se retiraron inmediatamente para conservar el aislamiento previo: solo `medipos_runtime` tiene permisos runtime en esa tabla; no se conectó ni modificó otra base. **37/37,54 FORCE-RLS, runtime restringido y User Secrets intactos** verificados. El launcher sigue sin ejecutar migraciones ni reparar permisos.
+
+**Activación detenida, sin autoridad concedida:** el certificado DEV válido contiene varios SAN; `GetNameInfo(DnsName)` devolvía otro nombre aunque `localhost` sí está incluido. El guard ahora exige `localhost` exacto entre todos los SAN, conserva clave privada/vigencia/cadena y rechaza comodines/nombres parecidos. No se cambia certificado ni confianza. Esto cambia el manifiesto aprobado previamente: el nuevo candidato de abajo requiere autorización antes de activarse. No existe todavía `session-7243`, aprobación de ventana ni proceso administrativo. Development ordinario fue restaurado: PID22788/readiness200/plataforma404, sockets reales correlacionados con DEV/runtime. La redirección MSIX se evitó iniciando la operación mediante el escritorio Explorer normal; nunca se omitió el guard de ruta física.
+
+**Inspección sin cambios, desde Windows PowerShell5.1 normal:**
+
+```powershell
+Set-Location C:\Proyectos\MediPOS\backend
+$DevActor = [Guid](Read-Host 'Tu ID interno DEV ya verificado; no es el correo')
+.\tools\start-local-dev-admin.ps1 -ActorId $DevActor
+```
+
+La identidad no se imprime. El resultado muestra solo destino/runtime/metadatos/migraciones y prueba la conexión del proceso activo, sin asumirla por el nombre de la base o por User Secrets. Los booleanos/canonicalización de PublicOrigin se interpretan como .NET, solo en memoria; no se reescriben secretos. No usar el AppData Local redirigido de Codex. La futura carpeta privada es `C:\Users\deyvi\AppData\Roaming\MediPOS\DevAdministration\session-7243`, también protegida por comprobación de ruta física/reparse y ACL usuario/SYSTEM; un destino existente se rechaza.
+
+**Solo después de aprobar y completar respaldo/34→37/GRANT, y aprobar la ventana concreta:** detén el `dotnet run` actual con Ctrl+C o la depuración de Visual Studio; no detengas PostgreSQL. El launcher nunca mata al proceso ordinario por puerto/nombre. Con7243 libre, ejecuta en esa misma consola:
+
+```powershell
+$DevCandidate = '2385D9BCF075C1445182F019EFDA2DF5D0B1B8ED87000C3B5C0C0B6750F694DC'
+.\tools\start-local-dev-admin.ps1 -ActorId $DevActor -Activate `
+    -ApprovedManifestSha256 $DevCandidate `
+    -TlsThumbprint 'FD2CFDAF5048CD2BDE4C1952793805949D88DE06'
+```
+
+Este candidato de58 archivos bajo `backend/obj/local-dev-admin/candidate` contiene el API Release corregido y React ya compilado, no otro servidor. Su manifiesto fija archivos/hashes,37 IDs, herramientas y digest de la única identidad aprobada; no atribuirle la CI del9f54345 sin el delta local. Validación, copia y credenciales privadas suceden solo con `-Activate` autorizado. Reutiliza/exporta el certificado TLS existente a un PFX protegido con contraseña aleatoria; no genera ni confía otro certificado. Copia configuración de arranque desde User Secrets sin modificar el original. La allowlist del hijo contiene exclusivamente el UUID aprobado, independiente de membresías.
+
+**Mantén esa PowerShell abierta.** El job Windows existente arranca el hijo suspendido, lo vincula antes de ejecutarlo y aplica un deadline no renovable de30 minutos independiente del polling. Se verifican loopback, readiness/React200 y plataforma anónima401 antes de anunciar ready. Solo entonces vuelve a Google en tu perfil DEV y abre **https://localhost:7243/plataforma**. React `/auth/me` debe responder200 y `/platform/session`200 con `allowed:true`; esto está **BLOCKED/NO EJECUTADO**, no probado por las unitarias. Ningún POST comercial/administrativo se ejecuta desde el launcher.
+
+**Cerrar antes del vencimiento, desde otra PowerShell normal:**
+
+```powershell
+Set-Location C:\Proyectos\MediPOS\backend
+.\tools\close-local-dev-admin.ps1 -Close
+```
+
+El cierre verifica ruta/binario/PID/hora del único hijo registrado; no renueva la aprobación. El controlador termina el hijo y restaura Development con plataforma=false, comprobando readiness200 y `/platform/session`/`/platform/tenants`404 reales. Debes iniciar sesión de nuevo como usuario ordinario. Si el controlador muere, el job revoca autoridad; el cierre puede recuperar solo el modo ordinario tras demostrar ausencia del controlador/hijo/listener. No se declara restauración si falla; conservar recibos, no borrar la carpeta ni reactivar. Una nueva ventana requiere nueva autorización y una carpeta nueva, no reutilizar la sesión consumida.
+
+Validaciones:119 pruebas HTTP/auth focalizadas (14 nuevas),8 arquitectura, formato y publish Release PASS;47 guards PS5.1 (incluidos nueve de SAN) y deadline de un proceso durmiente PASS. EF offline `has-pending-model-changes`: sin cambios. Respaldo/EF35–37/GRANT/verificación de datos y restauración del host ordinario ejecutados; Google/DP/User Secrets/LAB/QA conservados. **Superadmin real200, vencimiento y restauración de una ventana administrativa siguen NOT EXECUTED.** El propietario eligió conservar DEV ordinario; la ventana corregida no está autorizada y no debe activarse ni volver a proponerse automáticamente.
 
 The first profile is now `https-local`: build `frontend/dist` with `npm run build` in `frontend/`, then run `dotnet run --project src/MediPOS.Api --launch-profile https-local` from `backend/`. Kestrel uses the existing trusted localhost development certificate and listens at **https://localhost:7243**. Development-only `LocalFrontend:Enabled` serves only the compiled SPA/static files; `/auth`, `/api`, `/platform`, `/health` and `/openapi` never fall back to HTML. Missing assets stay 404. Host is restricted to localhost; authentication keeps its existing exact PublicOrigin/Origin/HTTPS/CSRF checks. There is no Node backend or forwarding proxy. Rebuild the frontend and refresh after changes. The earlier HTTP profile remains explicitly selectable for backend diagnostics.
 
@@ -505,11 +555,11 @@ No QA provisioning or temporary Superadmin launcher was installed. Next approval
 
 ### QA-1 — reproducible isolated provisioning procedure (PREPARED ONLY)
 
-QA-0B's18 files are already published in `2cddc3225223924fb5c531abe967c99435d6147e`; do not request committing them again. A new local category-concurrency correction precedes the conditionally authorized CI, so that CI was **not dispatched**. New tooling/correction requires its own reviewed SHA before packaging and any newly authorized CI. See `FRONTEND_INTEGRATION_PLAN.md` QA-1 for evidence and the active handoff. Nothing below has provisioned infrastructure; these are future operator/agent steps after explicit approval, not instructions to touch LAB/DEV.
+Historical preparation: QA-0B's18 files were published in `2cddc3225223924fb5c531abe967c99435d6147e`; do not request committing them again. A category-concurrency correction prevented that older conditional CI from being dispatched. The subsequent source is now certified as **9f5434549a9c06f61705523069fc13673aad3226**, with the complete verified package and CI recorded in the final-MVP section below; no new publication/CI is required for the current handoff. Nothing below has provisioned infrastructure; these are future operator/agent steps after explicit approval, not instructions to touch LAB/DEV.
 
 **Approval boundary:** exact new SHA, run name/retention, a new disposable native PostgreSQL18 cluster on55432, private QA material/current-user CA trust and ordinary Production API/React on7443. No Superadmin, users/business fixtures or commercial writes are included. Use existing PostgreSQL18 binaries only; no install, Windows service registration, Docker or LAB launcher. Reject an occupied port, existing data directory/database/role, reparse path, unexpected cluster ID or changed configuration; reconcile instead of resetting/removing resources.
 
-1. **Build once from clean approved source.** From `backend/`, `tools/prepare-local-qa.ps1 -ApprovedCommit <SHA>` creates only `obj/local-qa/<SHA>`; Format2 includes API/React source stamps, all file hashes/lengths,37 migration IDs,59 tables/54 RLS tables, constraints/triggers/functions and `runtime-grants.sql`. The dirty QA-1 tree is intentionally not packageable as2cddc32. Verify manifest after copying the complete package to a *new* `%LOCALAPPDATA%\MediPOS\QA\<run>\release`; never mix packages. Runtime/SQL scripts must be the reviewed source matching that SHA.
+1. **Use the existing certified package.** `obj/local-qa/9f5434549a9c06f61705523069fc13673aad3226` already contains the verified Format2 package: API/React source stamps,60 file hashes/lengths,37 migration IDs,59 tables/54 RLS tables, constraints/triggers/functions and `runtime-grants.sql`. Do not rebuild it for documentation-only status changes. For a future source change, `tools/prepare-local-qa.ps1 -ApprovedCommit <SHA>` requires clean matching source before and after building. After provisioning approval, verify the manifest again when copying the complete package to a *new* `%LOCALAPPDATA%\MediPOS\QA\<run>\release`; never mix packages. Runtime/SQL scripts must match the reviewed SHA.
 2. **Private root and certificates, only after approval.** `<run>` is one lowercase slug (≤32 chars); database suffix uses lowercase letters/digits/underscore (≤25 chars). Create fresh root with inheritance disabled and only current Windows SID/SYSTEM access; child directories `logs`, `keys`, `audit`, no junctions. Do not reuse LAB/DEV secrets/trust/keyring. `tools/prepare-local-qa-certificates.ps1 -PrivateRoot <root> -ApprovedCommit <SHA> -Create` writes distinct RSA3072 PostgreSQL/TLS/DP keys, SANlocalhost and90-day CA-signed certificates privately, with random PFX passwords. It refuses existing material; the CA signing key is not persisted. The separate approved `-TrustQaCa` adds only the recorded QA CA to `Cert:\CurrentUser\Root`; never trust an arbitrary certificate or change system-wide trust. `-SelfTest` tests RAM only, without trust/files or installed infrastructure.
 3. **Initialize the new native cluster.** Generate separate ≥48-byte cryptographic base64url provisioner/runtime passwords in memory; persist only protected files outside release, never arguments/transcripts/output. Verify all QA paths/ports and absent data directory *before* `C:\Program Files\PostgreSQL\18\bin\initdb.exe -D <root>\postgres-data --username=medipos_qa_<run>_provisioner --pwfile=<private-init-password-file> --auth-local=scram-sha-256 --auth-host=scram-sha-256 --encoding=UTF8 --locale-provider=builtin --builtin-locale=C.UTF-8`. Capture output privately/sanitize failures. No default postgres password or environment from LAB/DEV. [PostgreSQL18 initdb](https://www.postgresql.org/docs/18/app-initdb.html).
 4. **Pin cluster configuration/identity before startup.** In the new directory only, write the exact `Get-QaPostgresConfiguration` result (`LocalQa.Cluster.psm1`) to `postgresql.conf`/`pg_hba.conf`:127.0.0.1/::1:55432, TLS≥1.2, private PG certificate/key, SCRAM only for the exact QA provisioner/runtime and postgres/QA databases, explicit reject-all; no include/auto.conf overrides or statement/password logging. Capture actual `pg_controldata` with `LC_ALL=C`, then private `cluster.json`: Format=1, Discardable=true, SourceCommit=<SHA>, Host=localhost, Port=55432, Database/RuntimeRole/ProvisionerRole as above, exact absolute DataDirectory, real decimal SystemIdentifier, PostgresConfSha256/HbaConfSha256. Never invent the system identifier. `tools/manage-local-qa-cluster.ps1 -PrivateRoot <root> -ApprovedCommit <SHA> -Action Start -Execute` starts only that checked cluster and records PID/time/identity/exclusive listener. Default Inspect does not run PG binaries. [PG18 TLS](https://www.postgresql.org/docs/18/ssl-tcp.html).
@@ -528,21 +578,116 @@ Ordinary/admin launchers purge inherited PG credentials/TLS defaults and applica
 
 **Current status:** source preparation only; Format2 package/install, actual37 migrations/GRANT/TLS/Google/admin expiry/revocation/browser journeys **NOT EXECUTED**. Tests of memory keys and one disposable sleeping process are not infrastructure acceptance. Ordinary provisioning approval and the new reviewed SHA/CI are pending; A18 gap and operational D2 remain open, Release D **NO-GO**.
 
-### Final MVP QA continuation — reviewed baseline5598688 (2026-10-18)
+### Final MVP QA continuation — certified code, local QA pending (2026-10-18)
 
 The23 QA-1 files are already published in **5598688e3491854462a5853b44fc578e837a54a1** (parent2cddc32), verified local/remote; do not commit them again. A targeted review found that the administrative deadline depended on PowerShell polling: a blocking readiness/HTTP call could delay termination. The new correction arms a nonrenewable .NET timer on the existing Windows job, independently of the calling thread; suspended startup and ready publication also reject an elapsed lease. Disposable-process regressions cover blocked caller, controller termination without finally, explicit closure and deadline rejection. They do **not** certify a real Google/admin/HTTPS window. No C#/business model/SQL migration/runtime GRANT changed.
 
 Exact CA cleanup is now prepared through `tools/prepare-local-qa-certificates.ps1 -PrivateRoot <root> -ApprovedCommit <SHA> -RemoveQaCa -ExpectedCaThumbprint <recorded-QA-CA-thumbprint>`: separately authorized cleanup only, stopped QA resources/free7443+55432, source/metadata/public-certificate hash matching, literal **CurrentUser Root** path; no wildcard or other-store deletion. Pure guard tests do not change trust. Creation, trust and removal are not run in this session.
 
-The first candidate package failed closed on a Vite stderr warning: Windows PowerShell5.1 raised NativeCommandError under Stop although the build itself was valid. `Invoke-QaBuildCommand` now captures native build output with a temporary Continue preference and requires an actual exit0, preserving the caller's preference/LASTEXITCODE. Regressions accept synthetic stderr+exit0 and reject stderr+exit9. No warning threshold or build failure is relaxed. The incomplete4c1184d obj package is retained, never installed; the final candidate gets a new complete hash-verified package directory.
+The first candidate package failed closed on a Vite stderr warning: Windows PowerShell5.1 raised NativeCommandError under Stop although the build itself was valid. `Invoke-QaBuildCommand` now captures native build output with a temporary Continue preference and requires an actual exit0, preserving the caller's preference/LASTEXITCODE. Regressions accept synthetic stderr+exit0 and reject stderr+exit9. No warning threshold or build failure is relaxed. The incomplete4c1184d obj package is retained, never installed. The complete **9f5434549a9c06f61705523069fc13673aad3226** package is prepared and verified:60 files, same-SHA API/React,37 official migrations; manifest SHA-256 **3E382B87BEC7EDC52165A248648ADD2F32BDFD355806A19666B7EE946BDC9462**. All13 QA scripts/modules/SQL match that certified source.
 
-**One future ordinary-QA provisioning approval, after candidate CI passes:** approved candidate SHA; run `mvp_20261018`; private root **`C:\Users\deyvi\AppData\Local\MediPOS\QA\mvp_20261018`** (currently absent), native data `<root>\postgres-data`, base **`medipos_qa_mvp_20261018`**, roles **`medipos_qa_mvp_20261018_provisioner`** (temporary, retired NOLOGIN) and **`medipos_qa_mvp_20261018_runtime`** (restricted, non-owner). Existing binaries `C:\Program Files\PostgreSQL\18\bin`; loopback55432/TLS VerifyFull; official37 migrations; reviewed minGRANT/probe. Independent `<root>\pg-root.crt`, PostgreSQL key/cert, TLS/DP PFX/passwords, `<root>\keys`, runtime-only passfile, flat `settings.json`, cluster identity record and complete same-SHA package `<root>\release`. Approve adding only this QA CA to **CurrentUser Root**, importing the separate private Google JSON and starting ordinary Production API/React at **https://localhost:7443** with platform=false. No service registration, public bind, LAB/DEV access, Superadmin or business writes. Retain QA until tests finish; no automatic deletion, later cleanup requires its own approval. Do not use the sandbox-redirected LOCALAPPDATA as the real operator path.
+**Historical provisioning evidence, 2026-10-18 — scope corrected below:** package **9f5434549a9c06f61705523069fc13673aad3226**, run `mvp_20261018`, was prepared in the Codex/MSIX AppData namespace. Its real PostgreSQL18.4 runtime probe checked37 exact migrations,59 tables/54 FORCE-RLS and restricted non-owner grants; provisioner was retired to NOLOGIN and temporary administrative credentials removed. These are retained historical results, not proof of an installed or running cluster in normal Windows PowerShell. Google/API, browser authentication and Data Protection persistence were not exercised. Do not repeat provisioning or recreate roles/migrations; use the current physical-path diagnosis and guarded recovery procedure below.
 
-**Google Cloud steps (operator, no secrets in chat):** create/select a dedicated QA project; Google Auth Platform → **Branding** (application name/support email) → **Audience** (External, Testing; add actual A/B/C/D test users) → **Clients → Create client → Web application**. Set origin **https://localhost:7443** and redirect **https://localhost:7443/auth/google/callback** exactly. Download/save the Web-client JSON privately outside repo; it will be imported to protected QA after provisioning approval. Keep LAB/DEV client unchanged; grant only existing OIDC openid/email/profile scopes. [Official client setup](https://support.google.com/cloud/answer/15549257?hl=en), [audience/testing](https://support.google.com/cloud/answer/15549945?hl=en).
+**Correction 2026-10-22 — physical host installation is NOT complete.** The preceding 2026-10-18 provisioning evidence belongs to native Windows processes whose AppData was redirected into the Codex MSIX cache. An opened-file handle resolves the logical QA path to **`C:\Users\deyvi\AppData\Local\Packages\OpenAI.Codex_2p2nqsd0c76g0\LocalCache\Local\MediPOS\QA\mvp_20261018`**, even outside the restricted-token sandbox. It does not prove resources exist at the path used by normal Windows PowerShell. The owner reports that normal-host path absent; the tool context cannot independently confirm it through that redirected namespace. Today no process listens on55432/7443, and no matching QA process is present. Cached PG18 data/control identity and both60-file9f54345 packages match; the cluster says **in production** with stale PID metadata after an unclean stop. Do not recreate it, reset passwords, rerun migrations or delete its PID to force startup. Google/active settings/API remain absent. Moving to the actual host requires a separately approved, verified cold **copy**, original retained, and normal PostgreSQL WAL recovery of that copy. New directory-handle guards reject redirected roots and report a missing root explicitly. Current source changes remain local/uncommitted.
+
+**Windows launcher corrections, local/uncommitted:** actual native startup exposed inherited stdout/stderr handles holding pg_ctl capture open after exit; discard capture only for background startup, retain real exit-code/PID/time/configuration/exclusive-listener checks and normal control output. Normalize forward-slash PostgreSQL argv and require the exact pinned executable/data argument. A live PostgreSQL file disappeared during the final ACL snapshot: tolerate only ItemNotFound for an already-absent descendant of the approved postgres-data directory; still fail on missing secrets/config, reparse entries, real ACL/read failures and existing broad ACL. `test-local-qa.ps1 -NativeControlSelfTest -PrivateTreeSelfTest` passed on WindowsPS5.1:57 pure guards, inherited-pipe/nonzero/status primitives and vanished-file/missing-config/broad-ACL filesystem regressions. Real native restart/stop, migration/runtime probe and final ACL passed separately. A temporary PS5.1 operator assignment error was reproduced and corrected using explicit string conversion; retries reconciled existing DB/role/history, never recreated them. These3 tooling files are **not** covered by CI9f54345; API/React/migrations/package remain unchanged at that certified SHA. No new commit/push/workflow occurred.
+
+**Failure/reversal:** fail closed on occupied resources, source/configuration/cluster mismatch, migration errors or missing secrets. Stop only identity-verified QA API/cluster using the existing stop/controller scripts; preserve private data, certificates and receipts for diagnosis, never reset/drop/reinitialize. Previously running LAB/DEV remain untouched. Removing the exact recorded QA CA or deleting the new QA directory/cluster requires a separate explicit cleanup approval. If Google is still missing after provisioning approval, finish only independent approved PostgreSQL/TLS checks; the existing launcher requires real credentials and must not be bypassed.
+
+#### Encender QA desde Windows PowerShell 5.1 — uso diario
+
+Abre **Win+R → `powershell.exe` → Enter**, como tu usuario normal. Usa esta ventana externa a Codex/Visual Studio. No necesitas administrador, Vite, npm ni `dotnet run`: la API sirve el React compilado del mismo SHA. Los errores de Google/SCRAM de otro perfil de lanzamiento no justifican resetear credenciales QA.
+
+En cada ventana nueva:
+
+```powershell
+$ErrorActionPreference = 'Stop'
+Set-Location 'C:\Proyectos\MediPOS\backend'
+$QaRoot = Join-Path $env:LOCALAPPDATA 'MediPOS\QA\mvp_20261018'
+$QaSha = '9f5434549a9c06f61705523069fc13673aad3226'
+```
+
+**1. Comprobar existencia, sin instalar ni arrancar nada:**
+
+```powershell
+.\tools\prepare-local-qa-host.ps1 -PrivateRoot $QaRoot -ApprovedCommit $QaSha
+```
+
+`HostRootVisible=false` significa que falta la instalación. `VisibleRootIsPhysicalHost=false` con una ruta física bajo `Packages\OpenAI.Codex...\LocalCache` significa redirección MSIX: no sigas desde esa consola. `PreparedCopyFound=true` solo localiza el preparado; **no** significa PostgreSQL conectado ni HTTP aprobado. `manage-local-qa-cluster.ps1 -Action Inspect` valida registros, no conectividad. Los nuevos códigos `qa-private-root-missing` y `qa-private-root-redirected-use-normal-powershell` sustituyen el error genérico de esos casos.
+
+**2. Una sola instalación en el host — autorización específica concedida, condicionada a origen íntegro y destino NUEVO; ejecutar solo desde PowerShell normal:**
+
+```powershell
+# Autorizado por el propietario; el script debe verificar origen/destino antes de crear nada.
+.\tools\prepare-local-qa-host.ps1 -PrivateRoot $QaRoot -ApprovedCommit $QaSha `
+    -InstallCopy -AllowCrashRecovery -TrustQaCa
+```
+
+El origen por defecto es el cache MSIX identificado arriba. Antes de crear el destino se exige el hash externo fijado del manifiesto, la CA exacta/procedencia/vigencia y ausencia de overrides PostgreSQL no revisados. Se rechaza un destino existente/redirigido, procesos QA activos, puertos ocupados, huella/configuración incoherentes o ACL inseguras. Copia todos los archivos a la raíz nueva con ACL usuario/SYSTEM y comprueba longitud/SHA-256 del origen antes/después y del destino. Conserva el original; guarda **solo las copias** del PID/registro obsoletos en `audit\host-install`, tras verificar identidad/tiempo/directorio y ausencia del proceso original. Autoriza únicamente la CA ya preparada, huella pública **D03A9D3FFAFD78C6DE4C443B3CDC9C667C4733FB**, en CurrentUser Root. Windows puede pedir confirmarla. No crea otra base/rol, no cambia contraseñas ni aplica migraciones. No arranca procesos. El siguiente arranque puede ejecutar la recuperación WAL normal de PostgreSQL; no usa `pg_resetwal` ni borra historial. Copia/recuperación/confianza host todavía NOT EXECUTED; parser/guards no los certifican.
+
+**3. Una vez instalado: encender PostgreSQL y comprobar la base real:**
+
+```powershell
+.\tools\manage-local-qa-cluster.ps1 -PrivateRoot $QaRoot -ApprovedCommit $QaSha -Action Start -Execute
+.\tools\prepare-local-qa-host.ps1 -PrivateRoot $QaRoot -ApprovedCommit $QaSha -CheckDatabase
+```
+
+El segundo comando solo lee con runtime: comprueba TLS VerifyFull, destino/identidad del cluster,37 IDs oficiales, esquema/RLS y privilegios. No prueba aislamiento entre dos tenants. Si encuentra discrepancias, detente; no reinstales sobre el directorio ni borres `postmaster.pid`. Si ya está encendido, omite Start y usa CheckDatabase; no ejecutes Start repetidamente contra un PID/puerto existente.
+
+**4. Una sola configuración Google, después de crear el cliente como se explica abajo:**
+
+```powershell
+$GoogleQaJson = Read-Host 'Ruta absoluta del JSON OAuth QA fuera del repositorio'
+.\tools\configure-local-qa-google.ps1 -PrivateRoot $QaRoot -ApprovedCommit $QaSha -GoogleJsonPath $GoogleQaJson
+```
+
+Lee el JSON en memoria y escribe `settings.json` solo en la raíz privada, reutilizando TLS/DP/runtime de `settings.pending.json`. Valida Web y URLs exclusivas7443, allowlist completa y plataforma=false; nunca imprime secretos ni cambia User Secrets de LAB/DEV. No sobrescribe configuración activa ni valida un login por guardar JSON. No repetir para uso diario. No necesitas copiar contraseñas a la consola.
+
+**5. Encender MediPOS y verificar HTTP real:**
+
+```powershell
+.\tools\start-local-qa.ps1 -PrivateRoot $QaRoot -ApprovedCommit $QaSha
+.\tools\start-local-qa.ps1 -PrivateRoot $QaRoot -ApprovedCommit $QaSha -Start
+(Invoke-WebRequest -UseBasicParsing -Uri 'https://localhost:7443/health/ready' -TimeoutSec 15).StatusCode
+(Invoke-WebRequest -UseBasicParsing -Uri 'https://localhost:7443/' -TimeoutSec 15).StatusCode
+Get-NetTCPConnection -State Listen | Where-Object { $_.LocalPort -in @(55432,7443) } |
+    Select-Object LocalAddress,LocalPort,OwningProcess
+```
+
+El primer launcher solo hace preflight; `-Start` comprueba runtime, inicia Production, verifica proceso/loopback, readiness200, sello9f54345 y assets React, sesión anónima401 y plataforma404. Las dos respuestas HTTP deben ser200 y las direcciones solo127.0.0.1/::1. No desactives certificados/Host/Origin/CSRF. El arranque fail-closed no es una aprobación comercial o de RLS entre dos empresas. Hoy estas pruebas HTTP están BLOCKED: no hay host ni Google QA.
+
+**6. Abrir e iniciar sesión:** en un **perfil Chrome exclusivo QA**, escribe **https://localhost:7443/** y pulsa **Continuar con Google**. Usa la cuenta de prueba correspondiente. Comprueba en Network de React `/auth/me`200 y `/api/me/tenants`200 vacío; cookie Secure/HttpOnly/Lax; Cerrar sesión debe invalidarla. No compruebes sesión navegando directamente a `/auth/me`: la política Origin puede rechazar esa navegación. Usa perfiles separados A/B/C/D y separados de LAB/DEV: los puertos localhost no separan cookies. La primera sesión no concede Superadmin ni boticas; su alta requiere otra autorización antes de ensayar ventas.
+
+**7. Apagar correctamente antes de cerrar Windows:**
+
+```powershell
+if (Test-Path -LiteralPath (Join-Path $QaRoot 'process.json')) {
+    .\tools\stop-local-qa.ps1 -PrivateRoot $QaRoot -ApprovedCommit $QaSha -Stop
+}
+if (Test-Path -LiteralPath (Join-Path $QaRoot 'cluster-process.json')) {
+    .\tools\manage-local-qa-cluster.ps1 -PrivateRoot $QaRoot -ApprovedCommit $QaSha -Action Stop -Execute
+}
+```
+
+Cada día, con instalación/Google ya terminados, bastan variables → paso3 → paso5 → abrir Chrome; al terminar paso7. No repetir instalación, importación Google, migraciones, npm/build ni creación de certificados. Si hubo un apagón o registros obsoletos, conserva todo y reconcilia: los scripts no matan procesos ajenos ni borran datos para encender.
+
+#### Google Cloud QA — operator steps, not configured yet
+
+The owner confirmed that the dedicated QA client **has not been created**. This blocks OAuth activation/browser acceptance, not the already completed code/PG CI. The operator performs the following; no general browser control or credential contents are needed.
+
+1. Open [Google Cloud Console](https://console.cloud.google.com/). In the project selector choose **New project**, name it **MediPOS QA**, create it and select it. Keep LAB/DEV projects and clients unchanged.
+2. Open **Google Auth Platform** (search the console if needed), choose **Get started/Configure**, then **Branding**. Enter **MediPOS QA**, your monitored support email and developer contact email. Save. Do not invent public-domain links or publish the app. [Branding fields](https://support.google.com/cloud/answer/15549049?hl=en).
+3. In **Audience**, choose **External** and leave publishing status **Testing**. Under **Test users → Add users**, add the four real Google accounts A/B/C/D and save. These labels are acceptance roles only: A is the proposed later platform operator, B/C proposed Owners, D proposed cashier; no MediPOS authority is granted by this list. Google's identity-only scopes have a test-user restriction exception, so the list is not an authorization boundary. [Audience rules](https://support.google.com/cloud/answer/15549945?hl=en).
+4. Keep access limited to the backend's existing **openid/email/profile** identity scopes; no Gmail/Drive permissions or extra service APIs. Do not publish or request production verification for this local test.
+5. Under **Clients → Create client**, choose **Web application**, name **MediPOS QA localhost7443**, enter JavaScript origin **`https://localhost:7443`** and redirect URI **`https://localhost:7443/auth/google/callback`**, then create. No trailing path/slash on the origin; callback spelling/port/HTTPS must match exactly. [Web-client configuration](https://support.google.com/cloud/answer/15549257?hl=en).
+6. Download the JSON at creation and save outside the repository in the normal Windows profile, preferably **`<QaRoot>\google-qa.json`** after the approved host copy created that protected directory. Share only its absolute local path, never contents/client secret/tokens. Use `configure-local-qa-google.ps1` above once; no LAB/DEV User Secrets are changed. The QA client must contain only the7443 origin/callback, not7243/7343.
+7. Reopen that client's details and verify the two URLs and the four Audience accounts. Use four dedicated QA Chrome profiles, separate from LAB/DEV: localhost cookies are shared across ports; QA uses independent Data Protection keys. Real login waits for approved QA startup; saving the client alone is not a PASS of authentication.
+
+**Troubleshooting:** `redirect_uri_mismatch` → compare the exact callback in this QA client, including7443/path/HTTPS; allow propagation after saving, never substitute7243/7343 or disable origin checks. `org_internal`/`access_denied` → verify External audience and the actual selected test account; send only the error code, not a callback URL. `invalid_client` → verify Web-client selection and active private credential; import any corrected JSON privately. TLS warnings → stop and verify the approved QA CA/localhost certificate; do not click through or disable HTTPS. Correlation/state failures → retry from the ordinary QA home in the same dedicated profile, without parallel LAB/DEV sessions; retain server-side controls and share no state/cookie/token values.
 
 **First Chrome journey, only after authorized installation/live preflight:** open https://localhost:7443 in dedicated QA-A profile → real Google A → React `/auth/me`200/correct account → `/api/me/tenants`200 empty → platform404 → Secure/HttpOnly/Lax cookie → logout → React session401/previous access denied. Repeat for B/C/D in separate QA profiles, no tenants/permissions created. UUID/response bodies/tokens are not shared in chat. Ordinary login is not Superadmin approval. Natural30-minute session expiry and actual administrative expiry/recovery remain separate real tests, never inferred from these disposable-process tests.
 
-CI on5598688 is **not requested/executed** with the known expiry defect. Request one publication/CI on the corrected exact candidate recorded in `backend/obj/validation/qa-final-checkpoint.json`, diagnostic branch only, no main/merge/deployment. Then request the ordinary-QA resource approval above. Current gates, A1–A20 and next action: master integration plan's final-MVP continuation.
+**Current certification:** [run39147784981](https://github.com/saintdeyb321/MediPOS/actions/runs/39147784981), diagnostic branch, exact **9f5434549a9c06f61705523069fc13673aad3226**, workflow_dispatch/attempt1, completed/success:2560/2560 unit,8/8 architecture,**868/868 PostgreSQL18.6**,0 failures/skips. Restore/build/audit/format/diagnostics/sanitized reporter/cleanup and post-actions passed; suites include OwnerConcurrency6/6, invitations6/6, presentations10/10, RLS19/19, runtime10/10 and recovery20/20. Sanitized evidence/checkpoint are in `backend/obj/validation`; local gates and518 frontend tests are preserved, not repeated for unchanged product code. Publication/one-CI authorization is consumed: no rerun/new push/merge. Current22-October operational evidence is the MSIX correction and host guide above: no live server, host copy/recovery/trust authorized conditionally but still pending operator execution in normal Windows PowerShell; Google configuration pending real JSON, Google JSON missing. Focused PS5.1 guards/path/primitive checks do not certify those unexecuted operations. Actual administrative authority/revocation, Google/two-tenant QA acceptance and operational D2 remain unproven. A1–A20 have no E2E PASS; A5/A18 BLOCKED and Release D **NO-GO**.
 
 
 

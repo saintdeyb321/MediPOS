@@ -171,8 +171,8 @@ public static class GoogleAuthenticationRegistration
             { await AuthProblem.WriteAsync(context, 403, "auth.origin_denied"); return; }
             // Browsers control Origin and normally omit it on same-origin GET. Only that safe
             // method may use native same-origin/navigation metadata instead; mutations and
-            // platform operations still require the exact Origin as well as their CSRF check.
-            var sameOriginRead = tenantRequest && HttpMethods.IsGet(context.Request.Method) && context.Request.Headers.Origin.Count == 0 &&
+            // all mutations still require the exact Origin as well as their CSRF check.
+            var sameOriginRead = (tenantRequest || platformRequest) && HttpMethods.IsGet(context.Request.Method) && context.Request.Headers.Origin.Count == 0 &&
                 context.Request.Headers["Sec-Fetch-Site"].ToString() is "same-origin" or "none";
             if ((platformRequest || tenantRequest) && ((!sameOriginRead && context.Request.Headers.Origin != settings.Origin.GetLeftPart(UriPartial.Authority)) ||
                 context.Request.Headers["Sec-Fetch-Site"].ToString() is not ("" or "same-origin" or "none")))

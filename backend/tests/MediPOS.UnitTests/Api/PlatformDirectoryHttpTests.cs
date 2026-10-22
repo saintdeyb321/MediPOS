@@ -18,6 +18,66 @@ public sealed class PlatformDirectoryHttpTests
     private static readonly string[] SummaryFields = ["tenantId", "tradingName", "createdAt"];
 
     [Theory]
+    [InlineData("same-origin", "approved", HttpStatusCode.OK)]
+    [InlineData("none", "approved", HttpStatusCode.OK)]
+    [InlineData("same-origin", "anonymous", HttpStatusCode.Unauthorized)]
+    [InlineData("none", "anonymous", HttpStatusCode.Unauthorized)]
+    [InlineData("same-origin", "ordinary", HttpStatusCode.Forbidden)]
+    [InlineData("none", "ordinary", HttpStatusCode.Forbidden)]
+    public async Task BrowserPlatformGetWithoutOriginRequiresAnApprovedSession(string site, string identity, HttpStatusCode expected)
+    {
+        var reader = new Reader(); await using var host = await Host(reader, approved: identity == "approved");
+        if (identity != "anonymous") await PlatformLicenseHttpTests.Login(host);
+        using var request = new HttpRequestMessage(HttpMethod.Get, "/platform/session");
+        request.Headers.Add("Sec-Fetch-Site", site);
+        using var response = await host.Client.SendAsync(request, Token);
+        Assert.Equal(expected, response.StatusCode);
+        if (expected == HttpStatusCode.OK)
+        {
+            using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync(Token));
+            Assert.True(json.RootElement.GetProperty("allowed").GetBoolean());
+        }
+        Assert.Equal(0, reader.Calls);
+    }
+
+    [Theory]
+    [InlineData(null, null)]
+    [InlineData("same-site", null)]
+    [InlineData("cross-site", null)]
+    [InlineData("same-origin", "https://foreign.example.invalid")]
+    [InlineData("same-origin", "null")]
+    [InlineData("cross-site", "https://medipos.example.test")]
+    public async Task PlatformGetStillRejectsMissingOrForeignBrowserProvenance(string? site, string? origin)
+    {
+        var reader = new Reader(); await using var host = await Host(reader); await PlatformLicenseHttpTests.Login(host);
+        using var request = new HttpRequestMessage(HttpMethod.Get, "/platform/session");
+        if (site is not null) request.Headers.Add("Sec-Fetch-Site", site);
+        if (origin is not null) request.Headers.Add("Origin", origin);
+        using var response = await host.Client.SendAsync(request, Token);
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+        using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync(Token));
+        Assert.Equal("auth.origin_denied", json.RootElement.GetProperty("code").GetString());
+        Assert.Equal(0, reader.Calls);
+    }
+
+    [Theory]
+    [InlineData(false, HttpStatusCode.Forbidden, "auth.origin_denied")]
+    [InlineData(true, HttpStatusCode.BadRequest, "auth.csrf_invalid")]
+    public async Task BrowserMetadataCannotReplaceOriginOrCsrfOnPlatformWrites(bool exactOrigin, HttpStatusCode expected, string code)
+    {
+        var reader = new Reader(); await using var host = await Host(reader); await PlatformLicenseHttpTests.Login(host);
+        using var request = new HttpRequestMessage(HttpMethod.Post, "/platform/catalog/categories")
+        { Content = new StringContent("{}", System.Text.Encoding.UTF8, "application/json") };
+        request.Headers.Add("Sec-Fetch-Site", "same-origin");
+        if (exactOrigin) request.Headers.Add("Origin", "https://medipos.example.test");
+        using var response = await host.Client.SendAsync(request, Token);
+        Assert.Equal(expected, response.StatusCode);
+        using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync(Token));
+        Assert.Equal(code, json.RootElement.GetProperty("code").GetString());
+        Assert.Equal(0, reader.Calls);
+    }
+
+    [Theory]
     [InlineData("/platform/session")]
     [InlineData("/platform/catalog/categories?limit=100")]
     [InlineData("/platform/tenants?limit=20")]
