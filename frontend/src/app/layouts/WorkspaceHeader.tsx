@@ -18,14 +18,15 @@ export function WorkspaceHeader({ workspace: w, openMenu }: { workspace: Workspa
           <MapPin size={18} aria-hidden="true" /><span><small>{w.tenantName}</small>{w.branch.name}</span><ChevronDown size={16} aria-hidden="true" />
         </Link>
       </div>
-      <details className="account-menu">
+      <details className="account-menu" onKeyDown={event => { if (event.key === 'Escape') { event.currentTarget.open = false; event.currentTarget.querySelector('summary')?.focus() } }}>
         <summary aria-label="Mi cuenta">
           <span className="user-avatar"><UserRound size={20} aria-hidden="true" /></span>
           <span className="account-label">{roleLabels[w.access.role]}<small>Mi cuenta</small></span>
           <ChevronDown size={16} aria-hidden="true" />
         </summary>
         <div className="account-dropdown">
-          <strong>Mi cuenta</strong><p>Identificador de usuario</p><code>{w.session.userId}</code><LogoutButton />
+          <strong>Mi cuenta</strong><p>{roleLabels[w.access.role]} · {w.tenantName}</p>
+          <details className="inline-help"><summary>Detalles para soporte</summary><p>Identificador de cuenta</p><code>{w.session.userId}</code></details><LogoutButton />
         </div>
       </details>
     </header>

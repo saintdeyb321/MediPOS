@@ -2,6 +2,7 @@ import { useId, useState } from 'react'
 import type { Branch } from '../access'
 import { Button } from '../../shared/ui/Button'
 import { TextField } from '../../shared/ui/TextField'
+import { FormFooter } from '../../shared/ui/FormLayout'
 import type { Employee } from './api'
 import { canDeactivate, sameId } from './api'
 import { dayLabels, days, timeInput, validSchedule, weekday, windowLabel } from './schedule'
@@ -18,7 +19,7 @@ export function EmployeeBranchesForm({ employee, branches, complete, write }: { 
       {!branches.length && <p>No hay sucursales consultables.</p>}
       {branches.map(branch => <label key={branch.id}><input type="checkbox" checked={ids.some(id => sameId(id, branch.id))} onChange={event => { setIds(current => event.target.checked ? [...current, branch.id] : current.filter(id => !sameId(id, branch.id))); setReviewed(false) }} /> {branch.name}</label>)}
       <label><input type="checkbox" checked={reviewed} onChange={event => setReviewed(event.target.checked)} /> Revisé y autorizo reemplazar todas las asignaciones de este empleado.</label>
-      <Button type="submit" disabled={!reviewed} pending={write.busy}>Guardar sucursales</Button>
+      <FormFooter><Button type="submit" disabled={!reviewed} pending={write.busy}>Guardar sucursales</Button></FormFooter>
     </fieldset>
   </form>
 }
@@ -38,7 +39,7 @@ export function EmployeeScheduleForm({ employee, write }: { employee: Employee; 
       <Button variant="secondary" disabled={!canAdd} onClick={() => { if (candidate && canAdd) { setWindows(current => [...current, candidate]); setStart(''); setEnd(''); setReviewed(false) } }}>Agregar ventana al horario</Button>
       {windows.length ? <ul>{windows.map((window, index) => <li key={`${window.dayOfWeek}/${window.startTime}/${window.endTime}`}>{windowLabel(window)} <Button variant="quiet" onClick={() => { setWindows(current => current.filter((_, position) => position !== index)); setReviewed(false) }}>Quitar ventana {windowLabel(window)}</Button></li>)}</ul> : <p>Horario preparado vacío: no es acceso permanente para trabajadores.</p>}
       <label><input type="checkbox" checked={reviewed} onChange={event => setReviewed(event.target.checked)} /> Revisé y autorizo reemplazar el horario completo{windows.length ? '' : ' por un conjunto vacío'}.</label>
-      <Button type="submit" disabled={!reviewed || !validSchedule(windows) || Boolean(start.trim() || end.trim())} pending={write.busy}>Guardar horario</Button>
+      <FormFooter><Button type="submit" disabled={!reviewed || !validSchedule(windows) || Boolean(start.trim() || end.trim())} pending={write.busy}>Guardar horario</Button></FormFooter>
       {(start.trim() || end.trim()) && <p>Agrega la ventana en edición o vacía sus campos antes de guardar; no se descarta silenciosamente.</p>}
     </fieldset>
   </form>
@@ -50,6 +51,6 @@ export function EmployeeDeactivation({ employee, write }: { employee: Employee; 
   return <form aria-label="Desactivar empleado" onSubmit={event => { event.preventDefault(); if (reviewed && canDeactivate(employee)) void write.deactivate(employee) }}><h3>Desactivación segura de trabajador</h3>
     <p>Empleado: {employee.displayName}. Desactivar impide nuevas operaciones autorizadas y conserva el historial. La aplicación del trabajador deberá volver a verificar su acceso; el backend lo valida en cada operación.</p>
     <label><input type="checkbox" disabled={write.locked} checked={reviewed} onChange={event => setReviewed(event.target.checked)} /> Confirmo que deseo desactivar a {employee.displayName}.</label>
-    <Button type="submit" variant="secondary" disabled={write.locked || !reviewed} pending={write.busy}>Desactivar empleado una vez</Button>
+    <FormFooter><Button type="submit" variant="danger" disabled={write.locked || !reviewed} pending={write.busy}>Desactivar empleado una vez</Button></FormFooter>
   </form>
 }

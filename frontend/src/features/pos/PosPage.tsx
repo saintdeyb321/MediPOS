@@ -35,10 +35,10 @@ function PosWorkspace() {
   return (
     <>
       <PosHeader />
-      <Notice>Busca productos y pulsa Cobrar. Revisa los pagos antes de confirmar la venta.</Notice>
+      <Notice>1. Busca y añade productos. 2. Revisa el carrito. 3. Cobra con tu caja abierta.</Notice>
       <CashSessionPanel cash={cash} />
-      <a href="#carrito" className="text-link mobile-cart-link">Ir al carrito</a>
-      <div className="pos-layout"><ProductSearchPanel onSelect={select} disabled={draft.locked} />
+      <a href="#carrito" className="button secondary mobile-cart-link">Ver carrito · {lines.length} líneas</a>
+      <div className="pos-layout"><div id="buscador-pos"><ProductSearchPanel onSelect={select} disabled={draft.locked} /></div>
         <div className="pos-sale"><SaleCartPanel lines={lines} change={changeCart} disabled={draft.locked} message={message} /><SaleDraftPanel draft={draft} /><SaleCheckoutPanel draft={draft} /></div></div>
     </>
   )

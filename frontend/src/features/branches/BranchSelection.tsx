@@ -36,7 +36,7 @@ export function BranchSelection() {
     <>
       <BackLink to="/seleccionar-botica">Cambiar botica</BackLink>
       <Steps labels={['Botica', 'Sucursal', 'Tu espacio']} current={1} />
-      <PageHeader eyebrow="ELIGE DÓNDE OPERAR" title="Cada sucursal, bajo control." description="Mostramos únicamente las sucursales autorizadas para tu cuenta. Tu horario se valida al ingresar." />
+      <PageHeader eyebrow="ELIGE DÓNDE OPERAR" title="Selecciona una sucursal" description="Caja e inventario pertenecen a cada sucursal. El acceso y el horario se verifican al ingresar." />
       {content}
       {valid && <p><Link to={`/boticas/${tenantId}/configuracion`}>Configurar entidades y sucursales (solo Owner)</Link></p>}
     </>

@@ -6,6 +6,7 @@ import { scopedKey } from '../../shared/api/contracts'
 import { decimalLabel } from '../../shared/api/decimal'
 import { ApiError } from '../../shared/api/http'
 import { Button } from '../../shared/ui/Button'
+import { DateText } from '../../shared/ui/DateText'
 import type { PurchaseView } from './api'
 import { receiptTotal } from './receipt'
 
@@ -20,9 +21,9 @@ export function PurchaseReview({ view, disabled, confirm }: { view: PurchaseView
     return product?.isActive && (product.productType !== 'medicine' || Boolean(line.batchNumber?.trim() && line.expirationDate))
   })
   return <section aria-label="Recepción persistida"><h2>{view.purchase.status === 'confirmed' ? 'MERCADERÍA REGISTRADA' : 'Revisar recepción persistida'}</h2>
-    <p>Referencia: {view.purchase.documentReference ?? 'Sin referencia'} · Estado: {view.purchase.status === 'confirmed' ? 'Confirmada' : 'Borrador'} · Creada {view.purchase.createdAt}</p>
+    <p>Referencia: {view.purchase.documentReference ?? 'Sin referencia'} · Estado: {view.purchase.status === 'confirmed' ? 'Confirmada' : 'Borrador'} · Creada <DateText value={view.purchase.createdAt} /></p>
     <p>{view.purchase.supplierId ? 'Proveedor registrado: localízalo en el directorio paginado; aparecerá marcado como proveedor de esta recepción.' : 'Recepción sin proveedor registrado.'}</p>
-    {view.purchase.confirmedAt && <p>Confirmación del servidor: {view.purchase.confirmedAt}. No repetir la recepción.</p>}
+    {view.purchase.confirmedAt && <p>Confirmación del servidor: <DateText value={view.purchase.confirmedAt} />. No repetir la recepción.</p>}
     {products.some(row => row.isError) && <ApiErrorState error={products.find(row => row.isError)?.error} title="No pudimos verificar los productos de la recepción" />}
     <div className="operation-table"><table><caption>Líneas consultadas en el servidor</caption><thead><tr><th>Producto / presentación guardada</th><th>Cantidad / base</th><th>Costo por presentación</th><th>Lote / vencimiento</th></tr></thead><tbody>{view.lines.map(line => <tr key={line.id}><td>{products[ids.indexOf(line.businessProductId)]?.data?.product.name ?? 'Nombre no disponible'} · {line.unitNameSnapshot}</td><td>{decimalLabel(line.quantity)} / {decimalLabel(line.baseQuantity)}</td><td>S/ {decimalLabel(line.unitCost, 2)}</td><td>{line.batchNumber ?? 'No informado'} / {line.expirationDate ?? 'No informado'}</td></tr>)}</tbody></table></div>
     {!view.lines.length && <p>La recepción todavía no tiene líneas persistidas.</p>}

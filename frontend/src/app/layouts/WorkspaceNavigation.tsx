@@ -19,7 +19,7 @@ export function WorkspaceNavigation({ workspace: w, onNavigate }: { workspace: W
           const items = links.filter(item => item.section === section)
           return items.length > 0 && (
             <div className="nav-section" key={section}>
-              <p>{section === 'operation' ? 'TU BOTICA' : 'GESTIÓN'}</p>
+              <p>{section === 'operation' ? 'OPERACIÓN DIARIA' : 'ADMINISTRAR BOTICA'}</p>
               {items.map(item => (
                 <NavLink key={item.id} to={item.id ? `${w.base}/${item.id}` : w.base} end className={({ isActive }) => `nav-item${isActive ? ' active' : ''}`} onClick={onNavigate}
                   aria-label={item.availability !== 'implemented' ? `${item.label} · ${availabilityLabels[item.availability]}` : undefined}

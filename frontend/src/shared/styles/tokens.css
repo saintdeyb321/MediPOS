@@ -41,6 +41,10 @@
   --text-display: clamp(2rem, 3.2vw, 3rem);
   --line-height: 1.5;
   --control-height: 2.75rem;
+  --content-width: 94rem;
+  --form-width: 44rem;
+  --dialog-width: 40rem;
+  --drawer-width: 48rem;
 }
 @theme inline {
   --color-primary: var(--primary);

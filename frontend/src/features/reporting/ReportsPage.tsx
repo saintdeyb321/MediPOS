@@ -9,6 +9,8 @@ import { PageHeader } from '../../shared/ui/PageHeader'
 import { PageControls } from '../../shared/ui/PageControls'
 import { Panel } from '../../shared/ui/Panel'
 import { Notice } from '../../shared/ui/Notice'
+import { ActionMenu } from '../../shared/ui/ActionMenu'
+import { DateText } from '../../shared/ui/DateText'
 import { reportsApi } from './api'
 import { initialFilters, moreRows, reportLabels, validFilters } from './filters'
 import { ReportFilters } from './ReportFilters'
@@ -41,12 +43,13 @@ function ReportsWorkspace() {
     {!http && <Notice tone="warning">Se requiere conexión HTTPS real.</Notice>}
     <Panel><div className="operation-body"><ReportFilters value={draft} branches={branches.isError ? [] : branches.data ?? []} complete={branches.isSuccess && branches.data.length < 100} disabled={exporting || !http} change={value => setDraft(current => ({ ...current, ...value, offset: 0 }))} apply={() => { if (validFilters(draft)) { setApplied({ ...draft, offset: 0 }); setExportError(null); setExportNotice(''); if (JSON.stringify(applied) === JSON.stringify({ ...draft, offset: 0 })) void query.refetch() } }} />{branches.isError && <ApiErrorState error={branches.error} retry={() => void branches.refetch()} title="No pudimos consultar sucursales" />}</div></Panel>
     <Panel aria-label="Resultado del reporte aplicado"><div className="operation-body"><h2>{reportLabels[applied.kind]} · consulta aplicada</h2>{query.isFetching && <p role="status">Consultando reporte…</p>}{query.isError && <ApiErrorState error={query.error} retry={() => void query.refetch()} title="No pudimos consultar el reporte" />}
-      {view && <><p>{view.period}</p><p>Generado UTC: {query.data?.data.generatedAtUtc} · {applied.branchId ? branches.data?.find(branch => branch.id === applied.branchId)?.name ?? 'Sucursal seleccionada' : 'Todas las sucursales autorizadas'}</p><p>{view.explanation}</p>
-        <dl>{view.metrics.map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}</dl>
+      {view && <><p>{view.period} · {applied.branchId ? branches.data?.find(branch => branch.id === applied.branchId)?.name ?? 'Sucursal seleccionada' : 'Todas las sucursales autorizadas'}</p><p>{view.explanation}</p>
+        <dl className="summary-grid">{view.metrics.map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}</dl>
         {!!view.columns.length && <div className="operation-table"><table><caption>{reportLabels[applied.kind]} · filas del servidor</caption><thead><tr>{view.columns.map(column => <th key={column}>{column}</th>)}</tr></thead><tbody>{view.rows.map(row => <tr key={row.key}>{row.cells.map((cell, index) => <td key={index}>{cell}</td>)}</tr>)}</tbody></table>{!view.rows.length && <p>No hay filas para los filtros de esta página. No se crearon operaciones para llenar el reporte.</p>}</div>}
         {view.page && <PageControls offset={applied.offset} count={moreRows(view.page.count, applied.offset, view.page.shown) ? 20 : 0} busy={exporting} change={offset => setApplied(current => ({ ...current, offset }))} refresh={() => void query.refetch()} />}
         {!view.page && <Button variant="quiet" disabled={exporting} onClick={() => void query.refetch()}>Actualizar reporte aplicado</Button>}
-        {!['overview', 'dashboard'].includes(applied.kind) && <section aria-label="Exportar reporte"><h3>Exportar consulta aplicada</h3><p>PDF/Excel completos, máximo 10000 filas y 10 MiB. El servidor vuelve a autorizar y valida los filtros. No se exportan solo las filas visibles.</p><Button variant="secondary" disabled={exporting} onClick={() => void download('xlsx')}>Descargar Excel</Button><Button variant="secondary" disabled={exporting} onClick={() => void download('pdf')}>Descargar PDF</Button></section>}
+        <p>Última generación: <DateText value={query.data?.data.generatedAtUtc} /></p>
+        {!['overview', 'dashboard'].includes(applied.kind) && <section aria-label="Exportar reporte"><ActionMenu label="Descargar consulta aplicada"><Button variant="quiet" disabled={exporting} onClick={() => void download('xlsx')}>Descargar Excel</Button><Button variant="quiet" disabled={exporting} onClick={() => void download('pdf')}>Descargar PDF</Button></ActionMenu><p>Se exportan los filtros aplicados completos, no solo la página visible. Máximo 10000 filas y 10 MiB.</p></section>}
       </>}{exporting && <p role="status">Generando archivo…</p>}{exportError != null && <ApiErrorState error={exportError} title="No pudimos descargar el reporte" />}{exportNotice && <p role="status">{exportNotice}</p>}
     </div></Panel>
   </div>

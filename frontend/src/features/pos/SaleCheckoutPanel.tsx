@@ -4,6 +4,8 @@ import { Button } from '../../shared/ui/Button'
 import { Notice } from '../../shared/ui/Notice'
 import { Panel } from '../../shared/ui/Panel'
 import { TextField } from '../../shared/ui/TextField'
+import { Modal } from '../../shared/ui/Modal'
+import { FormFooter } from '../../shared/ui/FormLayout'
 import { decimalLabel } from '../../shared/api/decimal'
 import type { DraftController } from './useSaleDraft'
 import { useSaleCheckout } from './useSaleCheckout'
@@ -13,6 +15,7 @@ import { InternalTicketPanel } from './InternalTicketPanel'
 export function SaleCheckoutPanel({ draft }: { draft: DraftController }) {
   const checkout = useSaleCheckout(draft)
   const [opened, setOpened] = useState(false)
+  const [dirty, setDirty] = useState(false)
   const mounted = useRef(true)
   useEffect(() => { mounted.current = true; return () => { mounted.current = false } }, [])
   const terminal = draft.server && draft.server.status !== 'draft'
@@ -23,13 +26,12 @@ export function SaleCheckoutPanel({ draft }: { draft: DraftController }) {
       {checkout.notice && <p role="status">{checkout.notice}</p>}
       {draft.checkoutPending && <Notice tone="warning">Operación pendiente de reconciliar. No envíes otro cobro ni prepares otra venta para reemplazarla. Consulta este mismo registro.</Notice>}
       {!terminal && <>
-        <p id="checkout-requirements">Agrega productos y abre tu caja para cobrar. Prepararemos la venta automáticamente; solo se registran pagos al confirmar.</p>
+        <p id="checkout-requirements">Revisa los medios de pago antes de confirmar. El carrito y el borrador todavía no descuentan stock.</p>
         <Button aria-describedby="checkout-requirements" pending={draft.preparing} disabled={!draft.canPrepare || checkout.busy || checkout.denied}
-          onClick={async () => { const ready = await draft.prepare(); if (mounted.current) setOpened(ready) }}>Cobrar</Button>
+          onClick={async () => { const ready = await draft.prepare(); if (mounted.current) { setDirty(false); setOpened(ready) } }}>Cobrar</Button>
         {!draft.cashMatches && <p>Abre o consulta tu caja en esta sucursal antes de cobrar.</p>}
         {!draft.seller && <Notice tone="warning">Esta venta pertenece a otra membresía. No puedes editarla ni cobrarla.</Notice>}
         {draft.notice && draft.phase === 'idle' && <p role="status">{draft.notice}</p>}
-        {opened && draft.server && <PaymentForm key={`${draft.server.saleId}/${draft.server.version}`} draft={draft} checkout={checkout} />}
       </>}
       {(draft.checkoutPending || checkout.error != null || terminal) && <Button variant="secondary" pending={checkout.busy} disabled={draft.phase === 'loading'} onClick={() => void checkout.consult()}>Consultar resultado de venta</Button>}
       {terminal && <>
@@ -44,20 +46,34 @@ export function SaleCheckoutPanel({ draft }: { draft: DraftController }) {
         {draft.server?.status === 'confirmed' && <VoidSaleForm draft={draft} checkout={checkout} />}
       </>}
     </div>
+    <Modal open={opened && !terminal} title="Revisar y cobrar venta" description="Confirma únicamente los importes que realmente recibiste." onClose={() => { setOpened(false); setDirty(false) }} dirty={dirty} busy={checkout.busy} recovery={draft.checkoutPending}>
+      <div className="pos-section-body" onChangeCapture={() => setDirty(true)}>
+        {checkout.error != null && <ApiErrorState error={checkout.error} title="Revisa el resultado antes de repetir" />}
+        {checkout.notice && <p role="status">{checkout.notice}</p>}
+        {draft.checkoutPending && <Notice tone="warning">El cobro sigue pendiente de verificar. Conservamos esta venta; no se enviará un segundo cobro.</Notice>}
+        {(draft.checkoutPending || checkout.error != null) && <Button variant="secondary" pending={checkout.busy} onClick={() => void checkout.consult()}>Consultar esta misma venta</Button>}
+        {opened && draft.server && !terminal && <PaymentForm key={`${draft.server.saleId}/${draft.server.version}`} draft={draft} checkout={checkout} />}
+      </div>
+    </Modal>
   </Panel>
 }
 function VoidSaleForm({ draft, checkout }: { draft: DraftController; checkout: ReturnType<typeof useSaleCheckout> }) {
   const { access } = useWorkspace()
   const [reason, setReason] = useState(''); const [reviewed, setReviewed] = useState(false)
+  const [opened, setOpened] = useState(false)
   if (access.role !== 'owner' && !draft.seller) return null
-  return <details className="no-print"><summary>Anular esta venta</summary><form aria-label="Anulación de venta" onSubmit={event => {
+  return <div className="no-print"><Button variant="quiet" disabled={checkout.busy || draft.checkoutPending || checkout.denied} onClick={() => setOpened(true)}>Anular esta venta</Button>
+    <Modal open={opened} title="Anular venta confirmada" dirty={Boolean(reason || reviewed)} busy={checkout.busy} recovery={draft.checkoutPending} onClose={() => { setOpened(false); setReason(''); setReviewed(false) }}>
+    {checkout.error != null && <ApiErrorState error={checkout.error} />}
+    {draft.checkoutPending && <><Notice tone="warning">Anulación pendiente. Consulta la misma venta antes de otra operación.</Notice><Button disabled={checkout.busy} onClick={() => void checkout.consult()}>Consultar resultado de la venta</Button></>}
+    <form className="operation-body" aria-label="Anulación de venta" onSubmit={event => {
     event.preventDefault(); if (reviewed) void checkout.voidSale(reason)
   }}>
     <TextField label="Motivo de anulación" value={reason} maxLength={512} disabled={checkout.busy || draft.checkoutPending} onChange={event => { setReason(event.target.value); setReviewed(false) }} />
     <p>Se registrarán reversiones de pagos y stock; no se borra la venta. La caja original debe seguir abierta y disponer del efectivo necesario para la devolución.</p>
     <label><input type="checkbox" checked={reviewed} disabled={checkout.busy || draft.checkoutPending} onChange={event => setReviewed(event.target.checked)} /> Revisé la devolución y autorizo la anulación.</label>
-    <Button type="submit" variant="secondary" disabled={!reviewed || !reason.trim() || checkout.busy || draft.checkoutPending || checkout.denied}>Confirmar anulación</Button>
-  </form></details>
+    <FormFooter><Button type="submit" variant="danger" disabled={!reviewed || !reason.trim() || checkout.busy || draft.checkoutPending || checkout.denied}>Confirmar anulación</Button></FormFooter>
+  </form></Modal></div>
 }
 function PaymentForm({ draft, checkout }: { draft: DraftController; checkout: ReturnType<typeof useSaleCheckout> }) {
   const [fields, setFields] = useState(emptyPayments)
@@ -75,6 +91,6 @@ function PaymentForm({ draft, checkout }: { draft: DraftController; checkout: Re
       disabled={disabled} value={fields[method]} onChange={event => { setFields({ ...fields, [method]: event.target.value }); setReviewed(false) }} />)}
     <p aria-live="polite">Suma de pagos: S/ {decimalLabel(validation.sum, 2)}. {validation.error}</p>
     <label><input type="checkbox" checked={reviewed} disabled={disabled} onChange={event => setReviewed(event.target.checked)} /> Revisé los importes y los medios recibidos. Confirmar registrará pagos y descontará stock.</label>
-    <Button type="submit" pending={checkout.busy} disabled={disabled || !reviewed || Boolean(validation.error)}>Confirmar venta y registrar pagos</Button>
+    <FormFooter><Button type="submit" pending={checkout.busy} disabled={disabled || !reviewed || Boolean(validation.error)}>Confirmar venta y registrar pagos</Button></FormFooter>
   </form>
 }

@@ -1,12 +1,19 @@
-.catalog-page > * + * { margin-top: var(--space-4); }
+.catalog-page > * + * { margin-top: var(--space-6); }
 .catalog-page nav, .catalog-actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-3); }
-.catalog-body { padding: var(--space-4); }
-.catalog-body > * + *, .catalog-body form > * + *, .catalog-body fieldset > * + * { margin-top: var(--space-3); }
-.catalog-body fieldset { min-width: 0; padding: var(--space-3); border: 1px solid var(--border); }
+.catalog-body { padding: var(--space-6); }
+.task-dialog-body > .catalog-body { padding: 0; }
+.catalog-body > * + *, .catalog-body form > * + *, .catalog-body fieldset > * + * { margin-top: var(--space-4); }
+.catalog-body fieldset { min-width: 0; padding: var(--space-4); border: 1px solid var(--border); border-radius: var(--radius-md); }
+.catalog-body legend { padding-inline: var(--space-2); font-weight: 650; }
 .catalog-body form { margin-block: var(--space-4); }
-.catalog-page select { max-width: 100%; min-height: 2.75rem; background: var(--surface); color: var(--text); border: 1px solid var(--control-border); padding: var(--space-2); font: inherit; }
+.catalog-page select { display: block; width: 100%; max-width: 100%; min-height: 2.75rem; background: var(--surface); color: var(--text); border: 1px solid var(--control-border); border-radius: var(--radius-md); padding: var(--space-2); margin-top: var(--space-2); font: inherit; }
 .catalog-table { overflow-x: auto; }
 .catalog-table table { width: 100%; border-collapse: collapse; }
-.catalog-table th, .catalog-table td { padding: var(--space-3); border-bottom: 1px solid var(--border); text-align: left; vertical-align: top; }
+.catalog-table th, .catalog-table td { padding: var(--space-4); border-bottom: 1px solid var(--border); text-align: left; vertical-align: middle; }
+.catalog-table th { background: var(--surface-muted); color: var(--text-muted); font-size: var(--text-sm); }
+.catalog-table tbody tr:hover { background: var(--canvas); }
+.catalog-table td:first-child { font-weight: 650; min-width: 12rem; }
+.catalog-component { padding: var(--space-4); border-radius: var(--radius-md); background: var(--canvas); display: grid; gap: var(--space-3); }
 .catalog-page ul { padding-left: var(--space-4); }
 .catalog-page .state-block { min-height: auto; padding: var(--space-4); }
+@media (max-width: 740px) { .catalog-body { padding: var(--space-4); } .catalog-table th, .catalog-table td { padding: var(--space-3); } }

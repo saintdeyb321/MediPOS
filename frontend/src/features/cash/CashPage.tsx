@@ -6,6 +6,8 @@ import { Panel } from '../../shared/ui/Panel'
 import { Button } from '../../shared/ui/Button'
 import { TextField } from '../../shared/ui/TextField'
 import { Notice } from '../../shared/ui/Notice'
+import { Modal } from '../../shared/ui/Modal'
+import { FormFooter } from '../../shared/ui/FormLayout'
 import { scopedKey } from '../../shared/api/contracts'
 import { decimalInput, decimalLabel, maximumMoney } from '../../shared/api/decimal'
 import { cashApi } from './api'
@@ -21,10 +23,11 @@ function CashWorkspace() {
   const w = useWorkspace(); const { http } = useRuntime()
   const cash = useCashSession(); const close = useCashClose()
   const [amount, setAmount] = useState(''); const [reviewed, setReviewed] = useState(false); const [offset, setOffset] = useState(0)
+  const [closing, setClosing] = useState(false)
   const active = useQuery({ queryKey: scopedKey(w, 'active-cash', w.session.userId, w.access.membershipId, offset),
     queryFn: ({ signal }) => cashApi(http!).active(w, offset, signal), enabled: Boolean(http && w.access.role === 'owner'), retry: false, staleTime: 0,
   })
-  const pick = (id: string) => { setAmount(''); setReviewed(false); void close.consult(id) }
+  const pick = (id: string) => { setAmount(''); setReviewed(false); setClosing(true); void close.consult(id) }
   const valid = decimalInput(amount, maximumMoney, 4, true)
   const canClose = !close.denied && close.status?.status === 'open' && (w.access.role === 'owner' || close.status.membershipId === w.access.membershipId)
   return <>
@@ -34,13 +37,17 @@ function CashWorkspace() {
       <h2>Cierre y arqueo</h2>
       {close.error != null && <ApiErrorState error={close.error} title="Revisa el estado de la caja" />}
       <Button variant="secondary" disabled={!cash.session || close.busy || close.pending} onClick={() => { if (cash.session) pick(cash.session.cashSessionId) }}>Preparar cierre de mi caja</Button>
-      {close.id && <Button variant="quiet" disabled={close.busy} onClick={() => void close.consult()}>Consultar cierre guardado</Button>}
+      {close.id && <Button variant="quiet" disabled={close.busy} onClick={() => { setClosing(true); void close.consult() }}>Consultar cierre guardado</Button>}
       {close.busy && <p role="status">Consultando caja…</p>}
+      <Modal open={closing} title="Arqueo y cierre de caja" onClose={() => { setClosing(false); setAmount(''); setReviewed(false) }} dirty={Boolean(canClose && (amount || reviewed))} busy={close.busy} recovery={close.pending}>
+        <div className="pos-section-body">
+        {close.error != null && <ApiErrorState error={close.error} title="Revisa el resultado del cierre" />}
+        {close.pending && <><Notice tone="warning">Cierre pendiente de verificar. No se enviará otra solicitud.</Notice><Button disabled={close.busy} onClick={() => void close.consult()}>Consultar esta misma caja</Button></>}
       {canClose && !close.pending && <form aria-label="Cierre de caja" onSubmit={event => { event.preventDefault(); if (reviewed) void close.close(close.status!.cashSessionId, amount) }}>
         <p>Cuenta el efectivo físico. El servidor calculará ventas netas, movimientos de sencillo, esperado y diferencia al cerrar. El cierre no anula ventas.</p>
         <TextField label="Efectivo contado (S/)" value={amount} inputMode="decimal" maxLength={32} required disabled={close.busy} onChange={event => { setAmount(event.target.value); setReviewed(false) }} />
         <label><input type="checkbox" checked={reviewed} disabled={close.busy} onChange={event => setReviewed(event.target.checked)} /> Revisé el conteo y autorizo cerrar esta caja.</label>
-        <Button type="submit" pending={close.busy} disabled={!valid || !reviewed}>Confirmar cierre de caja</Button>
+        <FormFooter><Button type="submit" pending={close.busy} disabled={!valid || !reviewed}>Confirmar cierre de caja</Button></FormFooter>
       </form>}
       {close.status?.status === 'closed' && <p role="status">Caja cerrada en el servidor. Consultar su arqueo no repite el cierre.</p>}
       {close.receipt && <section aria-label="Arqueo registrado">
@@ -50,6 +57,8 @@ function CashWorkspace() {
         <p>Sencillo recibido: S/ {decimalLabel(close.receipt.cashTransfers.incoming, 2)} · Enviado: S/ {decimalLabel(close.receipt.cashTransfers.outgoing, 2)}</p>
         <p>Esperado: S/ {decimalLabel(close.receipt.expectedCashAmount, 2)} · Contado: S/ {decimalLabel(close.receipt.countedCashAmount, 2)} · Diferencia: S/ {decimalLabel(close.receipt.cashDifference, 2)}</p>
       </section>}
+        </div>
+      </Modal>
     </div></Panel>
     {w.access.role === 'owner' && <Panel className="pos-cash"><div className="pos-section-body"><h2>Cajas activas en esta sucursal</h2>
       {active.isPending && <p>Consultando cajas activas…</p>}

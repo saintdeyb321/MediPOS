@@ -9,12 +9,18 @@ import { Button } from '../../shared/ui/Button'
 import { Panel } from '../../shared/ui/Panel'
 import { Notice } from '../../shared/ui/Notice'
 import { PageHeader } from '../../shared/ui/PageHeader'
-import { TextField } from '../../shared/ui/TextField'
+import { SearchField, TextField } from '../../shared/ui/TextField'
+import { Drawer, Modal } from '../../shared/ui/Modal'
+import { PageToolbar } from '../../shared/ui/PageToolbar'
+import { Badge } from '../../shared/ui/Badge'
+import { EmptyState } from '../../shared/ui/States'
 import { catalogApi } from './api'
 import type { Category, GlobalProduct } from './api'
 import { useCatalogWrite } from './useCatalogWrite'
 import { CreateProductForm } from './CreateProductForm'
-import { ProductDetailPanel } from './ProductDetailPanel'
+import { MedicineView } from './ProductFields'
+import { EditPrices, EditStatus, ProductDetailPanel, UnitEditor } from './ProductDetailPanel'
+import type { ProductTask } from './ProductDetailPanel'
 import './catalog.css'
 
 export function ProductsPage() {
@@ -25,11 +31,15 @@ export function ProductsPage() {
 function CatalogWorkspace() {
   const w = useWorkspace(); const { http } = useRuntime()
   const [offset, setOffset] = useState(0); const [globalOffset, setGlobalOffset] = useState(0)
-  const [mode, setMode] = useState<'products' | 'create' | 'global'>('products')
+  const [mode, setMode] = useState<'products' | 'global'>('products')
+  const [createOpen, setCreateOpen] = useState(false); const [detailOpen, setDetailOpen] = useState(false)
+  const [task, setTask] = useState<ProductTask | null>(null)
+  const [dirty, setDirty] = useState(false); const [formEpoch, setFormEpoch] = useState(0)
+  const [filter, setFilter] = useState(''); const [status, setStatus] = useState('all')
   const [selected, setSelected] = useState(''); const [global, setGlobal] = useState<GlobalProduct | null>(null)
   const [reviewed, setReviewed] = useState(false)
   const [recoveryCode, setRecoveryCode] = useState('')
-  const write = useCatalogWrite(id => { setSelected(id); setMode('products'); setGlobal(null) })
+  const write = useCatalogWrite(id => { setSelected(id) })
   const key = (resource: string, ...values: unknown[]) => scopedKey(w, resource, w.session.userId, w.access.membershipId, ...values)
   const api = () => { if (!http) throw new ApiError(0, 'client.https_required'); return catalogApi(http) }
   const products = useQuery({ queryKey: key('catalog-products', offset), queryFn: ({ signal }) => api().list(w, offset, 50, signal), enabled: Boolean(http), retry: false, staleTime: 0 })
@@ -44,47 +54,74 @@ function CatalogWorkspace() {
   const globals = useQuery({ queryKey: key('catalog-global', globalOffset), queryFn: ({ signal }) => api().global(w, globalOffset, 50, signal), enabled: Boolean(http && mode === 'global'), retry: false, staleTime: 0 })
   const detail = useQuery({ queryKey: key('catalog-detail', selected), queryFn: ({ signal }) => api().detail(w, selected, signal), enabled: Boolean(http && selected), retry: false, staleTime: 0 })
   const categoryName = (id: string) => categories.data?.find(row => row.id === id)?.name ?? 'No disponible en las categorías consultables'
+  const visibleProducts = products.data?.filter(item => (!filter.trim() || [item.name, item.internalCode, item.brandOrLaboratory].some(value => value.toLocaleLowerCase('es-PE').includes(filter.trim().toLocaleLowerCase('es-PE')))) && (status === 'all' || item.isActive === (status === 'active')))
+  function closeCreate() { setCreateOpen(false); setDirty(false); setGlobal(null); setFormEpoch(value => value + 1) }
+  function edit(value: ProductTask) { setDetailOpen(false); setDirty(false); setTask(value) }
+  const recovery = write.pending && <Panel><div className="catalog-body"><h2>Operación pendiente de conciliación</h2><p>No reenvíes la solicitud. Conserva el código original; una consulta sin cambios no demuestra que la escritura falló.</p>
+    <Button variant="secondary" disabled={write.busy} onClick={() => { setReviewed(false); void write.consult(selected || undefined) }}>Consultar producto de la operación</Button>
+    {write.observed && <><p>Producto consultado: {write.observed.product.name} · Código {write.observed.product.internalCode}. Revisa sus atributos contra la solicitud original.</p>
+      <p>{write.observed.product.brandOrLaboratory} · {categoryName(write.observed.product.categoryId)} · {write.observed.product.isActive ? 'Activo' : 'Inactivo'} · Barras: {write.observed.product.barcode ?? 'No indicado'}</p>
+      <p>Minorista base: S/ {decimalLabel(write.observed.product.retailPrice, 2)} · Mayorista: {write.observed.product.wholesalePrice ? `S/ ${decimalLabel(write.observed.product.wholesalePrice, 2)}` : 'Sin configurar'}</p>
+      <MedicineView value={write.observed.product.medicine} />
+      <ul>{write.observed.units.map(unit => <li key={unit.id}>{unit.name} · factor {decimalLabel(unit.conversionToBase)} · {unit.isBaseUnit ? 'Base' : 'Presentación'} · {unit.isActive ? 'Activa' : 'Inactiva'}</li>)}</ul>
+      <TextField label="Código interno de la solicitud original" value={recoveryCode} maxLength={64} onChange={event => { setRecoveryCode(event.target.value); setReviewed(false) }} />
+      <label><input type="checkbox" checked={reviewed} onChange={event => setReviewed(event.target.checked)} /> Verifiqué el código y los atributos; la operación quedó conciliada, sin otra solicitud en curso.</label>
+      <Button variant="secondary" disabled={!reviewed || write.busy || !write.canAcknowledge || recoveryCode.trim() !== write.observed.product.internalCode} onClick={() => { write.acknowledge(recoveryCode); setReviewed(false); setRecoveryCode('') }}>Continuar tras conciliación verificada</Button></>}
+  </div></Panel>
   return <div className="catalog-page">
-    <PageHeader title="Productos" description={`Catálogo del negocio · ${w.tenantName}. Precios por unidad base; este listado no devuelve stock.`} />
-    <Link to={w.base + '/importacion'}>Importar productos desde Excel</Link>
+    <PageHeader title="Productos" description={`Catálogo de ${w.tenantName}. Consulta existencias y lotes en Inventario.`} action={<Button disabled={write.locked} onClick={() => { setGlobal(null); setDirty(false); setCreateOpen(true) }}>Nuevo producto</Button>} />
     {!http && <Notice tone="warning">Esta pantalla requiere conexión HTTPS real con MediPOS.</Notice>}
     {write.error != null && <ApiErrorState error={write.error} title="No pudimos completar la operación de catálogo" />}
     {write.notice && <p role="status">{write.notice}</p>}
-    {write.pending && <Panel><h2>Operación pendiente de conciliación</h2><p>No reenvíes la solicitud. Si falta el identificador, actualiza el listado y localiza el código interno original. Una lectura que no encuentra cambios no demuestra que la escritura falló.</p>
-      <Button variant="secondary" disabled={write.busy} onClick={() => { setReviewed(false); void write.consult(selected || undefined) }}>Consultar producto de la operación</Button>
-      {write.observed && <><p>Producto consultado: {write.observed.product.name} · Código {write.observed.product.internalCode}. Revisa todos sus datos en el detalle.</p>
-        <TextField label="Código interno de la solicitud original" value={recoveryCode} maxLength={64} onChange={event => { setRecoveryCode(event.target.value); setReviewed(false) }} />
-        <label><input type="checkbox" checked={reviewed} onChange={event => setReviewed(event.target.checked)} /> Verifiqué el código y los atributos contra la solicitud original; la operación quedó conciliada, sin otra solicitud en curso.</label>
-        <Button variant="secondary" disabled={!reviewed || write.busy || !write.canAcknowledge || recoveryCode.trim() !== write.observed.product.internalCode} onClick={() => { write.acknowledge(recoveryCode); setReviewed(false); setRecoveryCode('') }}>Continuar tras conciliación verificada</Button></>}
-    </Panel>}
-    <nav aria-label="Catálogo"><Button variant="secondary" onClick={() => setMode('products')}>Productos del negocio</Button><Button variant="secondary" disabled={write.locked} onClick={() => setMode('create')}>Nuevo producto local</Button><Button variant="secondary" onClick={() => setMode('global')}>Catálogo global</Button></nav>
+    {!createOpen && !task && recovery}
+    <PageToolbar actions={<Link className="text-link" to={w.base + '/importacion'}>Importar desde Excel</Link>}>
+      <nav aria-label="Catálogo" className="task-tabs"><Button variant="quiet" aria-pressed={mode === 'products'} onClick={() => setMode('products')}>Productos de la botica</Button><Button variant="quiet" aria-pressed={mode === 'global'} onClick={() => setMode('global')}>Referencias del catálogo global</Button></nav>
+    </PageToolbar>
     {categories.isError && <ApiErrorState error={categories.error} title="No pudimos consultar las categorías" />}
     {categories.isError && <Button variant="quiet" onClick={() => void categories.refetch()}>Consultar categorías</Button>}
-    {mode === 'create' && <Panel><div className="catalog-body">{categories.isPending ? <p>Consultando categorías…</p> : categories.data && !categories.isError && <CreateProductForm categories={categories.data} global={null} write={write} />}</div></Panel>}
+    <Modal open={createOpen} wide title={global ? 'Añadir referencia a mi botica' : 'Nuevo producto'} description="Registra sus datos, revisa los precios y configura las presentaciones después de guardar." onClose={closeCreate} dirty={dirty} busy={write.busy} recovery={write.pending}>
+      <div className="catalog-body">{write.error != null && <ApiErrorState error={write.error} />}{recovery}
+        {categories.isPending ? <p>Consultando categorías…</p> : categories.data && !categories.isError && <CreateProductForm key={`${global?.id ?? 'local'}/${formEpoch}`} categories={categories.data} global={global} write={write} onDirty={() => setDirty(true)} />}
+        {categories.isError && <ApiErrorState error={categories.error} retry={() => void categories.refetch()} />}
+        {write.notice && selected && <Button disabled={write.locked} onClick={() => { closeCreate(); edit('units') }}>Configurar presentaciones del producto guardado</Button>}
+      </div>
+    </Modal>
     {mode === 'global' && <Panel><div className="catalog-body"><h2>Catálogo global disponible</h2><p>Referencia global, sin precios privados ni existencias físicas. Asociar crea un producto propio, no stock.</p>
       {globals.isPending && <p role="status">Consultando catálogo global…</p>}
       {globals.isError && <ApiErrorState error={globals.error} title="No pudimos consultar el catálogo global" />}
       {globals.data && !globals.isError && <>{!globals.data.length && <p>No hay productos globales en esta página.</p>}
-        <ul>{globals.data.map(item => <li key={item.id}>{item.name} · {categoryName(item.categoryId)} · {item.brandOrLaboratory} <Button variant="quiet" disabled={write.locked} onClick={() => setGlobal(item)}>Seleccionar referencia {item.name}</Button></li>)}</ul></>}
+        <ul>{globals.data.map(item => <li key={item.id}>{item.name} · {categoryName(item.categoryId)} · {item.brandOrLaboratory} <Button variant="quiet" disabled={write.locked} onClick={() => { setGlobal(item); setDirty(false); setCreateOpen(true) }}>Añadir {item.name} a mi botica</Button></li>)}</ul></>}
       <Pagination offset={globalOffset} change={setGlobalOffset} count={globals.data?.length} busy={globals.isFetching} refresh={() => void globals.refetch()} />
-      {global && <CreateProductForm key={global.id} categories={categories.data ?? []} global={global} write={write} />}
     </div></Panel>}
-    <Panel><div className="catalog-body"><h2>Productos del negocio</h2>
+    {mode === 'products' && <Panel><div className="catalog-body"><h2>Productos de la botica</h2>
+      <PageToolbar><SearchField label="Filtrar esta página" hint="Solo filtra los productos cargados en la página actual." placeholder="Nombre, código o marca" value={filter} onChange={event => setFilter(event.target.value)} />
+        <label>Estado en esta página<select aria-label="Estado en esta página" value={status} onChange={event => setStatus(event.target.value)}><option value="all">Todos</option><option value="active">Activos</option><option value="inactive">Inactivos</option></select></label>
+      </PageToolbar>
       {products.isPending && <p role="status">Consultando productos…</p>}
       {products.isError && <ApiErrorState error={products.error} title="No pudimos consultar los productos" />}
-      {products.data && !products.isError && <>{!products.data.length ? <p>No hay productos en esta página.</p> : <div className="catalog-table"><table><caption>Precios por unidad base · stock no incluido en esta respuesta</caption><thead><tr><th>Producto/código</th><th>Categoría/tipo</th><th>Marca o laboratorio</th><th>Precios base</th><th>Estado</th><th>Detalle</th></tr></thead><tbody>{products.data.map(item => <tr key={item.id}>
+      {products.data && !products.isError && <>{!visibleProducts?.length ? <EmptyState title="Sin productos para esta vista" description={products.data.length ? 'Cambia los filtros de esta página o consulta la siguiente.' : 'Crea un producto o añade una referencia del catálogo global. El stock se registra después, en Compras.'} /> : <div className="catalog-table"><table><caption>Precios por unidad base · presentaciones en el detalle</caption><thead><tr><th>Producto/código</th><th>Categoría/tipo</th><th>Marca o laboratorio</th><th>Precios base</th><th>Estado</th><th>Detalle</th></tr></thead><tbody>{visibleProducts.map(item => <tr key={item.id}>
         <td>{item.name}<br />{item.internalCode}</td><td>{categoryName(item.categoryId)}<br />{item.productType === 'medicine' ? 'Medicamento' : 'Venta general'}</td><td>{item.brandOrLaboratory}</td>
-        <td>Minorista S/ {decimalLabel(item.retailPrice, 2)}<br />Mayorista {item.wholesalePrice ? `S/ ${decimalLabel(item.wholesalePrice, 2)}` : 'No configurado'}</td><td>{item.isActive ? 'Activo' : 'Inactivo'}</td>
-        <td><Button variant="quiet" disabled={write.busy} onClick={() => { setReviewed(false); setSelected(item.id) }}>Ver {item.name}</Button></td>
+        <td>Minorista S/ {decimalLabel(item.retailPrice, 2)}<br />Mayorista {item.wholesalePrice ? `S/ ${decimalLabel(item.wholesalePrice, 2)}` : 'No configurado'}</td><td><Badge tone={item.isActive ? 'success' : 'neutral'}>{item.isActive ? 'Activo' : 'Inactivo'}</Badge></td>
+        <td><Button variant="quiet" disabled={write.busy} onClick={() => { setReviewed(false); setSelected(item.id); setDetailOpen(true) }}>Ver {item.name}</Button></td>
       </tr>)}</tbody></table></div>}</>}
       <Pagination offset={offset} change={setOffset} count={products.data?.length} busy={products.isFetching} refresh={() => void products.refetch()} />
-    </div></Panel>
-    {selected && <Panel><div className="catalog-body">
+    </div></Panel>}
+    <Drawer open={detailOpen} title="Detalle del producto" onClose={() => setDetailOpen(false)}>
       {detail.isPending && <p role="status">Consultando detalle…</p>}
       {detail.isError && <ApiErrorState error={detail.error} title="No pudimos consultar este producto" />}
-      {detail.data && !detail.isError && <ProductDetailPanel detail={detail.data} write={write} />}
+      {detail.data && !detail.isError && <ProductDetailPanel key={detail.data.product.id} detail={detail.data} write={write} onEdit={edit} />}
       <Button variant="quiet" disabled={detail.isFetching} onClick={() => void detail.refetch()}>Actualizar detalle</Button>
-    </div></Panel>}
+    </Drawer>
+    <Modal open={task !== null} wide={task === 'units'} title={task === 'prices' ? 'Editar precios' : task === 'units' ? 'Configurar presentaciones' : 'Cambiar estado del producto'} onClose={() => { setTask(null); setDirty(false) }} dirty={dirty || task === 'units'} busy={write.busy} recovery={write.pending}>
+      <div className="catalog-body" onChangeCapture={() => setDirty(true)}>
+        {write.error != null && <ApiErrorState error={write.error} />}{recovery}{write.notice && <p role="status">{write.notice}</p>}
+        {detail.data && !detail.isError && <>
+          {task === 'prices' && <EditPrices key={`${detail.data.product.id}/${detail.data.product.retailPrice.literal}/${detail.data.product.wholesalePrice?.literal}`} detail={detail.data} write={write} />}
+          {task === 'status' && <EditStatus key={`${detail.data.product.id}/${detail.data.product.isActive}`} detail={detail.data} write={write} />}
+          {task === 'units' && <UnitEditor key={detail.data.product.id} detail={detail.data} write={write} />}
+        </>}
+      </div>
+    </Modal>
   </div>
 }
 function Pagination({ offset, change, count, busy, refresh }: { offset: number; change: (value: number) => void; count?: number; busy: boolean; refresh: () => void }) {

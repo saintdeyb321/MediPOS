@@ -37,9 +37,9 @@ export function TenantSelection() {
   return (
     <>
       <Steps labels={['Botica', 'Sucursal', 'Tu espacio']} current={0} />
-      <PageHeader eyebrow="TU ESPACIO DE TRABAJO" title="¿En qué botica trabajamos hoy?" description="Elige una de las boticas a las que tienes acceso." />
+      <PageHeader eyebrow="TU ESPACIO DE TRABAJO" title="Selecciona tu botica" description="Tus boticas asignadas. Después elegirás la sucursal donde vas a trabajar." />
       {content}
-      <details><summary>Mi identidad para el alta de Owner</summary><p>Inicia sesión en este entorno antes del alta. Comparte este identificador solo con el operador autorizado; el servidor verificará la cuenta Google registrada.</p><output>{session.data?.userId}</output></details>
+      <details className="inline-help"><summary>Mi identidad para asignar propietario</summary><p>Comparte este identificador solo con el operador autorizado de este entorno. El servidor verificará tu cuenta Google registrada; el identificador no concede permisos.</p><output>{session.data?.userId}</output></details>
     </>
   )
 }

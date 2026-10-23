@@ -3,6 +3,7 @@ import { Link } from 'react-router'
 import { useRuntime } from '../access'
 import { Button } from '../../shared/ui/Button'
 import { Panel } from '../../shared/ui/Panel'
+import { Notice } from '../../shared/ui/Notice'
 import { TextField } from '../../shared/ui/TextField'
 import { decimalLabel } from '../../shared/api/decimal'
 import type { CatalogItem } from './api'
@@ -76,7 +77,7 @@ export function ContingencyPage() {
     } catch (failure) { if (alive.current) setError(failure instanceof Error ? failure.message : 'No se pudo guardar en la cola local.') }
     finally { writing.current = false; if (alive.current) setBusy(false) }
   }
-  return <main className="operations"><h1>POS de contingencia</h1><p>Registro local provisional. No confirma stock, venta ni pago en el servidor. Los cambios de permiso, horario, licencia, caja y existencias se verifican al reconectar; pueden producir conflicto.</p>
+  return <main className="operations contingency-workspace"><h1>POS de contingencia</h1><Notice tone="warning">Operación local pendiente — aún no es venta confirmada.</Notice><p>Registro local provisional. No confirma stock, venta ni pago en el servidor. Los cambios de permiso, horario, licencia, caja y existencias se verifican al reconectar; pueden producir conflicto.</p>
     {!ready && <p role="status">Leyendo preparación local…</p>}{error && <p role="alert">{error}</p>}
     {ready && !lease && <Panel><p>No hay una preparación vigente. Inicia Google con conexión, entra a tu sucursal, abre tu caja y prepara la contingencia. No se extiende la sesión sin servidor.</p><Link to="/">Ingresar con conexión</Link></Panel>}
     {lease && <><Panel><div className="operation-body"><h2>{lease.tenantName} · {lease.branchName}</h2><p>Vence: {new Date(lease.expiresAt).toISOString()}. Catálogo de una fotografía anterior; cantidades orientativas, sin reserva.</p><Link to={`/boticas/${lease.tenantId}/sucursales/${lease.branchId}/sincronizacion`}>Volver online y conciliar con identidad verificada</Link><Button variant="quiet" onClick={() => { void offlineStorage.lock().then(() => { setLease(null); setItems([]); setRows([]); setLines([]) }) }}>Bloquear contingencia local</Button></div></Panel>

@@ -10,16 +10,23 @@ import { Notice } from '../../shared/ui/Notice'
 import { Panel } from '../../shared/ui/Panel'
 import { TextField } from '../../shared/ui/TextField'
 import { PageControls } from '../../shared/ui/PageControls'
+import { Drawer, Modal } from '../../shared/ui/Modal'
+import { DateText } from '../../shared/ui/DateText'
+import { Badge } from '../../shared/ui/Badge'
+import { Steps } from '../../shared/ui/Steps'
 import { invitationsApi } from './invitations.api'
 import type { EmployeeInvitation } from './invitations.api'
 
 const statusLabels = { pending_acceptance: 'Esperando aceptación', accepted_pending_approval: 'Cuenta aceptante pendiente de aprobación', approved: 'Membresía creada', revoked: 'Revocada', expired: 'Vencida' }
-export function EmployeeInvitationsPanel() {
+export function EmployeeInvitationsPanel({ createOpen, onCreateOpen, onCreateClose }: { createOpen?: boolean; onCreateOpen?: () => void; onCreateClose?: () => void } = {}) {
   const w = useWorkspace(); const { http } = useRuntime(); const client = useQueryClient(); const [params, setParams] = useSearchParams()
   const [offset, setOffset] = useState(0); const [role, setRole] = useState<TenantRole>('cashier'); const [reviewed, setReviewed] = useState(false)
   const [busy, setBusy] = useState(false); const running = useRef(false); const [error, setError] = useState<unknown>(null)
   const [notice, setNotice] = useState(''); const [link, setLink] = useState(''); const [recovered, setRecovered] = useState<EmployeeInvitation | null>(null)
   const controller = useRef<AbortController | null>(null); const mounted = useRef(true)
+  const [ownOpen, setOwnOpen] = useState(false); const [directoryOpen, setDirectoryOpen] = useState(false)
+  const opening = createOpen ?? ownOpen
+  function closeCreate() { setOwnOpen(false); onCreateClose?.(); setRole('cashier'); setReviewed(false) }
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; controller.current?.abort() } }, [])
   const requestId = params.get('invitationRequest'); const actionId = params.get('invitationTarget'); const pending = Boolean(requestId || actionId)
   const api = () => { if (!http) throw new ApiError(0, 'client.https_required'); return invitationsApi(http) }
@@ -82,35 +89,51 @@ export function EmployeeInvitationsPanel() {
     } catch (failure) { if (mounted.current) setError(failure) }
     finally { running.current = false; if (mounted.current) setBusy(false) }
   }
-  return <Panel><div className="operation-body"><h2>Invitaciones de empleados</h2>
-    <p>Google identifica la cuenta; solo la revisión y aprobación posterior del Owner emisor crean la membresía. El enlace vence a los 15 minutos, sin extenderse al aceptar.</p>
+  return <Panel><div className="operation-body"><div className="operation-actions"><h2>Invitaciones por enlace</h2>
+    <Button variant="secondary" onClick={() => setDirectoryOpen(!directoryOpen)}>{directoryOpen ? 'Ocultar invitaciones' : 'Consultar invitaciones'}</Button>
+    <Button variant="quiet" disabled={busy || pending || !http} onClick={() => { if (onCreateOpen) onCreateOpen(); else setOwnOpen(true) }}>Crear enlace de invitación</Button></div>
+    <p>Enlace válido por 15 minutos: la cuenta Google acepta y el propietario emisor verifica y aprueba. No enviamos correos automáticamente.</p>
     {error != null && <ApiErrorState error={error} title="No pudimos completar la invitación" />}
     {notice && <p role="status">{notice}</p>}
     {pending && <Notice tone="warning">Hay una operación pendiente. No crees otra intención ni repitas la aprobación sin consultar la original. <Button variant="secondary" disabled={busy} onClick={() => void reconcile()}>Consultar invitación original</Button></Notice>}
-    <form aria-label="Crear invitación de empleado" onSubmit={event => { event.preventDefault(); void create() }}>
+    <Modal open={opening} title="Nuevo integrante por invitación" description="Crear enlace → aceptación con Google → revisión y aprobación. Compartir el enlace no concede permisos." dirty={reviewed || role !== 'cashier'} busy={busy} recovery={pending} onClose={closeCreate}>
+      <Steps labels={['Elegir rol', 'Compartir enlace', 'Revisar aceptación']} current={link ? 1 : 0} label="Incorporación por enlace" />
+      {error != null && <ApiErrorState error={error} title="No pudimos completar la invitación" />}
+      {notice && <p role="status">{notice}</p>}
+      {pending && <Notice tone="warning">Solicitud pendiente. No emitas otra intención.<Button disabled={busy} onClick={() => void reconcile()}>Consultar invitación original</Button></Notice>}
+    <form className="operation-body" aria-label="Crear invitación de empleado" onSubmit={event => { event.preventDefault(); void create() }}>
       <label>Rol de la invitación<select aria-label="Rol de la invitación" value={role} disabled={busy || pending} onChange={event => { setRole(event.target.value as TenantRole); setReviewed(false) }}><option value="cashier">Cajero</option><option value="pharmacist">Químico farmacéutico</option><option value="owner">Propietario</option></select></label>
       <label><input type="checkbox" checked={reviewed} disabled={busy || pending} onChange={event => setReviewed(event.target.checked)} /> Revisé el rol; verificaré por un canal independiente la cuenta que acepte antes de incorporarla.</label>
-      <Button type="submit" disabled={!http || busy || pending || !reviewed}>Crear invitación</Button>
+      <Button type="submit" disabled={!http || busy || pending || !reviewed}>Crear enlace temporal</Button>
     </form>
+    {link && <section><Notice tone="warning">Copia el enlace ahora. Solo está disponible en esta sesión de la página y no puede recuperarse después.</Notice><TextField label="Enlace temporal para compartir" value={link} readOnly /><Button variant="secondary" onClick={() => { void navigator.clipboard.writeText(link).then(() => { if (mounted.current) setNotice('Enlace copiado.') }).catch(() => { if (mounted.current) setNotice('Selecciona y copia el enlace visible; no se enviará automáticamente.') }) }}>Copiar enlace</Button></section>}
+    </Modal>
     {link && <section aria-label="Enlace temporal de invitación"><TextField label="Enlace temporal (solo se muestra ahora)" value={link} readOnly />
       <p>Compártelo por un canal seguro. El trabajador debe iniciar Google y volver a abrir este enlace; poseerlo no concede permisos.</p>
       <Button variant="secondary" onClick={() => { void navigator.clipboard.writeText(link).then(() => { if (mounted.current) setNotice('Enlace copiado por solicitud del operador.') }).catch(() => { if (mounted.current) setNotice('No se pudo copiar. Selecciona el enlace visible; no se enviará automáticamente.') }) }}>Copiar enlace temporal</Button>
       <Button variant="quiet" onClick={() => setLink('')}>Ocultar enlace</Button></section>}
     {recovered && <p>Invitación consultada: {statusLabels[recovered.status]} · {roleLabels[recovered.role]}. El estado no sustituye la revisión de identidad.</p>}
+    <div hidden={!directoryOpen && !pending && !recovered}>
     {list.isFetching && <p role="status">Consultando invitaciones…</p>}
     {list.isError && <ApiErrorState error={list.error} title="No pudimos consultar invitaciones" />}
-    {list.data && !list.isError && <>{!list.data.length && <p>No hay invitaciones en esta página.</p>}{list.data.map(value => <InvitationCard key={`${value.id}/${value.version}`} value={value} disabled={busy || pending || !http} transition={transition} />)}</>}
+    {list.data && !list.isError && <>{!list.data.length && <p>No hay invitaciones en esta página.</p>}{list.data.map(value => <InvitationCard key={`${value.id}/${value.version}`} value={value} disabled={busy || pending || !http} busy={busy} pending={pending} error={error} notice={notice} reconcile={() => void reconcile()} transition={transition} />)}</>}
     <PageControls offset={offset} count={list.data?.length} busy={busy || list.isFetching || pending} change={setOffset} refresh={() => void list.refetch()} />
+    </div>
   </div></Panel>
 }
-function InvitationCard({ value, disabled, transition }: { value: EmployeeInvitation; disabled: boolean; transition: (value: EmployeeInvitation, kind: 'approve' | 'revoke', reason?: string) => Promise<void> }) {
+function InvitationCard({ value, disabled, transition, busy, pending, error, notice, reconcile }: { value: EmployeeInvitation; disabled: boolean; busy: boolean; pending: boolean; error: unknown; notice: string; reconcile: () => void; transition: (value: EmployeeInvitation, kind: 'approve' | 'revoke', reason?: string) => Promise<void> }) {
   const [reviewed, setReviewed] = useState(false); const [reason, setReason] = useState('')
-  return <section aria-label={`Invitación ${roleLabels[value.role]} ${statusLabels[value.status]}`}><h3>{roleLabels[value.role]} · {statusLabels[value.status]}</h3>
-    <p>Vence: <time dateTime={value.expiresAt}>{value.expiresAt}</time>. El vencimiento de una invitación ya aprobada no desactiva su membresía.</p>
+  const [opened, setOpened] = useState(false)
+  return <section className="invitation-summary" aria-label={`Invitación ${roleLabels[value.role]} ${statusLabels[value.status]}`}><div className="operation-actions"><h3>{roleLabels[value.role]}</h3><Badge tone={value.status === 'approved' ? 'success' : 'neutral'}>{statusLabels[value.status]}</Badge><Button variant="quiet" onClick={() => setOpened(true)}>Revisar invitación</Button></div><p>Vence: <DateText value={value.expiresAt} /></p>
+    <Drawer open={opened} title={`Invitación · ${roleLabels[value.role]}`} onClose={() => { setOpened(false); setReviewed(false); setReason('') }} dirty={Boolean(reviewed || reason)} busy={busy} recovery={pending}>
+    <div className="operation-body"><p>{statusLabels[value.status]} · Vence <DateText value={value.expiresAt} />. El vencimiento de una invitación ya aprobada no desactiva su membresía.</p>
+    {error != null && <ApiErrorState error={error} />}{notice && <p role="status">{notice}</p>}
+    {pending && <Notice tone="warning">Operación pendiente de verificar.<Button disabled={busy} onClick={reconcile}>Consultar invitación original</Button></Notice>}
     {value.acceptedAt && <p>Cuenta que aceptó: {value.acceptedDisplayName} · {value.acceptedEmail}. Correo/nombre son datos de revisión, no autoridad ni prueba de pertenencia.</p>}
     {value.canApprove && <><label><input type="checkbox" disabled={disabled} checked={reviewed} onChange={event => setReviewed(event.target.checked)} /> Verifiqué de forma independiente esta cuenta y confirmo su incorporación con el rol indicado.</label>
       <Button disabled={disabled || !reviewed} onClick={() => void transition(value, 'approve')}>Aprobar incorporación</Button></>}
     {!['approved', 'revoked'].includes(value.status) && <><TextField label="Motivo para revocar invitación" value={reason} disabled={disabled} maxLength={256} onChange={event => setReason(event.target.value)} />
       <Button variant="secondary" disabled={disabled || !reason.trim()} onClick={() => void transition(value, 'revoke', reason)}>Revocar invitación</Button></>}
+    </div></Drawer>
   </section>
 }

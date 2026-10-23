@@ -1,7 +1,7 @@
 import type { ButtonHTMLAttributes, ReactNode } from 'react'
 
 type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
-  variant?: 'primary' | 'secondary' | 'quiet'
+  variant?: 'primary' | 'secondary' | 'quiet' | 'danger'
   pending?: boolean
 }
 

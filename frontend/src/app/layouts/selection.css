@@ -16,7 +16,8 @@
 .branch-option > div { flex: 1; min-width: 0; overflow-wrap: anywhere; }
 .branch-option p { color: var(--text-muted); font-size: var(--text-sm); margin-top: var(--space-1); }
 @media (max-width: 740px) {
-  .selection-header { padding: var(--space-4); align-items: flex-start; }
+  .selection-header { padding: var(--space-4); align-items: flex-start; flex-wrap: wrap; }
+  .selection-account { width: 100%; flex-wrap: wrap; justify-content: space-between; }
   .selection-account > span { display: none; }
   .selection-content { width: calc(100% - 2rem); margin-block: var(--space-8); }
   .selection-card { max-width: none; padding: var(--space-4); }

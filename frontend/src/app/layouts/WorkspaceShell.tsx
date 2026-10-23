@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react'
-import { Outlet, useNavigate } from 'react-router'
+import { Outlet, useLocation, useNavigate } from 'react-router'
 import { X } from 'lucide-react'
 import type { Workspace } from '../../features/access'
 import { IconButton } from '../../shared/ui/Button'
@@ -11,6 +11,8 @@ import './workspace.css'
 export function WorkspaceShell({ workspace }: { workspace: Workspace }) {
   const mobile = useRef<HTMLDialogElement>(null)
   const navigate = useNavigate()
+  const { pathname } = useLocation(); const content = useRef<HTMLElement>(null)
+  useEffect(() => { content.current?.focus({ preventScroll: true }) }, [pathname])
   useEffect(() => {
     const shortcut = (event: KeyboardEvent) => {
       const target = event.target
@@ -37,7 +39,7 @@ export function WorkspaceShell({ workspace }: { workspace: Workspace }) {
       </Dialog>
       <div className="workspace">
         <WorkspaceHeader workspace={workspace} openMenu={() => mobile.current?.showModal()} />
-        <main id="contenido" tabIndex={-1} className="workspace-main"><Outlet /></main>
+        <main ref={content} id="contenido" tabIndex={-1} className="workspace-main"><Outlet /></main>
         <footer className="workspace-footer"><span>{workspace.tenantName} · {workspace.branch.name}</span><span>MediPOS · Perú</span></footer>
       </div>
     </div>

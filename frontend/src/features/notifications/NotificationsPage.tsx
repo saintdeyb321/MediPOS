@@ -9,6 +9,10 @@ import { PageHeader } from '../../shared/ui/PageHeader'
 import { PageControls } from '../../shared/ui/PageControls'
 import { Panel } from '../../shared/ui/Panel'
 import { Notice } from '../../shared/ui/Notice'
+import { Drawer } from '../../shared/ui/Modal'
+import { Badge } from '../../shared/ui/Badge'
+import { DateText } from '../../shared/ui/DateText'
+import type { NotificationDetails } from './api'
 import { notificationsApi } from './api'
 import '../../shared/styles/operations.css'
 
@@ -21,6 +25,7 @@ function NotificationsWorkspace() {
   const [branchId, setBranchId] = useState(w.branchId); const [onlyUnread, setOnlyUnread] = useState(false); const [offset, setOffset] = useState(0)
   const [params, setParams] = useSearchParams(); const pending = params.get('notificationRead'); const [busy, setBusy] = useState(false); const running = useRef(false); const abort = useRef<AbortController | null>(null)
   const [error, setError] = useState<unknown>(null); const [notice, setNotice] = useState(''); const [denied, setDenied] = useState(false)
+  const [selected, setSelected] = useState<NotificationDetails | null>(null)
   useEffect(() => () => abort.current?.abort(), [])
   const branches = useQuery({ queryKey: scopedKey(w, 'notification-branches', w.session.userId, w.access.membershipId), queryFn: ({ signal }) => service.branches(w.tenantId, signal), enabled: Boolean(api) && w.access.role === 'owner', retry: false, refetchOnWindowFocus: false })
   const query = useQuery({ queryKey: scopedKey(w, 'notifications', w.session.userId, w.access.membershipId, branchId, onlyUnread, offset), queryFn: ({ signal }) => api!.list(w, branchId, onlyUnread, offset, signal), enabled: Boolean(api), retry: false, refetchOnWindowFocus: false })
@@ -44,7 +49,7 @@ function NotificationsWorkspace() {
       {error != null && <ApiErrorState error={error} />}{notice && <p role="status">{notice}</p>}
       {pending && <Notice tone="warning">Lectura pendiente de conciliación; no se reenviará. Desactiva «Solo no leídas», consulta la página de la alerta y verifica su estado registrado. La ausencia de una fila no demuestra éxito.{rows?.some(r => r.notificationId === pending && r.isRead) && <Button disabled={busy} onClick={() => { mark(null); setError(null); void refresh() }}>Conciliar lectura registrada</Button>}</Notice>}
       {query.isFetching && <p role="status">Consultando notificaciones…</p>}{query.isError && <ApiErrorState error={query.error} retry={() => void query.refetch()} />}
-      {rows && <><p>Total del filtro: {query.data!.totalCount.literal}</p>{!rows.length && <p>No hay notificaciones en esta página.</p>}{rows.map(row => <article key={row.notificationId}><h2>{row.title}</h2><p>{row.message}</p><p>{row.productName ?? 'Producto sin nombre disponible'} · Lote {row.batchNumber ?? 'No disponible'} · Vence {row.expirationDate} · Días {row.daysUntilExpiration}</p><p>Sucursal: {row.branchId === w.branchId ? w.branch.name : branches.data?.find(b => b.id === row.branchId)?.name ?? row.branchId} · Creada UTC: {row.createdAt}</p><p>{row.isRead ? `Leída por tu membresía · UTC ${row.readAt}` : 'No leída por tu membresía'} · {row.isCurrentlyActionable ? 'Actualmente accionable' : 'Alerta histórica · ya no accionable'}</p><Button disabled={busy || Boolean(pending) || denied || row.isRead} onClick={() => void read(row.notificationId)}>Marcar como leída</Button></article>)}</>}
+      {rows && <><p>Total del filtro: {query.data!.totalCount.literal}</p>{!rows.length && <p>No hay notificaciones en esta página.</p>}{rows.map(row => <article className="notification-row" key={row.notificationId}><div><h2>{row.title}</h2><p>{row.productName ?? 'Producto sin nombre disponible'} · Lote {row.batchNumber ?? 'No disponible'} · Vence <DateText value={row.expirationDate} dateOnly /></p><Badge tone={row.isRead ? 'neutral' : 'warning'}>{row.isRead ? 'Leída' : 'No leída'}</Badge> <Badge tone={row.isCurrentlyActionable ? 'warning' : 'neutral'}>{row.isCurrentlyActionable ? 'Requiere atención' : 'Histórica'}</Badge></div><div className="operation-actions"><Button variant="quiet" disabled={busy} onClick={() => setSelected(row)}>Ver alerta</Button><Button variant="secondary" disabled={busy || Boolean(pending) || denied || row.isRead} onClick={() => void read(row.notificationId)}>Marcar como leída</Button></div></article>)}</>}
       <PageControls offset={offset} count={rows && BigInt(query.data!.totalCount.literal) > BigInt(offset + rows.length) ? 20 : 0} busy={busy || query.isFetching} change={setOffset} refresh={() => void refresh()} />
-    </div></Panel></div>
+    </div></Panel><Drawer open={selected !== null} title={selected?.title ?? 'Detalle de alerta'} onClose={() => setSelected(null)}>{selected && <div className="operation-body"><p>{selected.message}</p><dl className="summary-grid"><div><dt>Producto</dt><dd>{selected.productName ?? 'Sin nombre disponible'}</dd></div><div><dt>Lote</dt><dd>{selected.batchNumber ?? 'No disponible'}</dd></div><div><dt>Vencimiento</dt><dd><DateText value={selected.expirationDate} dateOnly /></dd></div><div><dt>Días restantes</dt><dd>{selected.daysUntilExpiration}</dd></div></dl><p>Sucursal: {selected.branchId === w.branchId ? w.branch.name : branches.data?.find(b => b.id === selected.branchId)?.name ?? 'No disponible en el directorio'}.</p><p>Creada <DateText value={selected.createdAt} />. {selected.isRead ? <>Leída <DateText value={selected.readAt} />.</> : 'No leída en esta consulta.'}</p><p>{selected.isCurrentlyActionable ? 'Actualmente accionable.' : 'Alerta histórica, ya no accionable.'} Marcar como leída no resuelve el riesgo del lote.</p></div>}</Drawer></div>
 }

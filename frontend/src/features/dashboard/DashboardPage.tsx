@@ -17,7 +17,7 @@ export function DashboardPage({ shortcuts }: { shortcuts: DashboardShortcut[] })
   const verified = new Intl.DateTimeFormat('es-PE', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Lima' }).format(new Date(w.access.evaluatedAtUtc))
   return (
     <>
-      <PageHeader eyebrow={w.tenantName} title="Todo listo para empezar." description="Revisa tu sucursal y elige dónde continuar." />
+      <PageHeader eyebrow={w.tenantName} title="Tu botica, en un solo lugar." description="Confirma la sucursal y elige tu próxima tarea." />
       <Panel className="dashboard-action">
         <div><Badge tone="info">POS conectado</Badge><h2>Punto de venta</h2><p>Busca productos, prepara la venta y cobra. Después puedes imprimir el ticket interno o seguir vendiendo. El cobro requiere confirmación explícita en el servidor.</p></div>
         <Link className="button primary" to={`${w.base}/ventas`}>Abrir punto de venta <ArrowRight size={20} aria-hidden="true" /></Link>
@@ -28,7 +28,7 @@ export function DashboardPage({ shortcuts }: { shortcuts: DashboardShortcut[] })
         <div><dt><Clock3 aria-hidden="true" />Última verificación · Lima</dt><dd><time dateTime={w.access.evaluatedAtUtc}>{verified}</time></dd></div>
       </dl>
       <Panel className="module-panel">
-        <div className="panel-heading"><div><h2>Tu espacio de trabajo</h2><p>Secciones conectadas según tu acceso actual. Implementado no significa aceptación comercial aprobada; los circuitos LAB siguen pendientes de aceptación.</p></div></div>
+        <div className="panel-heading"><div><h2>Tu espacio de trabajo</h2><p>Accesos disponibles para tu rol en esta sucursal.</p></div></div>
         <div className="module-rows">
           {shortcuts.map(item => (
             <Link key={item.id} to={`${w.base}/${item.id}`} className="module-row">
