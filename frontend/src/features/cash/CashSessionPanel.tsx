@@ -26,8 +26,9 @@ export function CashSessionPanel({ cash }: { cash: CashController }) {
         cash.uncertain ? <Notice tone="warning">La apertura tiene un resultado pendiente. Consulta la caja; no se enviará otra apertura automáticamente.</Notice> :
           !cash.query.isPending && !cash.query.isError && cash.connected && <Button disabled={cash.pending} onClick={() => setOpening(true)}>Abrir mi caja</Button>}
       <Button variant="quiet" onClick={() => void cash.refresh()} disabled={cash.pending || cash.query.isFetching || !cash.connected}>Consultar caja</Button>
+      {cash.uncertain && !opening && <Button variant="secondary" disabled={cash.pending} onClick={() => setOpening(true)}>Revisar apertura pendiente sin reenviar</Button>}
     </div>
-    <Modal open={opening && (!cash.session || cash.uncertain)} title="Abrir caja en esta sucursal" onClose={() => { setOpening(false); setAmount('') }} dirty={Boolean(amount)} busy={cash.pending} recovery={cash.uncertain}>
+    <Modal open={opening && (!cash.session || cash.uncertain)} title="Abrir caja en esta sucursal" onClose={() => { setOpening(false); setAmount('') }} onRecoveryClose={() => setOpening(false)} dirty={Boolean(amount)} busy={cash.pending} recovery={cash.uncertain}>
       <div className="pos-section-body">
         {cash.error != null && <ApiErrorState error={cash.error} />}
         {cash.uncertain && <><Notice tone="warning">Apertura pendiente de verificar. No la repitas aunque no aparezca todavía una caja abierta.</Notice><Button disabled={cash.pending || cash.query.isFetching} onClick={() => void cash.refresh()}>Consultar resultado de apertura</Button></>}

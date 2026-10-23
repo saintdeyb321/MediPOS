@@ -26,7 +26,8 @@ export function EmployeeInvitationsPanel({ createOpen, onCreateOpen, onCreateClo
   const controller = useRef<AbortController | null>(null); const mounted = useRef(true)
   const [ownOpen, setOwnOpen] = useState(false); const [directoryOpen, setDirectoryOpen] = useState(false)
   const opening = createOpen ?? ownOpen
-  function closeCreate() { setOwnOpen(false); onCreateClose?.(); setRole('cashier'); setReviewed(false) }
+  function hideCreate() { setOwnOpen(false); onCreateClose?.() }
+  function closeCreate() { hideCreate(); setRole('cashier'); setReviewed(false) }
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; controller.current?.abort() } }, [])
   const requestId = params.get('invitationRequest'); const actionId = params.get('invitationTarget'); const pending = Boolean(requestId || actionId)
   const api = () => { if (!http) throw new ApiError(0, 'client.https_required'); return invitationsApi(http) }
@@ -96,8 +97,9 @@ export function EmployeeInvitationsPanel({ createOpen, onCreateOpen, onCreateClo
     {error != null && <ApiErrorState error={error} title="No pudimos completar la invitación" />}
     {notice && <p role="status">{notice}</p>}
     {pending && <Notice tone="warning">Hay una operación pendiente. No crees otra intención ni repitas la aprobación sin consultar la original. <Button variant="secondary" disabled={busy} onClick={() => void reconcile()}>Consultar invitación original</Button></Notice>}
-    <Modal open={opening} title="Nuevo integrante por invitación" description="Crear enlace → aceptación con Google → revisión y aprobación. Compartir el enlace no concede permisos." dirty={reviewed || role !== 'cashier'} busy={busy} recovery={pending} onClose={closeCreate}>
-      <Steps labels={['Elegir rol', 'Compartir enlace', 'Revisar aceptación']} current={link ? 1 : 0} label="Incorporación por enlace" />
+    {requestId && !opening && <Button variant="secondary" disabled={busy} onClick={() => { if (onCreateOpen) onCreateOpen(); else setOwnOpen(true) }}>Revisar invitación pendiente sin reenviar</Button>}
+    <Modal open={opening} title="Nuevo integrante por invitación" description="Crear enlace → aceptación con Google → revisión y aprobación. Compartir el enlace no concede permisos." dirty={reviewed || role !== 'cashier'} busy={busy} recovery={pending} onClose={closeCreate} onRecoveryClose={hideCreate}>
+      <Steps labels={['Elegir rol', 'Compartir enlace', 'Revisar aceptación']} current={link ? 1 : 0} label="Incorporación por enlace" focusOnChange />
       {error != null && <ApiErrorState error={error} title="No pudimos completar la invitación" />}
       {notice && <p role="status">{notice}</p>}
       {pending && <Notice tone="warning">Solicitud pendiente. No emitas otra intención.<Button disabled={busy} onClick={() => void reconcile()}>Consultar invitación original</Button></Notice>}
@@ -125,7 +127,7 @@ function InvitationCard({ value, disabled, transition, busy, pending, error, not
   const [reviewed, setReviewed] = useState(false); const [reason, setReason] = useState('')
   const [opened, setOpened] = useState(false)
   return <section className="invitation-summary" aria-label={`Invitación ${roleLabels[value.role]} ${statusLabels[value.status]}`}><div className="operation-actions"><h3>{roleLabels[value.role]}</h3><Badge tone={value.status === 'approved' ? 'success' : 'neutral'}>{statusLabels[value.status]}</Badge><Button variant="quiet" onClick={() => setOpened(true)}>Revisar invitación</Button></div><p>Vence: <DateText value={value.expiresAt} /></p>
-    <Drawer open={opened} title={`Invitación · ${roleLabels[value.role]}`} onClose={() => { setOpened(false); setReviewed(false); setReason('') }} dirty={Boolean(reviewed || reason)} busy={busy} recovery={pending}>
+    <Drawer open={opened} title={`Invitación · ${roleLabels[value.role]}`} onClose={() => { setOpened(false); setReviewed(false); setReason('') }} onRecoveryClose={() => setOpened(false)} dirty={Boolean(reviewed || reason)} busy={busy} recovery={pending}>
     <div className="operation-body"><p>{statusLabels[value.status]} · Vence <DateText value={value.expiresAt} />. El vencimiento de una invitación ya aprobada no desactiva su membresía.</p>
     {error != null && <ApiErrorState error={error} />}{notice && <p role="status">{notice}</p>}
     {pending && <Notice tone="warning">Operación pendiente de verificar.<Button disabled={busy} onClick={reconcile}>Consultar invitación original</Button></Notice>}

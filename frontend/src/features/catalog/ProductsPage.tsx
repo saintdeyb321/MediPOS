@@ -34,6 +34,7 @@ function CatalogWorkspace() {
   const [mode, setMode] = useState<'products' | 'global'>('products')
   const [createOpen, setCreateOpen] = useState(false); const [detailOpen, setDetailOpen] = useState(false)
   const [task, setTask] = useState<ProductTask | null>(null)
+  const [taskOpen, setTaskOpen] = useState(false)
   const [dirty, setDirty] = useState(false); const [formEpoch, setFormEpoch] = useState(0)
   const [filter, setFilter] = useState(''); const [status, setStatus] = useState('all')
   const [selected, setSelected] = useState(''); const [global, setGlobal] = useState<GlobalProduct | null>(null)
@@ -56,7 +57,7 @@ function CatalogWorkspace() {
   const categoryName = (id: string) => categories.data?.find(row => row.id === id)?.name ?? 'No disponible en las categorías consultables'
   const visibleProducts = products.data?.filter(item => (!filter.trim() || [item.name, item.internalCode, item.brandOrLaboratory].some(value => value.toLocaleLowerCase('es-PE').includes(filter.trim().toLocaleLowerCase('es-PE')))) && (status === 'all' || item.isActive === (status === 'active')))
   function closeCreate() { setCreateOpen(false); setDirty(false); setGlobal(null); setFormEpoch(value => value + 1) }
-  function edit(value: ProductTask) { setDetailOpen(false); setDirty(false); setTask(value) }
+  function edit(value: ProductTask) { setDetailOpen(false); setDirty(false); setTask(value); setTaskOpen(true) }
   const recovery = write.pending && <Panel><div className="catalog-body"><h2>Operación pendiente de conciliación</h2><p>No reenvíes la solicitud. Conserva el código original; una consulta sin cambios no demuestra que la escritura falló.</p>
     <Button variant="secondary" disabled={write.busy} onClick={() => { setReviewed(false); void write.consult(selected || undefined) }}>Consultar producto de la operación</Button>
     {write.observed && <><p>Producto consultado: {write.observed.product.name} · Código {write.observed.product.internalCode}. Revisa sus atributos contra la solicitud original.</p>
@@ -73,13 +74,14 @@ function CatalogWorkspace() {
     {!http && <Notice tone="warning">Esta pantalla requiere conexión HTTPS real con MediPOS.</Notice>}
     {write.error != null && <ApiErrorState error={write.error} title="No pudimos completar la operación de catálogo" />}
     {write.notice && <p role="status">{write.notice}</p>}
-    {!createOpen && !task && recovery}
+    {!createOpen && !taskOpen && recovery}
+    {write.pending && !createOpen && !taskOpen && <Button variant="secondary" disabled={write.busy} onClick={() => { if (task) setTaskOpen(true); else setCreateOpen(true) }}>Revisar solicitud pendiente sin reenviar</Button>}
     <PageToolbar actions={<Link className="text-link" to={w.base + '/importacion'}>Importar desde Excel</Link>}>
       <nav aria-label="Catálogo" className="task-tabs"><Button variant="quiet" aria-pressed={mode === 'products'} onClick={() => setMode('products')}>Productos de la botica</Button><Button variant="quiet" aria-pressed={mode === 'global'} onClick={() => setMode('global')}>Referencias del catálogo global</Button></nav>
     </PageToolbar>
     {categories.isError && <ApiErrorState error={categories.error} title="No pudimos consultar las categorías" />}
     {categories.isError && <Button variant="quiet" onClick={() => void categories.refetch()}>Consultar categorías</Button>}
-    <Modal open={createOpen} wide title={global ? 'Añadir referencia a mi botica' : 'Nuevo producto'} description="Registra sus datos, revisa los precios y configura las presentaciones después de guardar." onClose={closeCreate} dirty={dirty} busy={write.busy} recovery={write.pending}>
+    <Modal open={createOpen} wide title={global ? 'Añadir referencia a mi botica' : 'Nuevo producto'} description="Registra sus datos, revisa los precios y configura las presentaciones después de guardar." onClose={closeCreate} onRecoveryClose={() => setCreateOpen(false)} dirty={dirty} busy={write.busy} recovery={write.pending}>
       <div className="catalog-body">{write.error != null && <ApiErrorState error={write.error} />}{recovery}
         {categories.isPending ? <p>Consultando categorías…</p> : categories.data && !categories.isError && <CreateProductForm key={`${global?.id ?? 'local'}/${formEpoch}`} categories={categories.data} global={global} write={write} onDirty={() => setDirty(true)} />}
         {categories.isError && <ApiErrorState error={categories.error} retry={() => void categories.refetch()} />}
@@ -102,7 +104,7 @@ function CatalogWorkspace() {
       {products.data && !products.isError && <>{!visibleProducts?.length ? <EmptyState title="Sin productos para esta vista" description={products.data.length ? 'Cambia los filtros de esta página o consulta la siguiente.' : 'Crea un producto o añade una referencia del catálogo global. El stock se registra después, en Compras.'} /> : <div className="catalog-table"><table><caption>Precios por unidad base · presentaciones en el detalle</caption><thead><tr><th>Producto/código</th><th>Categoría/tipo</th><th>Marca o laboratorio</th><th>Precios base</th><th>Estado</th><th>Detalle</th></tr></thead><tbody>{visibleProducts.map(item => <tr key={item.id}>
         <td>{item.name}<br />{item.internalCode}</td><td>{categoryName(item.categoryId)}<br />{item.productType === 'medicine' ? 'Medicamento' : 'Venta general'}</td><td>{item.brandOrLaboratory}</td>
         <td>Minorista S/ {decimalLabel(item.retailPrice, 2)}<br />Mayorista {item.wholesalePrice ? `S/ ${decimalLabel(item.wholesalePrice, 2)}` : 'No configurado'}</td><td><Badge tone={item.isActive ? 'success' : 'neutral'}>{item.isActive ? 'Activo' : 'Inactivo'}</Badge></td>
-        <td><Button variant="quiet" disabled={write.busy} onClick={() => { setReviewed(false); setSelected(item.id); setDetailOpen(true) }}>Ver {item.name}</Button></td>
+        <td><Button variant="quiet" disabled={write.busy || (write.pending && task !== null && selected !== item.id)} onClick={() => { setReviewed(false); setSelected(item.id); setDetailOpen(true) }}>Ver {item.name}</Button></td>
       </tr>)}</tbody></table></div>}</>}
       <Pagination offset={offset} change={setOffset} count={products.data?.length} busy={products.isFetching} refresh={() => void products.refetch()} />
     </div></Panel>}
@@ -112,7 +114,7 @@ function CatalogWorkspace() {
       {detail.data && !detail.isError && <ProductDetailPanel key={detail.data.product.id} detail={detail.data} write={write} onEdit={edit} />}
       <Button variant="quiet" disabled={detail.isFetching} onClick={() => void detail.refetch()}>Actualizar detalle</Button>
     </Drawer>
-    <Modal open={task !== null} wide={task === 'units'} title={task === 'prices' ? 'Editar precios' : task === 'units' ? 'Configurar presentaciones' : 'Cambiar estado del producto'} onClose={() => { setTask(null); setDirty(false) }} dirty={dirty || task === 'units'} busy={write.busy} recovery={write.pending}>
+    <Modal open={taskOpen && task !== null} wide={task === 'units'} title={task === 'prices' ? 'Editar precios' : task === 'units' ? 'Configurar presentaciones' : 'Cambiar estado del producto'} onClose={() => { setTaskOpen(false); setTask(null); setDirty(false) }} onRecoveryClose={() => setTaskOpen(false)} dirty={dirty || task === 'units'} busy={write.busy} recovery={write.pending}>
       <div className="catalog-body" onChangeCapture={() => setDirty(true)}>
         {write.error != null && <ApiErrorState error={write.error} />}{recovery}{write.notice && <p role="status">{write.notice}</p>}
         {detail.data && !detail.isError && <>

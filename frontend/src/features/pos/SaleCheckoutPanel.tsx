@@ -15,6 +15,7 @@ import { InternalTicketPanel } from './InternalTicketPanel'
 export function SaleCheckoutPanel({ draft }: { draft: DraftController }) {
   const checkout = useSaleCheckout(draft)
   const [opened, setOpened] = useState(false)
+  const [paymentFormActive, setPaymentFormActive] = useState(false)
   const [dirty, setDirty] = useState(false)
   const mounted = useRef(true)
   useEffect(() => { mounted.current = true; return () => { mounted.current = false } }, [])
@@ -28,12 +29,13 @@ export function SaleCheckoutPanel({ draft }: { draft: DraftController }) {
       {!terminal && <>
         <p id="checkout-requirements">Revisa los medios de pago antes de confirmar. El carrito y el borrador todavía no descuentan stock.</p>
         <Button aria-describedby="checkout-requirements" pending={draft.preparing} disabled={!draft.canPrepare || checkout.busy || checkout.denied}
-          onClick={async () => { const ready = await draft.prepare(); if (mounted.current) { setDirty(false); setOpened(ready) } }}>Cobrar</Button>
+          onClick={async () => { const ready = await draft.prepare(); if (mounted.current) { setDirty(false); setPaymentFormActive(ready); setOpened(ready) } }}>Cobrar</Button>
         {!draft.cashMatches && <p>Abre o consulta tu caja en esta sucursal antes de cobrar.</p>}
         {!draft.seller && <Notice tone="warning">Esta venta pertenece a otra membresía. No puedes editarla ni cobrarla.</Notice>}
         {draft.notice && draft.phase === 'idle' && <p role="status">{draft.notice}</p>}
       </>}
       {(draft.checkoutPending || checkout.error != null || terminal) && <Button variant="secondary" pending={checkout.busy} disabled={draft.phase === 'loading'} onClick={() => void checkout.consult()}>Consultar resultado de venta</Button>}
+      {draft.checkoutPending && paymentFormActive && !opened && !terminal && <Button variant="secondary" disabled={checkout.busy} onClick={() => setOpened(true)}>Revisar cobro pendiente sin reenviar</Button>}
       {terminal && <>
         <p role="status">{draft.server?.status === 'confirmed' ? 'VENTA REALIZADA. Pagos y stock verificados en el servidor.' : 'Venta anulada. No está disponible para otro cobro.'}</p>
         {checkout.ticket.isPending && <p role="status">Consultando ticket interno…</p>}
@@ -41,18 +43,18 @@ export function SaleCheckoutPanel({ draft }: { draft: DraftController }) {
         <Button variant="quiet" disabled={checkout.ticket.isFetching} onClick={() => void checkout.ticket.refetch()}>Consultar ticket</Button>
         {checkout.ticket.data && !checkout.ticket.isError && checkout.ticket.data.status === draft.server?.status && <InternalTicketPanel ticket={checkout.ticket.data} />}
         {!draft.checkoutPending && <Button variant="secondary" className="no-print" disabled={checkout.busy} onClick={() => {
-          if (draft.nextSale()) { setOpened(false); checkout.clearResult() }
+          if (draft.nextSale()) { setOpened(false); setPaymentFormActive(false); checkout.clearResult() }
         }}>Seguir vendiendo sin imprimir</Button>}
         {draft.server?.status === 'confirmed' && <VoidSaleForm draft={draft} checkout={checkout} />}
       </>}
     </div>
-    <Modal open={opened && !terminal} title="Revisar y cobrar venta" description="Confirma únicamente los importes que realmente recibiste." onClose={() => { setOpened(false); setDirty(false) }} dirty={dirty} busy={checkout.busy} recovery={draft.checkoutPending}>
+    <Modal open={opened && !terminal} title="Revisar y cobrar venta" description="Confirma únicamente los importes que realmente recibiste." onClose={() => { setOpened(false); setPaymentFormActive(false); setDirty(false) }} onRecoveryClose={() => setOpened(false)} dirty={dirty} busy={checkout.busy} recovery={draft.checkoutPending}>
       <div className="pos-section-body" onChangeCapture={() => setDirty(true)}>
         {checkout.error != null && <ApiErrorState error={checkout.error} title="Revisa el resultado antes de repetir" />}
         {checkout.notice && <p role="status">{checkout.notice}</p>}
         {draft.checkoutPending && <Notice tone="warning">El cobro sigue pendiente de verificar. Conservamos esta venta; no se enviará un segundo cobro.</Notice>}
         {(draft.checkoutPending || checkout.error != null) && <Button variant="secondary" pending={checkout.busy} onClick={() => void checkout.consult()}>Consultar esta misma venta</Button>}
-        {opened && draft.server && !terminal && <PaymentForm key={`${draft.server.saleId}/${draft.server.version}`} draft={draft} checkout={checkout} />}
+        {paymentFormActive && draft.server && !terminal && <PaymentForm key={`${draft.server.saleId}/${draft.server.version}`} draft={draft} checkout={checkout} />}
       </div>
     </Modal>
   </Panel>
@@ -63,7 +65,8 @@ function VoidSaleForm({ draft, checkout }: { draft: DraftController; checkout: R
   const [opened, setOpened] = useState(false)
   if (access.role !== 'owner' && !draft.seller) return null
   return <div className="no-print"><Button variant="quiet" disabled={checkout.busy || draft.checkoutPending || checkout.denied} onClick={() => setOpened(true)}>Anular esta venta</Button>
-    <Modal open={opened} title="Anular venta confirmada" dirty={Boolean(reason || reviewed)} busy={checkout.busy} recovery={draft.checkoutPending} onClose={() => { setOpened(false); setReason(''); setReviewed(false) }}>
+    {draft.checkoutPending && !opened && <Button variant="secondary" disabled={checkout.busy} onClick={() => setOpened(true)}>Revisar anulación pendiente sin reenviar</Button>}
+    <Modal open={opened} title="Anular venta confirmada" dirty={Boolean(reason || reviewed)} busy={checkout.busy} recovery={draft.checkoutPending} onClose={() => { setOpened(false); setReason(''); setReviewed(false) }} onRecoveryClose={() => setOpened(false)}>
     {checkout.error != null && <ApiErrorState error={checkout.error} />}
     {draft.checkoutPending && <><Notice tone="warning">Anulación pendiente. Consulta la misma venta antes de otra operación.</Notice><Button disabled={checkout.busy} onClick={() => void checkout.consult()}>Consultar resultado de la venta</Button></>}
     <form className="operation-body" aria-label="Anulación de venta" onSubmit={event => {

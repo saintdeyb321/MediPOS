@@ -14,19 +14,21 @@ export interface ModalProps {
   dirty?: boolean
   busy?: boolean
   recovery?: boolean
+  // Hide only: retain the original request, form state and persistent recovery marker.
+  onRecoveryClose?: () => void
   wide?: boolean
 }
 
 // Children remain mounted: closing a surface must not discard an operation's hook,
 // identity or reconciliation state. The feature owns those states and resets them.
-export function Modal({ open, title, description, children, footer, onClose, dirty = false, busy = false, recovery = false, wide = false, side = false }: ModalProps & { side?: boolean }) {
+export function Modal({ open, title, description, children, footer, onClose, onRecoveryClose, dirty = false, busy = false, recovery = false, wide = false, side = false }: ModalProps & { side?: boolean }) {
   const dialog = useRef<HTMLDialogElement>(null)
   const heading = useRef<HTMLHeadingElement>(null)
   const trigger = useRef<HTMLElement | null>(null)
   const decision = useRef<HTMLDivElement>(null)
   const [discard, setDiscard] = useState(false)
   const descriptionId = useId(); const titleId = useId()
-  const blocked = busy || recovery
+  const blocked = busy || (recovery && !onRecoveryClose)
   useEffect(() => {
     const element = dialog.current
     if (!element) return
@@ -54,7 +56,8 @@ export function Modal({ open, title, description, children, footer, onClose, dir
   function keepEditing() { setDiscard(false); heading.current?.focus({ preventScroll: true }) }
   function requestClose() {
     if (blocked) return
-    if (discard) keepEditing()
+    if (recovery) { setDiscard(false); onRecoveryClose?.() }
+    else if (discard) keepEditing()
     else if (dirty) setDiscard(true)
     else close()
   }
@@ -73,8 +76,9 @@ export function Modal({ open, title, description, children, footer, onClose, dir
       </div>}
       <div className="task-dialog-content" inert={discard || undefined}>{children}</div>
     </div>
-    {(footer || blocked) && <footer className="task-dialog-footer">
-      {blocked && <p className="task-dialog-lock" role="status">{recovery ? 'El resultado está pendiente. Consulta la operación antes de salir o repetirla.' : 'Espera mientras se confirma la operación.'}</p>}
+    {(footer || busy || recovery) && <footer className="task-dialog-footer">
+      {(busy || recovery) && <p className="task-dialog-lock" role="status">{busy ? 'Petición en curso. Espera a que termine antes de salir.' : 'Resultado pendiente de conciliación. Volver a la página conserva la operación y no permite repetirla.'}</p>}
+      {recovery && onRecoveryClose && <Button variant="secondary" disabled={busy} onClick={requestClose}>Volver a la página</Button>}
       {footer}
     </footer>}
   </Dialog>

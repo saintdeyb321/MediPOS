@@ -39,7 +39,7 @@ function CashWorkspace() {
       <Button variant="secondary" disabled={!cash.session || close.busy || close.pending} onClick={() => { if (cash.session) pick(cash.session.cashSessionId) }}>Preparar cierre de mi caja</Button>
       {close.id && <Button variant="quiet" disabled={close.busy} onClick={() => { setClosing(true); void close.consult() }}>Consultar cierre guardado</Button>}
       {close.busy && <p role="status">Consultando caja…</p>}
-      <Modal open={closing} title="Arqueo y cierre de caja" onClose={() => { setClosing(false); setAmount(''); setReviewed(false) }} dirty={Boolean(canClose && (amount || reviewed))} busy={close.busy} recovery={close.pending}>
+      <Modal open={closing} title="Arqueo y cierre de caja" onClose={() => { setClosing(false); setAmount(''); setReviewed(false) }} onRecoveryClose={() => setClosing(false)} dirty={Boolean(canClose && (amount || reviewed))} busy={close.busy} recovery={close.pending}>
         <div className="pos-section-body">
         {close.error != null && <ApiErrorState error={close.error} title="Revisa el resultado del cierre" />}
         {close.pending && <><Notice tone="warning">Cierre pendiente de verificar. No se enviará otra solicitud.</Notice><Button disabled={close.busy} onClick={() => void close.consult()}>Consultar esta misma caja</Button></>}

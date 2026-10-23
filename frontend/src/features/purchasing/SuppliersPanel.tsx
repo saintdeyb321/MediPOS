@@ -51,8 +51,11 @@ export function SuppliersPanel({ selected, select, disabled, onBusyChange, recei
     <div hidden={!directoryOpen && !pending}>{directory}<Button variant="quiet" disabled={disabled || busy} onClick={() => select(null)}>Continuar sin proveedor</Button></div>
     {error != null && <ApiErrorState error={error} title="No pudimos crear el proveedor" />}
     {created && <p role="status">Proveedor creado mediante la API: {created.name}. La lista puede requerir otra página.</p>}
-    {pending && <p role="alert">Alta de proveedor pendiente de conciliación. No repitas el POST: revisa las páginas y compara nombre, RUC, contacto y fecha con la solicitud original; una ausencia en esta página no demuestra que falló. Se requiere conciliación operacional antes de otra alta.</p>}
-    <Modal open={createOpen} title="Nuevo proveedor" description="RUC y contacto son opcionales. No uses datos fiscales inventados." dirty={dirty} busy={busy} recovery={pending} onClose={() => { setCreateOpen(false); setDirty(false); setName(''); setRuc(''); setContact('') }}>
+    {pending && <section aria-label="Recuperar alta de proveedor"><p role="alert">Alta de proveedor pendiente de conciliación. No repitas el POST: revisa las páginas y compara nombre, RUC, contacto y fecha con la solicitud original; una ausencia en esta página no demuestra que falló. Se requiere conciliación operacional antes de otra alta.</p>
+      {name ? <p>Solicitud original: {name} · RUC {ruc || 'No informado'} · Contacto {contact || 'No informado'}.</p> : <p>El marcador se conserva al recargar; recupera los datos originales antes de conciliar. Esta API no ofrece una constancia de creación consultable.</p>}
+      <Button variant="secondary" disabled={busy} onClick={() => { setDirectoryOpen(true); setCreateOpen(true) }}>Revisar alta pendiente sin reenviar</Button>
+    </section>}
+    <Modal open={createOpen} title="Nuevo proveedor" description="RUC y contacto son opcionales. No uses datos fiscales inventados." dirty={dirty} busy={busy} recovery={pending} onRecoveryClose={() => setCreateOpen(false)} onClose={() => { setCreateOpen(false); setDirty(false); setName(''); setRuc(''); setContact('') }}>
       {error != null && <ApiErrorState error={error} title="No pudimos crear el proveedor" />}
       {pending && <><p role="alert">El alta sigue pendiente. No repitas el envío; compara los datos con el directorio antes de conciliar con soporte.</p>{directory}</>}
     {w.access.role === 'owner' && <form className="operation-body" aria-label="Crear proveedor" onChange={() => setDirty(true)} onSubmit={event => { event.preventDefault(); void create() }}><fieldset disabled={disabled || busy || pending || denied || !http}><legend>Datos del proveedor</legend>

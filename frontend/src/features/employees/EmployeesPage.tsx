@@ -35,6 +35,7 @@ function EmployeesWorkspace() {
   const [invitationOpen, setInvitationOpen] = useState(false); const [drawerOpen, setDrawerOpen] = useState(false)
   const [tab, setTab] = useState<'profile' | 'branches' | 'schedule' | 'status'>('profile')
   const [task, setTask] = useState<'branches' | 'schedule' | 'status' | null>(null); const [dirty, setDirty] = useState(false)
+  const [taskOpen, setTaskOpen] = useState(false)
   const [filter, setFilter] = useState('')
   const key = scopedKey(w, 'employees', w.session.userId, w.access.membershipId, offset)
   const employees = useQuery({ queryKey: key, queryFn: ({ signal }) => { if (!http) throw new ApiError(0, 'client.https_required'); return employeesApi(http).list(w, offset, 20, signal) }, enabled: Boolean(http), retry: false, staleTime: 0, refetchOnWindowFocus: false })
@@ -43,7 +44,7 @@ function EmployeesWorkspace() {
   const employee = !employees.isError ? employees.data?.find(row => sameId(row.membershipId, selected)) : undefined
   function select(id: string) { setReviewed(false); setTab('profile'); setDrawerOpen(true); setParams(current => { const next = new URLSearchParams(current); next.set('employee', id); return next }, { replace: true }) }
   function page(value: number) { setReviewed(false); setParams(current => { const next = new URLSearchParams(current); next.set('employeePage', String(value)); if (!write.pending) next.delete('employee'); return next }, { replace: true }) }
-  function edit(value: 'branches' | 'schedule' | 'status') { setDrawerOpen(false); setDirty(false); setTask(value) }
+  function edit(value: 'branches' | 'schedule' | 'status') { setDrawerOpen(false); setDirty(false); setTask(value); setTaskOpen(true) }
   return <div className="operations"><PageHeader title="Personal" description={`Equipo y accesos de ${w.tenantName}`} action={<Button disabled={!http || write.locked} onClick={() => setInvitationOpen(true)}>Nuevo integrante</Button>} />
     {!http && <Notice tone="warning">Esta pantalla requiere conexión HTTPS real.</Notice>}
     <EmployeeInvitationsPanel createOpen={invitationOpen} onCreateClose={() => setInvitationOpen(false)} onCreateOpen={() => setInvitationOpen(true)} />
@@ -51,6 +52,7 @@ function EmployeesWorkspace() {
     {write.notice && <p role="status">{write.notice}</p>}
     {write.pending && <Panel><div className="operation-body"><h2>Cambio pendiente de conciliación</h2><p>No repitas el POST/PUT. Consulta el empleado original en su página. Una lectura temprana, incluso coincidente, no demuestra que una asignación u horario terminó ni que hubo rollback.</p>
       <Button variant="secondary" disabled={write.busy} onClick={() => { setReviewed(false); void write.consult() }}>Consultar empleado de la operación</Button>
+      {task && !taskOpen && <Button variant="secondary" disabled={write.busy} onClick={() => setTaskOpen(true)}>Revisar solicitud pendiente sin reenviar</Button>}
       {write.observed && <><p>Estado consultado: {write.observed.displayName} · {roleLabels[write.observed.role]} · {write.observed.isActive ? 'Activo' : 'Inactivo'}. Revisa sucursales y ventanas completas en el detalle.</p>
         {write.pending !== 'deactivate' && employee && sameId(write.observed.membershipId, employee.membershipId) && <><label><input type="checkbox" checked={reviewed} onChange={event => setReviewed(event.target.checked)} /> Verifiqué el empleado y el conjunto original solicitado, y concilié la finalización; no queda otra escritura en curso.</label>
           <Button variant="secondary" disabled={!reviewed || write.busy} onClick={() => { write.acknowledge(); setReviewed(false) }}>Continuar tras conciliación verificada</Button></>}
@@ -80,7 +82,7 @@ function EmployeesWorkspace() {
       {tab === 'status' && <><p>La desactivación conserva el historial y afecta las nuevas operaciones autorizadas.</p><Button variant="secondary" disabled={write.locked} onClick={() => edit('status')}>Revisar estado y desactivación</Button></>}
     </div>}
     </Drawer>
-    <Modal open={task !== null} title={task === 'branches' ? 'Asignar sucursales' : task === 'schedule' ? 'Configurar horario' : 'Estado del integrante'} onClose={() => { setTask(null); setDirty(false) }} dirty={dirty || task === 'schedule'} busy={write.busy} recovery={Boolean(write.pending)} wide={task === 'schedule'}>
+    <Modal open={taskOpen && task !== null} title={task === 'branches' ? 'Asignar sucursales' : task === 'schedule' ? 'Configurar horario' : 'Estado del integrante'} onClose={() => { setTaskOpen(false); setTask(null); setDirty(false) }} onRecoveryClose={() => setTaskOpen(false)} dirty={dirty || task === 'schedule'} busy={write.busy} recovery={Boolean(write.pending)} wide={task === 'schedule'}>
       <div className="operation-body" onChangeCapture={() => setDirty(true)}>
         {write.error != null && <ApiErrorState error={write.error} />}{write.notice && <p role="status">{write.notice}</p>}
         {!employee && <Notice tone="warning">El integrante no está disponible en esta consulta. Conserva la operación original y vuelve a consultarlo antes de editar.</Notice>}
