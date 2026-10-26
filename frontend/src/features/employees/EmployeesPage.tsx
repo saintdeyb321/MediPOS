@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useSearchParams } from 'react-router'
+import { UsersRound, UserRound, MapPin, Clock3, LayoutGrid, List } from 'lucide-react'
 import { ApiErrorState, roleLabels, useRuntime, useWorkspace } from '../access'
 import { ApiError } from '../../shared/api/http'
 import { scopedKey } from '../../shared/api/contracts'
@@ -37,6 +38,7 @@ function EmployeesWorkspace() {
   const [task, setTask] = useState<'branches' | 'schedule' | 'status' | null>(null); const [dirty, setDirty] = useState(false)
   const [taskOpen, setTaskOpen] = useState(false)
   const [filter, setFilter] = useState('')
+  const [viewMode, setViewMode] = useState<'cards' | 'list'>('list')
   const key = scopedKey(w, 'employees', w.session.userId, w.access.membershipId, offset)
   const employees = useQuery({ queryKey: key, queryFn: ({ signal }) => { if (!http) throw new ApiError(0, 'client.https_required'); return employeesApi(http).list(w, offset, 20, signal) }, enabled: Boolean(http), retry: false, staleTime: 0, refetchOnWindowFocus: false })
   const branches = useQuery({ queryKey: scopedKey(w, 'employee-branches', w.session.userId, w.access.membershipId), queryFn: ({ signal }) => service.branches(w.tenantId, signal), enabled: Boolean(http), retry: false, staleTime: 0, refetchOnWindowFocus: false })
@@ -45,14 +47,15 @@ function EmployeesWorkspace() {
   function select(id: string) { setReviewed(false); setTab('profile'); setDrawerOpen(true); setParams(current => { const next = new URLSearchParams(current); next.set('employee', id); return next }, { replace: true }) }
   function page(value: number) { setReviewed(false); setParams(current => { const next = new URLSearchParams(current); next.set('employeePage', String(value)); if (!write.pending) next.delete('employee'); return next }, { replace: true }) }
   function edit(value: 'branches' | 'schedule' | 'status') { setDrawerOpen(false); setDirty(false); setTask(value); setTaskOpen(true) }
-  return <div className="operations"><PageHeader title="Personal" description={`Equipo y accesos de ${w.tenantName}`} action={<Button disabled={!http || write.locked} onClick={() => setInvitationOpen(true)}>Nuevo integrante</Button>} />
+  const visibleEmployees = employees.data?.filter(row => row.displayName.toLocaleLowerCase('es-PE').includes(filter.toLocaleLowerCase('es-PE')))
+  return <div className="operations"><PageHeader icon={UsersRound} eyebrow="Equipo · acceso por rol y sucursal" title="Personal" description={`Equipo y accesos de ${w.tenantName}`} action={<Button disabled={!http || write.locked} onClick={() => setInvitationOpen(true)}>Invitar integrante</Button>} />
     {!http && <Notice tone="warning">Esta pantalla requiere conexión HTTPS real.</Notice>}
     <EmployeeInvitationsPanel createOpen={invitationOpen} onCreateClose={() => setInvitationOpen(false)} onCreateOpen={() => setInvitationOpen(true)} />
     {write.error != null && <ApiErrorState error={write.error} title="No pudimos completar el cambio de acceso" />}
     {write.notice && <p role="status">{write.notice}</p>}
     {write.pending && <Panel><div className="operation-body"><h2>Cambio pendiente de conciliación</h2><p>No repitas el POST/PUT. Consulta el empleado original en su página. Una lectura temprana, incluso coincidente, no demuestra que una asignación u horario terminó ni que hubo rollback.</p>
       <Button variant="secondary" disabled={write.busy} onClick={() => { setReviewed(false); void write.consult() }}>Consultar empleado de la operación</Button>
-      {task && !taskOpen && <Button variant="secondary" disabled={write.busy} onClick={() => setTaskOpen(true)}>Revisar solicitud pendiente sin reenviar</Button>}
+      {task && !taskOpen && <Button data-recovery-focus variant="secondary" disabled={write.busy} onClick={() => setTaskOpen(true)}>Revisar solicitud pendiente sin reenviar</Button>}
       {write.observed && <><p>Estado consultado: {write.observed.displayName} · {roleLabels[write.observed.role]} · {write.observed.isActive ? 'Activo' : 'Inactivo'}. Revisa sucursales y ventanas completas en el detalle.</p>
         {write.pending !== 'deactivate' && employee && sameId(write.observed.membershipId, employee.membershipId) && <><label><input type="checkbox" checked={reviewed} onChange={event => setReviewed(event.target.checked)} /> Verifiqué el empleado y el conjunto original solicitado, y concilié la finalización; no queda otra escritura en curso.</label>
           <Button variant="secondary" disabled={!reviewed || write.busy} onClick={() => { write.acknowledge(); setReviewed(false) }}>Continuar tras conciliación verificada</Button></>}
@@ -61,10 +64,16 @@ function EmployeesWorkspace() {
     </div></Panel>}
     {branches.isError && <ApiErrorState error={branches.error} retry={() => void branches.refetch()} title="No pudimos consultar las sucursales" />}
     <Panel><div className="operation-body"><h2>Equipo registrado</h2>
-      <PageToolbar><SearchField label="Filtrar nombres de esta página" hint="No busca cuentas ni empleados fuera de esta página." value={filter} onChange={event => setFilter(event.target.value)} /></PageToolbar>
+      <PageToolbar actions={<div className="segmented-control" role="group" aria-label="Vista de personal"><Button variant="quiet" aria-pressed={viewMode === 'cards'} onClick={() => setViewMode('cards')}><LayoutGrid size={18} aria-hidden="true" />Tarjetas</Button><Button variant="quiet" aria-pressed={viewMode === 'list'} onClick={() => setViewMode('list')}><List size={18} aria-hidden="true" />Lista</Button></div>}><SearchField label="Filtrar nombres de esta página" hint="No busca cuentas ni empleados fuera de esta página." value={filter} onChange={event => setFilter(event.target.value)} /></PageToolbar>
       {employees.isFetching && <p role="status">Consultando empleados…</p>}
       {employees.isError && <ApiErrorState error={employees.error} title="No pudimos consultar empleados" />}
-      {employees.data && !employees.isError && <div className="operation-table"><table><caption>Personal de la botica · detalle de accesos por integrante</caption><thead><tr><th>Integrante</th><th>Rol / estado</th><th>Sucursales asignadas</th><th>Horarios</th><th>Acción</th></tr></thead><tbody>{employees.data.filter(row => row.displayName.toLocaleLowerCase('es-PE').includes(filter.toLocaleLowerCase('es-PE'))).map(row => <tr key={row.membershipId}>
+      {visibleEmployees && !employees.isError && viewMode === 'cards' && <><div className="team-grid">{visibleEmployees.map(row => <article className="team-card" key={row.membershipId}>
+        <div className="operation-actions"><span className="member-avatar"><UserRound size={24} aria-hidden="true" /></span><div><h3>{row.displayName}</h3><p className="data-caption">{roleLabels[row.role]}{sameId(row.membershipId, w.access.membershipId) ? ' · Tu membresía' : ''}</p></div><Badge tone={row.isActive ? 'success' : 'neutral'}>{row.isActive ? 'Activo' : 'Inactivo'}</Badge></div>
+        <div className="member-assignment"><MapPin size={18} aria-hidden="true" /><div><strong>Sucursales asignadas</strong>{row.branchIds.length ? <div className="member-badges">{row.branchIds.map(id => <Badge key={id} tone="info">{branches.data?.find(branch => sameId(branch.id, id))?.name ?? 'No disponible en consulta'}</Badge>)}</div> : <p>Sin asignaciones registradas</p>}</div></div>
+        <div className="member-assignment"><Clock3 size={18} aria-hidden="true" /><div><strong>Horario · Lima</strong><p>{row.schedule.length ? `${row.schedule.length} ventanas configuradas · consulta el detalle` : row.role === 'owner' ? 'Excepción de horario de Owner' : 'Sin horario: no habilita operaciones'}</p></div></div>
+        <Button variant="secondary" disabled={write.busy || Boolean(write.pending && !sameId(row.membershipId, write.targetId))} onClick={() => select(row.membershipId)}>Ver integrante y accesos</Button>
+      </article>)}</div>{!visibleEmployees.length && <p className="loading-strip">No hay integrantes para el filtro de esta página.</p>}</>}
+      {employees.data && !employees.isError && viewMode === 'list' && <div className="operation-table"><table><caption>Personal de la botica · detalle de accesos por integrante</caption><thead><tr><th>Integrante</th><th>Rol / estado</th><th>Sucursales asignadas</th><th>Horarios</th><th>Acción</th></tr></thead><tbody>{visibleEmployees?.map(row => <tr key={row.membershipId}>
         <td>{row.displayName}{sameId(row.membershipId, w.access.membershipId) && <strong> · Tú</strong>}</td><td>{roleLabels[row.role]}<br /><Badge tone={row.isActive ? 'success' : 'neutral'}>{row.isActive ? 'Activo' : 'Inactivo'}</Badge></td>
         <td>{row.branchIds.length ? <ul>{row.branchIds.map(id => <li key={id}>{branches.data?.find(branch => sameId(branch.id, id))?.name ?? 'Sucursal no disponible en la consulta'}</li>)}</ul> : 'Sin asignaciones registradas'}</td>
         <td>{row.schedule.length ? `${row.schedule.length} ventanas · ver detalle` : 'Sin horario configurado'}</td>

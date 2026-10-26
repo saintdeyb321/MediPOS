@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { AlertCircle, LoaderCircle } from 'lucide-react'
+import { AlertCircle, Inbox, LoaderCircle } from 'lucide-react'
 import { Button } from './Button'
 
 export function LoadingState({ label = 'Preparando tu espacio…' }: { label?: string }) {
@@ -15,7 +15,7 @@ export function LoadingState({ label = 'Preparando tu espacio…' }: { label?: s
 export function EmptyState({ title, description, icon, action }: { title: string; description: string; icon?: ReactNode; action?: ReactNode }) {
   return (
     <div className="state-block">
-      {icon && <span className="state-icon" aria-hidden="true">{icon}</span>}
+      <span className="state-icon" aria-hidden="true">{icon ?? <Inbox size={28} />}</span>
       <h2>{title}</h2>
       <p>{description}</p>
       {action}

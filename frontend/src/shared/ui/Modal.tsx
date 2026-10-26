@@ -27,8 +27,14 @@ export function Modal({ open, title, description, children, footer, onClose, onR
   const trigger = useRef<HTMLElement | null>(null)
   const decision = useRef<HTMLDivElement>(null)
   const [discard, setDiscard] = useState(false)
+  const wasBusy = useRef(busy)
   const descriptionId = useId(); const titleId = useId()
   const blocked = busy || (recovery && !onRecoveryClose)
+  function restoreFocus() {
+    const source = trigger.current
+    if (source?.isConnected && !source.matches(':disabled') && source.getClientRects().length) source.focus()
+    else Array.from(document.querySelectorAll<HTMLElement>('[data-recovery-focus]')).find(element => !element.closest('dialog') && !element.matches(':disabled') && element.getClientRects().length)?.focus()
+  }
   useEffect(() => {
     const element = dialog.current
     if (!element) return
@@ -38,25 +44,33 @@ export function Modal({ open, title, description, children, footer, onClose, onR
       heading.current?.focus()
     } else if (!open && element.open) {
       element.close()
-      if (trigger.current?.isConnected) trigger.current.focus()
+      restoreFocus()
     }
     return () => {
       if (element.open) {
         element.close()
-        if (trigger.current?.isConnected) trigger.current.focus()
+        restoreFocus()
       }
     }
   }, [open])
   useEffect(() => { if (discard) decision.current?.querySelector('button')?.focus() }, [discard])
+  useEffect(() => {
+    const finished = wasBusy.current && !busy
+    wasBusy.current = busy
+    if (!finished || !open) return
+    const alert = Array.from(dialog.current?.querySelectorAll<HTMLElement>('[role="alert"]') ?? []).find(element => element.getClientRects().length && !element.closest('[inert]'))
+    if (alert) { alert.setAttribute('tabindex', '-1'); alert.focus({ preventScroll: true }) }
+  }, [busy, open])
   function close() {
     if (blocked) return
     setDiscard(false)
-    onClose()
+    if (recovery) onRecoveryClose?.()
+    else onClose()
   }
   function keepEditing() { setDiscard(false); heading.current?.focus({ preventScroll: true }) }
   function requestClose() {
     if (blocked) return
-    if (recovery) { setDiscard(false); onRecoveryClose?.() }
+    if (recovery) close()
     else if (discard) keepEditing()
     else if (dirty) setDiscard(true)
     else close()
@@ -66,7 +80,7 @@ export function Modal({ open, title, description, children, footer, onClose, onR
     <header className="task-dialog-heading">
       <div><h2 id={titleId} ref={heading} tabIndex={-1}>{title}</h2>
         {description && <p id={descriptionId}>{description}</p>}</div>
-      <IconButton label={`Cerrar ${title}`} disabled={blocked} onClick={requestClose}><X size={20} /></IconButton>
+      <IconButton label={recovery && onRecoveryClose ? `Volver a la página conservando ${title}` : `Cerrar ${title}`} disabled={blocked} onClick={requestClose}><X size={20} /></IconButton>
     </header>
     <div className="task-dialog-body">
       {discard && <div ref={decision} className="discard-confirmation" role="alert">
@@ -77,7 +91,7 @@ export function Modal({ open, title, description, children, footer, onClose, onR
       <div className="task-dialog-content" inert={discard || undefined}>{children}</div>
     </div>
     {(footer || busy || recovery) && <footer className="task-dialog-footer">
-      {(busy || recovery) && <p className="task-dialog-lock" role="status">{busy ? 'Petición en curso. Espera a que termine antes de salir.' : 'Resultado pendiente de conciliación. Volver a la página conserva la operación y no permite repetirla.'}</p>}
+      {(busy || recovery) && <p className="task-dialog-lock" role="status">{busy ? 'Petición en curso. Espera a que termine antes de salir.' : onRecoveryClose ? 'Resultado pendiente de conciliación. Volver a la página conserva la operación y no permite repetirla.' : 'Resultado pendiente de conciliación. Consulta la operación original antes de continuar.'}</p>}
       {recovery && onRecoveryClose && <Button variant="secondary" disabled={busy} onClick={requestClose}>Volver a la página</Button>}
       {footer}
     </footer>}

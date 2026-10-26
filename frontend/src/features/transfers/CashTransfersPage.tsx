@@ -1,5 +1,4 @@
 import { useCallback, useMemo, useState } from 'react'
-import { Link } from 'react-router'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { ApiErrorState, useRuntime, useWorkspace } from '../access'
 import { ApiError } from '../../shared/api/http'
@@ -48,7 +47,7 @@ function CashTransfersWorkspace() {
   const canReceive = Boolean(t?.status === 'in_transit' && equalId(t.destinationBranchId, w.branchId) && cash.session && !equalId(cash.session.cashSessionId, t.sourceCashSessionId))
   const dispatchReview = JSON.stringify([destination, amount?.literal, cash.session?.cashSessionId])
   const receiptReview = JSON.stringify([t?.id, t?.amount.literal, t?.destinationBranchId, cash.session?.cashSessionId])
-  return <div className="operations"><PageHeader title="Transferencias de sencillo" description={`Efectivo entre cajas · ${w.branch.name}`} action={<Button disabled={tracked.locked || Boolean(t) || dispatchOpen} onClick={() => setDispatchOpen(true)}>Nuevo envío de sencillo</Button>} /><Link className="text-link" to={w.base + '/transferencias'}>Transferencias de mercadería</Link>
+  return <div className="operations"><PageHeader title="Transferencias de sencillo" description={`Efectivo entre cajas · ${w.branch.name}`} action={<Button disabled={tracked.locked || Boolean(t) || dispatchOpen} onClick={() => setDispatchOpen(true)}>Nuevo envío de sencillo</Button>} />
     {(dispatchOpen || t) && <Steps labels={['Caja y destino', 'Revisar despacho', 'Recibir efectivo']} current={t ? 2 : reviewed === dispatchReview && amount ? 1 : 0} label="Transferencia de sencillo" />}
     {tracked.error != null && <ApiErrorState error={tracked.error} title="No pudimos completar o consultar el sencillo" />}{tracked.notice && <p role="status">{tracked.notice}</p>}
     <Panel><div className="operation-body"><details open={Boolean(tracked.pending)} onToggle={event => { if (tracked.pending && !event.currentTarget.open) event.currentTarget.open = true }}><summary>Consultar o recuperar un envío</summary><TransferRecovery {...tracked} observed={Boolean(t)} /><p>Sin identificador confirmado, Owner puede consultar pendientes de todas las sedes. Cashier no dispone de un listado general de envíos: debe conciliar con Owner. Una transferencia ya recibida no figura en pendientes; no se repite el despacho por su ausencia.</p></details></div></Panel>

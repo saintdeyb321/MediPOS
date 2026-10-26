@@ -32,5 +32,41 @@
 .operations label:has(> input[type="checkbox"]), .catalog-page label:has(> input[type="checkbox"]), .operations label:has(> input[type="radio"]), .pos-section-body label:has(> input[type="checkbox"]) { display: flex; align-items: flex-start; gap: var(--space-3); min-height: var(--control-height); padding-block: var(--space-2); }
 .operations input[type="checkbox"], .catalog-page input[type="checkbox"], .pos-section-body input[type="checkbox"] { width: 1.125rem; height: 1.125rem; margin-top: 0.2rem; flex-shrink: 0; accent-color: var(--primary); }
 .operations select { border-radius: var(--radius-md); }
+.guided-layout { display: grid; grid-template-columns: minmax(0, 1fr) 19rem; gap: var(--space-6); align-items: start; }
+.guided-main { min-width: 0; display: grid; gap: var(--space-6); }
+.guided-summary { position: sticky; top: 6.5rem; min-width: 0; }
+.guided-summary .summary-grid { grid-template-columns: 1fr; }
+.workflow-context { padding: var(--space-4); background: var(--info-soft); border-left: 3px solid var(--info); border-radius: var(--radius-md); }
+.workflow-context p { color: var(--text-muted); margin-top: var(--space-2); }
+.team-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 19rem), 1fr)); gap: var(--space-5); }
+.team-card { display: flex; flex-direction: column; gap: var(--space-5); min-width: 0; padding: var(--space-5); border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--canvas); }
+.team-card h3 { overflow-wrap: anywhere; }
+.team-card > .button { margin-top: auto; }
+.member-avatar { width: 3rem; height: 3rem; display: grid; place-items: center; border-radius: 50%; background: var(--primary-soft); color: var(--primary); flex-shrink: 0; }
+.member-assignment { display: flex; align-items: flex-start; gap: var(--space-3); font-size: var(--text-sm); }
+.member-assignment > svg { margin-top: var(--space-1); color: var(--info); }
+.member-assignment strong { display: block; margin-bottom: var(--space-2); }
+.member-assignment p { color: var(--text-muted); }
+.member-badges { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+.invitation-summary { padding: var(--space-5); border: 1px solid var(--border); border-left: 3px solid var(--info); border-radius: var(--radius-md); background: var(--canvas); }
+.invitation-link-panel { display: grid; gap: var(--space-4); padding: var(--space-4); background: var(--info-soft); border-radius: var(--radius-md); }
+.report-type-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 11rem), 1fr)); gap: var(--space-3); }
+.report-type-grid .button { min-height: 3.5rem; justify-content: flex-start; text-align: left; }
+.report-type-grid .button[aria-pressed="true"] { color: var(--primary); background: var(--primary-soft); border-color: var(--primary); }
+.operations .chart-bars { padding-left: 0; }
+.lot-expiry { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
+.operations > * + * { margin-top: var(--space-4); }
+.operation-body { padding: var(--space-4); }
+.operation-body > * + *, .operation-body form > * + *, .operation-body fieldset > * + * { margin-top: var(--space-3); }
+.operation-body fieldset { padding: var(--space-3); }
+.operation-table th, .operation-table td { padding: var(--space-3); }
+.operation-body > h2 { border: 0; padding: 0; }
+.team-card { padding: var(--space-4); gap: var(--space-3); }
+.invitation-summary { padding: var(--space-3); }
+.settings-index > .button { min-height: var(--control-height); }
+.operation-table { border: 1px solid var(--border); border-radius: var(--radius-md); }
+.operation-table caption { padding: var(--space-3) var(--space-4); text-align: left; font-size: var(--text-sm); color: var(--text-muted); background: var(--canvas); }
+.operation-body > h2 { padding-bottom: var(--space-3); border-bottom: 1px solid var(--border); }
+@media (max-width: 1279px) { .guided-layout { grid-template-columns: minmax(0, 1fr); } .guided-summary { position: static; } .guided-summary .summary-grid { grid-template-columns: repeat(auto-fit, minmax(min(100%, 12rem), 1fr)); } }
 @media (max-width: 740px) { .filter-bar { display: grid; grid-template-columns: 1fr; } .filter-bar select { width: 100%; } .operation-actions .button { max-width: 100%; } }
 @media (max-width: 740px) { .operation-body { padding: var(--space-4); } .operation-table th, .operation-table td { padding: var(--space-3); } }

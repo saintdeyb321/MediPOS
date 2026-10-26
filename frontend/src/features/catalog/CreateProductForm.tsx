@@ -33,7 +33,7 @@ export function CreateProductForm({ categories, global, write, onDirty }: { cate
     else if (type) void write.run('create', undefined, async signal => (await api.create(w, { internalCode: code.trim(), name: name.trim(), productType: type, categoryId,
       brandOrLaboratory: brand.trim(), barcode: barcode.trim() || null, medicine: type === 'medicine' ? clinical : null, ...priceInput, isActive: active }, signal)).id, code.trim())
   }}>
-    <Steps labels={['Identificación', 'Datos del producto', 'Precios', 'Revisión']} current={step} label="Pasos para crear el producto" />
+    <Steps labels={['Identificación', 'Datos del producto', 'Precios', 'Revisión']} current={step} label="Pasos para crear el producto" focusOnChange />
     <fieldset disabled={write.locked || saved} onChange={() => setReviewed(false)}><legend>{global ? `Asociar: ${global.name}` : 'Nuevo producto de tu botica'}</legend>
       <div hidden={step !== 0} className="form-section-fields">
       <TextField label="Código interno" value={code} maxLength={64} required onChange={event => setCode(event.target.value)} />

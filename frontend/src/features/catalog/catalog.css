@@ -16,4 +16,22 @@
 .catalog-component { padding: var(--space-4); border-radius: var(--radius-md); background: var(--canvas); display: grid; gap: var(--space-3); }
 .catalog-page ul { padding-left: var(--space-4); }
 .catalog-page .state-block { min-height: auto; padding: var(--space-4); }
+.catalog-page .catalog-card-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 16rem), 1fr)); gap: var(--space-5); padding: 0; list-style: none; }
+.catalog-product-card { display: flex; flex-direction: column; min-width: 0; gap: var(--space-3); padding: var(--space-5); border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--canvas); }
+.catalog-card-heading { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); }
+.catalog-product-card h3 { font-size: var(--text-lg); overflow-wrap: anywhere; }
+.catalog-product-card > p, .catalog-product-card small { font-size: var(--text-sm); color: var(--text-muted); }
+.catalog-composition { padding: var(--space-3); border-radius: var(--radius-sm); background: var(--surface); }
+.catalog-card-price { display: grid; gap: var(--space-1); margin-top: auto; padding: var(--space-4); background: var(--primary-soft); border-radius: var(--radius-md); }
+.catalog-card-price strong { color: var(--primary); font-size: var(--text-xl); font-variant-numeric: tabular-nums; }
+.catalog-product-card > .button { width: 100%; }
+.catalog-body .task-tabs { margin-top: var(--space-4); }
+.catalog-page > * + * { margin-top: var(--space-4); }
+.catalog-body { padding: var(--space-4); }
+.catalog-body > * + *, .catalog-body form > * + *, .catalog-body fieldset > * + * { margin-top: var(--space-3); }
+.catalog-page .catalog-card-grid { grid-template-columns: repeat(auto-fill, minmax(min(100%, 14rem), 1fr)); gap: var(--space-3); }
+.catalog-product-card { padding: var(--space-4); gap: var(--space-2); }
+.catalog-card-price { padding: var(--space-3); }
+.catalog-card-price strong { font-size: var(--text-lg); }
+.catalog-table th, .catalog-table td { padding: var(--space-3); }
 @media (max-width: 740px) { .catalog-body { padding: var(--space-4); } .catalog-table th, .catalog-table td { padding: var(--space-3); } }

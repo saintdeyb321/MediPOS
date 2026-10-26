@@ -1,13 +1,14 @@
 import type { ButtonHTMLAttributes, ReactNode } from 'react'
 
 type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
-  variant?: 'primary' | 'secondary' | 'quiet' | 'danger'
+  variant?: 'primary' | 'secondary' | 'quiet' | 'ghost' | 'danger' | 'success'
+  size?: 'sm' | 'md' | 'lg'
   pending?: boolean
 }
 
-export function Button({ variant = 'primary', pending = false, disabled, className = '', children, ...props }: ButtonProps) {
+export function Button({ variant = 'primary', size = 'md', pending = false, disabled, className = '', children, ...props }: ButtonProps) {
   return (
-    <button type="button" {...props} className={`button ${variant} ${className}`} disabled={disabled || pending} aria-busy={pending || undefined}>
+    <button type="button" {...props} className={`button ${variant} button-${size} ${className}`} disabled={disabled || pending} aria-busy={pending || undefined}>
       {children}
     </button>
   )

@@ -1,9 +1,6 @@
-import { Link } from 'react-router'
-import { ArrowLeft } from 'lucide-react'
-import { useWorkspace } from '../access'
-import { PageHeader } from '../../shared/ui/PageHeader'
+import type { ReactNode } from 'react'
+import { ShoppingBasket } from 'lucide-react'
 
-export function PosHeader() {
-  const { base, branch } = useWorkspace()
-  return <PageHeader title="Punto de venta" description={branch.name} action={<Link className="button secondary" to={base}><ArrowLeft size={18} aria-hidden="true" />Volver al inicio</Link>} />
+export function PosHeader({ status }: { status?: ReactNode }) {
+  return <div className="pos-heading"><h1><ShoppingBasket size={22} aria-hidden="true" />Punto de venta</h1><div className="cash-status-strip">{status}</div></div>
 }

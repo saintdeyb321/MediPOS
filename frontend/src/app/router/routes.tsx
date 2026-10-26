@@ -27,8 +27,8 @@ import { ModulePage } from './ModulePage'
 
 function DashboardRoute() {
   const { access } = useWorkspace()
-  const shortcuts = availableNavigation(access.role).filter(item => item.id && item.id !== 'ventas')
-  return <><DashboardPage shortcuts={shortcuts} /><OwnerDashboard /></>
+  const shortcuts = availableNavigation(access.role).filter(item => ['ventas', 'productos', 'compras', 'inventario'].includes(item.id))
+  return <DashboardPage shortcuts={shortcuts} metrics={<OwnerDashboard />} />
 }
 
 export function AppRoutes() {

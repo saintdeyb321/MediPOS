@@ -19,7 +19,7 @@ export function RequestGoods({ branches, destinationId, destinationName, disable
   const candidate = product ? requestLine(product, product.units.find(row => equalId(row.id, unitId)), quantity) : null
   const sources = branches.filter(branch => !equalId(branch.id, destinationId))
   return <section aria-label="Solicitar mercadería"><h2>Solicitar mercadería</h2><p>Destino operativo: {destinationName}. Solicitar no reserva ni descuenta stock. Orígenes limitados al directorio consultable; no se presupone autorización para aprobar o despachar desde ellos.</p>
-    <Steps labels={['Origen y destino', 'Productos y cantidades', 'Revisión']} current={step} label="Solicitud de transferencia" />
+    <Steps labels={['Origen y destino', 'Productos y cantidades', 'Revisión']} current={step} label="Solicitud de transferencia" focusOnChange />
     <fieldset disabled={disabled}><legend>Origen, productos y cantidades</legend>
       <div hidden={step !== 0}>
       <label htmlFor={id}>Sucursal origen</label><select id={id} value={source} onChange={event => { setSource(event.target.value); setReviewed(false) }}><option value="">Seleccionar origen consultable</option>{sources.map(branch => <option key={branch.id} value={branch.id}>{branch.name}</option>)}</select>

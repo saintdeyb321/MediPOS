@@ -53,7 +53,7 @@ export function SuppliersPanel({ selected, select, disabled, onBusyChange, recei
     {created && <p role="status">Proveedor creado mediante la API: {created.name}. La lista puede requerir otra página.</p>}
     {pending && <section aria-label="Recuperar alta de proveedor"><p role="alert">Alta de proveedor pendiente de conciliación. No repitas el POST: revisa las páginas y compara nombre, RUC, contacto y fecha con la solicitud original; una ausencia en esta página no demuestra que falló. Se requiere conciliación operacional antes de otra alta.</p>
       {name ? <p>Solicitud original: {name} · RUC {ruc || 'No informado'} · Contacto {contact || 'No informado'}.</p> : <p>El marcador se conserva al recargar; recupera los datos originales antes de conciliar. Esta API no ofrece una constancia de creación consultable.</p>}
-      <Button variant="secondary" disabled={busy} onClick={() => { setDirectoryOpen(true); setCreateOpen(true) }}>Revisar alta pendiente sin reenviar</Button>
+      <Button data-recovery-focus variant="secondary" disabled={busy} onClick={() => { setDirectoryOpen(true); setCreateOpen(true) }}>Revisar alta pendiente sin reenviar</Button>
     </section>}
     <Modal open={createOpen} title="Nuevo proveedor" description="RUC y contacto son opcionales. No uses datos fiscales inventados." dirty={dirty} busy={busy} recovery={pending} onRecoveryClose={() => setCreateOpen(false)} onClose={() => { setCreateOpen(false); setDirty(false); setName(''); setRuc(''); setContact('') }}>
       {error != null && <ApiErrorState error={error} title="No pudimos crear el proveedor" />}

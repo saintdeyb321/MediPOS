@@ -19,13 +19,13 @@ export function ReceiptEditor({ disabled, replacing, save, stage = 1, onStageCha
     <p>Estas líneas son locales hasta guardarlas. {replacing ? 'Guardar reemplazará todas las líneas del borrador; revisa el conjunto completo. No edita una compra confirmada.' : 'Guardar prepara la recepción sin ingresar stock.'}</p>
     <fieldset disabled={disabled}><legend>Agregar línea</legend>
       <div hidden={stage !== 1}><ProductLookup disabled={disabled} onSelect={value => { setDetail(value); setUnitId(''); setQuantity(''); setCost(''); setBatch(''); setExpiration(''); onStageChange?.(2) }} /></div>
-      {detail && <div hidden={Boolean(onStageChange) && stage !== 2} className="form-section-fields"><p>Producto: {detail.product.name} · {detail.product.productType === 'medicine' ? 'Medicamento: lote y vencimiento obligatorios.' : 'Venta general.'}</p>
+      {detail && <div hidden={Boolean(onStageChange) && stage !== 2} className="form-section-fields"><div className="workflow-context"><strong>{detail.product.name}</strong><p>{detail.product.productType === 'medicine' ? 'Medicamento: registra el lote y su vencimiento documentados.' : 'Venta general.'}</p></div>
         {onStageChange && <Button variant="quiet" onClick={() => onStageChange(1)}>Elegir otro producto</Button>}
         {!units.length && <p role="alert">Sin presentaciones activas. Owner debe configurar o activar una presentación desde Productos antes de recibir este producto.</p>}
         <label htmlFor={selectId}>Presentación de compra</label><select id={selectId} value={unitId} onChange={event => setUnitId(event.target.value)}><option value="">Elige una presentación</option>{units.map(row => <option key={row.id} value={row.id}>{row.name} · {decimalLabel(row.conversionToBase)} unidades base</option>)}</select>
         <TextField label="Cantidad de presentaciones" inputMode="decimal" value={quantity} maxLength={90} onChange={event => setQuantity(event.target.value)} />
         <TextField label="Costo por presentación (S/)" hint="Costo de la presentación elegida, no precio de venta ni costo por unidad base si eliges caja." inputMode="decimal" value={cost} maxLength={90} onChange={event => setCost(event.target.value)} />
-        <TextField label="Número de lote" value={batch} maxLength={128} onChange={event => setBatch(event.target.value)} />
+        <TextField label="Número de lote" hint="Copia el lote del producto recibido; no lo sustituyas por la referencia de compra." value={batch} maxLength={128} onChange={event => setBatch(event.target.value)} />
         <TextField label="Vencimiento del lote" type="date" value={expiration} onChange={event => setExpiration(event.target.value)} />
         {candidate ? <p>Cantidad base exacta: {decimalLabel(candidate.baseQuantity)}</p> : <p>Completa presentación, cantidad positiva, costo no negativo exacto y datos del lote. Sin conversiones ni redondeos silenciosos.</p>}
         <Button disabled={!candidate} onClick={() => { if (candidate) { setLines(current => [...current, candidate]); setReview(false); setQuantity(''); setCost(''); setBatch(''); setExpiration('') } }}>Agregar línea a la recepción</Button>

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Link } from 'react-router'
+import { BarChart3 } from 'lucide-react'
 import { ApiErrorState, useRuntime, useWorkspace } from '../access'
 import { ApiError } from '../../shared/api/http'
 import { scopedKey } from '../../shared/api/contracts'
@@ -15,6 +16,8 @@ import { reportsApi } from './api'
 import { initialFilters, moreRows, reportLabels, validFilters } from './filters'
 import { ReportFilters } from './ReportFilters'
 import { reportView } from './view'
+import { MetricGrid } from '../../shared/ui/MetricCard'
+import { ReportCharts } from './ReportCharts'
 import '../../shared/styles/operations.css'
 
 export function ReportsPage() {
@@ -30,6 +33,7 @@ function ReportsWorkspace() {
   const branches = useQuery({ queryKey: scopedKey(w, 'report-branches', w.session.userId, w.access.membershipId), queryFn: ({ signal }) => service.branches(w.tenantId, signal), enabled: Boolean(http), retry: false, staleTime: 0, refetchOnWindowFocus: false })
   const query = useQuery({ queryKey: scopedKey(w, 'owner-report', w.session.userId, w.access.membershipId, applied), queryFn: ({ signal }) => { if (!api) throw new ApiError(0, 'client.https_required'); return api.read(w, applied, signal) }, enabled: Boolean(api), retry: false, staleTime: 0, refetchOnWindowFocus: false })
   const view = !query.isError && !query.isFetching && query.data ? reportView(query.data, id => branches.data?.find(branch => branch.id === id)?.name ?? 'Sucursal no disponible en el directorio') : null
+  const filtersChanged = JSON.stringify({ ...draft, offset: 0 }) !== JSON.stringify({ ...applied, offset: 0 })
   async function download(format: 'pdf' | 'xlsx') {
     if (!api || busy.current || !view || applied.kind === 'overview' || applied.kind === 'dashboard') return
     busy.current = true; setExporting(true); setExportError(null); setExportNotice(''); const abort = new AbortController(); controller.current = abort
@@ -39,13 +43,16 @@ function ReportsWorkspace() {
       setExportNotice('Archivo generado con todos los filtros de la consulta aplicada, no solo esta página. Es una nueva lectura del servidor; puede reflejar cambios posteriores a la pantalla.')
     } catch (error) { if (!abort.signal.aborted) setExportError(error) } finally { busy.current = false; if (!abort.signal.aborted) setExporting(false) }
   }
-  return <div className="operations"><PageHeader title="Reportes" description={`${w.tenantName} · métricas reales del servidor. Acceso exclusivo Owner.`} /><Link to={w.base + '/comisiones'}>Configurar comisiones y reglas</Link>
+  return <div className="operations"><PageHeader icon={BarChart3} eyebrow="Análisis · decisiones con datos" title="Reportes" description={`${w.tenantName} · métricas reales del servidor. Acceso exclusivo Owner.`} action={<Link className="button secondary" to={w.base + '/comisiones'}>Reglas de comisiones</Link>} />
     {!http && <Notice tone="warning">Se requiere conexión HTTPS real.</Notice>}
     <Panel><div className="operation-body"><ReportFilters value={draft} branches={branches.isError ? [] : branches.data ?? []} complete={branches.isSuccess && branches.data.length < 100} disabled={exporting || !http} change={value => setDraft(current => ({ ...current, ...value, offset: 0 }))} apply={() => { if (validFilters(draft)) { setApplied({ ...draft, offset: 0 }); setExportError(null); setExportNotice(''); if (JSON.stringify(applied) === JSON.stringify({ ...draft, offset: 0 })) void query.refetch() } }} />{branches.isError && <ApiErrorState error={branches.error} retry={() => void branches.refetch()} title="No pudimos consultar sucursales" />}</div></Panel>
+    {filtersChanged && <Notice tone="info">Hay filtros sin aplicar. Los indicadores, gráficos y descargas siguen correspondiendo a «{reportLabels[applied.kind]}» con los últimos filtros aplicados.</Notice>}
     <Panel aria-label="Resultado del reporte aplicado"><div className="operation-body"><h2>{reportLabels[applied.kind]} · consulta aplicada</h2>{query.isFetching && <p role="status">Consultando reporte…</p>}{query.isError && <ApiErrorState error={query.error} retry={() => void query.refetch()} title="No pudimos consultar el reporte" />}
-      {view && <><p>{view.period} · {applied.branchId ? branches.data?.find(branch => branch.id === applied.branchId)?.name ?? 'Sucursal seleccionada' : 'Todas las sucursales autorizadas'}</p><p>{view.explanation}</p>
-        <dl className="summary-grid">{view.metrics.map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}</dl>
-        {!!view.columns.length && <div className="operation-table"><table><caption>{reportLabels[applied.kind]} · filas del servidor</caption><thead><tr>{view.columns.map(column => <th key={column}>{column}</th>)}</tr></thead><tbody>{view.rows.map(row => <tr key={row.key}>{row.cells.map((cell, index) => <td key={index}>{cell}</td>)}</tr>)}</tbody></table>{!view.rows.length && <p>No hay filas para los filtros de esta página. No se crearon operaciones para llenar el reporte.</p>}</div>}
+      {view && <><p className="data-caption">{view.period} · {applied.branchId ? branches.data?.find(branch => branch.id === applied.branchId)?.name ?? 'Sucursal seleccionada' : 'Todas las sucursales autorizadas'}</p>
+        <MetricGrid metrics={view.metrics.slice(0, 4)} />
+        {query.data && <ReportCharts result={query.data} branchName={id => branches.data?.find(branch => branch.id === id)?.name ?? 'Sucursal no disponible en el directorio'} />}
+        <details className="detail-disclosure"><summary>Cómo leer este reporte{view.metrics.length > 4 ? ' e indicadores adicionales' : ''}</summary><p>{view.explanation}</p>{view.metrics.length > 4 && <MetricGrid metrics={view.metrics.slice(4)} />}<p>Los contratos actuales no devuelven una serie diaria ni un reparto general por medios de pago. El gráfico por medio de pago está disponible en el arqueo de una caja cerrada; no se infieren series desde agregados.</p></details>
+        {!!view.columns.length && <details className="detail-disclosure"><summary>Ver detalle en tabla · {view.rows.length} filas de esta página</summary><div className="operation-table"><table><caption>{reportLabels[applied.kind]} · filas del servidor</caption><thead><tr>{view.columns.map(column => <th key={column}>{column}</th>)}</tr></thead><tbody>{view.rows.map(row => <tr key={row.key}>{row.cells.map((cell, index) => <td key={index}>{cell}</td>)}</tr>)}</tbody></table>{!view.rows.length && <p>No hay filas para los filtros de esta página. No se crearon operaciones para llenar el reporte.</p>}</div></details>}
         {view.page && <PageControls offset={applied.offset} count={moreRows(view.page.count, applied.offset, view.page.shown) ? 20 : 0} busy={exporting} change={offset => setApplied(current => ({ ...current, offset }))} refresh={() => void query.refetch()} />}
         {!view.page && <Button variant="quiet" disabled={exporting} onClick={() => void query.refetch()}>Actualizar reporte aplicado</Button>}
         <p>Última generación: <DateText value={query.data?.data.generatedAtUtc} /></p>

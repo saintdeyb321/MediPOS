@@ -13,6 +13,7 @@ export const navigation: NavigationItem[] = [
   { id: 'transferencias', label: 'Transferencias', description: 'Mercadería y sencillo entre sucursales autorizadas', icon: ArrowLeftRight, roles: ['owner', 'pharmacist', 'cashier'], section: 'operation', availability: 'implemented' },
   { id: 'notificaciones', label: 'Notificaciones', description: 'Alertas y lecturas de tu membresía', icon: Bell, roles: ['owner', 'pharmacist', 'cashier'], section: 'operation', availability: 'implemented' },
   { id: 'reportes', label: 'Reportes', description: 'Consultas, exportaciones y comisiones', icon: BarChart3, roles: ['owner'], section: 'management', availability: 'implemented' },
+  { id: 'comisiones', label: 'Comisiones', description: 'Configuración de reglas y revisiones', icon: Banknote, roles: ['owner'], section: 'management', availability: 'implemented' },
   { id: 'empleados', label: 'Personal', description: 'Integrantes, invitaciones por enlace, sucursales y horarios', icon: UsersRound, roles: ['owner'], section: 'management', availability: 'partial' },
   { id: 'sincronizacion', label: 'Contingencia', description: 'Preparación del catálogo, cola local y conflictos del servidor', icon: CloudOff, roles: ['owner', 'pharmacist', 'cashier'], section: 'operation', availability: 'implemented' },
   { id: 'configuracion', label: 'Configuración', description: 'Licencia, entidades, sucursales, auditoría e importación', icon: Settings2, roles: ['owner'], section: 'management', availability: 'implemented' },
