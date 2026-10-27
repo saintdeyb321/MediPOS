@@ -14,6 +14,7 @@ public enum AuditAction
     CommissionSettingsChanged, CommissionRuleCreated, CommissionRuleDeactivated, StockThresholdChanged,
     SyncDeviceRegistered, SyncDeviceRevoked, OfflineSaleConflictResolved,
     SupplierUblImported, SupplierUblReviewed, SupplierUblRejected, SupplierUblConverted, SupplierUblFileRejected,
+    BusinessProductDataCorrected,
 }
 
 public enum AuditEntityType { ElectronicSeries, ElectronicDocument, Tenant, License, LegalEntity, Branch, Membership, BusinessProduct, Purchase, InventoryLot, ImportJob, CashSession, Sale, Transfer, CashTransfer, TenantCommissionSettings, CommissionRule, BranchStockThreshold, SyncDevice, OfflineSaleConflict, SupplierUblImport, EmployeeInvitation }
@@ -48,6 +49,7 @@ public static class AuditCodes
         AuditAction.MembershipBranchesReplaced => "membership.branches_replaced",
         AuditAction.MembershipScheduleReplaced => "membership.schedule_replaced",
         AuditAction.MembershipDeactivated => "membership.deactivated",
+        AuditAction.BusinessProductDataCorrected => "business_product.data_corrected",
         AuditAction.BusinessProductCreated => "business_product.created",
         AuditAction.BusinessProductPriceChanged => "business_product.price_changed",
         AuditAction.BusinessProductStatusChanged => "business_product.status_changed",
@@ -104,6 +106,7 @@ public static class AuditCodes
         "membership.branches_replaced" => AuditAction.MembershipBranchesReplaced,
         "membership.schedule_replaced" => AuditAction.MembershipScheduleReplaced,
         "membership.deactivated" => AuditAction.MembershipDeactivated,
+        "business_product.data_corrected" => AuditAction.BusinessProductDataCorrected,
         "business_product.created" => AuditAction.BusinessProductCreated,
         "business_product.price_changed" => AuditAction.BusinessProductPriceChanged,
         "business_product.status_changed" => AuditAction.BusinessProductStatusChanged,
@@ -146,7 +149,7 @@ public static class AuditCodes
         AuditAction.MembershipCreated or AuditAction.MembershipBranchesReplaced or
             AuditAction.MembershipScheduleReplaced or AuditAction.MembershipDeactivated => AuditEntityType.Membership,
         AuditAction.BusinessProductCreated or AuditAction.BusinessProductPriceChanged or
-            AuditAction.BusinessProductStatusChanged or AuditAction.BusinessProductUnitsChanged => AuditEntityType.BusinessProduct,
+            AuditAction.BusinessProductDataCorrected or AuditAction.BusinessProductStatusChanged or AuditAction.BusinessProductUnitsChanged => AuditEntityType.BusinessProduct,
         AuditAction.PurchaseConfirmed => AuditEntityType.Purchase,
         AuditAction.InventoryAdjusted => AuditEntityType.InventoryLot,
         AuditAction.CatalogProductsImported => AuditEntityType.ImportJob,

@@ -16,7 +16,7 @@ public static partial class TenantEndpoints
         {
             var input = await TenantHttp.Read<SupplierRequest>(c);
             return TenantHttp.Response(await handler.HandleAsync(new(TenantHttp.Tenant(c), input.Name, input.Ruc, input.Contact, TenantHttp.Actor(c)), c.RequestAborted), 201);
-        }).Accepts<SupplierRequest>("application/json").Produces<SupplierDetails>(201).WithName("tenant.suppliers.create");
+        }).Accepts<SupplierRequest>("application/json").Produces<SupplierDetails>(201).WithName("tenant.suppliers.create").AddEndpointFilter(new RecoverableWriteFilter("supplier"));
         tenants.MapGet("/branches/{branchId}/suppliers", async (HttpContext c, PurchaseDirectoryQueries queries) =>
             TenantHttp.Response(await queries.SuppliersAsync(TenantHttp.Tenant(c), TenantHttp.Branch(c), TenantHttp.Offset(c), TenantHttp.Limit(c), c.RequestAborted)))
             .Produces<IReadOnlyList<SupplierDetails>>().WithName("tenant.suppliers.list").WithQuery<TenantOpenApi.Page>();
@@ -32,13 +32,13 @@ public static partial class TenantEndpoints
         tenants.MapPut("/purchases/{purchaseId}/lines", async (HttpContext c, ReplacePurchaseLinesHandler handler) =>
         {
             var input = await TenantHttp.Read<PurchaseLinesRequest>(c);
-            return TenantHttp.Response(await handler.HandleAsync(new(TenantHttp.Tenant(c), TenantHttp.Id(c, "purchaseId"), input.Lines, TenantHttp.Actor(c)), c.RequestAborted));
+            return TenantHttp.Response(await handler.HandleAsync(new(TenantHttp.Tenant(c), TenantHttp.Id(c, "purchaseId"), input.Lines, TenantHttp.Actor(c), input.ExpectedRevision), c.RequestAborted));
         }).Accepts<PurchaseLinesRequest>("application/json").Produces<IReadOnlyList<PurchaseLineDetails>>().WithName("tenant.purchases.lines");
         tenants.MapPost("/purchases/{purchaseId}/confirm", async (HttpContext c, ConfirmPurchaseHandler handler) =>
         {
-            await TenantHttp.Read<EmptyRequest>(c);
-            return TenantHttp.Response(await handler.HandleAsync(new(TenantHttp.Tenant(c), TenantHttp.Id(c, "purchaseId"), TenantHttp.Actor(c)), c.RequestAborted));
-        }).Accepts<EmptyRequest>("application/json").Produces<PurchaseDetails>().WithName("tenant.purchases.confirm");
+            var input = await TenantHttp.Read<PurchaseConfirmationRequest>(c);
+            return TenantHttp.Response(await handler.HandleAsync(new(TenantHttp.Tenant(c), TenantHttp.Id(c, "purchaseId"), TenantHttp.Actor(c), input.ExpectedRevision), c.RequestAborted));
+        }).Accepts<PurchaseConfirmationRequest>("application/json").Produces<PurchaseDetails>().WithName("tenant.purchases.confirm");
         tenants.MapGet("/branches/{branchId}/purchases/search", async (HttpContext c, FindPurchasesByDocumentReferenceHandler handler) =>
             TenantHttp.Response(await handler.HandleAsync(new(TenantHttp.Tenant(c), TenantHttp.Query(c, "reference") ?? "", TenantHttp.Branch(c), TenantHttp.Offset(c), TenantHttp.Limit(c)), c.RequestAborted)))
             .Produces<IReadOnlyList<PurchaseDetails>>().WithName("tenant.purchases.search").WithQuery<TenantOpenApi.PurchaseSearch>();
@@ -46,5 +46,6 @@ public static partial class TenantEndpoints
     public sealed record EmptyRequest;
     public sealed record SupplierRequest([property: JsonRequired] string Name, string? Ruc = null, string? Contact = null);
     public sealed record PurchaseRequest(Guid? SupplierId = null, string? DocumentReference = null);
-    public sealed record PurchaseLinesRequest([property: JsonRequired] IReadOnlyList<PurchaseLineInput> Lines);
+    public sealed record PurchaseLinesRequest([property: JsonRequired] IReadOnlyList<PurchaseLineInput> Lines, [property: JsonRequired] string ExpectedRevision);
+    public sealed record PurchaseConfirmationRequest([property: JsonRequired] string ExpectedRevision);
 }

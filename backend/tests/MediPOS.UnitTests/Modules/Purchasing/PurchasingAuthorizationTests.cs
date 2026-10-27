@@ -87,7 +87,7 @@ public sealed class PurchasingAuthorizationTests
         var licensing = new Licensing();
         var handler = new ConfirmPurchaseHandler(store, null!, null!, null!, licensing, access.Clock, access.Policy);
         var error = await Assert.ThrowsAsync<ApplicationErrorException>(() => handler.HandleAsync(
-            new(access.Tenant.Id, Guid.NewGuid(), access.User.UserId!.Value), TestContext.Current.CancellationToken));
+            new(access.Tenant.Id, Guid.NewGuid(), access.User.UserId!.Value, string.Empty), TestContext.Current.CancellationToken));
         Assert.Equal("access.branch_unassigned", error.Error.Code);
         Assert.Equal(1, spy.BranchLookups);
         Assert.Equal(0, spy.DocumentsLocked);

@@ -25,7 +25,7 @@ public static partial class TenantEndpoints
             if (count > ProductImportLimits.MaximumFileBytes) throw new HttpBoundaryException(413, "api.body_too_large");
             using var file = new MemoryStream(buffer, 0, count, writable: false);
             return TenantHttp.Response(await handler.HandleAsync(new(TenantHttp.Tenant(c), TenantHttp.Query(c, "fileName") ?? "products.xlsx", file, TenantHttp.Actor(c)), c.RequestAborted), 201);
-        }).Accepts<byte[]>(ExcelMediaType).Produces<ImportJobResult>(201).WithMetadata(new TenantRequestPolicy(ProductImportLimits.MaximumFileBytes, true)).WithName("tenant.imports.create").WithQuery<TenantOpenApi.ImportFile>();
+        }).Accepts<byte[]>(ExcelMediaType).Produces<ImportJobResult>(201).WithMetadata(new TenantRequestPolicy(ProductImportLimits.MaximumFileBytes, true)).WithName("tenant.imports.create").AddEndpointFilter(new RecoverableWriteFilter("product-import")).WithQuery<TenantOpenApi.ImportFile>();
         tenants.MapGet("/product-imports/{importJobId}", async (HttpContext c, GetImportJobResultHandler handler) =>
             TenantHttp.Response(await handler.HandleAsync(new(TenantHttp.Tenant(c), TenantHttp.Id(c, "importJobId"), TenantHttp.BoundedCount(c, "afterRowNumber", 0, 0, ProductImportLimits.MaximumWorksheetRow), TenantHttp.Limit(c)), c.RequestAborted)))
             .Produces<ImportJobResult>().WithName("tenant.imports.read").WithQuery<TenantOpenApi.ImportRows>();

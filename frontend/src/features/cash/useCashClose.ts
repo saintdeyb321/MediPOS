@@ -1,3 +1,4 @@
+import { useNavigationProtection } from '../../shared/ui/NavigationProtection'
 import { useEffect, useRef, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { useSearchParams } from 'react-router'
@@ -63,5 +64,6 @@ export function useCashClose() {
       try { await read(selected, controller.current.signal) } catch { /* Preserve the original error and unresolved marker. */ }
     } finally { running.current = false; if (mounted.current) setBusy(false) }
   }
+  useNavigationProtection({ busy, pending })
   return { id, pending, status, receipt, busy, error, denied, consult, close }
 }

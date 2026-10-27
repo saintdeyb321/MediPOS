@@ -9,14 +9,16 @@ async function openAdjustment() {
   return within(screen.getByRole('form', { name: 'Ajustar lote' }))
 }
 async function pickProduct() {
+  fireEvent.click(screen.getByRole('button', { name: 'Filtrar por producto' }))
   fireEvent.change(screen.getByRole('textbox', { name: 'Buscar producto por nombre, ingrediente o código' }), { target: { value: 'ingrediente' } })
   fireEvent.click(screen.getByRole('button', { name: 'Buscar productos' })); fireEvent.click(await screen.findByRole('button', { name: 'Consultar Producto sintético unitario' })); fireEvent.click(await screen.findByRole('button', { name: 'Usar producto consultado' }))
+  fireEvent.click(await screen.findByRole('button', { name: 'Configurar mínimo' }))
   return screen.findByRole('form', { name: 'Configurar stock mínimo' })
 }
 it('reads stock, lots and their dates without translating an error into empty inventory', async () => {
   const fake = operationServer(); mountOperation(fake, <InventoryPage />)
   expect(await screen.findByRole('cell', { name: '20' })).toBeInTheDocument()
-  await openAdjustment(); expect(screen.getByRole('cell', { name: 'BATCH-UNIT / 2027-12-31' })).toBeInTheDocument()
+  await openAdjustment(); expect(document.querySelector('time[datetime="2027-12-31"]')).toBeInTheDocument()
   expect(fake.writes()).toHaveLength(0)
 })
 it('distinguishes returned zero, absent balance and failed read', async () => {

@@ -37,8 +37,16 @@ internal sealed class ProductImportStore(MediPosDbContext context, TimeProvider 
         PrepareWrite(job.TenantId);
         try
         {
+            await using var transaction = await context.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
             context.ImportJobs.Add(job);
+            if (context.PendingImportReceipt is { } receipt)
+            {
+                if (receipt.TenantId != job.TenantId || receipt.ActorId != job.ActorId) throw new InvalidOperationException("Import intention scope mismatch.");
+                receipt.ResultJson = JsonSerializer.Serialize(new { importJobId = job.Id });
+                context.Set<OperationReceiptRow>().Add(receipt);
+            }
             await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+            await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
         }
         finally { context.ChangeTracker.Clear(); }
     }

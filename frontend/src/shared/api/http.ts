@@ -52,7 +52,7 @@ export class HttpClient {
     this.listeners.add(listener)
     return () => { this.listeners.delete(listener) }
   }
-  async request(path: string, options: { method?: 'GET' | 'POST' | 'PUT'; body?: unknown; xlsxBody?: Blob; signal?: AbortSignal; exactNumbers?: boolean; responseType?: 'blob'; timeoutMs?: number; idempotencyKey?: string } = {}): Promise<unknown> {
+  async request(path: string, options: { method?: 'GET' | 'POST' | 'PUT'; body?: unknown; xlsxBody?: Blob; signal?: AbortSignal; exactNumbers?: boolean; responseType?: 'blob'; timeoutMs?: number; idempotencyKey?: string; intention?: { id: string; branchId: string } } = {}): Promise<unknown> {
     // Deliberately relative-only: production uses a single HTTPS origin, not a configurable API host.
     if (!/^\/(api|auth|platform)\//.test(path) || path.includes('\\') || /[\r\n]/.test(path)) throw new ApiError(0, 'client.invalid_path')
     if (window.location.protocol !== 'https:') throw new ApiError(0, 'client.https_required')
@@ -62,6 +62,7 @@ export class HttpClient {
     if (options.idempotencyKey !== undefined && (method !== 'POST' || path !== '/platform/tenants' ||
       !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(options.idempotencyKey) ||
       options.idempotencyKey === '00000000-0000-0000-0000-000000000000')) throw new ApiError(0, 'client.invalid_request')
+    if (options.intention && (method === 'GET' || !/^[0-9a-f-]{36}$/i.test(options.intention.id) || !/^[0-9a-f-]{36}$/i.test(options.intention.branchId))) throw new ApiError(0, 'client.invalid_request')
     if (method === 'GET' && options.body !== undefined) throw new ApiError(0, 'client.invalid_request')
     // B1.6 accepts raw XLSX bytes only, bounded before CSRF or network I/O.
     if (options.xlsxBody !== undefined && (method !== 'POST' || options.body !== undefined || !(options.xlsxBody instanceof Blob) || options.xlsxBody.size < 1 || options.xlsxBody.size > 5 * 1024 * 1024)) throw new ApiError(0, 'client.invalid_request')
@@ -76,6 +77,7 @@ export class HttpClient {
     try {
       const headers = new Headers({ Accept: options.responseType === 'blob' ? 'application/pdf, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, application/problem+json' : 'application/json' })
       if (options.idempotencyKey !== undefined) headers.set('Idempotency-Key', options.idempotencyKey)
+      if (options.intention) { headers.set('Idempotency-Key', options.intention.id); headers.set('X-MediPOS-Branch', options.intention.branchId) }
       if (method !== 'GET') {
         headers.set('X-CSRF-TOKEN', await this.csrf(signal))
         if (options.body !== undefined) headers.set('Content-Type', 'application/json')

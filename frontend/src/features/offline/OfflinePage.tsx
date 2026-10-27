@@ -52,12 +52,6 @@ function OfflineWorkspace() {
     } catch (failure) { if (mounted.current) setError(failure) }
     finally { running.current = false; if (mounted.current) setBusy(false) }
   }
-  const runRef = useRef(run); useEffect(() => { runRef.current = run })
-  useEffect(() => {
-    const sync = () => { if (navigator.onLine) void runRef.current('sync', false) }
-    const timer = window.setInterval(sync, 10_000); window.addEventListener('online', sync)
-    return () => { clearInterval(timer); window.removeEventListener('online', sync) }
-  }, [])
   return <div className="operations"><PageHeader title="Contingencia y sincronización" description={`${w.branch.name} · sesión online verificada. Nunca administración, transferencias o edición de stock offline.`} />
     <Notice tone="warning">Operación local pendiente ≠ venta confirmada. Conserva los datos del navegador hasta conciliar cada evento con su identidad original.</Notice>
     <Panel><div className="operation-body"><h2>Preparar este navegador</h2><p>Requiere caja propia abierta y conexión. Descarga solo el catálogo de esta sucursal; el stock es orientativo. Una desconexión no permite comprobar revocaciones ni asegurar stock entre dispositivos. El servidor vuelve a validar acceso, horario, precio, caja y existencias al sincronizar.</p>

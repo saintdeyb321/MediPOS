@@ -10,7 +10,7 @@ namespace MediPOS.Application.Modules.Purchasing.ReplacePurchaseLines;
 
 public sealed record PurchaseLineInput(Guid BusinessProductId, Guid ProductUnitId, decimal Quantity,
     decimal UnitCost, string? BatchNumber, DateOnly? ExpirationDate);
-public sealed record ReplacePurchaseLinesCommand(Guid TenantId, Guid PurchaseId, IReadOnlyList<PurchaseLineInput> Lines, Guid ActorId);
+public sealed record ReplacePurchaseLinesCommand(Guid TenantId, Guid PurchaseId, IReadOnlyList<PurchaseLineInput> Lines, Guid ActorId, string ExpectedRevision);
 public sealed record PurchaseLineDetails(Guid Id, Guid BusinessProductId, decimal Quantity, string UnitNameSnapshot,
     decimal ConversionToBaseSnapshot, decimal BaseQuantity, decimal UnitCost, string? BatchNumber, DateOnly? ExpirationDate)
 {
@@ -35,6 +35,8 @@ public sealed class ReplacePurchaseLinesHandler(IPurchasingStore store, IBusines
         var purchase = await PurchasingValidation.LockAsync(command.TenantId, command.PurchaseId, branchId, store, cancellationToken).ConfigureAwait(false);
         await authorization.RequireAsync(command.TenantId, purchase.BranchId, command.ActorId, TenantOperation.Purchasing, cancellationToken).ConfigureAwait(false);
         PurchasingValidation.RequireDraft(purchase);
+        var reviewed = await store.FindLinesAsync(command.TenantId, purchase.Id, cancellationToken).ConfigureAwait(false);
+        PurchaseRevision.Require(purchase.Id, reviewed.Select(PurchaseLineDetails.From), command.ExpectedRevision);
         var lines = new List<PurchaseLine>(command.Lines.Count);
         foreach (var input in command.Lines)
         {

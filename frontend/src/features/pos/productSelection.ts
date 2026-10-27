@@ -3,7 +3,7 @@ import type { JsonNumber } from '../../shared/api/exactJson'
 import { compare, multiply, zero, fits, maximumQuantity } from '../../shared/api/decimal'
 export { decimalLabel } from '../../shared/api/decimal'
 
-export interface ProductSelection { product: ProductMatch; unit: ProductUnit; quantity?: JsonNumber }
+export interface ProductSelection { product: ProductMatch; unit: ProductUnit; quantity?: JsonNumber; priceKind?: 'retail' | 'wholesale' }
 
 // Only exact decimal coefficients are compared; prices/quantities never pass through Number.
 export function canSelectUnit(product: ProductMatch, unit: ProductUnit): boolean {

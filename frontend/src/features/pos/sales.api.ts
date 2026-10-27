@@ -1,3 +1,5 @@
+import { recoverOperation } from '../../shared/api/operations'
+import type { OperationIntention } from '../../shared/api/operations'
 import { ApiError, HttpClient } from '../../shared/api/http'
 import { array, branchPath, decimal, object, oneOf, requireScope, uint, utc, uuid } from '../../shared/api/contracts'
 import { text } from '../../shared/api/contracts'
@@ -59,8 +61,9 @@ export function salesApi(http: HttpClient) {
       if (result.status !== 'draft') throw new ApiError(0, 'client.unexpected_response')
       return result
     },
-    async create(scope: BranchScope, signal?: AbortSignal) {
-      const data = await http.request(`${branchPath(scope)}/sales`, { method: 'POST', body: {}, signal, exactNumbers: true })
+    async recoverCreation(scope: BranchScope, id: string, signal?: AbortSignal) { return decode(await recoverOperation(http, scope, id, 'sale-draft', signal), scope) },
+    async create(scope: BranchScope, signal?: AbortSignal, intention?: OperationIntention) {
+      const data = await http.request(`${branchPath(scope)}/sales`, { method: 'POST', body: {}, signal, exactNumbers: true, intention })
       try { return decode(data, scope) } catch { throw new ApiError(0, 'client.outcome_unknown', undefined, true) }
     },
     async replace(scope: BranchScope, saleId: string, expectedVersion: number, lines: SaleLineInput[], signal?: AbortSignal) {

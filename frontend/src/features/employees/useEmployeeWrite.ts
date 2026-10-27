@@ -1,3 +1,4 @@
+import { useNavigationProtection } from '../../shared/ui/NavigationProtection'
 import { useEffect, useRef, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { useSearchParams } from 'react-router'
@@ -90,6 +91,7 @@ export function useEmployeeWrite(offset: number) {
   }
   const idsKey = (ids: readonly string[]) => [...ids].map(id => id.toLowerCase()).sort().join('/')
   const scheduleKey = (windows: readonly WorkWindow[]) => windows.map(row => `${row.dayOfWeek}/${row.startTime}/${row.endTime}`).sort().join('|')
+  useNavigationProtection({ busy, pending: Boolean(pending) })
   return { busy, pending, targetId, error, notice, observed, consult, acknowledge, locked: busy || Boolean(pending) || denied || !http,
     branches: (employee: Employee, ids: string[], available: readonly string[]) => run('branches', employee, signal => employeesApi(http!).branches(w, employee, ids, available, signal), row => idsKey(row.branchIds) === idsKey(ids)),
     schedule: (employee: Employee, windows: WorkWindow[]) => run('schedule', employee, signal => employeesApi(http!).schedule(w, employee, windows, signal), row => scheduleKey(row.schedule) === scheduleKey(windows)),

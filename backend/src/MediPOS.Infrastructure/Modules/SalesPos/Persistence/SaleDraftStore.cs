@@ -26,13 +26,15 @@ internal sealed class SaleDraftStore(MediPosDbContext context) : ISaleDraftStore
         sale.EnsureDraft();
         if (sale.Lines.Count != 0 || sale.TotalAmount != 0) throw new InvalidOperationException("Creation requires an empty draft.");
         context.SelectTenant(sale.TenantId);
-        await using var transaction = await context.Database.BeginTransactionAsync(IsolationLevel.ReadCommitted, cancellationToken).ConfigureAwait(false);
+        if (context.Database.CurrentTransaction is not null && !context.RecoverableWriteActive) throw new InvalidOperationException("Unexpected ambient transaction.");
+        await using var owned = context.Database.CurrentTransaction is null ? await context.Database.BeginTransactionAsync(IsolationLevel.ReadCommitted, cancellationToken).ConfigureAwait(false) : null;
+        var transaction = context.Database.CurrentTransaction!;
         try
         {
             context.Sales.Add(sale);
             await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
             var version = context.Entry(sale).Property<uint>("Version").CurrentValue;
-            await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+            if (owned is not null) await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
             context.Entry(sale).State = EntityState.Detached;
             return version;
         }
@@ -44,7 +46,9 @@ internal sealed class SaleDraftStore(MediPosDbContext context) : ISaleDraftStore
         ArgumentNullException.ThrowIfNull(sale);
         sale.EnsureDraft();
         context.SelectTenant(sale.TenantId);
-        await using var transaction = await context.Database.BeginTransactionAsync(IsolationLevel.ReadCommitted, cancellationToken).ConfigureAwait(false);
+        if (context.Database.CurrentTransaction is not null && !context.RecoverableWriteActive) throw new InvalidOperationException("Unexpected ambient transaction.");
+        await using var owned = context.Database.CurrentTransaction is null ? await context.Database.BeginTransactionAsync(IsolationLevel.ReadCommitted, cancellationToken).ConfigureAwait(false) : null;
+        var transaction = context.Database.CurrentTransaction!;
         try
         {
             // Compare-and-set the parent FIRST, including unchanged/empty carts. PostgreSQL serializes
@@ -62,7 +66,7 @@ internal sealed class SaleDraftStore(MediPosDbContext context) : ISaleDraftStore
             await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
             var version = await context.Sales.Where(value => value.TenantId == sale.TenantId && value.Id == sale.Id)
                 .Select(value => EF.Property<uint>(value, "Version")).SingleAsync(cancellationToken).ConfigureAwait(false);
-            await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+            if (owned is not null) await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
             context.Entry(sale).State = EntityState.Detached;
             foreach (var line in sale.Lines) context.Entry(line).State = EntityState.Detached;
             return version;

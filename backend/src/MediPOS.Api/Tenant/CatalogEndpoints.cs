@@ -15,6 +15,17 @@ public static partial class TenantEndpoints
 {
     private static void MapCatalog(RouteGroupBuilder tenants)
     {
+        tenants.MapGet("/branches/{branchId}/operational-products", async (HttpContext c, OperationalCatalogQueries queries) =>
+            TenantHttp.Response((await queries.ReadAsync(TenantHttp.Tenant(c), TenantHttp.Branch(c), TenantHttp.Query(c, "q") ?? "", TenantHttp.OptionalId(c, "categoryId"), TenantHttp.Offset(c), TenantHttp.Limit(c), c.RequestAborted)).Select(ProductResponse.From).ToArray()))
+            .WithName("tenant.operational_products.list").WithQuery<OperationalCatalogFilter>();
+        tenants.MapGet("/branches/{branchId}/operational-categories", async (HttpContext c, OperationalCatalogQueries queries) =>
+            TenantHttp.Response(await queries.CategoriesAsync(TenantHttp.Tenant(c), TenantHttp.Branch(c), TenantHttp.Offset(c), TenantHttp.Limit(c), c.RequestAborted)))
+            .WithName("tenant.operational_categories.list").WithQuery<TenantOpenApi.Page>();
+        tenants.MapPut("/products/{productId}/local-data", async (HttpContext c, UpdateLocalProductHandler handler) =>
+        {
+            var input = await TenantHttp.Read<LocalDataRequest>(c);
+            return TenantHttp.Response(ProductResponse.From(await handler.HandleAsync(new(TenantHttp.Tenant(c), TenantHttp.Id(c, "productId"), input.ExpectedRevision, input.Name, input.CategoryId, input.BrandOrLaboratory, input.Barcode, input.Medicine, TenantHttp.Actor(c)), c.RequestAborted)));
+        }).Accepts<LocalDataRequest>("application/json").WithName("tenant.local_product.correct");
         tenants.MapGet("/categories", async (HttpContext c, CatalogDirectoryQueries queries) => TenantHttp.Response(await queries.CategoriesAsync(TenantHttp.Tenant(c), TenantHttp.Offset(c), TenantHttp.Limit(c), c.RequestAborted)))
             .Produces<IReadOnlyList<CategoryDetails>>().WithName("tenant.categories.list").WithQuery<TenantOpenApi.Page>();
         tenants.MapGet("/global-products", async (HttpContext c, CatalogDirectoryQueries queries) => TenantHttp.Response((await queries.GlobalProductsAsync(TenantHttp.Tenant(c), TenantHttp.Offset(c), TenantHttp.Limit(c), c.RequestAborted)).Select(GlobalProductResponse.From).ToArray()))
@@ -24,7 +35,7 @@ public static partial class TenantEndpoints
         tenants.MapGet("/branches/{branchId}/products/{productId}", async (HttpContext c, CatalogDirectoryQueries queries) =>
         {
             var result = await queries.ProductAsync(TenantHttp.Tenant(c), TenantHttp.Branch(c), TenantHttp.Id(c, "productId"), c.RequestAborted);
-            return TenantHttp.Response(new ProductWithUnitsResponse(ProductResponse.From(result.Product), result.Units));
+            return TenantHttp.Response(new ProductWithUnitsResponse(ProductResponse.From(result.Product), result.Units, result.Revision));
         }).Produces<ProductWithUnitsResponse>().WithName("tenant.products.read");
         tenants.MapGet("/branches/{branchId}/products/search", async (HttpContext c, SearchProductsHandler handler) =>
             TenantHttp.Response(await handler.HandleAsync(new(TenantHttp.Tenant(c), TenantHttp.Branch(c), TenantHttp.Query(c, "q") ?? "", TenantHttp.BoundedCount(c, "limit", 20, 1, 50)), c.RequestAborted)))
@@ -65,6 +76,9 @@ public static partial class TenantEndpoints
         }).Accepts<UnitsRequest>("application/json").Produces<IReadOnlyList<ProductUnitDetails>>().WithName("tenant.products.units");
     }
 
+    public sealed record OperationalCatalogFilter(string? Q, Guid? CategoryId, int Offset = 0, int Limit = 50);
+    public sealed record LocalDataRequest([property: JsonRequired] string ExpectedRevision, [property: JsonRequired] string Name,
+        [property: JsonRequired] Guid CategoryId, [property: JsonRequired] string BrandOrLaboratory, string? Barcode = null, MedicineInput? Medicine = null);
     public sealed record LocalProductRequest([property: JsonRequired] string InternalCode, [property: JsonRequired] ProductType ProductType,
         [property: JsonRequired] string Name, [property: JsonRequired] Guid CategoryId, [property: JsonRequired] string BrandOrLaboratory,
         [property: JsonRequired] decimal RetailPrice, string? Barcode = null, MedicineInput? Medicine = null, decimal? WholesalePrice = null, bool IsActive = true);
@@ -90,5 +104,5 @@ public static partial class TenantEndpoints
     {
         internal static GlobalProductResponse From(GlobalProductDetails value) => new(value.Id, value.ProductType, value.Name, value.CategoryId, value.BrandOrLaboratory, value.Barcode, MedicineResponse.From(value.Medicine));
     }
-    public sealed record ProductWithUnitsResponse(ProductResponse Product, IReadOnlyList<ProductUnitDetails> Units);
+    public sealed record ProductWithUnitsResponse(ProductResponse Product, IReadOnlyList<ProductUnitDetails> Units, string Revision);
 }

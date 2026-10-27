@@ -46,9 +46,9 @@ internal static class ProductSearchTestData
         await source.GetRequiredService<ReplacePurchaseLinesHandler>().HandleAsync(
             new(tenant.TenantId, purchase.Id, receipts.Select(value =>
                 new PurchaseLineInput(value.Product.Id, value.Product.BaseUnitId, value.Quantity, 19.125m, "L", value.Expiry)).ToArray(),
-                tenant.Identity.ActorId), TestContext.Current.CancellationToken);
+                tenant.Identity.ActorId, MediPOS.IntegrationTests.Modules.Purchasing.PurchaseTestData.Revision(source, tenant.TenantId, purchase.Id)), TestContext.Current.CancellationToken);
         await source.GetRequiredService<ConfirmPurchaseHandler>().HandleAsync(
-            new(tenant.TenantId, purchase.Id, tenant.Identity.ActorId), TestContext.Current.CancellationToken);
+            new(tenant.TenantId, purchase.Id, tenant.Identity.ActorId, MediPOS.IntegrationTests.Modules.Purchasing.PurchaseTestData.Revision(source, tenant.TenantId, purchase.Id)), TestContext.Current.CancellationToken);
     }
 
     internal static Task<SearchProductsResult> SearchAsync(IServiceProvider source, TenantIsolationTestData.TenantRows tenant,

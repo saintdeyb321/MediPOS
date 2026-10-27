@@ -115,11 +115,11 @@ public sealed class PurchasingWorkflowTests
         var original = setup.Store.Lines[0].Id;
         var valid = new PurchaseLineInput(setup.Product.Id, setup.Unit.Id, 2.5m, 3.125m, null, null);
         await Assert.ThrowsAsync<ApplicationErrorException>(() => handler.HandleAsync(
-            new(setup.Purchase.TenantId, setup.Purchase.Id, [valid, valid with { Quantity = 0m }], setup.Command.ActorId),
+            new(setup.Purchase.TenantId, setup.Purchase.Id, [valid, valid with { Quantity = 0m }], setup.Command.ActorId, setup.Command.ExpectedRevision),
             TestContext.Current.CancellationToken));
         Assert.Equal(original, Assert.Single(setup.Store.Lines).Id);
         Assert.Equal(0, setup.Store.Replacements);
-        var result = await handler.HandleAsync(new(setup.Purchase.TenantId, setup.Purchase.Id, [valid], setup.Command.ActorId),
+        var result = await handler.HandleAsync(new(setup.Purchase.TenantId, setup.Purchase.Id, [valid], setup.Command.ActorId, setup.Command.ExpectedRevision),
             TestContext.Current.CancellationToken);
         var line = Assert.Single(result);
         Assert.Equal("Caja", line.UnitNameSnapshot);
@@ -135,9 +135,32 @@ public sealed class PurchasingWorkflowTests
         await setup.Confirm.HandleAsync(setup.Command, TestContext.Current.CancellationToken);
         var handler = new ReplacePurchaseLinesHandler(setup.Store, setup.Products, setup.Units, setup.Licensing, new Clock(), new BusinessRuleAuthorizationStub());
         var error = await Assert.ThrowsAsync<ApplicationErrorException>(() => handler.HandleAsync(
-            new(setup.Purchase.TenantId, setup.Purchase.Id, [], setup.Command.ActorId), TestContext.Current.CancellationToken));
+            new(setup.Purchase.TenantId, setup.Purchase.Id, [], setup.Command.ActorId, setup.Command.ExpectedRevision), TestContext.Current.CancellationToken));
         Assert.Equal(PurchasingErrors.DraftRequired, error.Error);
         Assert.Equal(0, setup.Store.Replacements);
+    }
+
+    [Fact]
+    public async Task AReviewMadeBeforeTheLockCannotConfirmReplacedLines()
+    {
+        var setup = new Setup();
+        var reviewed = setup.Command;
+        setup.Store.AfterLock = () => setup.Store.Lines = [PurchaseLine.Create(setup.Purchase, setup.Product, setup.Unit, 1m, 2m, null, null)];
+        var error = await Assert.ThrowsAsync<ApplicationErrorException>(() => setup.Confirm.HandleAsync(reviewed, TestContext.Current.CancellationToken));
+        Assert.Equal("purchasing.receipt_changed", error.Error.Code);
+        Assert.Empty(setup.Receipts.Movements);
+        Assert.False(setup.Licensing.Scope!.Committed);
+    }
+
+    [Fact]
+    public void RevisionIsOrderIndependentAndDecimalScaleIndependentButIncludesLineIdentity()
+    {
+        var setup = new Setup();
+        var line = PurchaseLineDetails.From(setup.Store.Lines[0]);
+        var first = PurchaseRevision.For(setup.Purchase.Id, [line]);
+        Assert.Equal(first, PurchaseRevision.For(setup.Purchase.Id, [line with { Quantity = 3.000m }]));
+        Assert.NotEqual(first, PurchaseRevision.For(setup.Purchase.Id, [line with { Id = Guid.NewGuid() }]));
+        Assert.Throws<ApplicationErrorException>(() => PurchaseRevision.Require(setup.Purchase.Id, [line], ""));
     }
 
     private sealed class Setup
@@ -153,7 +176,8 @@ public sealed class PurchasingWorkflowTests
         public Licensing Licensing { get; } = new();
         public Clock Clock { get; } = new();
         public ConfirmPurchaseHandler Confirm { get; }
-        public ConfirmPurchaseCommand Command { get; }
+        private readonly Guid actor = Guid.NewGuid();
+        public ConfirmPurchaseCommand Command => new(Purchase.TenantId, Purchase.Id, actor, PurchaseRevision.For(Purchase.Id, Store.Lines.Select(PurchaseLineDetails.From)));
         public Setup()
         {
             (Purchase, Product) = PurchasingDomainTests.Setup();
@@ -163,7 +187,6 @@ public sealed class PurchasingWorkflowTests
             Units = new(Unit);
             Branches = new(Branch.Create(Product.TenantId, Guid.NewGuid(), Product.TenantId, "Sucursal", Now));
             Confirm = new(Store, Branches, Products, Receipts, Licensing, Clock, new BusinessRuleAuthorizationStub());
-            Command = new(Purchase.TenantId, Purchase.Id, Guid.NewGuid());
         }
     }
 

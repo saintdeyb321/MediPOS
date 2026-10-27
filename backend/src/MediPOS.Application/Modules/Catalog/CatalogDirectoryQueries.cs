@@ -4,7 +4,10 @@ using MediPOS.Application.Modules.IdentityAccess.OperationalAccess;
 
 namespace MediPOS.Application.Modules.Catalog;
 
-public sealed record CatalogProductView(BusinessProductDetails Product, IReadOnlyList<ProductUnitDetails> Units);
+public sealed record CatalogProductView(BusinessProductDetails Product, IReadOnlyList<ProductUnitDetails> Units)
+{
+    public string Revision => ProductMetadataRevision.For(Product);
+}
 public interface ICatalogDirectoryReader
 {
     Task<IReadOnlyList<CategoryDetails>> CategoriesAsync(int offset, int limit, CancellationToken token);

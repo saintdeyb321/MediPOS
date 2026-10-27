@@ -20,8 +20,8 @@ namespace MediPOS.Infrastructure.Modules.TenancyLicensing.Persistence.Migrations
                 .HasAnnotation("ProductVersion", "10.0.12")
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
-            NpgsqlModelBuilderExtensions.HasPostgresExtension(modelBuilder, "public", "pg_trgm");
-            NpgsqlModelBuilderExtensions.HasPostgresExtension(modelBuilder, "public", "unaccent");
+            NpgsqlModelBuilderExtensions.HasPostgresExtension(modelBuilder, "pg_trgm");
+            NpgsqlModelBuilderExtensions.HasPostgresExtension(modelBuilder, "unaccent");
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
             modelBuilder.Entity("MediPOS.Domain.Modules.AuditSupport.AuditLog", b =>
@@ -84,7 +84,7 @@ namespace MediPOS.Infrastructure.Modules.TenancyLicensing.Persistence.Migrations
 
                             t.HasCheckConstraint("ck_audit_logs_before", "before_json IS NULL OR jsonb_typeof(before_json) = 'object'");
 
-                            t.HasCheckConstraint("ck_audit_logs_codes", "(entity_type = 'electronic_series' AND action = 'cpe.series_configured') OR\n(entity_type = 'electronic_document' AND action IN ('cpe.requested','cpe.reviewed','cpe.delivery_changed')) OR\n(entity_type = 'supplier_ubl_import' AND action IN ('supplier_ubl.imported','supplier_ubl.reviewed','supplier_ubl.rejected','supplier_ubl.converted','supplier_ubl.file_rejected')) OR\n(entity_type = 'tenant' AND action IN ('tenant.created', 'tenant.purge_requested')) OR\n(entity_type = 'license' AND action IN ('license.renewed', 'license.suspended', 'license.reactivated')) OR\n(entity_type = 'legal_entity' AND action = 'legal_entity.created') OR\n(entity_type = 'branch' AND action IN ('branch.created', 'branch.main_hub_changed')) OR\n(entity_type = 'membership' AND action IN ('membership.created', 'membership.branches_replaced', 'membership.schedule_replaced', 'membership.deactivated')) OR\n(entity_type = 'employee_invitation' AND action IN ('employee_invitation.created','employee_invitation.accepted','employee_invitation.approved','employee_invitation.revoked')) OR\n(entity_type = 'business_product' AND action IN ('business_product.created', 'business_product.price_changed', 'business_product.status_changed', 'business_product.units_changed')) OR\n(entity_type = 'purchase' AND action = 'purchase.confirmed') OR\n(entity_type = 'inventory_lot' AND action = 'inventory.adjusted') OR\n(entity_type = 'import_job' AND action = 'catalog.products_imported') OR\n(entity_type = 'cash_session' AND action IN ('cash_session.opened', 'cash_session.closed')) OR\n(entity_type = 'sale' AND action IN ('sale.confirmed', 'sale.voided')) OR\n(entity_type = 'transfer' AND action IN ('transfer.requested', 'transfer.approved', 'transfer.dispatched', 'transfer.received', 'transfer.cancelled')) OR\n(entity_type = 'cash_transfer' AND action IN ('cash_transfer.dispatched', 'cash_transfer.received')) OR\n(entity_type = 'tenant_commission_settings' AND action = 'commissions.settings_changed') OR\n(entity_type = 'commission_rule' AND action IN ('commission_rule.created', 'commission_rule.deactivated')) OR\n(entity_type = 'branch_stock_threshold' AND action = 'stock_threshold.changed') OR\n(entity_type = 'sync_device' AND action IN ('sync_device.registered', 'sync_device.revoked')) OR\n(entity_type = 'offline_sale_conflict' AND action = 'offline_sale_conflict.resolved')");
+                            t.HasCheckConstraint("ck_audit_logs_codes", "(entity_type = 'electronic_series' AND action = 'cpe.series_configured') OR\r\n(entity_type = 'electronic_document' AND action IN ('cpe.requested','cpe.reviewed','cpe.delivery_changed')) OR\r\n(entity_type = 'supplier_ubl_import' AND action IN ('supplier_ubl.imported','supplier_ubl.reviewed','supplier_ubl.rejected','supplier_ubl.converted','supplier_ubl.file_rejected')) OR\r\n(entity_type = 'tenant' AND action IN ('tenant.created', 'tenant.purge_requested')) OR\r\n(entity_type = 'license' AND action IN ('license.renewed', 'license.suspended', 'license.reactivated')) OR\r\n(entity_type = 'legal_entity' AND action = 'legal_entity.created') OR\r\n(entity_type = 'branch' AND action IN ('branch.created', 'branch.main_hub_changed')) OR\r\n(entity_type = 'membership' AND action IN ('membership.created', 'membership.branches_replaced', 'membership.schedule_replaced', 'membership.deactivated')) OR\r\n(entity_type = 'employee_invitation' AND action IN ('employee_invitation.created','employee_invitation.accepted','employee_invitation.approved','employee_invitation.revoked')) OR\r\n(entity_type = 'business_product' AND action IN ('business_product.data_corrected', 'business_product.created', 'business_product.price_changed', 'business_product.status_changed', 'business_product.units_changed')) OR\r\n(entity_type = 'purchase' AND action = 'purchase.confirmed') OR\r\n(entity_type = 'inventory_lot' AND action = 'inventory.adjusted') OR\r\n(entity_type = 'import_job' AND action = 'catalog.products_imported') OR\r\n(entity_type = 'cash_session' AND action IN ('cash_session.opened', 'cash_session.closed')) OR\r\n(entity_type = 'sale' AND action IN ('sale.confirmed', 'sale.voided')) OR\r\n(entity_type = 'transfer' AND action IN ('transfer.requested', 'transfer.approved', 'transfer.dispatched', 'transfer.received', 'transfer.cancelled')) OR\r\n(entity_type = 'cash_transfer' AND action IN ('cash_transfer.dispatched', 'cash_transfer.received')) OR\r\n(entity_type = 'tenant_commission_settings' AND action = 'commissions.settings_changed') OR\r\n(entity_type = 'commission_rule' AND action IN ('commission_rule.created', 'commission_rule.deactivated')) OR\r\n(entity_type = 'branch_stock_threshold' AND action = 'stock_threshold.changed') OR\r\n(entity_type = 'sync_device' AND action IN ('sync_device.registered', 'sync_device.revoked')) OR\r\n(entity_type = 'offline_sale_conflict' AND action = 'offline_sale_conflict.resolved')");
 
                             t.HasCheckConstraint("ck_audit_logs_correlation", "correlation_id ~ '^[0-9a-f]{32}$' AND correlation_id <> repeat('0', 32)");
 
@@ -4589,6 +4589,56 @@ namespace MediPOS.Infrastructure.Modules.TenancyLicensing.Persistence.Migrations
                         });
                 });
 
+            modelBuilder.Entity("MediPOS.Infrastructure.Persistence.OperationReceiptRow", b =>
+                {
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("tenant_id");
+
+                    b.Property<Guid>("BranchId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("branch_id");
+
+                    b.Property<Guid>("ActorId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("actor_id");
+
+                    b.Property<Guid>("RequestId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("request_id");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasColumnName("kind");
+
+                    b.Property<Guid>("MembershipId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("membership_id");
+
+                    b.Property<string>("PayloadHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("payload_hash");
+
+                    b.Property<string>("ResultJson")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("result_json");
+
+                    b.HasKey("TenantId", "BranchId", "ActorId", "RequestId");
+
+                    b.HasIndex("TenantId", "MembershipId");
+
+                    b.ToTable("tenant_operation_receipts", (string)null);
+                });
+
             modelBuilder.Entity("MediPOS.Domain.Modules.AuditSupport.AuditLog", b =>
                 {
                     b.HasOne("MediPOS.Domain.Modules.TenancyLicensing.Tenant", null)
@@ -5838,6 +5888,23 @@ namespace MediPOS.Infrastructure.Modules.TenancyLicensing.Persistence.Migrations
                         .HasForeignKey("ResultTenantId", "LicenseId")
                         .HasPrincipalKey("TenantId", "Id")
                         .OnDelete(DeleteBehavior.Restrict);
+                });
+
+            modelBuilder.Entity("MediPOS.Infrastructure.Persistence.OperationReceiptRow", b =>
+                {
+                    b.HasOne("MediPOS.Domain.Modules.Branches.Branch", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId", "BranchId")
+                        .HasPrincipalKey("TenantId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("MediPOS.Domain.Modules.IdentityAccess.Membership", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId", "MembershipId")
+                        .HasPrincipalKey("TenantId", "Id")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("MediPOS.Domain.Modules.Catalog.GlobalProduct", b =>

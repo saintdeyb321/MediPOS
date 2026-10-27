@@ -54,8 +54,8 @@ internal static class OperationalReportTestData
         var lines = await source.GetRequiredService<ReplacePurchaseLinesHandler>().HandleAsync(new(tenant.TenantId, purchase.Id,
             [new(medicineA, boxA, 3m, 1m, "A-GOOD", Today.AddDays(15)), new(medicineA, boxA, 1m, 1m, "A-EXPIRED", Today.AddDays(-2)),
              new(medicineA, baseA, 1m, .5m, "A-30", Today.AddDays(30)), new(medicineB, boxB, 1m, 7m, "B-TODAY", Today),
-             new(medicineB, baseB, 1m, 1m, "B-LATER", Today.AddDays(31)), new(tenant.BusinessProductId, retailUnit, 5m, 2m, null, Today.AddDays(-3))], owner.UserId), Token);
-        await source.GetRequiredService<ConfirmPurchaseHandler>().HandleAsync(new(tenant.TenantId, purchase.Id, owner.UserId), Token);
+             new(medicineB, baseB, 1m, 1m, "B-LATER", Today.AddDays(31)), new(tenant.BusinessProductId, retailUnit, 5m, 2m, null, Today.AddDays(-3))], owner.UserId, MediPOS.IntegrationTests.Modules.Purchasing.PurchaseTestData.Revision(source, tenant.TenantId, purchase.Id)), Token);
+        await source.GetRequiredService<ConfirmPurchaseHandler>().HandleAsync(new(tenant.TenantId, purchase.Id, owner.UserId, MediPOS.IntegrationTests.Modules.Purchasing.PurchaseTestData.Revision(source, tenant.TenantId, purchase.Id)), Token);
         var original = await context.InventoryLots.AsNoTracking().SingleAsync(lot => lot.SourcePurchaseLineId == lines[0].Id, Token);
         var transfer = await source.GetRequiredService<RequestTransferHandler>().HandleAsync(new(tenant.TenantId, owner.BranchId, tenant.SpareBranchId,
             [new(medicineA, baseA, 3m)]), Token);

@@ -25,12 +25,12 @@ export function SuppliersPanel({ selected, select, disabled, onBusyChange, recei
   const rows = useQuery({ queryKey: scopedKey(w, 'suppliers', w.session.userId, w.access.membershipId, offset),
     queryFn: ({ signal }) => { if (!http) throw new ApiError(0, 'client.https_required'); return purchasingApi(http).suppliers(w, offset, 20, signal) },
     enabled: Boolean(http), retry: false, staleTime: 0, refetchOnWindowFocus: false })
-  function mark(value: boolean) { setParams(current => { const next = new URLSearchParams(current); if (value) next.set('supplierPending', '1'); else next.delete('supplierPending'); return next }, { replace: true }) }
+  function mark(value: boolean, requestId = '') { setParams(current => { const next = new URLSearchParams(current); if (value) next.set('supplierPending', requestId); else next.delete('supplierPending'); return next }, { replace: true }) }
   async function create() {
     if (!http || running.current || pending || disabled || denied || w.access.role !== 'owner' || !name.trim() || name.trim().length > 256) return
-    running.current = true; setBusy(true); onBusyChange(true); setError(null); setCreated(null); mark(true); controller.current = new AbortController()
+    running.current = true; setBusy(true); onBusyChange(true); setError(null); setCreated(null); const requestId = crypto.randomUUID(); mark(true, requestId); controller.current = new AbortController()
     try {
-      const result = await purchasingApi(http).createSupplier(w, { name: name.trim(), ruc: ruc.trim() || null, contact: contact.trim() || null }, controller.current.signal)
+      const result = await purchasingApi(http).createSupplier(w, { name: name.trim(), ruc: ruc.trim() || null, contact: contact.trim() || null }, controller.current.signal, { id: requestId, branchId: w.branchId })
       if (!mounted.current) return
       setCreated(result); select(result); mark(false); setName(''); setRuc(''); setContact(''); await rows.refetch(); setDirty(false); setCreateOpen(false)
     } catch (failure) {
@@ -38,6 +38,14 @@ export function SuppliersPanel({ selected, select, disabled, onBusyChange, recei
       setError(failure)
       if (failure instanceof ApiError && !failure.outcomeUnknown) { mark(false); if (failure.status === 401 || failure.status === 403) setDenied(true) }
     } finally { running.current = false; if (mounted.current) { setBusy(false); onBusyChange(false) } }
+  }
+  async function reconcile() {
+    const requestId = params.get('supplierPending')
+    if (!http || busy || !requestId) return
+    setBusy(true); setError(null); const abort = new AbortController(); controller.current = abort
+    try { const original = await purchasingApi(http).recoverSupplier(w, requestId, abort.signal); if (mounted.current) { setCreated(original); select(original); mark(false); setDirty(false); setCreateOpen(false); await rows.refetch() } }
+    catch (failure) { if (mounted.current) setError(failure) }
+    finally { if (mounted.current) setBusy(false) }
   }
   const directory = <>
     {rows.isPending && <p>Consultando proveedores…</p>}
@@ -51,7 +59,7 @@ export function SuppliersPanel({ selected, select, disabled, onBusyChange, recei
     <div hidden={!directoryOpen && !pending}>{directory}<Button variant="quiet" disabled={disabled || busy} onClick={() => select(null)}>Continuar sin proveedor</Button></div>
     {error != null && <ApiErrorState error={error} title="No pudimos crear el proveedor" />}
     {created && <p role="status">Proveedor creado mediante la API: {created.name}. La lista puede requerir otra página.</p>}
-    {pending && <section aria-label="Recuperar alta de proveedor"><p role="alert">Alta de proveedor pendiente de conciliación. No repitas el POST: revisa las páginas y compara nombre, RUC, contacto y fecha con la solicitud original; una ausencia en esta página no demuestra que falló. Se requiere conciliación operacional antes de otra alta.</p>
+    {pending && <section aria-label="Recuperar alta de proveedor"><Button disabled={busy} onClick={() => void reconcile()}>Consultar constancia original del proveedor</Button><p role="alert">Alta de proveedor pendiente de conciliación. No repitas el POST: revisa las páginas y compara nombre, RUC, contacto y fecha con la solicitud original; una ausencia en esta página no demuestra que falló. Se requiere conciliación operacional antes de otra alta.</p>
       {name ? <p>Solicitud original: {name} · RUC {ruc || 'No informado'} · Contacto {contact || 'No informado'}.</p> : <p>El marcador se conserva al recargar; recupera los datos originales antes de conciliar. Esta API no ofrece una constancia de creación consultable.</p>}
       <Button data-recovery-focus variant="secondary" disabled={busy} onClick={() => { setDirectoryOpen(true); setCreateOpen(true) }}>Revisar alta pendiente sin reenviar</Button>
     </section>}

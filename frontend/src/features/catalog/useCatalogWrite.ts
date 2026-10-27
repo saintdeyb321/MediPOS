@@ -1,3 +1,4 @@
+import { useNavigationProtection } from '../../shared/ui/NavigationProtection'
 import { useEffect, useRef, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { useSearchParams } from 'react-router'
@@ -7,7 +8,7 @@ import { scopedKey } from '../../shared/api/contracts'
 import { catalogApi } from './api'
 import type { ProductDetail } from './api'
 
-type Kind = 'create' | 'global' | 'prices' | 'status' | 'units'
+type Kind = 'create' | 'global' | 'prices' | 'status' | 'units' | 'metadata'
 export function useCatalogWrite(select: (id: string) => void) {
   const w = useWorkspace(); const { http } = useRuntime(); const client = useQueryClient()
   const [parameters, setParameters] = useSearchParams(); const latest = useRef(parameters)
@@ -75,6 +76,7 @@ export function useCatalogWrite(select: (id: string) => void) {
     if (!observed || running.current || !pending || !canAcknowledge || code.trim() !== observed.product.internalCode) return
     mark(null); setError(null); setNotice('El operador revisó el estado consultado y concilió la operación. No se repitió la escritura.')
   }
+  useNavigationProtection({ busy, pending })
   return { busy, pending, denied, error, notice, observed, run, consult, acknowledge, canAcknowledge, locked: busy || pending || denied || !http }
 }
 export type CatalogWrite = ReturnType<typeof useCatalogWrite>

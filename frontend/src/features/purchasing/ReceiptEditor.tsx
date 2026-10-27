@@ -1,3 +1,4 @@
+import { useNavigationProtection } from '../../shared/ui/NavigationProtection'
 import { useId, useState } from 'react'
 import { ProductLookup } from '../catalog'
 import type { ProductDetail } from '../catalog'
@@ -12,7 +13,9 @@ import type { PurchaseLineInput } from './api'
 export function ReceiptEditor({ disabled, replacing, save, stage = 1, onStageChange }: { disabled: boolean; replacing: boolean; save: (lines: PurchaseLineInput[]) => void; stage?: 1 | 2; onStageChange?: (value: 1 | 2) => void }) {
   const [detail, setDetail] = useState<ProductDetail | null>(null); const [unitId, setUnitId] = useState(''); const selectId = useId()
   const [quantity, setQuantity] = useState(''); const [cost, setCost] = useState(''); const [batch, setBatch] = useState(''); const [expiration, setExpiration] = useState('')
+  useNavigationProtection({ dirty: Boolean(detail || quantity || cost || batch || expiration) })
   const [lines, setLines] = useState<ReceiptLine[]>([]); const [review, setReview] = useState(false)
+  useNavigationProtection({ dirty: lines.length > 0 })
   const units = detail?.units.filter(row => row.isActive) ?? []; const unit = units.find(row => row.id === unitId)
   const candidate = detail ? prepareLine(detail, unit, quantity, cost, batch, expiration) : null
   return <section aria-label="Productos y lotes"><h2>Productos y lotes</h2>

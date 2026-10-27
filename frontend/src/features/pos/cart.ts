@@ -36,16 +36,19 @@ export function cartError(lines: CartLine[]): string | null {
 }
 export function addSelection(lines: CartLine[], selection: ProductSelection): CartLine[] {
   const { product, unit } = selection
+  const priceKind = selection.priceKind ?? 'retail'
+  const price = priceKind === 'wholesale' ? product.wholesalePrice : product.retailPrice
+  if (!price) throw new Error('El producto no tiene precio mayorista configurado.')
   const next = lines.map(line => line.productId === product.businessProductId ? { ...line, units: product.units,
-    stock: product.quantityAvailableBase, basePrice: line.priceKind === 'retail' ? product.retailPrice : line.basePrice } : line)
-  const existing = next.find(line => line.productId === product.businessProductId && line.unitId === unit.id && line.priceKind === 'retail')
+    stock: product.quantityAvailableBase, basePrice: line.priceKind === 'retail' ? product.retailPrice : product.wholesalePrice ?? line.basePrice } : line)
+  const existing = next.find(line => line.productId === product.businessProductId && line.unitId === unit.id && line.priceKind === priceKind)
   const quantity = selection.quantity ?? new JsonNumber('1')
   if (existing) {
     const previous = quantityValue(existing)
     if (!previous) throw new Error('Corrige la cantidad de esta línea antes de agregar más unidades.')
     existing.quantity = add(previous, quantity).literal
   } else next.push({ productId: product.businessProductId, name: product.name, unitId: unit.id, units: product.units,
-    quantity: quantity.literal, priceKind: 'retail', basePrice: product.retailPrice, stock: product.quantityAvailableBase })
+    quantity: quantity.literal, priceKind, basePrice: price, stock: product.quantityAvailableBase })
   const error = cartError(next)
   if (error) throw new Error(error)
   return next

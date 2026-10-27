@@ -17,7 +17,9 @@ internal sealed class TenantLicenseProvisioning(MediPosDbContext context) : ITen
             throw new ArgumentException("A tenant identifier is required.", nameof(tenantId));
         }
 
-        var transaction = await context.Database.BeginTransactionAsync(IsolationLevel.ReadCommitted, cancellationToken).ConfigureAwait(false);
+        var ownsTransaction = context.Database.CurrentTransaction is null;
+        if (!ownsTransaction && !context.RecoverableWriteActive) throw new InvalidOperationException("Unexpected ambient transaction.");
+        var transaction = context.Database.CurrentTransaction ?? await context.Database.BeginTransactionAsync(IsolationLevel.ReadCommitted, cancellationToken).ConfigureAwait(false);
 
         try
         {
@@ -29,20 +31,20 @@ internal sealed class TenantLicenseProvisioning(MediPosDbContext context) : ITen
 
             if (license is null)
             {
-                await transaction.DisposeAsync().ConfigureAwait(false);
+                if (ownsTransaction) await transaction.DisposeAsync().ConfigureAwait(false);
                 return null;
             }
 
-            return new ProvisioningScope(transaction, license, context);
+            return new ProvisioningScope(transaction, license, context, ownsTransaction);
         }
         catch
         {
-            await transaction.DisposeAsync().ConfigureAwait(false);
+            if (ownsTransaction) await transaction.DisposeAsync().ConfigureAwait(false);
             throw;
         }
     }
 
-    private sealed class ProvisioningScope(IDbContextTransaction transaction, License license, MediPosDbContext context) : ITenantLicenseProvisioningScope
+    private sealed class ProvisioningScope(IDbContextTransaction transaction, License license, MediPosDbContext context, bool ownsTransaction) : ITenantLicenseProvisioningScope
     {
         public Guid TenantId => license.TenantId;
         public int MaxBranches => license.MaxBranches;
@@ -50,12 +52,12 @@ internal sealed class TenantLicenseProvisioning(MediPosDbContext context) : ITen
         private bool _committed;
         public async Task CompleteAsync(CancellationToken cancellationToken)
         {
-            await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+            if (ownsTransaction) await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
             _committed = true;
         }
         public async ValueTask DisposeAsync()
         {
-            try { await transaction.DisposeAsync().ConfigureAwait(false); }
+            try { if (ownsTransaction) await transaction.DisposeAsync().ConfigureAwait(false); }
             finally
             {
                 // Rolled-back mutations must never escape through a later SaveChanges in this scope.

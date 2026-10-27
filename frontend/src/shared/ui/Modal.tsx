@@ -1,3 +1,4 @@
+import { useNavigationProtection } from './NavigationProtection'
 import { useEffect, useId, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import { X } from 'lucide-react'
@@ -17,11 +18,13 @@ export interface ModalProps {
   // Hide only: retain the original request, form state and persistent recovery marker.
   onRecoveryClose?: () => void
   wide?: boolean
+  trackNavigation?: boolean
 }
 
 // Children remain mounted: closing a surface must not discard an operation's hook,
 // identity or reconciliation state. The feature owns those states and resets them.
-export function Modal({ open, title, description, children, footer, onClose, onRecoveryClose, dirty = false, busy = false, recovery = false, wide = false, side = false }: ModalProps & { side?: boolean }) {
+export function Modal({ open, title, description, children, footer, onClose, onRecoveryClose, dirty = false, busy = false, recovery = false, wide = false, trackNavigation = true, side = false }: ModalProps & { side?: boolean }) {
+  useNavigationProtection({ dirty: trackNavigation && open && dirty, busy: trackNavigation && open && busy, pending: trackNavigation && open && recovery })
   const dialog = useRef<HTMLDialogElement>(null)
   const heading = useRef<HTMLHeadingElement>(null)
   const trigger = useRef<HTMLElement | null>(null)

@@ -1,3 +1,4 @@
+import { useNavigationProtection } from '../../shared/ui/NavigationProtection'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useSearchParams } from 'react-router'
@@ -124,6 +125,7 @@ export function usePlatformConsole(http: HttpClient, userId: string) {
       client.setQueryData([...key, 'tenant', tenantId], current); setReconciliationRead(true)
     })
   }
+  useNavigationProtection({ busy, pending: Boolean(pending || creationKey || categoryPending) })
   return { list, detail, data, tenantId, identity, setIdentity, busy, locked, error, notice, pending, creationKey, denied, reconciliationRead, refresh,
     categories, categoriesRead, categoryPending, readCategories, createCategory,
     acknowledgeCategory: () => { if (!busy && categoryPending && categoriesRead && categories.data?.filter(row => row.name.trim().toLocaleLowerCase('es-PE') === categoryPending.trim().toLocaleLowerCase('es-PE')).length === 1) { mark({ categoryPending: null }); setNotice('Conciliación manual registrada en esta vista. No se repitió el POST ni se afirmó idempotencia de categorías.') } },

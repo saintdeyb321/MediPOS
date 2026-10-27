@@ -59,6 +59,16 @@ public sealed class BusinessProduct
         return product;
     }
 
+    public void CorrectLocalData(string name, Guid categoryId, string brandOrLaboratory, string? barcode, MedicineData? medicine)
+    {
+        if (GlobalProductId is not null) throw new ArgumentException("Correct local products only.");
+        CatalogFields.ValidateReference(ProductType, categoryId, medicine);
+        var checkedName = CatalogFields.Required(name, 256, nameof(name));
+        var checkedBrand = CatalogFields.Required(brandOrLaboratory, 200, nameof(brandOrLaboratory));
+        var checkedBarcode = CatalogFields.Optional(barcode, 128, nameof(barcode));
+        Name = checkedName; CategoryId = categoryId; BrandOrLaboratory = checkedBrand; Barcode = checkedBarcode; Medicine = medicine?.Copy();
+    }
+
     public bool UpdatePrices(decimal retailPrice, decimal? wholesalePrice)
     {
         ValidatePrice(retailPrice);

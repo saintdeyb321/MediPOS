@@ -27,7 +27,7 @@ export interface Medicine extends MedicineInput { activeIngredients: string[]; n
 export interface Category { id: string; name: string; isActive: boolean; createdAt: string }
 export interface GlobalProduct { id: string; productType: 'medicine' | 'retail'; name: string; categoryId: string; brandOrLaboratory: string; barcode: string | null; medicine: Medicine | null }
 export interface BusinessProduct extends GlobalProduct { tenantId: string; globalProductId: string | null; internalCode: string; retailPrice: JsonNumber; wholesalePrice: JsonNumber | null; isActive: boolean; createdAt: string }
-export interface ProductDetail { product: BusinessProduct; units: ProductUnit[] }
+export interface ProductDetail { product: BusinessProduct; units: ProductUnit[]; revision: string }
 export interface PricesInput { retailPrice: JsonNumber; wholesalePrice: JsonNumber | null }
 export interface LocalProductInput extends PricesInput { internalCode: string; productType: 'medicine' | 'retail'; name: string; categoryId: string; brandOrLaboratory: string; barcode: string | null; medicine: MedicineInput | null; isActive: boolean }
 export interface FromGlobalInput extends PricesInput { globalProductId: string; internalCode: string; isActive: boolean }
@@ -40,7 +40,7 @@ const medicine = nullable(object<Medicine>({ components: array(object({ ingredie
 const globalShape = { id: uuid, productType: oneOf('medicine', 'retail'), name: text, categoryId: uuid, brandOrLaboratory: text, barcode: nullable(text), medicine }
 export const businessProduct = object<BusinessProduct>({ ...globalShape, tenantId: uuid, globalProductId: nullable(uuid), internalCode: text,
   retailPrice: decimal, wholesalePrice: nullable(decimal), isActive: boolean, createdAt: utc })
-const detail = object<ProductDetail>({ product: businessProduct, units: array(productUnit) })
+const detail = object<ProductDetail>({ product: businessProduct, units: array(productUnit), revision: text })
 const category = object<Category>({ id: uuid, name: text, isActive: boolean, createdAt: utc })
 const globalProduct = object<GlobalProduct>(globalShape)
 function page(offset: number, limit: number) {
@@ -60,6 +60,13 @@ export function catalogApi(http: HttpClient) {
     try { return scopedProduct(data, scope, id) } catch { throw new ApiError(0, 'client.outcome_unknown', undefined, true) }
   }
   return {
+    async operationalList(scope: BranchScope, queryText: string, categoryId: string, offset = 0, limit = 50, signal?: AbortSignal) {
+      const query = page(offset, limit); if (queryText.trim()) query.set('q', queryText.trim()); if (categoryId) query.set('categoryId', uuid(categoryId))
+      return array(businessProduct)(await http.request(`${branchPath(scope)}/operational-products?${query}`, { signal, exactNumbers: true }))
+    },
+    async operationalCategories(scope: BranchScope, offset = 0, limit = 100, signal?: AbortSignal) {
+      return array(category)(await http.request(`${branchPath(scope)}/operational-categories?${page(offset, limit)}`, { signal }))
+    },
     async list(scope: BranchScope, offset = 0, limit = 50, signal?: AbortSignal) {
       const data = array(businessProduct)(await http.request(`${root(scope)}/products?${page(offset, limit)}`, { signal, exactNumbers: true }))
       return data.map(item => scopedProduct(item, scope))
@@ -76,6 +83,7 @@ export function catalogApi(http: HttpClient) {
     },
     create: (scope: BranchScope, input: LocalProductInput, signal?: AbortSignal) => write(scope, '/products/local', input, 'POST', signal),
     fromGlobal: (scope: BranchScope, input: FromGlobalInput, signal?: AbortSignal) => write(scope, '/products/from-global', input, 'POST', signal),
+    correctLocal: (scope: BranchScope, id: string, input: { expectedRevision: string; name: string; categoryId: string; brandOrLaboratory: string; barcode: string | null; medicine: MedicineInput | null }, signal?: AbortSignal) => write(scope, `/products/${uuid(id)}/local-data`, input, 'PUT', signal, id),
     prices: (scope: BranchScope, id: string, input: PricesInput, signal?: AbortSignal) => write(scope, `/products/${uuid(id)}/prices`, input, 'PUT', signal, id),
     status: (scope: BranchScope, id: string, isActive: boolean, signal?: AbortSignal) => write(scope, `/products/${uuid(id)}/status`, { isActive }, 'PUT', signal, id),
     async unitConfiguration(scope: BranchScope, id: string, signal?: AbortSignal) {

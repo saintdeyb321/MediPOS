@@ -25,7 +25,7 @@ BEGIN
     ('legal_entities','SELECT, INSERT, UPDATE'), ('branches','SELECT, INSERT, UPDATE'),
     ('memberships','SELECT, INSERT, UPDATE'), ('membership_branches','SELECT, INSERT, DELETE'),
     ('work_schedules','SELECT, INSERT, DELETE'), ('__EFMigrationsHistory','SELECT'),
-    ('audit_logs','SELECT, INSERT'),
+    ('audit_logs','SELECT, INSERT'), ('tenant_operation_receipts','SELECT, INSERT'),
     ('platform_tenant_creation_requests','SELECT, INSERT (actor_id, operation, request_key, payload_hash, created_at), UPDATE (tenant_id, license_id, status, starts_at, expires_at, max_branches)'),
     ('categories','SELECT, INSERT'), ('global_products','SELECT, INSERT'), ('medicine_profiles','SELECT, INSERT'),
     ('business_products','SELECT, INSERT, UPDATE'), ('product_units','SELECT, INSERT, UPDATE, DELETE'),

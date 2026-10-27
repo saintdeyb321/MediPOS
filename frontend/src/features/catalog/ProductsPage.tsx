@@ -1,3 +1,4 @@
+import { EditLocalProduct } from './EditLocalProduct'
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Link } from 'react-router'
@@ -126,10 +127,11 @@ function CatalogWorkspace() {
       {detail.data && !detail.isError && <ProductDetailPanel key={detail.data.product.id} detail={detail.data} write={write} onEdit={edit} />}
       <Button variant="quiet" disabled={detail.isFetching} onClick={() => void detail.refetch()}>Actualizar detalle</Button>
     </Drawer>
-    <Modal open={taskOpen && task !== null} wide={task === 'units'} title={task === 'prices' ? 'Editar precios' : task === 'units' ? 'Configurar presentaciones' : 'Cambiar estado del producto'} onClose={() => { setTaskOpen(false); setTask(null); setDirty(false) }} onRecoveryClose={() => setTaskOpen(false)} dirty={dirty || task === 'units'} busy={write.busy} recovery={write.pending}>
+    <Modal open={taskOpen && task !== null} wide={task === 'units'} title={task === 'metadata' ? 'Corregir datos locales' : task === 'prices' ? 'Editar precios' : task === 'units' ? 'Configurar presentaciones' : 'Cambiar estado del producto'} onClose={() => { setTaskOpen(false); setTask(null); setDirty(false) }} onRecoveryClose={() => setTaskOpen(false)} dirty={dirty || task === 'units'} busy={write.busy} recovery={write.pending}>
       <div className="catalog-body" onChangeCapture={() => setDirty(true)}>
         {write.error != null && <ApiErrorState error={write.error} />}{recovery}{write.notice && <p role="status">{write.notice}</p>}
         {detail.data && !detail.isError && <>
+          {task === 'metadata' && <EditLocalProduct key={detail.data.revision} detail={detail.data} categories={categories.data ?? []} write={write} />}
           {task === 'prices' && <EditPrices key={`${detail.data.product.id}/${detail.data.product.retailPrice.literal}/${detail.data.product.wholesalePrice?.literal}`} detail={detail.data} write={write} />}
           {task === 'status' && <EditStatus key={`${detail.data.product.id}/${detail.data.product.isActive}`} detail={detail.data} write={write} />}
           {task === 'units' && <UnitEditor key={detail.data.product.id} detail={detail.data} write={write} />}

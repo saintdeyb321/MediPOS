@@ -87,10 +87,10 @@ public sealed class PurchaseWorkflowIntegrationTests(PostgreSqlFixture fixture)
         Assert.Equal(originalUnit.ConversionToBase, preservedUnit.ConversionToBase);
         Assert.All(historical, value => Assert.Equal(preservedUnit.ConversionToBase, value.ConversionToBaseSnapshot));
         var conflict = await Assert.ThrowsAsync<ApplicationErrorException>(() => scope.ServiceProvider.GetRequiredService<ConfirmPurchaseHandler>()
-            .HandleAsync(new(rows.TenantId, rows.PurchaseId, rows.ActorId), TestContext.Current.CancellationToken));
+            .HandleAsync(new(rows.TenantId, rows.PurchaseId, rows.ActorId, MediPOS.IntegrationTests.Modules.Purchasing.PurchaseTestData.Revision(fixture, rows.TenantId, rows.PurchaseId)), TestContext.Current.CancellationToken));
         Assert.Equal(PurchasingErrors.DraftRequired, conflict.Error);
         var edit = await Assert.ThrowsAsync<ApplicationErrorException>(() => scope.ServiceProvider.GetRequiredService<ReplacePurchaseLinesHandler>()
-            .HandleAsync(new(rows.TenantId, rows.PurchaseId, [], rows.ActorId), TestContext.Current.CancellationToken));
+            .HandleAsync(new(rows.TenantId, rows.PurchaseId, [], rows.ActorId, MediPOS.IntegrationTests.Modules.Purchasing.PurchaseTestData.Revision(fixture, rows.TenantId, rows.PurchaseId)), TestContext.Current.CancellationToken));
         Assert.Equal(PurchasingErrors.DraftRequired, edit.Error);
         Assert.Equal(2, await context.StockMovements.CountAsync(TestContext.Current.CancellationToken));
         Assert.Equal(1, await context.AuditLogs.CountAsync(value => value.EntityId == purchase.Id, TestContext.Current.CancellationToken));
@@ -107,7 +107,7 @@ public sealed class PurchaseWorkflowIntegrationTests(PostgreSqlFixture fixture)
         await using var services = ServicesWithInterceptor(rejection);
         await using var scope = services.CreateAsyncScope();
         var source = scope.ServiceProvider;
-        var command = new ConfirmPurchaseCommand(rows.TenantId, rows.PurchaseId, rows.ActorId);
+        var command = new ConfirmPurchaseCommand(rows.TenantId, rows.PurchaseId, rows.ActorId, MediPOS.IntegrationTests.Modules.Purchasing.PurchaseTestData.Revision(fixture, rows.TenantId, rows.PurchaseId));
         var error = await Assert.ThrowsAsync<DbUpdateException>(() =>
             source.GetRequiredService<ConfirmPurchaseHandler>().HandleAsync(command, TestContext.Current.CancellationToken));
         Assert.Equal(PostgresErrorCodes.CheckViolation, Assert.IsType<PostgresException>(error.InnerException).SqlState);
@@ -153,7 +153,7 @@ public sealed class PurchaseWorkflowIntegrationTests(PostgreSqlFixture fixture)
             try
             {
                 return (await source.GetRequiredService<ConfirmPurchaseHandler>().HandleAsync(
-                    new(rows.TenantId, rows.PurchaseId, rows.ActorId), TestContext.Current.CancellationToken)).Status;
+                    new(rows.TenantId, rows.PurchaseId, rows.ActorId, MediPOS.IntegrationTests.Modules.Purchasing.PurchaseTestData.Revision(fixture, rows.TenantId, rows.PurchaseId)), TestContext.Current.CancellationToken)).Status;
             }
             catch (ApplicationErrorException error) { return error.Error.Code; }
         }
@@ -179,11 +179,11 @@ public sealed class PurchaseWorkflowIntegrationTests(PostgreSqlFixture fixture)
         var unit = await context.ProductUnits.FirstAsync(value => value.BusinessProductId == tenant.BusinessProductId, TestContext.Current.CancellationToken);
         var input = new PurchaseLineInput(tenant.BusinessProductId, unit.Id, 1m, 0m, null, null);
         await Assert.ThrowsAsync<ApplicationErrorException>(() => source.GetRequiredService<ReplacePurchaseLinesHandler>().HandleAsync(
-            new(rows.TenantId, rows.PurchaseId, [input, input with { ProductUnitId = Guid.NewGuid() }], rows.ActorId), TestContext.Current.CancellationToken));
+            new(rows.TenantId, rows.PurchaseId, [input, input with { ProductUnitId = Guid.NewGuid() }], rows.ActorId, MediPOS.IntegrationTests.Modules.Purchasing.PurchaseTestData.Revision(fixture, rows.TenantId, rows.PurchaseId)), TestContext.Current.CancellationToken));
         await using var failedServices = ServicesWithInterceptor(new RejectSave("line"));
         await using var failedScope = failedServices.CreateAsyncScope();
         var error = await Assert.ThrowsAsync<DbUpdateException>(() => failedScope.ServiceProvider.GetRequiredService<ReplacePurchaseLinesHandler>().HandleAsync(
-            new(rows.TenantId, rows.PurchaseId, [input], rows.ActorId), TestContext.Current.CancellationToken));
+            new(rows.TenantId, rows.PurchaseId, [input], rows.ActorId, MediPOS.IntegrationTests.Modules.Purchasing.PurchaseTestData.Revision(fixture, rows.TenantId, rows.PurchaseId)), TestContext.Current.CancellationToken));
         Assert.Equal(PostgresErrorCodes.CheckViolation, Assert.IsType<PostgresException>(error.InnerException).SqlState);
         await using var verification = fixture.CreateContext(rows.TenantId);
         Assert.Equal(rows.LineIds.Order(), await verification.PurchaseLines.Select(value => value.Id).OrderBy(value => value)
@@ -228,14 +228,14 @@ public sealed class PurchaseWorkflowIntegrationTests(PostgreSqlFixture fixture)
         var confirm = source.GetRequiredService<ConfirmPurchaseHandler>();
         foreach (var invalid in new[] { input, input with { BatchNumber = "L" }, input with { ExpirationDate = new(2020, 1, 1) } })
         {
-            await replace.HandleAsync(new(rows.TenantId, rows.PurchaseId, [invalid], rows.ActorId), TestContext.Current.CancellationToken);
+            await replace.HandleAsync(new(rows.TenantId, rows.PurchaseId, [invalid], rows.ActorId, MediPOS.IntegrationTests.Modules.Purchasing.PurchaseTestData.Revision(fixture, rows.TenantId, rows.PurchaseId)), TestContext.Current.CancellationToken);
             var error = await Assert.ThrowsAsync<ApplicationErrorException>(() => confirm.HandleAsync(
-                new(rows.TenantId, rows.PurchaseId, rows.ActorId), TestContext.Current.CancellationToken));
+                new(rows.TenantId, rows.PurchaseId, rows.ActorId, MediPOS.IntegrationTests.Modules.Purchasing.PurchaseTestData.Revision(fixture, rows.TenantId, rows.PurchaseId)), TestContext.Current.CancellationToken));
             Assert.Equal(ApplicationErrors.InvalidRequest, error.Error);
         }
         await replace.HandleAsync(new(rows.TenantId, rows.PurchaseId,
-            [input with { BatchNumber = "L", ExpirationDate = new(2020, 1, 1) }], rows.ActorId), TestContext.Current.CancellationToken);
-        await confirm.HandleAsync(new(rows.TenantId, rows.PurchaseId, rows.ActorId), TestContext.Current.CancellationToken);
+            [input with { BatchNumber = "L", ExpirationDate = new(2020, 1, 1) }], rows.ActorId, MediPOS.IntegrationTests.Modules.Purchasing.PurchaseTestData.Revision(fixture, rows.TenantId, rows.PurchaseId)), TestContext.Current.CancellationToken);
+        await confirm.HandleAsync(new(rows.TenantId, rows.PurchaseId, rows.ActorId, MediPOS.IntegrationTests.Modules.Purchasing.PurchaseTestData.Revision(fixture, rows.TenantId, rows.PurchaseId)), TestContext.Current.CancellationToken);
         await using var verification = fixture.CreateContext(rows.TenantId);
         Assert.Equal(new DateOnly(2020, 1, 1), (await verification.InventoryLots.SingleAsync(TestContext.Current.CancellationToken)).ExpirationDate);
     }

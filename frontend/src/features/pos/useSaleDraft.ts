@@ -1,3 +1,4 @@
+import { useNavigationProtection } from '../../shared/ui/NavigationProtection'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { useSearchParams } from 'react-router'
@@ -65,14 +66,25 @@ export function useSaleDraft(lines: CartLine[], replaceCart: (lines: CartLine[])
   const locked = preparing || creationUnknown || checkoutPending || phase === 'loading' || phase === 'creating' || phase === 'saving' || phase === 'blocked' || !seller || Boolean(server && server.status !== 'draft')
   const dirty = Boolean(server && !matchesSaved(lines, server))
   const writable = Boolean(api && cashMatches && seller && !cartError(lines) && !locked && phase === 'idle' && (!server || server.saleId === saleId))
+  async function recoverCreation() {
+    const requestId = parameters.get('draftPending')
+    if (!http || busy.current || !requestId || !isUuid(requestId)) return
+    busy.current = true; setPhase('loading'); setError(null); operation.current = new AbortController()
+    try {
+      const result = await salesApi(http).recoverCreation({ tenantId, branchId }, requestId, operation.current.signal)
+      if (operation.current.signal.aborted) return
+      mark({ sale: result.saleId, draftPending: null }); setServer(result); replaceCart(restoreCart(result)); setPhase('idle'); setNotice('Borrador original recuperado por su constancia, sin repetir la creación.')
+    } catch (failure) { if (!operation.current.signal.aborted) { setError(failure); setPhase('uncertain') } }
+    finally { busy.current = false }
+  }
   async function create() {
     if (!api || !writable || server || saleId || creationUnknown || !lines.length || busy.current) return
     busy.current = true; operation.current = new AbortController(); setPhase('creating'); setError(null)
     // This POST has no client-generated ID/idempotency key in the existing contract.
     // Keep a URL marker across reloads; unknown creation must never cause another POST.
-    mark({ draftPending: '1' })
+    const requestId = crypto.randomUUID(); mark({ draftPending: requestId })
     try {
-      const result = await api.create({ tenantId, branchId }, operation.current.signal)
+      const result = await api.create({ tenantId, branchId }, operation.current.signal, { id: requestId, branchId })
       if (operation.current.signal.aborted) return
       loadedId.current = result.saleId; setServer(result); mark({ sale: result.saleId, draftPending: null })
       if (result.status !== 'draft' || result.sellerMembershipId !== access.membershipId || result.cashSessionId !== cash?.cashSessionId) {
@@ -165,7 +177,8 @@ export function useSaleDraft(lines: CartLine[], replaceCart: (lines: CartLine[])
     } catch (failure) { if (!operation.current.signal.aborted) { setError(failure); setPhase('blocked') } }
     finally { busy.current = false }
   }
-  return { server, phase, error, notice, seller, cashMatches, locked, dirty, creationUnknown, create, save, refresh, resolve, recover, hasKnownId: isUuid(saleId),
+  useNavigationProtection({ dirty: lines.length > 0 && (!server || dirty), busy: preparing || ['creating', 'saving', 'loading'].includes(phase), pending: creationUnknown || checkoutPending })
+  return { recoverCreation, server, phase, error, notice, seller, cashMatches, locked, dirty, creationUnknown, create, save, refresh, resolve, recover, hasKnownId: isUuid(saleId),
     prepare, preparing, nextSale, canPrepare: writable && !creationUnknown && lines.length > 0,
     checkoutPending, voidPending, markCheckout: (pending: boolean, kind: 'confirm' | 'void' = 'confirm') =>
       mark(pending ? { [kind === 'void' ? 'voidPending' : 'confirmPending']: '1' } : { confirmPending: null, voidPending: null }),

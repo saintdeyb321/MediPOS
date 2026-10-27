@@ -42,12 +42,22 @@ internal sealed class BusinessProductStore(MediPosDbContext context) : IBusiness
         await PersistAsync(cancellationToken).ConfigureAwait(false);
     }
 
+    public async Task<BusinessProduct?> FindForUpdateAsync(Guid tenantId, Guid productId, CancellationToken cancellationToken)
+    {
+        context.SelectTenant(tenantId); RequireTransaction();
+        foreach (var entry in context.ChangeTracker.Entries<BusinessProduct>().Where(e => e.Entity.Id == productId).ToArray())
+        {
+            if (entry.Entity.Medicine is { } medicine) context.Entry(medicine).State = EntityState.Detached;
+            entry.State = EntityState.Detached;
+        }
+        return await context.BusinessProducts.FromSqlInterpolated($"SELECT p.*, p.xmin FROM business_products p WHERE p.tenant_id = {tenantId} AND p.id = {productId} FOR UPDATE").SingleOrDefaultAsync(cancellationToken);
+    }
     public async Task SaveAsync(BusinessProduct product, AuditLog audit, CancellationToken cancellationToken)
     {
         RequireTransaction();
         if (context.Entry(product).State == EntityState.Detached)
             throw new InvalidOperationException("Load the business product through this scoped store before saving it.");
-        if (audit.Action is not (AuditAction.BusinessProductPriceChanged or AuditAction.BusinessProductStatusChanged))
+        if (audit.Action is not (AuditAction.BusinessProductPriceChanged or AuditAction.BusinessProductStatusChanged or AuditAction.BusinessProductDataCorrected))
             throw new InvalidOperationException("An existing product requires a price/status audit action.");
         context.AddAudit(audit, product.TenantId, audit.Action, product.Id);
         await PersistAsync(cancellationToken).ConfigureAwait(false);

@@ -16,12 +16,13 @@ import type { UnitFields } from './forms'
 import { MedicineView, PriceInputs } from './ProductFields'
 import type { CatalogWrite } from './useCatalogWrite'
 
-export type ProductTask = 'prices' | 'status' | 'units'
+export type ProductTask = 'prices' | 'status' | 'units' | 'metadata'
 export function ProductDetailPanel({ detail, write, onEdit }: { detail: ProductDetail; write: CatalogWrite; onEdit: (task: ProductTask) => void }) {
   const w = useWorkspace()
   const [tab, setTab] = useState<'data' | 'prices' | 'units' | 'stock'>('data')
   const p = detail.product
   return <section aria-label="Detalle del producto">
+    {!p.globalProductId && <Button disabled={write.locked} onClick={() => onEdit('metadata')}>Corregir datos del producto local</Button>}
     <h2>{p.name}</h2><p>Código: {p.internalCode} · {p.productType === 'medicine' ? 'Medicamento' : 'Venta general'} · {p.isActive ? 'Activo' : 'Inactivo'}</p>
     <nav className="task-tabs" aria-label="Detalle del producto">{([['data', 'Datos'], ['prices', 'Precios'], ['units', 'Presentaciones'], ['stock', 'Lotes y stock']] as const).map(([id, label]) => <Button key={id} variant="quiet" aria-pressed={tab === id} onClick={() => setTab(id)}>{label}</Button>)}</nav>
     {tab === 'data' && <><p>Marca/laboratorio: {p.brandOrLaboratory} · Barras: {p.barcode ?? 'No indicado'} · Origen: {p.globalProductId ? 'Vinculado desde catálogo global' : 'Local del negocio'}</p>

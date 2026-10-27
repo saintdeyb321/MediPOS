@@ -190,8 +190,8 @@ public sealed class PerformanceDataset : IAsyncDisposable
                 var lines = batch.SelectMany(product => Enumerable.Range(0, _options.Lots).Select(lot => new PurchaseLineInput(product.Id, product.BaseUnit,
                     (_options.Samples + _options.Warmup) * 1000m, 1m, "SYN-" + product.Definition.Index + "-" + lot,
                     product.Definition.Type == ProductType.Medicine ? DateOnly.FromDateTime(BusinessTime.Date).AddDays(lot == 0 ? -1 : 30 + lot * 30) : null))).ToArray();
-                await provider.GetRequiredService<ReplacePurchaseLinesHandler>().HandleAsync(new(tenant.Id, purchase.Id, lines, tenant.Owner), token).ConfigureAwait(false);
-                await provider.GetRequiredService<ConfirmPurchaseHandler>().HandleAsync(new(tenant.Id, purchase.Id, tenant.Owner), token).ConfigureAwait(false);
+                await provider.GetRequiredService<ReplacePurchaseLinesHandler>().HandleAsync(new(tenant.Id, purchase.Id, lines, tenant.Owner, MediPOS.Application.Modules.Purchasing.PurchaseRevision.For(purchase.Id, [])), token).ConfigureAwait(false);
+                await provider.GetRequiredService<ConfirmPurchaseHandler>().HandleAsync(new(tenant.Id, purchase.Id, tenant.Owner, MediPOS.Application.Modules.Purchasing.PurchaseRevision.For(purchase.Id, (await provider.GetRequiredService<MediPOS.Application.Modules.Purchasing.IPurchasingStore>().FindLinesAsync(tenant.Id, purchase.Id, token)).Select(MediPOS.Application.Modules.Purchasing.ReplacePurchaseLines.PurchaseLineDetails.From))), token).ConfigureAwait(false);
             }
     }
 

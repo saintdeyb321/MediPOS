@@ -5,6 +5,7 @@ using MediPOS.Application.Modules.Branches;
 using MediPOS.Application.Modules.Catalog;
 using MediPOS.Application.Modules.IdentityAccess.OperationalAccess;
 using MediPOS.Application.Modules.Inventory;
+using MediPOS.Application.Modules.Purchasing.ReplacePurchaseLines;
 using MediPOS.Application.Modules.TenancyLicensing;
 using MediPOS.Domain.Modules.AuditSupport;
 using MediPOS.Domain.Modules.Catalog;
@@ -12,7 +13,7 @@ using MediPOS.Domain.Modules.Inventory;
 
 namespace MediPOS.Application.Modules.Purchasing.ConfirmPurchase;
 
-public sealed record ConfirmPurchaseCommand(Guid TenantId, Guid PurchaseId, Guid ActorId);
+public sealed record ConfirmPurchaseCommand(Guid TenantId, Guid PurchaseId, Guid ActorId, string ExpectedRevision);
 
 public sealed class ConfirmPurchaseHandler(IPurchasingStore store, IBranchesStore branches, IBusinessProductStore products,
     IPurchaseReceiptWriter receipts, ITenantLicenseProvisioning provisioning, TimeProvider clock, ITenantOperationAuthorizer authorization)
@@ -34,6 +35,7 @@ public sealed class ConfirmPurchaseHandler(IPurchasingStore store, IBranchesStor
         PurchasingValidation.RequireDraft(purchase);
         await PurchasingValidation.ReferencesAsync(command.TenantId, purchase.BranchId, purchase.SupplierId, branches, store, cancellationToken).ConfigureAwait(false);
         var lines = await store.FindLinesAsync(command.TenantId, purchase.Id, cancellationToken).ConfigureAwait(false);
+        PurchaseRevision.Require(purchase.Id, lines.Select(PurchaseLineDetails.From), command.ExpectedRevision);
         var catalog = new Dictionary<Guid, BusinessProduct>();
         foreach (var productId in lines.Select(value => value.BusinessProductId).Distinct())
         {

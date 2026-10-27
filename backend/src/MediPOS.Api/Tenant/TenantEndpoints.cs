@@ -38,6 +38,9 @@ public static partial class TenantEndpoints
             var input = await TenantHttp.Read<BranchRequest>(c);
             return TenantHttp.Response(await handler.HandleAsync(new(TenantHttp.Tenant(c), input.LegalEntityId, input.Name, TenantHttp.Actor(c)), c.RequestAborted), 201);
         }).Accepts<BranchRequest>("application/json").Produces<BranchDetails>(201).WithName("tenant.branches.create");
+        tenants.MapGet("/branches/{branchId}/operations/{requestId}", async (HttpContext c, IRecoverableOperations operations) =>
+            TenantHttp.Response(await operations.ReadAsync(TenantHttp.Tenant(c), TenantHttp.Branch(c), TenantHttp.Id(c, "requestId"), c.RequestAborted)))
+            .Produces<OperationReceipt>().WithName("tenant.operations.read");
         // Every commercial endpoint shares the same real boundary and application authorization.
         MapCatalog(tenants);
         MapPurchasing(tenants);

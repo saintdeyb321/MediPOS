@@ -17,7 +17,7 @@ public static partial class TenantEndpoints
         {
             var input = await TenantHttp.Read<StockThresholdRequest>(c);
             return TenantHttp.Response(await handler.HandleAsync(new(TenantHttp.Tenant(c), TenantHttp.Branch(c), TenantHttp.Id(c, "productId"), input.MinimumStockBase), c.RequestAborted));
-        }).Accepts<StockThresholdRequest>("application/json").Produces<BranchStockThresholdDetails>().WithName("tenant.inventory.set_threshold");
+        }).Accepts<StockThresholdRequest>("application/json").Produces<BranchStockThresholdDetails>().WithName("tenant.inventory.set_threshold").AddEndpointFilter(new RecoverableWriteFilter("minimum"));
         tenants.MapGet("/branches/{branchId}/inventory/stock", async (HttpContext c, InventoryDirectoryQueries queries) =>
             TenantHttp.Response(await queries.StockAsync(TenantHttp.Tenant(c), TenantHttp.Branch(c), TenantHttp.OptionalId(c, "productId"), TenantHttp.Offset(c), TenantHttp.Limit(c), c.RequestAborted)))
             .Produces<IReadOnlyList<ProductStockDetails>>().WithName("tenant.inventory.stock").WithQuery<TenantOpenApi.ProductPage>();
@@ -28,7 +28,7 @@ public static partial class TenantEndpoints
         {
             var input = await TenantHttp.Read<StockAdjustmentRequest>(c);
             return TenantHttp.Response(await handler.HandleAsync(new(TenantHttp.Tenant(c), TenantHttp.Id(c, "lotId"), input.QuantityDeltaBase, input.Reason, TenantHttp.Actor(c)), c.RequestAborted));
-        }).Accepts<StockAdjustmentRequest>("application/json").Produces<AdjustStockResult>().WithName("tenant.inventory.adjust");
+        }).Accepts<StockAdjustmentRequest>("application/json").Produces<AdjustStockResult>().WithName("tenant.inventory.adjust").AddEndpointFilter(new RecoverableWriteFilter("adjustment"));
     }
     public sealed record StockAdjustmentRequest([property: JsonRequired] decimal QuantityDeltaBase, [property: JsonRequired] string Reason);
     public sealed record StockThresholdRequest([property: JsonRequired] decimal MinimumStockBase);

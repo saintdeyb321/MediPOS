@@ -21,7 +21,9 @@ internal sealed class StockAdjustmentTransaction(MediPosDbContext context) : ISt
     public async Task<IStockAdjustmentScope?> BeginAsync(Guid tenantId, Guid inventoryLotId, CancellationToken cancellationToken)
     {
         context.SelectTenant(tenantId);
-        var transaction = await context.Database.BeginTransactionAsync(IsolationLevel.ReadCommitted, cancellationToken).ConfigureAwait(false);
+        var ownsTransaction = context.Database.CurrentTransaction is null;
+        if (!ownsTransaction && !context.RecoverableWriteActive) throw new InvalidOperationException("Unexpected ambient transaction.");
+        var transaction = context.Database.CurrentTransaction ?? await context.Database.BeginTransactionAsync(IsolationLevel.ReadCommitted, cancellationToken).ConfigureAwait(false);
         try
         {
             var lot = await context.InventoryLots.FromSqlInterpolated(
@@ -29,7 +31,7 @@ internal sealed class StockAdjustmentTransaction(MediPosDbContext context) : ISt
                 .AsNoTracking().SingleOrDefaultAsync(cancellationToken).ConfigureAwait(false);
             if (lot is null)
             {
-                await transaction.DisposeAsync().ConfigureAwait(false);
+                if (ownsTransaction) await transaction.DisposeAsync().ConfigureAwait(false);
                 return null;
             }
             // Licensing is read after the lot lock wait; it is never the stock serialization lock.
@@ -38,17 +40,17 @@ internal sealed class StockAdjustmentTransaction(MediPosDbContext context) : ISt
             foreach (var entry in context.ChangeTracker.Entries<InventoryLot>().Where(value => value.Entity.Id == lot.Id).ToArray())
                 entry.State = EntityState.Detached;
             context.InventoryLots.Attach(lot);
-            return new AdjustmentScope(context, transaction, lot, license);
+            return new AdjustmentScope(context, transaction, lot, license, ownsTransaction);
         }
         catch
         {
-            await transaction.DisposeAsync().ConfigureAwait(false);
+            if (ownsTransaction) await transaction.DisposeAsync().ConfigureAwait(false);
             context.ChangeTracker.Clear();
             throw;
         }
     }
 
-    private sealed class AdjustmentScope(MediPosDbContext context, IDbContextTransaction transaction, InventoryLot lot, License license)
+    private sealed class AdjustmentScope(MediPosDbContext context, IDbContextTransaction transaction, InventoryLot lot, License license, bool ownsTransaction)
         : IStockAdjustmentScope
     {
         private bool _committed;
@@ -63,12 +65,12 @@ internal sealed class StockAdjustmentTransaction(MediPosDbContext context) : ISt
             context.StockMovements.Add(adjustment);
             context.AddAudit(audit, lot.TenantId, AuditAction.InventoryAdjusted, lot.Id);
             await context.SaveAuditedChangesAsync(cancellationToken).ConfigureAwait(false);
-            await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+            if (ownsTransaction) await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
             _committed = true;
         }
         public async ValueTask DisposeAsync()
         {
-            try { await transaction.DisposeAsync().ConfigureAwait(false); }
+            try { if (ownsTransaction) await transaction.DisposeAsync().ConfigureAwait(false); }
             finally { if (!_committed) context.ChangeTracker.Clear(); }
         }
     }

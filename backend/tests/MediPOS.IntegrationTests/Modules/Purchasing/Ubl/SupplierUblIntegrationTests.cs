@@ -109,7 +109,7 @@ public sealed class SupplierUblIntegrationTests(PostgreSqlFixture fixture)
         Assert.Equal(1, await context.AuditLogs.CountAsync(v => v.EntityId == imported.Id && v.Action == AuditAction.SupplierUblConverted, Token));
         Assert.Equal(Encoding.UTF8.GetBytes(xml), (await context.SupplierUblImports.AsNoTracking().SingleAsync(Token)).SourceXml);
         // The existing commercial confirmation remains the only step that receives stock.
-        await source.GetRequiredService<ConfirmPurchaseHandler>().HandleAsync(new(rows.TenantId, purchase.Id, rows.UserId), Token);
+        await source.GetRequiredService<ConfirmPurchaseHandler>().HandleAsync(new(rows.TenantId, purchase.Id, rows.UserId, MediPOS.IntegrationTests.Modules.Purchasing.PurchaseTestData.Revision(fixture, rows.TenantId, purchase.Id)), Token);
         Assert.Equal(6, await context.InventoryLots.CountAsync(Token)); Assert.Equal(6, await context.StockMovements.CountAsync(Token));
         Assert.Equal(PurchaseStatus.Confirmed, (await context.Purchases.AsNoTracking().SingleAsync(Token)).Status);
     }

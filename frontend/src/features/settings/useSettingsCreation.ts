@@ -1,3 +1,4 @@
+import { useNavigationProtection } from '../../shared/ui/NavigationProtection'
 import { useEffect, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router'
 import { useRuntime } from '../access'
@@ -27,5 +28,6 @@ export function useSettingsCreation(w: TenantSettingsScope, refresh: () => Promi
     } finally { running.current = false; if (!controller.signal.aborted) setBusy(false) }
   }
   function reconcile() { if (!running.current) { mark(null); setError(null); setNotice('Operación original conciliada por el operador contra el directorio. No se repitió la creación.') } }
+  useNavigationProtection({ busy, pending: Boolean(pending) })
   return { pending, createdId, busy, error, notice, locked: busy || Boolean(pending) || denied, run, reconcile }
 }

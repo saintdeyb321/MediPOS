@@ -1,3 +1,5 @@
+import { recoverOperation } from '../../shared/api/operations'
+import type { OperationIntention } from '../../shared/api/operations'
 import { array, nullable, object, oneOf, text, uint, utc, uuid } from '../../shared/api/contracts'
 import type { BranchScope } from '../../shared/api/contracts'
 import { ApiError, HttpClient } from '../../shared/api/http'
@@ -18,10 +20,11 @@ export function importApi(http: HttpClient) {
   const root = (w: BranchScope) => `/api/tenants/${uuid(w.tenantId)}/product-imports`
   return {
     async template(w: BranchScope, signal?: AbortSignal) { const data = await http.request(root(w) + '/template', { signal, responseType: 'blob' }); if (!(data instanceof Blob) || data.type !== excelType || !data.size || data.size > maximumFileBytes) throw new ApiError(0, 'client.unexpected_response'); return data },
-    async create(w: BranchScope, file: File, signal?: AbortSignal) {
+    async recover(w: BranchScope, requestId: string, signal?: AbortSignal) { return object({ importJobId: uuid })(await recoverOperation(http, w, requestId, 'product-import', signal)) },
+    async create(w: BranchScope, file: File, signal?: AbortSignal, intention?: OperationIntention) {
       if (!validFile(file)) throw new ApiError(0, 'client.invalid_file')
       let data: unknown
-      try { data = await http.request(root(w) + '?fileName=' + encodeURIComponent(file.name), { method: 'POST', xlsxBody: file, signal, exactNumbers: true, timeoutMs: 60_000 }) }
+      try { data = await http.request(root(w) + '?fileName=' + encodeURIComponent(file.name), { method: 'POST', xlsxBody: file, signal, exactNumbers: true, timeoutMs: 60_000, intention }) }
       catch (failure) {
         // Authorization is rechecked between committed rows. A mid-import 403 can
         // leave a failed job with imported products, unlike a boundary rejection.
@@ -29,7 +32,7 @@ export function importApi(http: HttpClient) {
         throw failure
       }
       // Creation returns up to 100 rows (handler default), unlike our GET pages of 20.
-      try { return decode(data, 0, 100) }
+      try { const reference = object({ importJobId: uuid })(data); return reference }
       catch { throw new ApiError(0, 'client.outcome_unknown', undefined, true) }
     },
     async read(w: BranchScope, id: string, after: number, signal?: AbortSignal) {

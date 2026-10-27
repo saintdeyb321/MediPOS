@@ -61,8 +61,8 @@ internal static class SaleCheckoutTestData
             new(tenant.TenantId, tenant.Identity.BranchId, supplier.Id, null, tenant.Identity.ActorId), TestContext.Current.CancellationToken);
         var lines = await source.GetRequiredService<ReplacePurchaseLinesHandler>().HandleAsync(new(tenant.TenantId, purchase.Id,
             receipts.Select((receipt, index) => new PurchaseLineInput(productId, unitId, receipt.Quantity, 1m,
-                "L-" + index.ToString(System.Globalization.CultureInfo.InvariantCulture), receipt.Expiration)).ToArray(), tenant.Identity.ActorId), TestContext.Current.CancellationToken);
-        await source.GetRequiredService<ConfirmPurchaseHandler>().HandleAsync(new(tenant.TenantId, purchase.Id, tenant.Identity.ActorId), TestContext.Current.CancellationToken);
+                "L-" + index.ToString(System.Globalization.CultureInfo.InvariantCulture), receipt.Expiration)).ToArray(), tenant.Identity.ActorId, MediPOS.IntegrationTests.Modules.Purchasing.PurchaseTestData.Revision(source, tenant.TenantId, purchase.Id)), TestContext.Current.CancellationToken);
+        await source.GetRequiredService<ConfirmPurchaseHandler>().HandleAsync(new(tenant.TenantId, purchase.Id, tenant.Identity.ActorId, MediPOS.IntegrationTests.Modules.Purchasing.PurchaseTestData.Revision(source, tenant.TenantId, purchase.Id)), TestContext.Current.CancellationToken);
         var ids = lines.Select(line => line.Id).ToArray();
         return await source.GetRequiredService<MediPosDbContext>().InventoryLots.Where(lot => ids.Contains(lot.SourcePurchaseLineId))
             .OrderBy(lot => lot.ExpirationDate).ThenBy(lot => lot.CreatedAt).ThenBy(lot => lot.Id).Select(lot => lot.Id).ToArrayAsync(TestContext.Current.CancellationToken);

@@ -126,6 +126,10 @@ public static class DependencyInjection
         services.AddDbContext<MediPosDbContext>(options => options.UseNpgsql(connectionString)
             .AddInterceptors(new RuntimeDatabaseRoleInterceptor()));
         services.AddScoped<ITenantDataContext, TenantDataContext>();
+        services.AddScoped<MediPOS.Application.Modules.Catalog.UpdateLocalProductHandler>();
+        services.AddScoped<MediPOS.Application.Modules.Catalog.OperationalCatalogQueries>();
+        services.AddScoped<MediPOS.Application.Modules.Catalog.IOperationalCatalogReader, MediPOS.Infrastructure.Modules.Catalog.Persistence.OperationalCatalogReader>();
+        services.AddScoped<MediPOS.Application.Modules.IdentityAccess.OperationalAccess.IRecoverableOperations, MediPOS.Infrastructure.Persistence.RecoverableOperations>();
         services.TryAddScoped<IPlatformAdministration, DisabledPlatformAdministration>();
         services.TryAddScoped<ITenantOperationAuthorizer, DisabledTenantOperationAuthorizer>();
         services.TryAddSingleton(TimeProvider.System);

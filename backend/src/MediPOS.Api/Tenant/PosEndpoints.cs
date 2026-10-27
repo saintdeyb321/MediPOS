@@ -46,7 +46,7 @@ public static partial class TenantEndpoints
         {
             await TenantHttp.Read<EmptyRequest>(c);
             return TenantHttp.Response(await handler.HandleAsync(new(TenantHttp.Tenant(c), TenantHttp.Branch(c)), c.RequestAborted), 201);
-        }).Accepts<EmptyRequest>("application/json").Produces<SaleDraftDetails>(201).WithName("tenant.sales.create_draft");
+        }).Accepts<EmptyRequest>("application/json").Produces<SaleDraftDetails>(201).WithName("tenant.sales.create_draft").AddEndpointFilter(new RecoverableWriteFilter("sale-draft"));
         branches.MapGet("/sales/{saleId}/draft", async (HttpContext c, GetSaleDraftHandler handler) =>
             TenantHttp.Response(await handler.HandleAsync(new(TenantHttp.Tenant(c), TenantHttp.Branch(c), TenantHttp.Id(c, "saleId")), c.RequestAborted)))
             .Produces<SaleDraftDetails>().WithName("tenant.sales.read_draft");

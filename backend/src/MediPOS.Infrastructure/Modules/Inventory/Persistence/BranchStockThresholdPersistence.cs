@@ -49,11 +49,13 @@ internal sealed class BranchStockThresholdTransaction(MediPosDbContext context) 
     {
         context.SelectTenant(tenantId);
         foreach (var tracked in context.ChangeTracker.Entries<BranchProductStockThreshold>().ToArray()) tracked.State = EntityState.Detached;
-        var transaction = await context.Database.BeginTransactionAsync(IsolationLevel.ReadCommitted, token).ConfigureAwait(false);
-        return new Scope(context, transaction, tenantId);
+        var ownsTransaction = context.Database.CurrentTransaction is null;
+        if (!ownsTransaction && !context.RecoverableWriteActive) throw new InvalidOperationException("Unexpected ambient transaction.");
+        var transaction = context.Database.CurrentTransaction ?? await context.Database.BeginTransactionAsync(IsolationLevel.ReadCommitted, token).ConfigureAwait(false);
+        return new Scope(context, transaction, tenantId, ownsTransaction);
     }
 
-    private sealed class Scope(MediPosDbContext context, IDbContextTransaction transaction, Guid tenantId) : IBranchStockThresholdScope
+    private sealed class Scope(MediPosDbContext context, IDbContextTransaction transaction, Guid tenantId, bool ownsTransaction) : IBranchStockThresholdScope
     {
         private bool _committed;
         public Task<bool> ProductExistsAsync(Guid productId, CancellationToken token) => context.BusinessProducts.AsNoTracking()
@@ -73,11 +75,11 @@ internal sealed class BranchStockThresholdTransaction(MediPosDbContext context) 
         public async Task CompleteAsync(CancellationToken token)
         {
             if (_committed) throw new InvalidOperationException("A threshold transaction can commit once.");
-            await transaction.CommitAsync(token).ConfigureAwait(false); _committed = true;
+            if (ownsTransaction) await transaction.CommitAsync(token).ConfigureAwait(false); _committed = true;
         }
         public async ValueTask DisposeAsync()
         {
-            await transaction.DisposeAsync().ConfigureAwait(false);
+            if (ownsTransaction) await transaction.DisposeAsync().ConfigureAwait(false);
             if (!_committed) context.ChangeTracker.Clear();
         }
     }

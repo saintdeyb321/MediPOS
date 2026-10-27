@@ -1,6 +1,6 @@
 import { expect, it, vi } from 'vitest'
 import { HttpClient } from '../../shared/api/http'
-import { id, json, n, operationServer, purchase, storedLine, workspace } from '../../test/operations'
+import { id, json, n, operationServer, purchase, storedLine, receiptRevision, workspace } from '../../test/operations'
 import { purchasingApi } from './api'
 
 it('uses supplier pagination, official branch reference search and scoped receipt GET, never a general directory', async () => {
@@ -15,16 +15,16 @@ it('uses supplier pagination, official branch reference search and scoped receip
   ])
   await expect(api.suppliers(workspace, -1)).rejects.toThrow('Invalid page')
 })
-it('sends only official DTOs with exact numbers and CSRF, without inventing versions or idempotency keys', async () => {
+it('sends only official DTOs with exact numbers and CSRF, with the reviewed revision and no identity headers', async () => {
   const fake = operationServer(); const api = purchasingApi(new HttpClient(fake.fetcher))
   await api.createSupplier(workspace, { name: 'Proveedor unitario', ruc: null, contact: null })
   await api.create(workspace, null, 'REF-UNIT')
-  await api.lines(workspace, purchase.id, [{ businessProductId: id(10), productUnitId: id(11), quantity: n('9007199254740993'), unitCost: n('0.1234567890123456789012345678'), batchNumber: 'Lote', expirationDate: '2027-12-31' }])
-  await api.confirm(workspace, purchase.id)
+  await api.lines(workspace, purchase.id, [{ businessProductId: id(10), productUnitId: id(11), quantity: n('9007199254740993'), unitCost: n('0.1234567890123456789012345678'), batchNumber: 'Lote', expirationDate: '2027-12-31' }], receiptRevision(fake.state.lines))
+  await api.confirm(workspace, purchase.id, receiptRevision(fake.state.lines))
   const writes = fake.writes(); expect(writes).toHaveLength(4)
   expect(String(writes[2]?.[0])).toBe(`/api/tenants/${id(2)}/purchases/${id(20)}/lines`)
   expect(writes[2]?.[1]?.body).toContain('"quantity":9007199254740993,"unitCost":0.1234567890123456789012345678')
-  expect(writes[3]?.[1]?.body).toBe('{}')
+  expect(writes[3]?.[1]?.body).toBe(JSON.stringify({ expectedRevision: receiptRevision(fake.state.lines) }))
   for (const [, init] of writes) { expect(new Headers(init?.headers).get('X-CSRF-TOKEN')).toBe('unit-csrf'); expect(init?.credentials).toBe('same-origin'); expect(String(init?.body)).not.toMatch(/expectedVersion|actorId|tenantId|idempotency/i) }
 })
 it('rejects wrong branch/id on reads and marks malformed successful writes uncertain', async () => {

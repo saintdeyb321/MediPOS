@@ -1,10 +1,10 @@
+import { useNavigationProtection } from '../../shared/ui/NavigationProtection'
 import { useEffect, useRef, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { useSearchParams } from 'react-router'
 import { isUuid, useRuntime, useWorkspace } from '../access'
 import { scopedKey } from '../../shared/api/contracts'
 import { ApiError } from '../../shared/api/http'
-import { stringifyExactJson } from '../../shared/api/exactJson'
 import { purchasingApi } from './api'
 import type { PurchaseLineInput, PurchaseView } from './api'
 
@@ -83,7 +83,7 @@ export function usePurchaseReceipt() {
   async function consult(purchaseId = id) {
     if (!isUuid(purchaseId) || !http || running.current || expectedId && pending && expectedId.toLowerCase() !== purchaseId.toLowerCase()) return
     initialRead.current?.abort()
-    running.current = true; setBusy(true); setError(null); setServer(null); controller.current = new AbortController()
+    running.current = true; setBusy(true); setError(null); controller.current = new AbortController()
     mark(pending as WriteKind | null, purchaseId)
     try { await read(purchaseId, controller.current.signal) } catch (failure) { if (mounted.current) setError(failure) }
     finally { running.current = false; if (mounted.current) setBusy(false) }
@@ -97,18 +97,12 @@ export function usePurchaseReceipt() {
     initialRead.current?.abort()
     setServer(null); setExpectedId(''); setError(null); setNotice(''); mark(null, '')
   }
+  useNavigationProtection({ busy, pending: Boolean(pending) })
   return { id, pending, server, busy, error, notice, consult, acknowledge, startNew, locked: busy || Boolean(pending) || denied || !http,
     create: (supplierId: string | null, reference: string | null) => run('create', async signal => (await purchasingApi(http!).create(w, supplierId, reference, signal)).id),
-    save: (lines: PurchaseLineInput[]) => { if (server?.purchase.status === 'draft') return run('lines', async signal => { await purchasingApi(http!).lines(w, server.purchase.id, lines, signal); return server.purchase.id }) },
+    save: (lines: PurchaseLineInput[]) => { if (server?.purchase.status === 'draft') return run('lines', async signal => { await purchasingApi(http!).lines(w, server.purchase.id, lines, server.revision, signal); return server.purchase.id }) },
     confirm: () => { if (server?.purchase.status === 'draft' && server.lines.length) return run('confirm', async signal => {
-      const current = await purchasingApi(http!).read(w, server.purchase.id, signal)
-      if (current.purchase.status === 'confirmed') return current.purchase.id
-      if (stringifyExactJson(current.lines) !== stringifyExactJson(server.lines)) {
-        if (mounted.current) setServer(current)
-        throw new ApiError(409, 'purchasing.receipt_changed')
-      }
-      // This read catches observed edits; it is not an atomic version precondition in the backend.
-      return (await purchasingApi(http!).confirm(w, server.purchase.id, signal)).id
+      return (await purchasingApi(http!).confirm(w, server.purchase.id, server.revision, signal)).id
     }) },
   }
 }

@@ -19,12 +19,14 @@ import { Modal } from '../../shared/ui/Modal'
 function ProductChoice({ product, onSelect, disabled }: { product: ProductMatch; onSelect: (selection: ProductSelection) => void; disabled?: boolean }) {
   const id = useId()
   const [unitId, setUnitId] = useState('')
+  const [priceKind, setPriceKind] = useState<'retail' | 'wholesale'>('retail')
+  const price = priceKind === 'wholesale' ? product.wholesalePrice : product.retailPrice
   const [quantityText, setQuantityText] = useState('1')
   const quantity = decimalInput(quantityText, maximumQuantity, 12)
   const units = product.units.filter(unit => unit.isActive)
   const unit = units.find(item => item.id === unitId) ??
     units.find(item => item.isBaseUnit && canSelectUnit(product, item)) ?? units.find(item => canSelectUnit(product, item)) ?? units[0]
-  const selectable = Boolean(unit && quantity && canSelectQuantity(product, unit, quantity))
+  const selectable = Boolean(price && unit && quantity && canSelectQuantity(product, unit, quantity))
   const available = units.some(item => canSelectUnit(product, item))
   return (
     <div className="product-choice">
@@ -32,10 +34,10 @@ function ProductChoice({ product, onSelect, disabled }: { product: ProductMatch;
       <p>{product.brandOrLaboratory} · Código: {product.internalCode}</p>
       {product.barcode && <p>Código de barras: {product.barcode}</p>}
       <dl className="product-facts">
-        <div><dt>Precio por unidad base</dt><dd>S/ {decimalLabel(product.retailPrice, 2)}</dd></div>
+        <div><dt>Precio por unidad base</dt><dd>S/ {decimalLabel(price ?? product.retailPrice, 2)}</dd></div>
         <div><dt>Stock vendible en unidades base</dt><dd>{decimalLabel(product.quantityAvailableBase)}</dd></div>
       </dl>
-      <div className="product-selection">
+      <div className="product-selection"><label>Tipo de precio<select aria-label="Tipo de precio" value={priceKind} disabled={disabled} onChange={event => setPriceKind(event.target.value === 'wholesale' ? 'wholesale' : 'retail')}><option value="retail">Minorista</option><option value="wholesale" disabled={product.wholesalePrice === null}>Mayorista{product.wholesalePrice === null ? ' · sin configurar' : ''}</option></select></label>
         <div className="form-field"><label htmlFor={id}>Presentación de {product.name}</label>
           <select id={id} value={unit?.id ?? ''} disabled={disabled || units.length === 0} onChange={event => setUnitId(event.target.value)}>
             {units.length === 0 && <option value="">Sin presentaciones activas</option>}
@@ -44,9 +46,9 @@ function ProductChoice({ product, onSelect, disabled }: { product: ProductMatch;
         </div>
         <TextField label={`Cantidad a agregar de ${product.name}`} value={quantityText} inputMode="decimal" maxLength={32} disabled={disabled}
           onChange={event => setQuantityText(event.target.value)} error={!quantity ? 'Cantidad positiva, hasta 12 decimales.' : undefined} />
-        <Button disabled={disabled || !selectable} aria-describedby={!selectable ? `${id}-availability` : undefined} onClick={() => { if (unit && quantity && selectable) onSelect({ product, unit, quantity }) }} aria-label={`Seleccionar ${product.name}`}><Plus size={18} aria-hidden="true" />Agregar</Button>
+        <Button disabled={disabled || !selectable} aria-describedby={!selectable ? `${id}-availability` : undefined} onClick={() => { if (unit && quantity && selectable) onSelect({ product, unit, quantity, priceKind }) }} aria-label={`Seleccionar ${product.name}`}><Plus size={18} aria-hidden="true" />Agregar</Button>
       </div>
-      {unit && <p className="selection-price">S/ {decimalLabel(multiply(product.retailPrice, unit.conversionToBase), 2)} por {unit.name} · {decimalLabel(unit.conversionToBase)} unidades base</p>}
+      {unit && price && <p className="selection-price">S/ {decimalLabel(multiply(price!, unit.conversionToBase), 2)} por {unit.name} · {decimalLabel(unit.conversionToBase)} unidades base</p>}
       {!selectable && <p id={`${id}-availability`}>No hay stock vendible suficiente para esta presentación o no hay presentaciones activas.</p>}
     </div>
   )
@@ -82,6 +84,8 @@ export function ProductSearchPanel({ onSelect, disabled }: { onSelect: (selectio
               <Button variant="secondary" disabled={disabled} onClick={() => setChoice(product)}>Elegir presentación</Button>
             </li>)}</ul></>}
       </div>
+      {query.isSuccess && !query.isFetching && text && query.data.equivalentInBranch.length > 0 && <section aria-label="Coincidencias estructuradas en esta sucursal"><h3>Coincidencias estructuradas · misma sucursal</h3><p>No son recomendaciones médicas ni sustitución terapéutica automática. Revisa composición, forma y concentración documentadas.</p><ul>{query.data.equivalentInBranch.map(row => <li key={row.product.businessProductId}><strong>{row.product.name}</strong><p>{row.description} · Stock vendible base: {decimalLabel(row.product.quantityAvailableBase)}</p><Button disabled={disabled} onClick={() => setChoice(row.product)}>Elegir presentación de {row.product.name}</Button></li>)}</ul></section>}
+      {query.isSuccess && !query.isFetching && text && query.data.otherBranchAvailability.length > 0 && <section aria-label="Disponibilidad en otras sucursales"><h3>Otras sucursales · solo consulta</h3><ul>{query.data.otherBranchAvailability.map(row => <li key={row.branchId + row.businessProductId}>{[...matches, ...query.data.equivalentInBranch.map(v => v.product)].find(p => p.businessProductId === row.businessProductId)?.name ?? 'Producto relacionado'} · {row.branchName} · {decimalLabel(row.quantityAvailableBase)} base. No se puede agregar este stock al ticket de la sede actual.</li>)}</ul></section>}
       <Modal open={choice !== null} title="Agregar al ticket" description={choice?.name} onClose={() => setChoice(null)}>
         {choice && <ProductChoice key={choice.businessProductId} product={choice} disabled={disabled} onSelect={selection => { onSelect(selection); setChoice(null) }} />}
       </Modal>

@@ -46,9 +46,9 @@ public sealed class InventoryQueriesTests(PostgreSqlFixture fixture)
                 new(tenant.TenantId, branch, null, Guid.NewGuid().ToString("N"), tenant.Identity.ActorId), TestContext.Current.CancellationToken);
             await source.GetRequiredService<ReplacePurchaseLinesHandler>().HandleAsync(new(tenant.TenantId, purchase.Id,
                 values.Select(value => new PurchaseLineInput(product.Id, presentation.Id, value.Quantity, 12m, "L", today.AddDays(value.Days))).ToArray(),
-                tenant.Identity.ActorId), TestContext.Current.CancellationToken);
+                tenant.Identity.ActorId, MediPOS.IntegrationTests.Modules.Purchasing.PurchaseTestData.Revision(fixture, tenant.TenantId, purchase.Id)), TestContext.Current.CancellationToken);
             await source.GetRequiredService<ConfirmPurchaseHandler>().HandleAsync(
-                new(tenant.TenantId, purchase.Id, tenant.Identity.ActorId), TestContext.Current.CancellationToken);
+                new(tenant.TenantId, purchase.Id, tenant.Identity.ActorId, MediPOS.IntegrationTests.Modules.Purchasing.PurchaseTestData.Revision(fixture, tenant.TenantId, purchase.Id)), TestContext.Current.CancellationToken);
             var context = source.GetRequiredService<MediPosDbContext>();
             return await (from lot in context.InventoryLots
                           join line in context.PurchaseLines on lot.SourcePurchaseLineId equals line.Id

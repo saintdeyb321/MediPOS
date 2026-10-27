@@ -44,6 +44,8 @@ namespace MediPOS.Infrastructure.Persistence;
 
 public sealed partial class MediPosDbContext(DbContextOptions<MediPosDbContext> options, ITenantDataContext tenantContext) : DbContext(options)
 {
+    internal bool RecoverableWriteActive { get; set; }
+    internal OperationReceiptRow? PendingImportReceipt { get; set; }
     private bool _officialCatalogWrites;
     private int _officialCurationWrites;
     private int _officialRefreshWrites;
@@ -124,6 +126,7 @@ public sealed partial class MediPosDbContext(DbContextOptions<MediPosDbContext> 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
+        modelBuilder.ApplyConfiguration(new OperationReceiptConfiguration());
         modelBuilder.HasPostgresExtension("public", "pg_trgm");
         modelBuilder.HasPostgresExtension("public", "unaccent");
         modelBuilder.HasDbFunction(typeof(OperationalReportMoney).GetMethod(nameof(OperationalReportMoney.LotCapital))!)
@@ -549,6 +552,8 @@ public sealed partial class MediPosDbContext(DbContextOptions<MediPosDbContext> 
     private void ValidateTenantWrites()
     {
         ValidateInvitationWrites();
+        if (ChangeTracker.Entries<OperationReceiptRow>().Any(e => e.State is EntityState.Modified or EntityState.Deleted || e.State == EntityState.Added && !RecoverableWriteActive && PendingImportReceipt != e.Entity))
+            throw new InvalidOperationException("Operation receipts are append-only and require their coordinator.");
         foreach (var entry in ChangeTracker.Entries().Where(value => value.State is EntityState.Added or EntityState.Modified or EntityState.Deleted))
         {
             if (_officialRefreshWrites != 0)
@@ -585,6 +590,7 @@ public sealed partial class MediPosDbContext(DbContextOptions<MediPosDbContext> 
                 throw new InvalidOperationException("Catalog curation cannot modify staging, commercial data or existing global products.");
             Guid? tenantId = entry.Entity switch
             {
+                OperationReceiptRow value => value.TenantId,
                 License value => value.TenantId,
                 Notification value => value.TenantId,
                 SyncDevice value => value.TenantId,

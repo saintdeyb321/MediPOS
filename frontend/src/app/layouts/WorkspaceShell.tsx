@@ -1,3 +1,4 @@
+import { WorkspaceOutboxSync } from '../../features/offline'
 import { useEffect, useRef } from 'react'
 import { Outlet, useLocation, useNavigate } from 'react-router'
 import { X } from 'lucide-react'
@@ -52,7 +53,7 @@ export function WorkspaceShell({ workspace }: { workspace: Workspace }) {
       </Dialog>
       <div className="workspace">
         <WorkspaceHeader workspace={workspace} openMenu={() => mobile.current?.showModal()} />
-        <main ref={content} id="contenido" tabIndex={-1} className="workspace-main">{submodule && <Breadcrumbs items={crumbs.slice(1)} />}<Outlet /></main>
+        <WorkspaceOutboxSync /><main ref={content} id="contenido" tabIndex={-1} className="workspace-main">{submodule && <Breadcrumbs items={crumbs.slice(1)} />}<Outlet /></main>
         {relative !== 'ventas' && <footer className="workspace-footer"><span>MediPOS · Perú</span></footer>}
       </div>
     </div>

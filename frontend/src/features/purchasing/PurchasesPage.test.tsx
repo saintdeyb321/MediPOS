@@ -8,7 +8,10 @@ import { id, json, mountOperation, operationServer, purchase, storedLine, time, 
 import { PurchasesPage } from './PurchasesPage'
 
 async function begin(fake: ReturnType<typeof operationServer>) {
+  fireEvent.click(screen.getByRole('button', { name: 'Nueva recepción' }))
+  if (!screen.queryByRole('textbox', { name: 'Referencia documental (opcional)' })) fireEvent.click(screen.getByRole('button', { name: 'Nueva recepción' }))
   fireEvent.change(screen.getByRole('textbox', { name: 'Referencia documental (opcional)' }), { target: { value: 'REF-UNIT' } })
+  if (screen.getByRole('button', { name: 'Nueva recepción' }).getAttribute('disabled') === null && !screen.queryByRole('textbox', { name: 'Referencia documental (opcional)' })) fireEvent.click(screen.getByRole('button', { name: 'Nueva recepción' }))
   fireEvent.click(screen.getByRole('button', { name: 'Continuar con productos y lotes' }))
   await waitFor(() => expect(fake.state.purchases).toHaveLength(1))
   return screen.findByRole('region', { name: 'Productos y lotes' })
@@ -55,13 +58,13 @@ it('restores the addressed receipt after reload without any automatic write', as
   expect(await review.findByText(/Producto sintético unitario/)).toBeInTheDocument()
   expect(review.getByText('BATCH-UNIT / 2027-12-31')).toBeInTheDocument(); expect(fake.writes()).toHaveLength(0)
 })
-it('requires another review if lines changed in the server before confirmation, without posting', async () => {
+it('rejects confirmation under the server precondition if lines changed after review, without retry', async () => {
   const fake = operationServer(); mountOperation(fake, <PurchasesPage />, loaded(fake))
   const checkbox = await screen.findByRole('checkbox', { name: /recibí físicamente/ }); await waitFor(() => expect(checkbox).toBeEnabled()); fireEvent.click(checkbox)
   fake.state.lines = [{ ...storedLine, id: id(98), quantity: storedLine.baseQuantity }]
   fireEvent.click(screen.getByRole('button', { name: 'Confirmar recepción una vez' }))
   await screen.findByText('No pudimos completar la operación de compra')
-  expect(fake.writes()).toHaveLength(0); expect(screen.getByRole('button', { name: 'Confirmar recepción una vez' })).toBeDisabled()
+  expect(fake.writes()).toHaveLength(1); expect(fake.state.purchases[0]?.status).toBe('draft'); expect(screen.getByRole('button', { name: 'Confirmar recepción una vez' })).toBeDisabled()
 })
 it('invalidates receipt stock, lots, expiration and POS search only in the affected tenant/branch', async () => {
   const fake = operationServer(); let client!: QueryClient
@@ -79,7 +82,9 @@ it('invalidates receipt stock, lots, expiration and POS search only in the affec
 })
 it('blocks another creation on lost response and reference lookup does not silently acknowledge it', async () => {
   const fake = operationServer(); fake.state.loseCreate = true; const view = mountOperation(fake, <PurchasesPage />)
+  if (!screen.queryByRole('textbox', { name: 'Referencia documental (opcional)' })) fireEvent.click(screen.getByRole('button', { name: 'Nueva recepción' }))
   fireEvent.change(screen.getByRole('textbox', { name: 'Referencia documental (opcional)' }), { target: { value: 'REF-UNIT' } })
+  if (screen.getByRole('button', { name: 'Nueva recepción' }).getAttribute('disabled') === null && !screen.queryByRole('textbox', { name: 'Referencia documental (opcional)' })) fireEvent.click(screen.getByRole('button', { name: 'Nueva recepción' }))
   fireEvent.click(screen.getByRole('button', { name: 'Continuar con productos y lotes' }))
   await screen.findByRole('heading', { name: 'Recepción pendiente de conciliación' })
   expect(screen.getByRole('button', { name: 'Nueva recepción' })).toBeDisabled()
@@ -95,6 +100,7 @@ it('blocks another creation on lost response and reference lookup does not silen
 it('never reconciles a lost creation merely by finding an older confirmed receipt with that reference', async () => {
   const fake = operationServer(); fake.state.loseCreate = true; fake.state.purchases = [{ ...purchase, id: id(99), status: 'confirmed', confirmedAt: time, confirmedByActorId: id(1) }]
   mountOperation(fake, <PurchasesPage />)
+  if (!screen.queryByRole('textbox', { name: 'Referencia documental (opcional)' })) fireEvent.click(screen.getByRole('button', { name: 'Nueva recepción' }))
   fireEvent.change(screen.getByRole('textbox', { name: 'Referencia documental (opcional)' }), { target: { value: 'REF-UNIT' } }); fireEvent.click(screen.getByRole('button', { name: 'Continuar con productos y lotes' }))
   await screen.findByRole('heading', { name: 'Recepción pendiente de conciliación' })
   fireEvent.change(screen.getByRole('textbox', { name: 'Referencia de la recepción a consultar' }), { target: { value: 'REF-UNIT' } }); fireEvent.click(screen.getByRole('button', { name: 'Buscar referencia' }))
@@ -155,6 +161,7 @@ it('allows Pharmacist purchasing but no supplier administration, and rejects Cas
 })
 it.each([403, 409, 429])('keeps HTTP %s visible without an automatic retry or a false success', async status => {
   const fake = operationServer(); fake.state.reject = status; mountOperation(fake, <PurchasesPage />)
+  if (screen.getByRole('button', { name: 'Nueva recepción' }).getAttribute('disabled') === null && !screen.queryByRole('textbox', { name: 'Referencia documental (opcional)' })) fireEvent.click(screen.getByRole('button', { name: 'Nueva recepción' }))
   fireEvent.click(screen.getByRole('button', { name: 'Continuar con productos y lotes' }))
   await screen.findByText('No pudimos completar la operación de compra'); expect(fake.writes()).toHaveLength(1)
   expect(screen.queryByRole('heading', { name: 'MERCADERÍA REGISTRADA' })).not.toBeInTheDocument()
@@ -167,6 +174,7 @@ it('aborts an in-flight write on context change and discards its late response',
     return normal(path, init)
   })
   const view = mountOperation(fake, <PurchasesPage />)
+  if (screen.getByRole('button', { name: 'Nueva recepción' }).getAttribute('disabled') === null && !screen.queryByRole('textbox', { name: 'Referencia documental (opcional)' })) fireEvent.click(screen.getByRole('button', { name: 'Nueva recepción' }))
   fireEvent.click(screen.getByRole('button', { name: 'Continuar con productos y lotes' }))
   await waitFor(() => expect(finish).toBeTypeOf('function'))
   view.changeContext({ ...workspace, branchId: id(99), branch: { ...workspace.branch, id: id(99), name: 'Otra sede unitaria' } })
@@ -181,7 +189,7 @@ it('cancels the initial receipt read when starting a new one so its late respons
     return normal(path, init)
   })
   mountOperation(fake, <PurchasesPage />, '?purchase=' + id(20)); await waitFor(() => expect(finish).toBeTypeOf('function'))
-  fireEvent.click(screen.getByRole('button', { name: 'Nueva recepción' })); expect(signal!.aborted).toBe(true)
+  fireEvent.click(screen.getByRole('button', { name: 'Nueva recepción' })); fireEvent.click(screen.getByRole('button', { name: 'Continuar con otra recepción' })); expect(signal!.aborted).toBe(true)
   await act(async () => { finish() })
   expect(screen.queryByRole('region', { name: 'Recepción persistida' })).not.toBeInTheDocument(); expect(screen.getByRole('form', { name: 'Nueva recepción' })).toBeInTheDocument(); expect(fake.writes()).toHaveLength(0)
 })

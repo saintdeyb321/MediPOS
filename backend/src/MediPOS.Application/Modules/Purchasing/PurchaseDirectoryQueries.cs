@@ -5,7 +5,10 @@ using MediPOS.Application.Modules.Purchasing.ReplacePurchaseLines;
 
 namespace MediPOS.Application.Modules.Purchasing;
 
-public sealed record PurchaseView(PurchaseDetails Purchase, IReadOnlyList<PurchaseLineDetails> Lines);
+public sealed record PurchaseView(PurchaseDetails Purchase, IReadOnlyList<PurchaseLineDetails> Lines)
+{
+    public string Revision => PurchaseRevision.For(Purchase.Id, Lines);
+}
 public interface IPurchaseDirectoryReader
 {
     Task<IReadOnlyList<SupplierDetails>> SuppliersAsync(Guid tenantId, int offset, int limit, CancellationToken token);
