@@ -2,7 +2,7 @@ import { useNavigationProtection } from '../../shared/ui/NavigationProtection'
 import { useEffect, useRef, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { useSearchParams } from 'react-router'
-import { useRuntime, useWorkspace } from '../access'
+import { isUuid, useRuntime, useWorkspace } from '../access'
 import { scopedKey } from '../../shared/api/contracts'
 import { ApiError } from '../../shared/api/http'
 import type { JsonNumber } from '../../shared/api/exactJson'
@@ -46,7 +46,7 @@ export function useInventoryWrite() {
     finally { running.current = false; if (mounted.current) setBusy(false) }
   }
   useNavigationProtection({ busy, pending })
-  return { reconcile, busy, pending, error, result, locked: busy || pending || denied || !http,
+  return { reconcile, recoverable: isUuid(params.get('inventoryRequest') ?? ''), busy, pending, error, result, locked: busy || pending || denied || !http,
     adjust: (lotId: string, quantity: JsonNumber, reason: string) => run('adjustment', lotId, (signal, requestId) => inventoryApi(http!).adjust(w, lotId, quantity, reason, signal, { id: requestId, branchId: w.branchId })),
     minimum: (productId: string, quantity: JsonNumber) => run('minimum', productId, (signal, requestId) => inventoryApi(http!).minimum(w, productId, quantity, signal, { id: requestId, branchId: w.branchId })),
   }

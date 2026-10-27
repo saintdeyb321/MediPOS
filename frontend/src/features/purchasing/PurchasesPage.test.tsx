@@ -91,11 +91,11 @@ it('blocks another creation on lost response and reference lookup does not silen
   fireEvent.change(screen.getByRole('textbox', { name: 'Referencia de la recepción a consultar' }), { target: { value: 'REF-UNIT' } })
   fireEvent.click(screen.getByRole('button', { name: 'Buscar referencia' }))
   fireEvent.click(await screen.findByRole('button', { name: 'Consultar recepción de ' + time }))
-  await screen.findByRole('region', { name: 'Recepción persistida' })
+  await screen.findByRole('region', { name: 'Productos y lotes' })
   expect(screen.getByRole('button', { name: 'Continuar tras conciliación verificada' })).toBeDisabled()
   expect(screen.getByTestId('location').textContent).toContain('receiptPending=create'); expect(fake.writes()).toHaveLength(1)
   view.unmount(); mountOperation(fake, <PurchasesPage />, '?receiptPending=create&purchase=' + id(20))
-  await screen.findByRole('region', { name: 'Recepción persistida' }); expect(screen.getByRole('button', { name: 'Nueva recepción' })).toBeDisabled(); expect(fake.writes()).toHaveLength(1)
+  await screen.findByRole('region', { name: 'Productos y lotes' }); expect(screen.getByRole('button', { name: 'Nueva recepción' })).toBeDisabled(); expect(fake.writes()).toHaveLength(1)
 })
 it('never reconciles a lost creation merely by finding an older confirmed receipt with that reference', async () => {
   const fake = operationServer(); fake.state.loseCreate = true; fake.state.purchases = [{ ...purchase, id: id(99), status: 'confirmed', confirmedAt: time, confirmedByActorId: id(1) }]
@@ -145,7 +145,9 @@ it('blocks medicines without lots and new products without presentations, never 
 it('creates suppliers with optional RUC/contact only for Owner and paginates suppliers on the server', async () => {
   const fake = operationServer(); fake.state.suppliers = Array.from({ length: 21 }, (_, index) => ({ id: id(100 + index), name: 'Proveedor ' + index, ruc: null, contact: null, isActive: true, createdAt: time }))
   mountOperation(fake, <PurchasesPage />)
+  fireEvent.click(screen.getByRole('button', { name: 'Nueva recepción' })); fireEvent.click(screen.getByRole('button', { name: 'Elegir proveedor' }))
   const next = await screen.findByRole('button', { name: 'Página siguiente' }); await waitFor(() => expect(next).toBeEnabled()); fireEvent.click(next); await screen.findByRole('button', { name: 'Elegir Proveedor 20' })
+  fireEvent.click(screen.getByRole('button', { name: 'Nuevo proveedor' }))
   const form = within(screen.getByRole('form', { name: 'Crear proveedor' }))
   fireEvent.change(form.getByRole('textbox', { name: 'Nombre del proveedor' }), { target: { value: 'Proveedor sin RUC unitario' } }); fireEvent.click(form.getByRole('button', { name: 'Crear proveedor una vez' }))
   await screen.findByText(/Proveedor creado mediante la API/)
@@ -154,6 +156,7 @@ it('creates suppliers with optional RUC/contact only for Owner and paginates sup
 it('allows Pharmacist purchasing but no supplier administration, and rejects Cashier before any query', async () => {
   const fake = operationServer(); const pharmacist = { ...workspace, access: { ...workspace.access, role: 'pharmacist' as const } }
   const view = mountOperation(fake, <PurchasesPage />, '', pharmacist)
+  fireEvent.click(screen.getByRole('button', { name: 'Nueva recepción' })); fireEvent.click(screen.getByRole('button', { name: 'Elegir proveedor' }))
   await screen.findByText('No hay proveedores en esta página.'); expect(screen.queryByRole('form', { name: 'Crear proveedor' })).not.toBeInTheDocument()
   expect(screen.getByRole('button', { name: 'Continuar con productos y lotes' })).toBeEnabled()
   view.unmount(); const empty = operationServer(); mountOperation(empty, <PurchasesPage />, '', { ...workspace, access: { ...workspace.access, role: 'cashier' } })

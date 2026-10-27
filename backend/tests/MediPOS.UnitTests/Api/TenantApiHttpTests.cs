@@ -76,8 +76,10 @@ public sealed class TenantApiHttpTests
         using var supplier = await Json(host, "POST", tenant + "/suppliers", new { name = "Proveedor" }, csrf, 201);
         using var purchase = await Json(host, "POST", operational + "/purchases", new { supplierId = supplier.RootElement.GetProperty("id").GetGuid(), documentReference = "F001-123" }, csrf, 201);
         var purchaseId = purchase.RootElement.GetProperty("id").GetGuid();
-        using var purchasedLines = await Json(host, "PUT", tenant + $"/purchases/{purchaseId:D}/lines", new { lines = new[] { new { businessProductId = productId, productUnitId = unitId, quantity = 10m, unitCost = 1.25m, batchNumber = (string?)null, expirationDate = (string?)null } } }, csrf);
-        using var receipt = await Json(host, "POST", tenant + $"/purchases/{purchaseId:D}/confirm", new { }, csrf);
+        using var reviewedEmpty = await Json(host, "GET", operational + $"/purchases/{purchaseId:D}");
+        using var purchasedLines = await Json(host, "PUT", tenant + $"/purchases/{purchaseId:D}/lines", new { expectedRevision = reviewedEmpty.RootElement.GetProperty("revision").GetString(), lines = new[] { new { businessProductId = productId, productUnitId = unitId, quantity = 10m, unitCost = 1.25m, batchNumber = (string?)null, expirationDate = (string?)null } } }, csrf);
+        using var reviewedLines = await Json(host, "GET", operational + $"/purchases/{purchaseId:D}");
+        using var receipt = await Json(host, "POST", tenant + $"/purchases/{purchaseId:D}/confirm", new { expectedRevision = reviewedLines.RootElement.GetProperty("revision").GetString() }, csrf);
         Assert.Equal("confirmed", receipt.RootElement.GetProperty("status").GetString()); Assert.Single(state.Lots); Assert.Single(state.Movements);
         using var receivedPurchase = await Json(host, "GET", operational + $"/purchases/{purchaseId:D}"); Assert.Equal("confirmed", receivedPurchase.RootElement.GetProperty("purchase").GetProperty("status").GetString()); Assert.Single(receivedPurchase.RootElement.GetProperty("lines").EnumerateArray());
         using var stock = await Json(host, "GET", operational + "/inventory/stock"); Assert.Equal(10m, stock.RootElement[0].GetProperty("quantityAvailableBase").GetDecimal());

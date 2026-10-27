@@ -127,6 +127,7 @@ public sealed partial class MediPosDbContext(DbContextOptions<MediPosDbContext> 
     {
         base.OnModelCreating(modelBuilder);
         modelBuilder.ApplyConfiguration(new OperationReceiptConfiguration());
+        modelBuilder.Entity<OperationReceiptRow>().HasQueryFilter(value => SelectedTenantId.HasValue && value.TenantId == SelectedTenantId);
         modelBuilder.HasPostgresExtension("public", "pg_trgm");
         modelBuilder.HasPostgresExtension("public", "unaccent");
         modelBuilder.HasDbFunction(typeof(OperationalReportMoney).GetMethod(nameof(OperationalReportMoney.LotCapital))!)

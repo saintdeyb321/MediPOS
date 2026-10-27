@@ -1,3 +1,4 @@
+using System.Globalization;
 using MediPOS.Application.Modules.Catalog;
 using MediPOS.Application.Modules.Catalog.ReplaceProductUnits;
 using MediPOS.Infrastructure.Persistence;
@@ -22,9 +23,10 @@ internal sealed class CatalogDirectoryReader(MediPosDbContext context) : ICatalo
     public async Task<CatalogProductView?> ProductAsync(Guid tenantId, Guid productId, CancellationToken token)
     {
         context.SelectTenant(tenantId);
-        var product = await context.BusinessProducts.AsNoTracking().SingleOrDefaultAsync(value => value.Id == productId, token).ConfigureAwait(false);
+        var snapshot = await context.BusinessProducts.AsNoTracking().Where(value => value.Id == productId).Select(value => new { Product = value, Version = EF.Property<uint>(value, "Version") }).SingleOrDefaultAsync(token).ConfigureAwait(false);
+        var product = snapshot?.Product;
         if (product is null) return null;
         var units = await context.ProductUnits.AsNoTracking().Where(value => value.BusinessProductId == productId).OrderBy(value => value.Id).ToListAsync(token).ConfigureAwait(false);
-        return new(BusinessProductDetails.From(product), units.Select(ProductUnitDetails.From).ToArray());
+        return new(BusinessProductDetails.From(product), units.Select(ProductUnitDetails.From).ToArray(), snapshot!.Version.ToString(CultureInfo.InvariantCulture));
     }
 }

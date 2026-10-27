@@ -1,5 +1,39 @@
 # MediPOS backend
 
+## Fases 2–3: actualización DEV pendiente (2026-10-27)
+
+Continuación local de `a0c0ce1`, sin instalación ni escritura en DEV/LAB/QA. Estado y evidencias focalizadas: [handoff vigente](../docs/FRONTEND_INTEGRATION_PLAN.md). La migración **38** `20261027043336_AddRecoverableOperationsAndLocalCorrections` agrega constancias inmutables con FORCE RLS y permite el código de auditoría de corrección local; no modifica filas comerciales ni recrea extensiones. Snapshot/designer 38 explicitan el esquema `public` de extensiones existentes para eliminar drift de metadatos. No se modificaron migraciones aplicadas.
+
+Contratos incrementales (T=`/api/tenants/{tenantId}`, B=`T/branches/{branchId}`):
+
+- GET `B/operations/{requestId}`: constancia de la intención original para el actor/membresía/sucursal autorizados; 404 `operation.not_observed` **no demuestra rollback**. No acepta actor del cliente.
+- POST proveedor, ajuste, borrador y Excel; PUT mínimo: `Idempotency-Key` UUID estable, sucursal de ruta o `X-MediPOS-Branch`. Payload distinto devuelve 409 `operation.intention_conflict`; simultáneo 409 `operation.in_progress`; ambos conservan el pendiente. Replay devuelve el cuerpo original y el 200/201 de su operación. Excel recupera el job original, sin convertir la importación por filas en una transacción global.
+- PUT líneas/POST confirmar compra exige `expectedRevision` de la consulta revisada, comprobado bajo bloqueo transaccional; conflicto `purchasing.receipt_changed` exige nueva revisión.
+- GET `B/operational-products?q=&categoryId=&offset=&limit=` y `B/operational-categories`: acceso operacional Owner/Pharmacist/Cashier, sin conceder administración.
+- PUT `T/products/{productId}/local-data`: Owner; `expectedRevision` del GET detalle (xmin), nombre/categoría/marca/código de barras/medicina validados y auditados. Mantiene tipo, código interno, precios, referencias globales y snapshots históricos; productos globales no se editan aquí.
+
+**Procedimiento preparado; NO ejecutar sin aprobación específica:**
+
+1. Reservar mantenimiento solo DEV, identificar su proceso/destino y detenerlo con autorización. Verificar PostgreSQL18 loopback5432, `medipos_dev` y prefijo oficial exacto 37; si difiere, detenerse. Respaldo privado con `pg_dump` y pgpass existentes; verificar hash, listado y decodificación y conservar huellas/conteos previos. No confundir lectura del backup con prueba de restauración.
+2. Revisar el SQL offline 37→38 y ejecutar externamente las regresiones PostgreSQL preparadas antes de aprobarlo. Cargar temporalmente la conexión administrativa **solo DEV** desde configuración privada en `ConnectionStrings__MediPosDatabase`; no usar argumentos con secretos, cambiar User Secrets ni imprimir la variable.
+3. Desde `backend/`, únicamente en esa sesión administrativa privada:
+
+   ```powershell
+   try {
+     dotnet ef database update 20261027043336_AddRecoverableOperationsAndLocalCorrections --project src/MediPOS.Infrastructure --startup-project src/MediPOS.Infrastructure
+     if ($LASTEXITCODE -ne 0) { throw 'Detener: migración DEV no completada.' }
+     & 'C:\Program Files\PostgreSQL\18\bin\psql.exe' -X -w -h localhost -p 5432 -U postgres -d medipos_dev -f tools/dev-recoverable-runtime-grants.sql
+     if ($LASTEXITCODE -ne 0) { throw 'Detener: permisos DEV no verificados.' }
+   } finally {
+     Remove-Item Env:\ConnectionStrings__MediPosDatabase -ErrorAction SilentlyContinue
+   }
+   ```
+
+4. Verificar 38 IDs oficiales, constancias FORCE RLS/trigger, solo SELECT/INSERT del runtime, sin privilegios elevados y huellas previas conservadas. El SQL de GRANT tiene guardas de base/puerto/servidor/rol y revoca cualquier privilegio sobre la **tabla nueva** antes de conceder solo esos dos. Runtime y credenciales Google existentes permanecen intactos.
+5. Tras aprobación de ejecución, compilar frontend en `frontend/` con `npm.cmd run build`; iniciar DEV ordinario desde `backend/` con `dotnet run --project src/MediPOS.Api --launch-profile https-local` (https://localhost:7243). Verificar readiness/plataforma deshabilitada y realizar el recorrido Chrome del handoff. Sin copiar builds ni reiniciar LAB/QA.
+
+Ante fallo, detenerse y conservar evidencia privada; nunca borrar constancias, resetear base ni ejecutar Down después de aceptar nuevas operaciones. Una restauración de backup o sustitución de binarios requiere autorización y ventana aparte, comprobando operaciones posteriores. La creación de tablas/constancias en DEV sigue **PENDIENTE DE APROBACIÓN**; el usuario realiza las simulaciones comerciales.
+
 **Integration source update (2026-10-17), NOT deployed:** versioned presentations and employee invitations are implemented with the React contingency PWA. Historical LAB evidence below still describes the installed 34-migration release. **DEV exception2026-10-22:** explicit approval completed official35–37 with private backup and minimum invitation grants; see the DEV section below. No LAB/QA upgrade, startup migration or production-readiness claim is added. See [FRONTEND_INTEGRATION_PLAN.md](../docs/FRONTEND_INTEGRATION_PLAN.md).
 
 Requires the .NET 10 SDK. Do not check/start/install Docker or run Testcontainers locally. The explicitly authorized F2.0 development exception below permits only the existing local PostgreSQL 18 database `medipos_dev`; it does not authorize running the container integration suite.

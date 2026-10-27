@@ -51,6 +51,7 @@ function server() {
   const fetcher = vi.fn<typeof fetch>().mockImplementation(async (input, init) => {
     const path = String(input); const method = init?.method ?? 'GET'
     if (path === '/auth/csrf') return json({ requestToken: 'unit-test-csrf' })
+    if (method === 'GET' && path.includes('/operations/')) return json({ requestId: path.split('/').at(-1), kind: 'sale-draft', resultJson: stringifyExactJson(emptySale()) })
     if (path.includes('/products/search?')) return json({ directMatches: [product], equivalentInBranch: [], otherBranchAvailability: [] })
     if (path.endsWith('/cash-sessions/current')) return json({ session: state.cash })
     if (method === 'POST' && path.endsWith('/cash-sessions')) {
@@ -120,6 +121,7 @@ function mount(fake: ReturnType<typeof server>, search = '') {
 }
 async function select(quantity = '2') {
   fireEvent.change(screen.getByRole('searchbox'), { target: { value: 'producto' } })
+  fireEvent.click(await screen.findByRole('button', { name: 'Elegir presentación' }))
   const button = await screen.findByRole('button', { name: `Seleccionar ${product.name}` })
   fireEvent.change(screen.getByRole('textbox', { name: /Cantidad a agregar/ }), { target: { value: quantity } })
   fireEvent.click(button)
@@ -456,6 +458,25 @@ describe('POS local cart, cash and persisted draft', () => {
     expect(screen.getByRole('button', { name: 'Cobrar' })).toBeDisabled()
     expect(screen.getByRole('textbox', { name: /Cantidad en carrito/ })).toBeDisabled()
     expect(fake.writes()).toHaveLength(0)
+  })
+  it('recovers the current draft after a creation receipt instead of restoring its stale empty snapshot', async () => {
+    const fake = server(); fake.state.sale = withLines('3'); mount(fake, '?draftPending=' + id('60'))
+    fireEvent.click(await screen.findByRole('button', { name: 'Consultar constancia del borrador original' }))
+    await waitFor(() => expect(screen.getByRole('textbox', { name: /Cantidad en carrito/ })).toHaveValue('3'))
+    await waitFor(() => expect(screen.getByTestId('location')).not.toHaveTextContent('draftPending'))
+    expect(fake.fetcher.mock.calls.some(([path]) => String(path).endsWith(`/sales/${saleId}/draft`))).toBe(true)
+    expect(fake.writes()).toHaveLength(0)
+  })
+  it('preserves an unsaved cart when creation receipt recovery finds different persisted lines', async () => {
+    const fake = server(); fake.state.loseCreate = true; mount(fake); await select('2')
+    fireEvent.click(screen.getByRole('button', { name: 'Cobrar' }))
+    const recover = await screen.findByRole('button', { name: 'Consultar constancia del borrador original' })
+    await waitFor(() => expect(recover).toBeEnabled())
+    fake.state.sale = withLines('3'); fireEvent.click(recover)
+    await screen.findByRole('button', { name: 'Conservar mi carrito revisado' })
+    expect(screen.getByRole('textbox', { name: /Cantidad en carrito/ })).toHaveValue('2')
+    expect(screen.getByText('Total consultado en el servidor: S/ 0.30')).toBeInTheDocument()
+    expect(fake.writes()).toHaveLength(1)
   })
   it('recovers a known draft on demand without creating a new one', async () => {
     const fake = server(); fake.state.sale = withLines(); mount(fake, '?draftPending=1')

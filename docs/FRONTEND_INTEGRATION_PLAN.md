@@ -1,5 +1,32 @@
 # Plan maestro de integración frontend
 
+## Handoff vigente — fases 2–3, continuación de a0c0ce1 (2026-10-27)
+
+**IN_PROGRESS:** implementación local estabilizada; PostgreSQL externo y simulaciones Chrome pendientes. No se aplicó la migración 38, no se modificaron DEV/LAB/QA ni servicios, y no se ejecutaron operaciones comerciales, commits, push o despliegues. Este handoff sustituye los siguientes históricos para esta tarea.
+
+| Hallazgo | Estado del correctivo local | Evidencia / límite |
+|---|---|---|
+| H01–H02 | Corregido en código | Compras conserva el editor ante GET fallido; navegación/recarga advierten antes de descartar. Direcciones de intenciones pendientes sobreviven en sessionStorage por identidad, sin cuerpos ni secretos; incluye invitaciones. |
+| H03 | Corregido en código | Revisión de IDs/snapshots exactos de líneas, comprobada dentro de la transacción y después del bloqueo en reemplazo/confirmación. Carrera PostgreSQL preparada, no ejecutada. |
+| H04–H05 | Corregido en código | Constancia + escritura atómicas para proveedor/ajuste/mínimo/borrador; Excel vincula el job original antes de filas independientes. Recuperación ligada a usuario/membresía/botica/sucursal y permiso actual. 409 conserva incertidumbre; replay mantiene 200/201 original. |
+| H06 | Fuera de alcance | A18/purga física pendiente. |
+| H07–H12 | Pendiente, fuera del correctivo funcional solicitado | No se rehízo UX/UI ni se certificaron los restantes hallazgos visuales. |
+| H13 | Corregido en código | Directos, equivalentes locales y otras sedes solo informativas; nunca se agrega stock remoto al carrito. |
+| H14 | Corregido en código | Catálogo operacional/categorías paginados con autorización operacional; directorios administrativos siguen siendo Owner. |
+| H15 | Corregido en código | Precio minorista/mayorista explícito, importe exacto y mayorista ausente rechazado. |
+| H16 | Corregido en código | Corrección local Owner con xmin consultado y comparado bajo bloqueo, validación medicinal y auditoría; sin editar referencia global, precios ni snapshots anteriores. |
+| H17 | Corregido en código | Outbox en workspace, independiente de pantalla; conserva ámbito/UUID, aborto, límites y consulta de conflictos existentes. |
+
+**Personal sigue `partial`:** invitación → Google real → aprobación del Owner emisor → sucursales/horarios → desactivación de trabajador utiliza contratos existentes. No se añadió envío de correo, cambio de rol, reactivación ni desactivación Owner. Aceptación con cuentas reales pendiente.
+
+**Contratos:** GET `B/operations/{requestId}`, `B/operational-products`, `B/operational-categories`; PUT `T/products/{productId}/local-data`. Compras requiere `expectedRevision` al reemplazar/confirmar; detalle de producto devuelve `revision` (xmin). Las cinco escrituras recuperables usan `Idempotency-Key` UUID estable y sucursal real (ruta o `X-MediPOS-Branch`); constancia ausente no prueba rollback. Pendientes antiguos sin UUID no tienen constancia retroactiva: conciliar referencia original sin reenvío ciego. Recuperar creación POS consulta el borrador vigente y conserva carrito local incompatible.
+
+**Migración preparada:** `20261027043336_AddRecoverableOperationsAndLocalCorrections` (38), tabla inmutable `tenant_operation_receipts` con FORCE RLS y acción auditada de corrección local. Snapshot/designer 38 alinean solo anotaciones `public.pg_trgm`/`public.unaccent`; script 37→38 sin eliminar/recrear extensiones ni transformar filas comerciales. Historias aplicadas intactas. GRANT DEV separado en `backend/tools/dev-recoverable-runtime-grants.sql`, solo SELECT/INSERT y guard de destino/rol/esquema.
+
+**Validación:** builds backend/API y proyecto de integración sin advertencias/errores; frontend compilado en carpeta aislada (aviso de bundle grande). 77 pruebas frontend focalizadas PASS (75 de los diez archivos seleccionados + 2 de recuperación por constancia en `PosPage.test.tsx`; restantes casos de ese archivo no seleccionados), 59 unitarias backend sin red y 24 HTTP loopback focalizadas PASS. HTTP con stores/OIDC de prueba: no acredita Google/PostgreSQL real. EF offline sin drift; script 37→38 generado e inspeccionado; lint focalizado PASS. Diez casos PostgreSQL nuevos preparados y compilados (rollback, replay, concurrencia, RLS, permisos/inmutabilidad, importación, corrección local incluyendo ABA), **NOT EXECUTED**. No se ejecutaron suites generales.
+
+**Siguiente operación exacta:** ejecutar externamente `RecoverableOperationPostgreSqlTests` y la regresión histórica 34→37, fijada a ese destino histórico. Solo con aprobación explícita, seguir `backend/README.md` §«Fases 2–3: actualización DEV pendiente»: respaldar/verificar prefijo 37, aplicar solo 38 y GRANT mínimos. No ejecutar Down tras usar constancias. Luego una sesión Chrome: editar recepción/navegar/cancelar; conflicto con dos pestañas; recuperar intención tras respuesta incierta; catálogo/precio/corrección local; Personal con identidades reales; navegar durante sincronización y revisar UUID. Sin aprobación no se inicia DEV ni se actualiza lo servido. MVP/comercialización/Release D sin aprobación.
+
 Estado: 2026-10-17. La autorización «Integración funcional integral frontend/backend» permite implementar presentaciones, invitaciones y bloque 09 en código/pruebas y sustituye sus bloqueos de aprobación históricos. No autoriza despliegue, migración persistente, escrituras comerciales ni configuración privilegiada. Los estados IN_PROGRESS distinguen integración implementada de aceptación comercial/externa pendiente; `BACKEND_PLAN.md` conserva el roadmap backend.
 
 ## Matriz de bloques

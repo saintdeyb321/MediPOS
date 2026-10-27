@@ -14,6 +14,7 @@ import { Drawer, Modal } from '../../shared/ui/Modal'
 import { DateText } from '../../shared/ui/DateText'
 import { Badge } from '../../shared/ui/Badge'
 import { Steps } from '../../shared/ui/Steps'
+import { useNavigationProtection } from '../../shared/ui/NavigationProtection'
 import { invitationsApi } from './invitations.api'
 import type { EmployeeInvitation } from './invitations.api'
 
@@ -30,6 +31,7 @@ export function EmployeeInvitationsPanel({ createOpen, onCreateOpen, onCreateClo
   function closeCreate() { hideCreate(); setRole('cashier'); setReviewed(false) }
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; controller.current?.abort() } }, [])
   const requestId = params.get('invitationRequest'); const actionId = params.get('invitationTarget'); const pending = Boolean(requestId || actionId)
+  useNavigationProtection({ busy, pending })
   const api = () => { if (!http) throw new ApiError(0, 'client.https_required'); return invitationsApi(http) }
   const listKey = scopedKey(w, 'employee-invitations', w.session.userId, w.access.membershipId)
   const list = useQuery({ queryKey: [...listKey, offset], queryFn: ({ signal }) => api().list(w, offset, undefined, signal), enabled: Boolean(http), retry: false, staleTime: 0, refetchOnWindowFocus: false })

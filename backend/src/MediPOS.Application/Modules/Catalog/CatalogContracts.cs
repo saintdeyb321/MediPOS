@@ -17,6 +17,7 @@ public interface IBusinessProductStore
 {
     Task<BusinessProduct?> FindAsync(Guid tenantId, Guid productId, CancellationToken cancellationToken);
     Task<BusinessProduct?> FindForUpdateAsync(Guid tenantId, Guid productId, CancellationToken cancellationToken) => FindAsync(tenantId, productId, cancellationToken);
+    uint ReadLockedVersion(BusinessProduct product) => throw new NotSupportedException("This store does not support versioned local corrections.");
     Task<bool> InternalCodeExistsAsync(Guid tenantId, string internalCode, CancellationToken cancellationToken);
     Task AddAsync(BusinessProduct product, AuditLog audit, CancellationToken cancellationToken);
     Task SaveAsync(BusinessProduct product, AuditLog audit, CancellationToken cancellationToken);

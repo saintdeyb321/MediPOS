@@ -10,6 +10,13 @@ namespace MediPOS.Api.Tenant;
 // Opt-in compatibility: existing unkeyed internal callers keep their contracts; the UI always supplies an intention.
 public sealed class RecoverableWriteFilter(string kind) : IEndpointFilter
 {
+    internal static int ReplayStatus(string operationKind) => operationKind switch
+    {
+        "supplier" or "sale-draft" or "product-import" => StatusCodes.Status201Created,
+        "adjustment" or "minimum" => StatusCodes.Status200OK,
+        _ => throw new InvalidOperationException("Unsupported recoverable operation."),
+    };
+
     public async ValueTask<object?> InvokeAsync(EndpointFilterInvocationContext context, EndpointFilterDelegate next)
     {
         var c = context.HttpContext;
@@ -43,7 +50,7 @@ public sealed class RecoverableWriteFilter(string kind) : IEndpointFilter
                         throw new InvalidOperationException("Recoverable writes require a successful typed JSON result.");
                     return JsonSerializer.Serialize(value.Value, TenantHttp.Json);
                 }, c.RequestAborted);
-            return response ?? Results.Text(receipt.ResultJson, "application/json", statusCode: 201);
+            return response ?? Results.Text(receipt.ResultJson, "application/json", statusCode: ReplayStatus(kind));
         }
         finally { c.Request.Body = originalBody; }
     }

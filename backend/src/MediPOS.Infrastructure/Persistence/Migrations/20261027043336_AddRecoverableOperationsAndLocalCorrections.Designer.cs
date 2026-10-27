@@ -23,8 +23,8 @@ namespace MediPOS.Infrastructure.Persistence.Migrations
                 .HasAnnotation("ProductVersion", "10.0.12")
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
-            NpgsqlModelBuilderExtensions.HasPostgresExtension(modelBuilder, "pg_trgm");
-            NpgsqlModelBuilderExtensions.HasPostgresExtension(modelBuilder, "unaccent");
+            NpgsqlModelBuilderExtensions.HasPostgresExtension(modelBuilder, "public", "pg_trgm");
+            NpgsqlModelBuilderExtensions.HasPostgresExtension(modelBuilder, "public", "unaccent");
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
             modelBuilder.Entity("MediPOS.Domain.Modules.AuditSupport.AuditLog", b =>

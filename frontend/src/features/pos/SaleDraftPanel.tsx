@@ -17,7 +17,8 @@ export function SaleDraftPanel({ draft }: { draft: DraftController }) {
     <div className="panel-heading"><h2 id="recovery-title">Recuperar venta pendiente</h2></div>
     <div className="pos-section-body">
       {draft.error != null && <ApiErrorState error={draft.error} title="No se pudo preparar la venta" />}
-      {draft.creationUnknown && <Button disabled={busy} onClick={() => void draft.recoverCreation()}>Consultar constancia del borrador original</Button>}
+      {draft.creationUnknown && <Button disabled={busy || !draft.canRecoverCreation} onClick={() => void draft.recoverCreation()}>Consultar constancia del borrador original</Button>}
+      {draft.creationUnknown && !draft.canRecoverCreation && <p role="alert">Solicitud anterior sin intención consultable: conserva esta dirección y localiza el identificador original con soporte; no crees otra venta.</p>}
       {draft.creationUnknown && <Notice tone="warning">No recibimos el identificador de la venta. No crees otra. Un operador debe localizar la operación antes de recuperarla.</Notice>}
       {draft.notice && <p role="status">{draft.notice}</p>}
       {draft.server && <p>Total consultado en el servidor: S/ {decimalLabel(draft.server.totalAmount, 2)}</p>}

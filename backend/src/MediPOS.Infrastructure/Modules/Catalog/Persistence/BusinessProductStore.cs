@@ -52,6 +52,8 @@ internal sealed class BusinessProductStore(MediPosDbContext context) : IBusiness
         }
         return await context.BusinessProducts.FromSqlInterpolated($"SELECT p.*, p.xmin FROM business_products p WHERE p.tenant_id = {tenantId} AND p.id = {productId} FOR UPDATE").SingleOrDefaultAsync(cancellationToken);
     }
+    public uint ReadLockedVersion(BusinessProduct product) => context.Entry(product).Property<uint>("Version").OriginalValue;
+
     public async Task SaveAsync(BusinessProduct product, AuditLog audit, CancellationToken cancellationToken)
     {
         RequireTransaction();

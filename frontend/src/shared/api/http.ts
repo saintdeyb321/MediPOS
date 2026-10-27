@@ -117,7 +117,7 @@ export class HttpClient {
         const problem = data && typeof data === 'object' ? data as Record<string, unknown> : {}
         const code = typeof problem.code === 'string' && /^[a-z0-9_.]{1,100}$/.test(problem.code) ? problem.code : `http.${response.status}`
         const trace = typeof problem.traceId === 'string' && /^[a-zA-Z0-9_-]{1,100}$/.test(problem.traceId) ? problem.traceId : undefined
-        throw new ApiError(response.status, code, trace, method !== 'GET' && response.status >= 500)
+        throw new ApiError(response.status, code, trace, method !== 'GET' && (response.status >= 500 || ['operation.in_progress', 'operation.intention_conflict'].includes(code)))
       }
       return data
     } catch (error) {

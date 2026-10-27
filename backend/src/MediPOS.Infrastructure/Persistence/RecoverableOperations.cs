@@ -41,7 +41,7 @@ internal sealed class RecoverableOperations(MediPosDbContext db, IAuthenticatedM
         try
         {
             acquired = await db.Database.SqlQuery<bool>($"SELECT pg_try_advisory_lock({lockId}) AS \"Value\"").SingleAsync(token);
-            if (!acquired) throw Conflict();
+            if (!acquired) throw new ApplicationErrorException(new("operation.in_progress", ErrorCategory.Conflict, "The original intention is still executing. Consult its receipt without creating another intention."));
             var existing = await db.Set<OperationReceiptRow>().AsNoTracking().SingleOrDefaultAsync(x => x.TenantId == tenantId && x.BranchId == branchId && x.ActorId == access.UserId && x.RequestId == requestId, token);
             if (existing is not null)
             {

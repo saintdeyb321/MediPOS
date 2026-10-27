@@ -71,17 +71,22 @@ export function useSaleDraft(lines: CartLine[], replaceCart: (lines: CartLine[])
     if (!http || busy.current || !requestId || !isUuid(requestId)) return
     busy.current = true; setPhase('loading'); setError(null); operation.current = new AbortController()
     try {
-      const result = await salesApi(http).recoverCreation({ tenantId, branchId }, requestId, operation.current.signal)
+      const receipt = await salesApi(http).recoverCreation({ tenantId, branchId }, requestId, operation.current.signal)
+      const result = await read(receipt.saleId, operation.current.signal)
       if (operation.current.signal.aborted) return
-      mark({ sale: result.saleId, draftPending: null }); setServer(result); replaceCart(restoreCart(result)); setPhase('idle'); setNotice('Borrador original recuperado por su constancia, sin repetir la creación.')
+      // A creation receipt identifies the original sale, not its current lines. Preserve an unsaved local cart.
+      loadedId.current = result.saleId; setServer(result); mark({ sale: result.saleId, draftPending: null })
+      if (lines.length === 0) replaceCart(restoreCart(result))
+      setPhase(result.status === 'draft' && result.lines.length > 0 && lines.length > 0 && !matchesSaved(lines, result) ? 'conflict' : 'idle')
+      setNotice('Borrador original identificado y reconsultado. El carrito local se conserva si aún no estaba guardado; no se repitió ninguna escritura.')
     } catch (failure) { if (!operation.current.signal.aborted) { setError(failure); setPhase('uncertain') } }
     finally { busy.current = false }
   }
   async function create() {
     if (!api || !writable || server || saleId || creationUnknown || !lines.length || busy.current) return
     busy.current = true; operation.current = new AbortController(); setPhase('creating'); setError(null)
-    // This POST has no client-generated ID/idempotency key in the existing contract.
-    // Keep a URL marker across reloads; unknown creation must never cause another POST.
+    // Persist the original intention before sending its idempotency key.
+    // Unknown creation is recovered by its receipt, never by creating another intention.
     const requestId = crypto.randomUUID(); mark({ draftPending: requestId })
     try {
       const result = await api.create({ tenantId, branchId }, operation.current.signal, { id: requestId, branchId })
@@ -178,7 +183,7 @@ export function useSaleDraft(lines: CartLine[], replaceCart: (lines: CartLine[])
     finally { busy.current = false }
   }
   useNavigationProtection({ dirty: lines.length > 0 && (!server || dirty), busy: preparing || ['creating', 'saving', 'loading'].includes(phase), pending: creationUnknown || checkoutPending })
-  return { recoverCreation, server, phase, error, notice, seller, cashMatches, locked, dirty, creationUnknown, create, save, refresh, resolve, recover, hasKnownId: isUuid(saleId),
+  return { recoverCreation, canRecoverCreation: isUuid(parameters.get('draftPending') ?? ''), server, phase, error, notice, seller, cashMatches, locked, dirty, creationUnknown, create, save, refresh, resolve, recover, hasKnownId: isUuid(saleId),
     prepare, preparing, nextSale, canPrepare: writable && !creationUnknown && lines.length > 0,
     checkoutPending, voidPending, markCheckout: (pending: boolean, kind: 'confirm' | 'void' = 'confirm') =>
       mark(pending ? { [kind === 'void' ? 'voidPending' : 'confirmPending']: '1' } : { confirmPending: null, voidPending: null }),

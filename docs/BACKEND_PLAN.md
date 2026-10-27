@@ -5,6 +5,9 @@ This is the single execution roadmap for the backend. Prompts are given in chat 
 Frontend vertical integration status and acceptance are maintained in [FRONTEND_INTEGRATION_PLAN.md](FRONTEND_INTEGRATION_PLAN.md); that plan reuses existing F2.1 work and does not advance backend milestones.
 
 ## Working state
+
+**Correctivo funcional fases 2–3, 2026-10-27 — IN_PROGRESS:** H01–H05 y H13–H17 implementados/estabilizados localmente sobre a0c0ce1; migración 38 y GRANT DEV preparados, no aplicados. Evidencia focalizada y limitaciones en el handoff vigente de `FRONTEND_INTEGRATION_PLAN.md`; PostgreSQL externo y simulaciones Chrome pendientes. No se declara M8/Release D/comercialización aprobados ni se cambia el alcance de A18, Personal parcial o UX pendiente. DEV/LAB/QA intactos.
+
 - **Current milestone:** M8 — Backend hardening for real pilot
 - **Current sprint:** B8.6.5.1 — GitHub Actions context validation corrective
 - **Status:** IN_PROGRESS — B8.6.5 attempt 38619817614 failed before creating jobs; invalid job-level runner expression removed. Successful external validation and B8.6.3.x/B8.6.4 PostgreSQL acceptance remain pending. Commercial routes stay unpublished. A18 controlled physical purge is NOT_IMPLEMENTED; A20 is a FRONTEND_DEPENDENCY. B8.2 targets remain NOT_MEASURED; B8.3 recovery and B8.4 deployment/monitor validation remain external. Real Google/TLS/reverse proxy/hosting and patched hosting runtime verification remain pending. M8 is not DONE; SUNAT/SIRE and B7.3/B7.4 remain voluntarily deferred.

@@ -14,6 +14,7 @@ using MediPOS.IntegrationTests.Modules.TenancyLicensing;
 using MediPOS.Performance;
 using MediPOS.Recovery;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.Extensions.DependencyInjection;
 using Npgsql;
 
@@ -57,10 +58,11 @@ public sealed class RecoveryPostgreSqlTests(PostgreSqlFixture fixture)
         Assert.False(before.Tables.ContainsKey("employee_invitations"));
         await using (var context = RecoveryInspection.ModelContext(harness.OwnerConnection))
         {
-            await context.Database.MigrateAsync(Token);
-            Assert.False(context.Database.HasPendingModelChanges());
+            // Exercise exactly the historical 34 -> 37 contract even after later migrations exist.
+            await context.GetService<Microsoft.EntityFrameworkCore.Migrations.IMigrator>().MigrateAsync(RecoveryMigrationIntegrity.Target37, Token);
         }
-        var after = await RecoveryWorkflow.InspectAsync(owner, true, Token);
+        // 37 is an intentional historical prefix; current-schema validation belongs to the latest-schema tests.
+        var after = await RecoveryWorkflow.InspectAsync(owner, false, Token);
         Assert.Equal(37, after.Migrations.Length);
         Assert.Equal("ALL_EXISTING_TABLES_34_TO_37", RecoveryMigrationIntegrity.Verify(before, after));
         await GrantProbeReadsAsync(harness);

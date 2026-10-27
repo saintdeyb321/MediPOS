@@ -1,4 +1,3 @@
-import { createHash } from 'node:crypto'
 import { render } from '@testing-library/react'
 import { vi } from 'vitest'
 import type { ReactNode } from 'react'
@@ -29,7 +28,13 @@ export const detail: ProductDetail = { revision: 'A'.repeat(64), product: { id: 
 export const purchase: Purchase = { id: id(20), branchId: id(5), supplierId: null, documentReference: 'REF-UNIT', status: 'draft', createdAt: time, confirmedAt: null, createdByActorId: id(1), confirmedByActorId: null }
 export const storedLine: PurchaseLine = { id: id(21), businessProductId: id(10), quantity: n('2'), unitNameSnapshot: 'Caja de 10', conversionToBaseSnapshot: n('10'), baseQuantity: n('20'), unitCost: n('5'), batchNumber: 'BATCH-UNIT', expirationDate: '2027-12-31' }
 export const lot: LotStock = { inventoryLotId: id(30), businessProductId: id(10), batchNumber: 'BATCH-UNIT', expirationDate: '2027-12-31', quantityAvailableBase: n('20.000000000000') }
-export const receiptRevision = (lines: PurchaseLine[]) => createHash('sha256').update(stringifyExactJson(lines)).digest('hex').toUpperCase()
+// Simulated opaque revisions for transport/component tests; PostgreSQL validates the production digest separately.
+const receiptRevisions = new Map<string, string>()
+export const receiptRevision = (lines: PurchaseLine[]) => {
+  const key = stringifyExactJson(lines); const known = receiptRevisions.get(key)
+  if (known) return known
+  const token = (receiptRevisions.size + 1).toString(16).padStart(64, '0').toUpperCase(); receiptRevisions.set(key, token); return token
+}
 export const json = (data: unknown, status = 200) => new Response(stringifyExactJson(data), { status, headers: { 'Content-Type': 'application/json' } })
 export function operationServer() {
   const state = { detail: { revision: detail.revision, product: { ...detail.product }, units: [...detail.units] }, purchases: [] as Purchase[], lines: [] as PurchaseLine[], suppliers: [] as Supplier[], lots: [lot], expiring: [] as ExpiringLot[],

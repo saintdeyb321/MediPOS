@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useSearchParams } from 'react-router'
-import { ApiErrorState, useRuntime, useWorkspace } from '../access'
+import { ApiErrorState, isUuid, useRuntime, useWorkspace } from '../access'
 import { scopedKey } from '../../shared/api/contracts'
 import { ApiError } from '../../shared/api/http'
 import { Panel } from '../../shared/ui/Panel'
@@ -59,7 +59,7 @@ export function SuppliersPanel({ selected, select, disabled, onBusyChange, recei
     <div hidden={!directoryOpen && !pending}>{directory}<Button variant="quiet" disabled={disabled || busy} onClick={() => select(null)}>Continuar sin proveedor</Button></div>
     {error != null && <ApiErrorState error={error} title="No pudimos crear el proveedor" />}
     {created && <p role="status">Proveedor creado mediante la API: {created.name}. La lista puede requerir otra página.</p>}
-    {pending && <section aria-label="Recuperar alta de proveedor"><Button disabled={busy} onClick={() => void reconcile()}>Consultar constancia original del proveedor</Button><p role="alert">Alta de proveedor pendiente de conciliación. No repitas el POST: revisa las páginas y compara nombre, RUC, contacto y fecha con la solicitud original; una ausencia en esta página no demuestra que falló. Se requiere conciliación operacional antes de otra alta.</p>
+    {pending && <section aria-label="Recuperar alta de proveedor">{!isUuid(params.get('supplierPending') ?? '') && <p role="alert">Solicitud anterior sin intención consultable: requiere conciliación del registro original con soporte, sin otra alta.</p>}<Button disabled={busy || !isUuid(params.get('supplierPending') ?? '')} onClick={() => void reconcile()}>Consultar constancia original del proveedor</Button><p role="alert">Alta de proveedor pendiente de conciliación. No repitas el POST: revisa las páginas y compara nombre, RUC, contacto y fecha con la solicitud original; una ausencia en esta página no demuestra que falló. Se requiere conciliación operacional antes de otra alta.</p>
       {name ? <p>Solicitud original: {name} · RUC {ruc || 'No informado'} · Contacto {contact || 'No informado'}.</p> : <p>El marcador se conserva al recargar; recupera los datos originales antes de conciliar. Esta API no ofrece una constancia de creación consultable.</p>}
       <Button data-recovery-focus variant="secondary" disabled={busy} onClick={() => { setDirectoryOpen(true); setCreateOpen(true) }}>Revisar alta pendiente sin reenviar</Button>
     </section>}

@@ -11,7 +11,8 @@ public static class RecoveryMigrationIntegrity
         "audit_logs", "license_changes", "stock_movements", "sale_payments", "sale_payment_reversals",
         "commission_entries", "transfer_events", "electronic_document_attempts", "notifications",
         "notification_read_states", "import_row_results", "official_catalog_revisions", "official_catalog_publications",
-        "official_catalog_platform_audits", "official_catalog_version_history", "supplier_ubl_purchase_line_links", "sync_events"
+        "official_catalog_platform_audits", "official_catalog_version_history", "supplier_ubl_purchase_line_links", "sync_events",
+        "tenant_operation_receipts"
     ];
 
     public static string Verify(RecoverySnapshot before, RecoverySnapshot after)

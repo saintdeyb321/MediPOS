@@ -62,7 +62,9 @@ export function catalogApi(http: HttpClient) {
   return {
     async operationalList(scope: BranchScope, queryText: string, categoryId: string, offset = 0, limit = 50, signal?: AbortSignal) {
       const query = page(offset, limit); if (queryText.trim()) query.set('q', queryText.trim()); if (categoryId) query.set('categoryId', uuid(categoryId))
-      return array(businessProduct)(await http.request(`${branchPath(scope)}/operational-products?${query}`, { signal, exactNumbers: true }))
+      const rows = array(businessProduct)(await http.request(`${branchPath(scope)}/operational-products?${query}`, { signal, exactNumbers: true }))
+      if (rows.length > limit || new Set(rows.map(row => row.id.toLowerCase())).size !== rows.length) throw new ApiError(0, 'client.unexpected_response')
+      return rows.map(row => scopedProduct(row, scope))
     },
     async operationalCategories(scope: BranchScope, offset = 0, limit = 100, signal?: AbortSignal) {
       return array(category)(await http.request(`${branchPath(scope)}/operational-categories?${page(offset, limit)}`, { signal }))

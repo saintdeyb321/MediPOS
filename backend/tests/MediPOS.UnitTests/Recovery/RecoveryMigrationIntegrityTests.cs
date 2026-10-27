@@ -63,6 +63,7 @@ public sealed class RecoveryMigrationIntegrityTests
     [InlineData("official_catalog_publications")]
     [InlineData("notification_read_states")]
     [InlineData("supplier_ubl_purchase_line_links")]
+    [InlineData("tenant_operation_receipts")]
     public void OtherUpgradePathsStillProtectPreviouslyOmittedHistories(string table)
     {
         var (before, after) = Snapshots();
@@ -83,26 +84,45 @@ public sealed class RecoveryMigrationIntegrityTests
     }
 
     [Fact]
-    public void ExactOfflinePlanContainsOnlyTheThreeReviewedMigrations()
+    public void CurrentOfflinePlanPreservesTheHistoricalReviewedPrefixAndAddsOnlyRecoverableStorage()
     {
         var (before, _) = Snapshots();
         var manifest = new BackupManifest(new string('a', 32), DateTimeOffset.UtcNow, "RecoveryLab", "operator", "protected",
             new string('B', 64), 18, "postgresql18-custom-full", 1, new string('C', 64), before);
         using var model = RecoveryInspection.ModelContext();
         var script = RecoveryWorkflow.MigrationPlan(manifest);
-        Assert.Equal(model.GetService<IMigrator>().GenerateScript(RecoveryMigrationIntegrity.Source34, RecoveryMigrationIntegrity.Target37), script);
-        Assert.Equal(3, script.Split("INSERT INTO \"__EFMigrationsHistory\"", StringSplitOptions.None).Length - 1);
+        Assert.Equal(model.GetService<IMigrator>().GenerateScript(RecoveryMigrationIntegrity.Source34, "20261027043336_AddRecoverableOperationsAndLocalCorrections"), script);
+        Assert.StartsWith(model.GetService<IMigrator>().GenerateScript(RecoveryMigrationIntegrity.Source34, RecoveryMigrationIntegrity.Target37), script, StringComparison.Ordinal);
+        Assert.Equal(4, script.Split("INSERT INTO \"__EFMigrationsHistory\"", StringSplitOptions.None).Length - 1);
         Assert.Contains("CREATE TABLE employee_invitations", script, StringComparison.Ordinal);
         Assert.Contains("CREATE OR REPLACE FUNCTION official_refresh_global_guard", script, StringComparison.Ordinal);
         Assert.Contains("CREATE OR REPLACE FUNCTION official_refresh_guard", script, StringComparison.Ordinal);
+        Assert.Contains("CREATE TABLE tenant_operation_receipts", script, StringComparison.Ordinal);
         Assert.DoesNotContain("DROP TABLE", script, StringComparison.OrdinalIgnoreCase);
         Assert.Equal(RecoveryWorkflow.PlanHash(script), RecoveryWorkflow.PlanHash(RecoveryWorkflow.MigrationPlan(manifest)));
+    }
+
+    [Fact]
+    public void RecoverableMigrationAddsImmutableTenantStorageWithoutRecreatingExtensionsOrChangingBusinessRows()
+    {
+        using var model = RecoveryInspection.ModelContext();
+        var script = model.GetService<IMigrator>().GenerateScript(RecoveryMigrationIntegrity.Target37, "20261027043336_AddRecoverableOperationsAndLocalCorrections");
+        Assert.Equal(1, script.Split("INSERT INTO \"__EFMigrationsHistory\"", StringSplitOptions.None).Length - 1);
+        Assert.Contains("CREATE TABLE tenant_operation_receipts", script, StringComparison.Ordinal);
+        Assert.Contains("FORCE ROW LEVEL SECURITY", script, StringComparison.Ordinal);
+        Assert.Contains("BEFORE UPDATE OR DELETE ON tenant_operation_receipts", script, StringComparison.Ordinal);
+        Assert.Contains("business_product.data_corrected", script, StringComparison.Ordinal);
+        Assert.DoesNotContain("DROP TABLE", script, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("EXTENSION", script, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("UPDATE business_products", script, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("DELETE FROM", script, StringComparison.OrdinalIgnoreCase);
     }
 
     private static (RecoverySnapshot Before, RecoverySnapshot After) Snapshots()
     {
         using var model = RecoveryInspection.ModelContext();
-        var migrations = model.Database.GetMigrations().ToArray();
+        // This fixture represents the reviewed historical prefix, not the latest database schema.
+        var migrations = model.Database.GetMigrations().Take(37).ToArray();
         Assert.Equal(37, migrations.Length);
         Assert.Equal(RecoveryMigrationIntegrity.Source34, migrations[33]);
         Assert.Equal(RecoveryMigrationIntegrity.Target37, migrations[36]);

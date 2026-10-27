@@ -1,4 +1,4 @@
-using System.Security.Cryptography;
+using System.Globalization;
 using System.Text.Json;
 using MediPOS.Application.Errors;
 using MediPOS.Application.Modules.AuditSupport;
@@ -8,10 +8,6 @@ using MediPOS.Domain.Modules.AuditSupport;
 
 namespace MediPOS.Application.Modules.Catalog;
 
-public static class ProductMetadataRevision
-{
-    public static string For(BusinessProductDetails product) => Convert.ToHexString(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(product)));
-}
 public sealed record UpdateLocalProductCommand(Guid TenantId, Guid ProductId, string ExpectedRevision, string Name, Guid CategoryId,
     string BrandOrLaboratory, string? Barcode, MedicineInput? Medicine, Guid ActorId);
 public sealed class UpdateLocalProductHandler(IBusinessProductStore store, IGlobalCatalogStore global, ITenantLicenseProvisioning provisioning,
@@ -24,8 +20,9 @@ public sealed class UpdateLocalProductHandler(IBusinessProductStore store, IGlob
         if (scope.TenantId != command.TenantId || !scope.AllowsOperation(clock.GetUtcNow())) throw new ApplicationErrorException(ApplicationErrors.LicenseDenied);
         await authorization.RequireAsync(command.TenantId, null, command.ActorId, TenantOperation.Administration, token);
         var product = await store.FindForUpdateAsync(command.TenantId, command.ProductId, token) ?? throw new ApplicationErrorException(CatalogErrors.BusinessProductNotFound);
+        if (product.TenantId != command.TenantId) throw new ApplicationErrorException(ApplicationErrors.TenantScopeConflict);
         if (product.GlobalProductId is not null) throw new ApplicationErrorException(new("catalog.global_reference_locked", ErrorCategory.Conflict, "Global reference identity is not editable here."));
-        if (!string.Equals(ProductMetadataRevision.For(BusinessProductDetails.From(product)), command.ExpectedRevision, StringComparison.Ordinal)) throw new ApplicationErrorException(CatalogErrors.ConcurrentChange);
+        if (!string.Equals(store.ReadLockedVersion(product).ToString(CultureInfo.InvariantCulture), command.ExpectedRevision, StringComparison.Ordinal)) throw new ApplicationErrorException(CatalogErrors.ConcurrentChange);
         var category = await global.FindCategoryAsync(command.CategoryId, token);
         if (category?.IsActive != true) throw new ApplicationErrorException(CatalogErrors.CategoryNotFound);
         var before = JsonSerializer.Serialize(BusinessProductDetails.From(product));
