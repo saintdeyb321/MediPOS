@@ -1,6 +1,26 @@
 # MediPOS backend
 
-## Fases 2–3: actualización DEV pendiente (2026-10-27)
+## DEV operativo — 2026-10-29
+
+Actualización local autorizada desde **58dc1c889ebc91889a59402331ab2f869a4d94d7**: `medipos_dev` PostgreSQL18.4 en5432, **38/38 migraciones**,55 tablas FORCE RLS y API con `medipos_runtime` restringido, sin autoridad administrativa. Aplicada únicamente38 y SELECT/INSERT en las nuevas constancias; huellas de las59 tablas previas idénticas, constancias vacías y User Secrets intactos. Respaldo real privado en `C:\Users\deyvi\AppData\Roaming\MediPOS\DevAdministration\maintenance-20261029`, hash/listado/decodificación comprobados; no se afirma restauración de ensayo. La copia vacía redirigida por MSIX no es el respaldo. No repetir la migración ni el mantenimiento histórico de abajo.
+
+HTTPS7243 escucha solo127.0.0.1/::1: React/assets/readiness200, plataforma404. Índice/JS/CSS/ServiceWorker servidos coinciden con el build actual; API enlazada por sockets a `medipos_dev`/`medipos_runtime`. Google challenge302 al callback exacto7243, CSRF200, login sin CSRF400 y Origin ajeno403. No se completó un login Google humano en esta sesión ni se realizaron operaciones comerciales. PostgreSQL externo del correctivo y aceptación Chrome siguen pendientes; no se declara MVP/producción aprobado. LAB/QA no se tocaron. PostgreSQL conserva sus listeners preexistentes; no se cambió su configuración ni el firewall.
+
+**Uso diario desde PowerShell5.1 normal, con7243 libre:**
+
+```powershell
+# Solo si cambiaste frontend; la versión actual ya está compilada:
+Set-Location C:\Proyectos\MediPOS\frontend
+npm.cmd run build
+Set-Location C:\Proyectos\MediPOS\backend
+dotnet run --project src/MediPOS.Api --launch-profile https-local -- --PlatformAdministration:Enabled=false --PlatformApi:Enabled=false
+```
+
+Conservar la consola abierta; apagar esa ejecución con **Ctrl+C**. PostgreSQL existente ya es un servicio Windows; no hace falta iniciarlo ni detenerlo cada vez. No iniciar otro host si7243 está ocupado ni terminar procesos por nombre. En esta habilitación el host se inició oculto; su PID/starttime se registraron privadamente en el respaldo. Para detener **solo esta ejecución**, cuando hayas terminado todas las operaciones, ejecutar desde `backend/`: `powershell.exe -NoProfile -File .\obj\stop-dev-ordinary-20261029.ps1`. El helper temporal comprueba el registro, PID/inicio, ejecutable y listener exclusivo; rechaza reemplazos y no pertenece al producto publicado. Solo su modo `-Inspect` fue ejecutado durante la habilitación, sin apagar el servidor.
+
+Abrir `https://localhost:7243/` en el perfil DEV, cerrar otras pestañas DEV y recargar online antes de las simulaciones. No borrar IndexedDB/outbox ni forzar `skipWaiting` para actualizar cachés. Iniciar Google y comprobar botica/sede. Primer recorrido: producto/presentación → proveedor → compra con lote/vencimiento → revisión/confirmación → inventario de la misma sede. Existe una caja abierta: consultarla antes de intentar otra apertura. Las escrituras comerciales las realiza el propietario en Chrome.
+
+## Fases 2–3: preparación histórica (2026-10-27; aplicada arriba el29)
 
 Continuación local de `a0c0ce1`, sin instalación ni escritura en DEV/LAB/QA. Estado y evidencias focalizadas: [handoff vigente](../docs/FRONTEND_INTEGRATION_PLAN.md). La migración **38** `20261027043336_AddRecoverableOperationsAndLocalCorrections` agrega constancias inmutables con FORCE RLS y permite el código de auditoría de corrección local; no modifica filas comerciales ni recrea extensiones. Snapshot/designer 38 explicitan el esquema `public` de extensiones existentes para eliminar drift de metadatos. No se modificaron migraciones aplicadas.
 

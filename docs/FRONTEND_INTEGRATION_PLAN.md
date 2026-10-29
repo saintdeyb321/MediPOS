@@ -1,6 +1,12 @@
 # Plan maestro de integración frontend
 
-## Handoff vigente — fases 2–3, continuación de a0c0ce1 (2026-10-27)
+## Handoff vigente — DEV habilitado para simulaciones (2026-10-29)
+
+**IN_PROGRESS, no certificación comercial:** HEAD/remote diagnóstico58dc1c8 coincidían y árbol limpio antes de esta actualización documental. Con autorización específica se respaldó en la ruta real privada `DevAdministration/maintenance-20261029` y se aplicó solo38 a `medipos_dev`, con SELECT/INSERT de constancias para runtime.38/38,55 FORCE-RLS,59 huellas previas idénticas, constancias vacías y User Secrets intactos. API ordinaria7243 solo loopback, conexión real a DEV/runtime restringido; React/assets/readiness200 y plataforma404. Builds actuales PASS; sin repetir suites. Challenge Google302/callback exacto, CSRF y Origin verificados; login humano/selección y recorridos comerciales **PENDING**, PostgreSQL externo del correctivo **NOT EXECUTED**. No se tocó LAB/QA ni se activó Superadmin; no hubo operaciones comerciales ni publicación.
+
+H01–H05/H13–H16 conservan su implementación del handoff anterior; H04–H05/H16 ya disponen del esquema requerido en DEV. Siguiente acción: abrir7243 en perfil DEV, loginGoogle → botica/sede → producto/presentación/proveedor/compra → stock; luego caja existente/POS/pago mixto/ticket/cierre, Personal y transferencias/reportes/recuperación. Personal sigue `partial`; A18, aceptación de concurrencia/RLS PostgreSQL y cierre del MVP pendientes. Comandos diarios y evidencia del mantenimiento en `backend/README.md` §«DEV operativo». No repetir migraciones ni convertir readiness en aceptación de aislamiento.
+
+## Handoff histórico — fases 2–3, continuación de a0c0ce1 (2026-10-27)
 
 **IN_PROGRESS:** implementación local estabilizada; PostgreSQL externo y simulaciones Chrome pendientes. No se aplicó la migración 38, no se modificaron DEV/LAB/QA ni servicios, y no se ejecutaron operaciones comerciales, commits, push o despliegues. Este handoff sustituye los siguientes históricos para esta tarea.
 
