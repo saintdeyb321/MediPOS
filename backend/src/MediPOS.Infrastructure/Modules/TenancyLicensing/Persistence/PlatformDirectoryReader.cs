@@ -33,6 +33,10 @@ internal sealed class PlatformDirectoryReader(MediPosDbContext context) : IPlatf
         context.Users.AsNoTracking().Where(u => u.Id == userId && u.GoogleSubject != "")
             .Select(u => new PlatformGoogleIdentity(u.Id, u.DisplayName, u.Email)).SingleOrDefaultAsync(token);
 
+    public async Task<IReadOnlyList<PlatformGoogleIdentity>> GoogleIdentitiesByEmailAsync(string normalizedEmail, CancellationToken token) =>
+        await context.Users.AsNoTracking().Where(u => u.GoogleSubject != "" && u.GoogleEmailVerified && u.Email.ToLower() == normalizedEmail)
+            .OrderBy(u => u.Id).Take(2).Select(u => new PlatformGoogleIdentity(u.Id, u.DisplayName, u.Email)).ToListAsync(token).ConfigureAwait(false);
+
     public async Task<LicenseDetails?> CreationResultAsync(Guid actorId, Guid requestKey, CancellationToken token)
     {
         await using var transaction = await context.Database.BeginTransactionAsync(token).ConfigureAwait(false);

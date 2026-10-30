@@ -19,13 +19,14 @@ public partial class Program
         builder.Services.AddInfrastructure(builder.Configuration);
         builder.AddBackendObservability();
         var authentication = builder.AddGoogleAuthentication();
-        var platform = PlatformAdministrationSettings.Read(builder.Configuration, authentication is not null, builder.Environment.IsProduction());
+        var platform = PlatformAdministrationSettings.Read(builder.Configuration, authentication is not null, builder.Environment.IsProduction(), builder.Environment.IsDevelopment());
         if (platform is not null)
         {
             builder.Services.AddSingleton(platform);
             builder.Services.AddScoped<MediPOS.Application.Modules.IdentityAccess.Authentication.IPlatformAdministration, SessionPlatformAdministration>();
         }
-        var platformApi = PlatformApiSettings.IsEnabled(builder.Configuration, builder.Environment.IsProduction(), authentication is not null, platform is not null);
+        var platformApi = PlatformApiSettings.IsEnabled(builder.Configuration, builder.Environment.IsProduction(), authentication is not null, platform is not null, platform?.IsLocalDevelopment == true);
+        if (platform?.IsLocalDevelopment == true) LocalDevelopmentPlatform.Configure(builder);
         if (platformApi) builder.Services.AddSingleton<PlatformApiRateLimiter>();
         var tenantApi = TenantApiSettings.IsEnabled(builder.Configuration, authentication is not null);
         if (tenantApi)
@@ -40,6 +41,7 @@ public partial class Program
         if (builder.Environment.IsDevelopment()) builder.Services.AddOpenApi(TenantOpenApi.Configure);
 
         var application = builder.Build();
+        if (platform?.IsLocalDevelopment == true) application.UseLocalDevelopmentPlatformBoundary();
         application.UseRouting();
         application.UseMiddleware<RequestObservationMiddleware>();
         application.UseExceptionHandler(new ExceptionHandlerOptions { SuppressDiagnosticsCallback = _ => true });

@@ -1,6 +1,55 @@
 # MediPOS backend
 
-## DEV operativo — 2026-10-29
+## Superadministrador persistente DEV — activado 2026-10-29
+
+El bloqueo original era `Production-only` en ambos ajustes de plataforma. Se conserva el contrato Production y se añade una excepción **optativa**, exclusivamente en Development/HTTPS localhost7243/Direct y conexión loopback5432 a `medipos_dev` con `medipos_runtime`. Kestrel se fija a localhost, sin recarga de endpoints; al arrancar se verifica el runtime restringido. También se exige TLS/IP/puerto/Host nativos en cada petición y en el adaptador de autoridad. CSRF, Origin, cookies, expiración normal de sesión, allowlist UUID, permisos comerciales y RLS no cambian. No se usan los launchers temporales ni sus ventanas de30 minutos.
+
+**Activación inicial autorizada y ejecutada:** cuenta principal indicada por el propietario resuelta de forma única contra `users` de DEV usando runtime; allowlist privada con su UUID, sin inferirlo por Owner. Respaldo privado de configuración/binarios en `DevAdministration/maintenance-20261029/persistent-platform`; escritura atómica compatible con PS5.1 y copia byte-exacta conservada. Solo se cambiaron allowlist/flags: demás valores privados, Google, Data Protection y credencial runtime idénticos. Reinicio exclusivo DEV; API instalada coincide por SHA con la probada. HTTPS7243 solo loopback, React/readiness200, plataforma anónima401 y conexión real a `medipos_dev`/`medipos_runtime` restringido,38 migraciones. Sin migraciones, GRANT, boticas ni operaciones comerciales; LAB/QA intactos. Compilación sin advertencias/errores y166 casos focalizados distintos PASS:36 del modo DEV,39 de sesión/autoridad y91 HTTP de plataforma/alta/primer Owner. Las pruebas de autorización usan sesiones/store sintéticos: login real principal, denegación secundaria y onboarding manual siguen pendientes. No se declara MVP/producción aprobado.
+
+Configuración necesaria **solo en User Secrets de MediPOS.Api**, conservando todas las credenciales existentes:
+
+| Clave privada | Valor |
+|---|---|
+| `PlatformAdministration:Enabled` | `true` |
+| `PlatformAdministration:Development:Enabled` | `true` |
+| `PlatformAdministration:AdministratorUserIds:0` | UUID interno de la cuenta Google personal, registrado y aprobado localmente |
+| `PlatformApi:Enabled` | `true` |
+
+La allowlist debe contener exclusivamente esa cuenta aprobada; no el Gmail escrito, subject Google, UUID de otra base ni el Owner secundario. Mantener el Google DEV/PublicOrigin7243/Direct/Data Protection/runtime existentes y `AllowedHosts=localhost` del perfil. El opt-in DEV se rechaza en Production/Staging; Production utiliza su activación original. Una sesión vencida requiere volver a Google, **no renovar una autorización administrativa**.
+
+**Alta inicial, después de la autorización específica:** iniciar Google con la cuenta personal en perfil Chrome DEV; obtener su `userId` de la respuesta real React `GET /auth/me` en Network, sin enviarlo al chat. Validar localmente que corresponde al usuario Google registrado en `medipos_dev`. Guardar ese único UUID en la allowlist y los tres flags privados, sin imprimir el JSON de secretos. Aplicar los cambios desde PowerShell normal de Windows o el administrador de User Secrets de Visual Studio; evitar el namespace AppData redirigido de Codex. Conservar un respaldo privado de configuración antes de editar. No sobrescribir el archivo con `null` ni usar `ConvertFrom-Json -AsHashtable` en PS5.1.
+
+Después, detener **solo DEV identificado**, compilar y arrancar normalmente (no utilizar los argumentos `--PlatformAdministration:Enabled=false --PlatformApi:Enabled=false` de la ejecución ordinaria anterior, porque prevalecen sobre User Secrets):
+
+```powershell
+Set-Location C:\Proyectos\MediPOS\backend
+dotnet run --project src/MediPOS.Api --launch-profile https-local
+```
+
+No usar `--no-build` para incorporar esta implementación. Conservar la consola abierta; Ctrl+C al terminar operaciones. Google de nuevo tras el reinicio; abrir **https://localhost:7243/plataforma**. La sesión administrativa debe obtener200 en `/platform/session`; una cuenta ordinaria autenticada debe obtener403 `access.platform_denied`; sin sesión401. Un fallo en origen/transportes puede denegar antes de consultar autoridad. No convertir esas comprobaciones automatizadas en afirmaciones de acceso real.
+
+La primera ejecución autorizada quedó iniciada oculta. Para detener solo esa ejecución al terminar operaciones: `powershell.exe -NoProfile -File .\obj\stop-dev-platform-20261029.ps1` desde `backend/`; verifica PID/inicio/ejecutable/listener contra su registro privado y rechaza reemplazos. Es un helper operativo local, sin expiración ni modificación de autoridad; la autoridad persistente reside en configuración y C#, no en el helper. Solo su modo `-Inspect` se comprueba durante la habilitación; no se apaga el host. Para posteriores arranques en tu consola usa el comando habitual y Ctrl+C.
+
+**Dos cuentas y onboarding, solo mediante la UI/endpoints oficiales:**
+
+1. En otro perfil Chrome, la cuenta secundaria inicia Google en7243 una vez; queda registrada globalmente aunque aún no tenga boticas. Obtener su propio `userId` desde React Network `/auth/me`, privadamente.
+2. En el perfil administrativo, Plataforma → Nueva botica → nombre y máximo de sedes → confirmar Trial30 días. La UI conserva la clave original de idempotencia y permite consultar su constancia ante respuesta incierta; no crear con otra clave a ciegas.
+3. Seleccionar esa botica → Asignar propietario → ingresar el UUID secundario → verificar la identidad real devuelta por `/platform/identities/{userId}` y confirmar que es la cuenta deseada → asignar primer Owner. El backend comprueba el historial de Owners y no reabre bootstrap por desactivación. No asignar automáticamente al operador.
+4. En el perfil secundario, actualizar boticas → seleccionar nueva botica → configuración inicial de razón social/identificador y primera sede mediante TenantApi. Revisar el dato legal antes de guardarlo; no atribuir un marcador de laboratorio a un RUC fiscal auténtico.
+5. Comprobar que la cuenta secundaria recibe403 en plataforma y que el administrador no aparece como miembro de la nueva botica ni entra a su espacio comercial. Una membresía comercial previa del administrador, si existe, es independiente.
+
+**Revocación estable:** quitar el UUID aprobado de la allowlist o establecer ambos flags `PlatformAdministration:Enabled` y `PlatformApi:Enabled` a `false` en configuración privada; para retirar el modo local establecer además `PlatformAdministration:Development:Enabled=false`. Detener/reiniciar exclusivamente DEV identificado. Los objetos de autoridad son snapshots: editar el archivo sin reiniciar **no** revoca el proceso vivo. Con flags deshabilitados plataforma devuelve404; con la cuenta retirada y otra allowlist válida,403 para esa cuenta. No borrar Data Protection ni modificar PostgreSQL. La allowlist vacía con plataforma aún activada rechaza el arranque; no representa una revocación observada del proceso anterior. El recorrido con Gmail real sigue pendiente.
+
+Desde `backend/`, los flags de revocación pueden guardarse sin escribir identidades ni credenciales en argumentos:
+
+```powershell
+dotnet user-secrets set "PlatformApi:Enabled" "false" --project src/MediPOS.Api
+dotnet user-secrets set "PlatformAdministration:Enabled" "false" --project src/MediPOS.Api
+dotnet user-secrets set "PlatformAdministration:Development:Enabled" "false" --project src/MediPOS.Api
+# Después: detener solo DEV identificado y arrancar con el comando habitual anterior.
+```
+
+## DEV ordinario — evidencia histórica anterior a la activación persistente del29
 
 Actualización local autorizada desde **58dc1c889ebc91889a59402331ab2f869a4d94d7**: `medipos_dev` PostgreSQL18.4 en5432, **38/38 migraciones**,55 tablas FORCE RLS y API con `medipos_runtime` restringido, sin autoridad administrativa. Aplicada únicamente38 y SELECT/INSERT en las nuevas constancias; huellas de las59 tablas previas idénticas, constancias vacías y User Secrets intactos. Respaldo real privado en `C:\Users\deyvi\AppData\Roaming\MediPOS\DevAdministration\maintenance-20261029`, hash/listado/decodificación comprobados; no se afirma restauración de ensayo. La copia vacía redirigida por MSIX no es el respaldo. No repetir la migración ni el mantenimiento histórico de abajo.
 

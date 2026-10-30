@@ -14,11 +14,23 @@ public interface IPlatformDirectoryReader
     Task<PlatformTenantPage> TenantsAsync(Guid? afterTenantId, int limit, CancellationToken token);
     Task<PlatformTenantDetails?> TenantAsync(Guid tenantId, CancellationToken token);
     Task<PlatformGoogleIdentity?> GoogleIdentityAsync(Guid userId, CancellationToken token);
+    Task<IReadOnlyList<PlatformGoogleIdentity>> GoogleIdentitiesByEmailAsync(string normalizedEmail, CancellationToken token) =>
+        Task.FromResult<IReadOnlyList<PlatformGoogleIdentity>>([]);
     Task<LicenseDetails?> CreationResultAsync(Guid actorId, Guid requestKey, CancellationToken token);
 }
 
 public sealed class PlatformDirectoryQueries(IPlatformDirectoryReader reader, IPlatformAdministration administration)
 {
+    public async Task<PlatformGoogleIdentity?> GoogleIdentityByEmailAsync(string email, CancellationToken token)
+    {
+        var actor = await PlatformAdministrationAccess.RequireAsync(administration, null, token).ConfigureAwait(false);
+        var normalized = GoogleEmailAddress.Normalize(email) ?? throw new ApplicationErrorException(ApplicationErrors.InvalidRequest);
+        var matches = await reader.GoogleIdentitiesByEmailAsync(normalized, token).ConfigureAwait(false);
+        await PlatformAdministrationAccess.RequireAsync(administration, actor, token).ConfigureAwait(false);
+        if (matches.Count > 1) throw new ApplicationErrorException(new("platform.identity_ambiguous", ErrorCategory.Conflict, "Multiple registered identities require administrative review."));
+        return matches.SingleOrDefault();
+    }
+
     public async Task<PlatformTenantPage> TenantsAsync(Guid? afterTenantId, int limit, CancellationToken token)
     {
         await PlatformAdministrationAccess.RequireAsync(administration, null, token).ConfigureAwait(false);

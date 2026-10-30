@@ -19,7 +19,7 @@ public sealed class VerifiedGoogleIdentitySource : IVerifiedGoogleIdentitySource
         if (principal.Identity?.IsAuthenticated != true || string.IsNullOrWhiteSpace(subject) || subject.Length > 255 ||
             string.IsNullOrWhiteSpace(email) || email.Length > 320 || string.IsNullOrWhiteSpace(name) || name.Length > 200)
             throw new InvalidOperationException("The validated provider profile is incomplete.");
-        _identity = new(subject, email, name);
+        _identity = new(subject, email, name, string.Equals(Single(principal, "email_verified"), "true", StringComparison.OrdinalIgnoreCase));
     }
 
     private static string? Single(ClaimsPrincipal principal, string type)

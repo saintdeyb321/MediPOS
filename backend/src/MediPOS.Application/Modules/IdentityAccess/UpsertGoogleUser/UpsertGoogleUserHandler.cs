@@ -12,7 +12,7 @@ public sealed class UpsertGoogleUserHandler(
     {
         var identity = await verifiedIdentitySource.GetVerifiedIdentityAsync(cancellationToken).ConfigureAwait(false)
             ?? throw new UnauthorizedAccessException("A server-verified Google identity is required.");
-        var candidate = User.Create(identity.Subject, identity.Email, identity.DisplayName, timeProvider.GetUtcNow());
+        var candidate = User.Create(identity.Subject, identity.Email, identity.DisplayName, timeProvider.GetUtcNow(), identity.EmailVerified);
         var user = await store.UpsertGoogleUserAsync(candidate, cancellationToken).ConfigureAwait(false);
         return new GoogleUserDetails(user.Id, user.Email, user.DisplayName);
     }

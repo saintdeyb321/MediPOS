@@ -9,6 +9,8 @@ public sealed class SessionPlatformAdministration(IHttpContextAccessor accessor,
     public Task<Guid?> GetAuthorizedActorAsync(CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
+        if (settings.IsLocalDevelopment && (accessor.HttpContext is not { } local || !LocalDevelopmentPlatform.AllowsRequest(local)))
+            return Task.FromResult<Guid?>(null);
         var result = accessor.HttpContext?.Features.Get<IAuthenticateResultFeature>()?.AuthenticateResult;
         var now = clock.GetUtcNow();
         var userId = user.UserId;

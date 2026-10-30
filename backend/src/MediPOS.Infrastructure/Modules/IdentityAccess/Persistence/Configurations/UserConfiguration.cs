@@ -18,6 +18,7 @@ internal sealed class UserConfiguration : IEntityTypeConfiguration<User>
         builder.Property(user => user.Id).HasColumnName("id").ValueGeneratedNever();
         builder.Property(user => user.GoogleSubject).HasColumnName("google_subject").IsRequired();
         builder.Property(user => user.Email).HasColumnName("email").IsRequired();
+        builder.Property(user => user.GoogleEmailVerified).HasColumnName("google_email_verified").HasDefaultValue(false);
         builder.Property(user => user.DisplayName).HasColumnName("display_name").IsRequired();
         builder.Property(user => user.CreatedAt).HasColumnName("created_at").HasColumnType("timestamp with time zone");
         builder.HasIndex(user => user.GoogleSubject).IsUnique().HasDatabaseName("ux_users_google_subject");

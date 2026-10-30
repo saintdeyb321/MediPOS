@@ -94,6 +94,7 @@ Rules:
 
 ## 7. Authentication and authorization
 - Google OIDC is the initial identity mechanism.
+- Platform authority is an immutable startup allowlist of internal Google-registered UUIDs, independent of commercial memberships. Production keeps explicit platform/Google activation. An explicitly enabled Development exception is limited to native loopback TLS `https://localhost:7243`, Direct hosting and `medipos_dev`/`medipos_runtime` on loopback5432; startup verifies the restricted runtime, pins Kestrel to localhost and disables endpoint reload. The request boundary and authority adapter both check native transport. It grants no tenant membership, RLS bypass or catalog-publishing database role. Removing a grant/disabling private configuration requires an effective controlled restart; the normal Google-session expiration remains unchanged.
 - Authentication proves identity; authorization is server-side and depends on tenant, membership, role, branch, license and schedule where applicable.
 - Maximum two Owner memberships per tenant.
 - Deactivation preserves historical references.

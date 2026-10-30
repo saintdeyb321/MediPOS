@@ -8,7 +8,7 @@ public interface IVerifiedGoogleIdentitySource
     Task<VerifiedGoogleIdentity?> GetVerifiedIdentityAsync(CancellationToken cancellationToken);
 }
 
-public sealed record VerifiedGoogleIdentity(string Subject, string Email, string DisplayName);
+public sealed record VerifiedGoogleIdentity(string Subject, string Email, string DisplayName, bool EmailVerified = false);
 
 // Read only from a validated MediPOS server session; session claims never grant tenant/platform authority.
 public interface IAuthenticatedMediPosUser

@@ -4,18 +4,24 @@ namespace MediPOS.Api.Authentication;
 public sealed class PlatformAdministrationSettings
 {
     private readonly HashSet<Guid> _administrators;
-    private PlatformAdministrationSettings(HashSet<Guid> administrators) => _administrators = administrators;
+    private PlatformAdministrationSettings(HashSet<Guid> administrators, bool localDevelopment)
+    { _administrators = administrators; IsLocalDevelopment = localDevelopment; }
+    public bool IsLocalDevelopment { get; }
     public bool Allows(Guid userId) => userId != Guid.Empty && _administrators.Contains(userId);
     public override string ToString() => "Platform administration settings (identities redacted).";
 
-    public static PlatformAdministrationSettings? Read(IConfiguration configuration, bool oidcEnabled, bool isProduction)
+    public static PlatformAdministrationSettings? Read(IConfiguration configuration, bool oidcEnabled, bool isProduction, bool isDevelopment = false)
     {
         var section = configuration.GetSection("PlatformAdministration");
         var enabled = section["Enabled"];
         if (enabled is null) return null;
         if (!bool.TryParse(enabled, out var active)) throw Invalid();
         if (!active) return null;
-        if (!oidcEnabled || !isProduction) throw Invalid();
+        var local = LocalDevelopmentPlatform.IsEnabled(configuration);
+        if (!oidcEnabled) throw Invalid();
+        if (isProduction) { if (local) throw Invalid(); }
+        else if (!isDevelopment || !local) throw Invalid();
+        if (local) LocalDevelopmentPlatform.Validate(configuration);
         var entries = section.GetSection("AdministratorUserIds").GetChildren().Take(33).ToArray();
         if (entries.Length is < 1 or > 32 || section["AdministratorUserIds"] is not null || entries.Any(entry => entry.GetChildren().Any())) throw Invalid();
         var ids = new HashSet<Guid>();
@@ -25,8 +31,8 @@ public sealed class PlatformAdministrationSettings
             if (value is null || !Guid.TryParseExact(value, "D", out var id) || id == Guid.Empty ||
                 value.Length != 36 || !ids.Add(id)) throw Invalid();
         }
-        return new(ids);
+        return new(ids, local);
     }
 
-    private static InvalidOperationException Invalid() => new("Platform administration requires explicit production activation, Google sessions and a valid restricted internal-user allowlist.");
+    private static InvalidOperationException Invalid() => new("Platform administration requires explicit Production or guarded local Development activation, Google sessions and a valid restricted internal-user allowlist.");
 }

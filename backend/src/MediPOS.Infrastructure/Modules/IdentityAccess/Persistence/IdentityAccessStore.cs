@@ -14,10 +14,10 @@ internal sealed class IdentityAccessStore(MediPosDbContext context) : IIdentityA
         ArgumentNullException.ThrowIfNull(user);
         // PostgreSQL arbitrates concurrent first sign-ins; the existing ID and creation time survive.
         await context.Database.ExecuteSqlInterpolatedAsync($"""
-            INSERT INTO users (id, google_subject, email, display_name, created_at)
-            VALUES ({user.Id}, {user.GoogleSubject}, {user.Email}, {user.DisplayName}, {user.CreatedAt})
+            INSERT INTO users (id, google_subject, email, display_name, created_at, google_email_verified)
+            VALUES ({user.Id}, {user.GoogleSubject}, {user.Email}, {user.DisplayName}, {user.CreatedAt}, {user.GoogleEmailVerified})
             ON CONFLICT (google_subject) DO UPDATE
-            SET email = EXCLUDED.email, display_name = EXCLUDED.display_name
+            SET email = EXCLUDED.email, display_name = EXCLUDED.display_name, google_email_verified = EXCLUDED.google_email_verified
             """, cancellationToken).ConfigureAwait(false);
         return await context.Users.AsNoTracking().SingleAsync(
             value => value.GoogleSubject == user.GoogleSubject, cancellationToken).ConfigureAwait(false);
