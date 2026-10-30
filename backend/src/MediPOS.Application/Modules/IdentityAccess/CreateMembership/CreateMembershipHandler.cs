@@ -5,6 +5,7 @@ using MediPOS.Application.Modules.IdentityAccess.OperationalAccess;
 using MediPOS.Application.Modules.TenancyLicensing;
 using MediPOS.Domain.Modules.AuditSupport;
 using MediPOS.Domain.Modules.IdentityAccess;
+using MediPOS.Application.Modules.IdentityAccess.Invitations;
 
 namespace MediPOS.Application.Modules.IdentityAccess.CreateMembership;
 
@@ -12,7 +13,7 @@ namespace MediPOS.Application.Modules.IdentityAccess.CreateMembership;
 public sealed record CreateMembershipCommand(Guid TenantId, Guid UserId, TenantRole Role, Guid ActorId);
 
 public sealed class CreateMembershipHandler(IIdentityAccessStore store, ITenantLicenseProvisioning provisioning, TimeProvider timeProvider,
-    ITenantOperationAuthorizer authorization, IPlatformAdministration administration)
+    ITenantOperationAuthorizer authorization, IPlatformAdministration administration, IInitialOwnerInvitationStore? ownerInvitations = null)
 {
     public Task<MembershipDetails> HandleAsync(CreateMembershipCommand command, CancellationToken cancellationToken) =>
         ExecuteAsync(command, false, cancellationToken);
@@ -46,6 +47,12 @@ public sealed class CreateMembershipHandler(IIdentityAccessStore store, ITenantL
         {
             // Serialized by the license lock. Historical inactive Owners cannot reopen bootstrap.
             await PlatformAdministrationAccess.RequireAsync(administration, command.ActorId, cancellationToken).ConfigureAwait(false);
+            if (ownerInvitations is not null)
+            {
+                await ownerInvitations.SetPlatformAsync(command.ActorId, cancellationToken).ConfigureAwait(false);
+                if (await ownerInvitations.CurrentAsync(command.TenantId, cancellationToken).ConfigureAwait(false) is { Status: "pending" })
+                    throw new ApplicationErrorException(InitialOwnerInvitations.Conflict);
+            }
             if (command.Role != TenantRole.Owner || await store.HasOwnerHistoryAsync(command.TenantId, cancellationToken).ConfigureAwait(false))
                 throw new ApplicationErrorException(new("access.bootstrap_denied", ErrorCategory.Forbidden, "Only the initial Owner can be provisioned by the platform."));
             if (!scope.AllowsOperation(timeProvider.GetUtcNow())) throw new ApplicationErrorException(ApplicationErrors.LicenseDenied);

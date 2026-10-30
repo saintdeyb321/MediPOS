@@ -19,6 +19,20 @@ public sealed class PlatformTenantCreationHttpTests
     private const string Body = """{"tradingName":"Botica Ñandú","startsAt":"2026-10-01T00:00:00Z","expiresAt":"2027-10-01T00:00:00Z","maxBranches":2,"status":"active"}""";
 
     [Theory]
+    [InlineData(null)]
+    [InlineData("null")]
+    [InlineData("\"\"")]
+    [InlineData("\" \"")]
+    public async Task EmailOnboardingCannotReserveOrCreateWithoutItsRecipient(string? emailJson)
+    {
+        var db = new TestDatabase(); await using var host = await Host(db, PlatformLicenseHttpTests.Operator()); await PlatformLicenseHttpTests.Login(host);
+        var body = emailJson is null ? Body : Body[..^1] + ",\"ownerEmail\":" + emailJson + "}";
+        using var response = await Send(host, Guid.NewGuid().ToString("D"), await host.Csrf(), body, path: "/platform/tenants/with-owner");
+        await Problem(response, HttpStatusCode.BadRequest, "platform.owner_email_required");
+        Assert.Equal(0, db.ReservationAttempts); Assert.Equal(0, db.CreationAttempts); Assert.Empty(db.Committed);
+    }
+
+    [Theory]
     [InlineData("trial")]
     [InlineData("active")]
     [InlineData("grace")]
@@ -192,9 +206,9 @@ public sealed class PlatformTenantCreationHttpTests
             services.AddScoped<ITenancyLicensingStore>(provider => provider.GetRequiredService<TestStore>());
             services.AddScoped<ITenantCreationRequests>(provider => provider.GetRequiredService<TestStore>());
         });
-    private static async Task<HttpResponseMessage> Send(GoogleHost host, string? key, string? csrf, string body = Body, string origin = "https://medipos.example.test")
+    private static async Task<HttpResponseMessage> Send(GoogleHost host, string? key, string? csrf, string body = Body, string origin = "https://medipos.example.test", string path = "/platform/tenants")
     {
-        using var request = new HttpRequestMessage(HttpMethod.Post, "/platform/tenants") { Content = new StringContent(body, Encoding.UTF8, "application/json") };
+        using var request = new HttpRequestMessage(HttpMethod.Post, path) { Content = new StringContent(body, Encoding.UTF8, "application/json") };
         request.Headers.Add("Origin", origin); request.Headers.Add("ActorId", Guid.NewGuid().ToString("D"));
         if (key is not null) request.Headers.TryAddWithoutValidation("Idempotency-Key", key);
         if (csrf is not null) request.Headers.Add("X-CSRF-TOKEN", csrf);

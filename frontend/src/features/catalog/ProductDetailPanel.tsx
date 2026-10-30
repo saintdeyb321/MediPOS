@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Link } from 'react-router'
 import { Button } from '../../shared/ui/Button'
@@ -37,10 +37,11 @@ export function ProductDetailPanel({ detail, write, onEdit }: { detail: ProductD
     {tab === 'stock' && <><p>Las existencias y los vencimientos pertenecen a los lotes de cada sucursal.</p><Link className="button secondary" to={w.base + '/inventario'}>Consultar inventario de {w.branch.name}</Link><Link className="text-link" to={w.base + '/compras'}>Registrar recepción en Compras</Link></>}
   </section>
 }
-export function EditPrices({ detail, write }: { detail: ProductDetail; write: CatalogWrite }) {
+export function EditPrices({ detail, write, onDirty }: { detail: ProductDetail; write: CatalogWrite; onDirty?: (dirty: boolean) => void }) {
   const w = useWorkspace(); const { http } = useRuntime(); const p = detail.product
   const [value, setValue] = useState({ retail: decimalLabel(p.retailPrice), wholesale: p.wholesalePrice ? decimalLabel(p.wholesalePrice) : '' })
   const [reviewed, setReviewed] = useState(false); const input = prices(value)
+  useEffect(() => { onDirty?.(value.retail !== decimalLabel(p.retailPrice) || value.wholesale !== (p.wholesalePrice ? decimalLabel(p.wholesalePrice) : '')) }, [value, p, onDirty])
   return <form aria-label="Actualizar precios" onSubmit={event => { event.preventDefault(); if (http && input && reviewed) void write.run('prices', p.id, async signal => (await catalogApi(http).prices(w, p.id, input, signal)).id) }}>
     <h3>Precios base del negocio</h3>
     <PriceInputs value={value} change={next => { setValue(next); setReviewed(false) }} disabled={write.locked} />
@@ -48,31 +49,40 @@ export function EditPrices({ detail, write }: { detail: ProductDetail; write: Ca
     <FormFooter><Button type="submit" disabled={write.locked || !input || !reviewed}>Guardar precios</Button></FormFooter>
   </form>
 }
-export function EditStatus({ detail, write }: { detail: ProductDetail; write: CatalogWrite }) {
+export function EditStatus({ detail, write, onDirty }: { detail: ProductDetail; write: CatalogWrite; onDirty?: (dirty: boolean) => void }) {
   const w = useWorkspace(); const { http } = useRuntime(); const p = detail.product
   const [reviewed, setReviewed] = useState(false)
+  useEffect(() => { onDirty?.(reviewed) }, [reviewed, onDirty])
   return <form aria-label="Cambiar estado" onSubmit={event => { event.preventDefault(); if (http && reviewed) void write.run('status', p.id, async signal => (await catalogApi(http).status(w, p.id, !p.isActive, signal)).id) }}>
     <p>Desactivar retira el producto de nuevas operaciones; no elimina su historial.</p>
     <label><input type="checkbox" checked={reviewed} disabled={write.locked} onChange={event => setReviewed(event.target.checked)} /> Confirmo {p.isActive ? 'desactivar' : 'activar'} este producto.</label>
     <FormFooter><Button type="submit" variant={p.isActive ? 'danger' : 'primary'} disabled={write.locked || !reviewed}>{p.isActive ? 'Desactivar producto' : 'Activar producto'}</Button></FormFooter>
   </form>
 }
-export function UnitEditor({ detail, write }: { detail: ProductDetail; write: CatalogWrite }) {
+export function UnitEditor({ detail, write, onDirty }: { detail: ProductDetail; write: CatalogWrite; onDirty?: (dirty: boolean) => void }) {
   const w = useWorkspace(); const { http } = useRuntime()
+  const [baseline, setBaseline] = useState<UnitConfiguration | null>(null); const [dirty, setDirty] = useState(false)
+  const reportDirty = useCallback((value: boolean) => { setDirty(value); onDirty?.(value) }, [onDirty])
   const configuration = useQuery({ queryKey: scopedKey(w, 'unit-configuration', w.session.userId, w.access.membershipId, detail.product.id),
     queryFn: ({ signal }) => { if (!http) throw new ApiError(0, 'client.https_required'); return catalogApi(http).unitConfiguration(w, detail.product.id, signal) },
     enabled: Boolean(http), retry: false, staleTime: 0, refetchOnWindowFocus: false })
+  // A recovery GET must not replace the user's original intent or its optimistic version.
+  // The parent remounts this editor only after confirmed save/reconciliation.
+  useEffect(() => { if (!baseline && configuration.data) setBaseline(configuration.data) }, [baseline, configuration.data])
   return <section aria-label="Configuración versionada de presentaciones"><h3>Editar presentaciones</h3>
     <p>Las unidades existentes conservan su identidad y factor. Para otro factor agrega una presentación; para retirarla de nuevas operaciones desactívala.</p>
     {configuration.isPending && <p role="status">Consultando configuración vigente…</p>}
     {configuration.isError && <ApiErrorState error={configuration.error} title="No pudimos consultar la configuración de presentaciones" />}
-    {configuration.data && !configuration.isError && <UnitConfigurationForm key={configuration.data.version} productId={detail.product.id} configuration={configuration.data} write={write} />}
-    <Button variant="quiet" disabled={configuration.isFetching || write.busy} onClick={() => void configuration.refetch()}>Recargar presentaciones del servidor</Button>
+    {baseline && <UnitConfigurationForm key={baseline.version} productId={detail.product.id} configuration={baseline} write={write} onDirty={reportDirty} />}
+    <Button variant="quiet" disabled={configuration.isFetching || write.busy || write.pending || dirty} onClick={() => { void configuration.refetch().then(result => { if (result.data && !result.isError) setBaseline(result.data) }) }}>Recargar presentaciones del servidor</Button>
+    {dirty && <p className="data-caption">Para descartar esta edición y revisar otra versión, cierra el formulario y vuelve a abrirlo.</p>}
   </section>
 }
-function UnitConfigurationForm({ productId, configuration, write }: { productId: string; configuration: UnitConfiguration; write: CatalogWrite }) {
+function UnitConfigurationForm({ productId, configuration, write, onDirty }: { productId: string; configuration: UnitConfiguration; write: CatalogWrite; onDirty?: (dirty: boolean) => void }) {
   const w = useWorkspace(); const { http } = useRuntime(); const [reviewed, setReviewed] = useState(false)
   const [rows, setRows] = useState<UnitFields[]>(() => configuration.units.length ? configuration.units.map(unit => ({ id: unit.id, name: unit.name, conversion: decimalLabel(unit.conversionToBase), base: unit.isBaseUnit, active: unit.isActive })) : [{ name: '', conversion: '1', base: true, active: true }])
+  const [baseline] = useState(() => JSON.stringify(rows))
+  useEffect(() => { onDirty?.(JSON.stringify(rows) !== baseline) }, [rows, baseline, onDirty])
   const input = unitInputs(rows)
   function change(index: number, patch: Partial<UnitFields>) { setReviewed(false); setRows(rows.map((row, position) => position === index ? { ...row, ...patch } : patch.base ? { ...row, base: false } : row)) }
   return <form aria-label="Guardar configuración de presentaciones" onSubmit={event => { event.preventDefault(); if (http && input && reviewed) void write.run('units', productId, async signal => { await catalogApi(http).configureUnits(w, productId, configuration.version, input.map((unit, index) => ({ ...unit, id: rows[index]?.id ?? null })), signal); return productId }) }}>

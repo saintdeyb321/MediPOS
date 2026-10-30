@@ -9,7 +9,7 @@ import { catalogApi } from './api'
 import type { ProductDetail } from './api'
 
 type Kind = 'create' | 'global' | 'prices' | 'status' | 'units' | 'metadata'
-export function useCatalogWrite(select: (id: string) => void) {
+export function useCatalogWrite(select: (id: string) => void, onConfirmed?: (detail: ProductDetail) => void) {
   const w = useWorkspace(); const { http } = useRuntime(); const client = useQueryClient()
   const [parameters, setParameters] = useSearchParams(); const latest = useRef(parameters)
   const [expected, setExpected] = useState<{ id?: string; code?: string }>(() => ({ id: parameters.get('catalogProduct') ?? undefined }))
@@ -51,9 +51,9 @@ export function useCatalogWrite(select: (id: string) => void) {
       if (!mounted.current) return
       setExpected(current => ({ ...current, id: affected }))
       mark(kind, affected)
-      await refresh(affected, controller.current.signal)
+      const verified = await refresh(affected, controller.current.signal)
       if (!mounted.current) return
-      mark(null); setNotice('Operación guardada y producto consultado nuevamente en el servidor. No se crearon existencias.')
+      mark(null); if (verified) onConfirmed?.(verified); setNotice('Operación guardada y producto consultado nuevamente en el servidor. No se crearon existencias.')
     } catch (failure) {
       if (!mounted.current) return
       setError(failure)
@@ -74,7 +74,7 @@ export function useCatalogWrite(select: (id: string) => void) {
   const canAcknowledge = Boolean(observed && (!expected.id || expected.id.toLowerCase() === observed.product.id.toLowerCase()) && (!expected.code || expected.code === observed.product.internalCode))
   function acknowledge(code: string) {
     if (!observed || running.current || !pending || !canAcknowledge || code.trim() !== observed.product.internalCode) return
-    mark(null); setError(null); setNotice('El operador revisó el estado consultado y concilió la operación. No se repitió la escritura.')
+    mark(null); onConfirmed?.(observed); setError(null); setNotice('El operador revisó el estado consultado y concilió la operación. No se repitió la escritura.')
   }
   useNavigationProtection({ busy, pending })
   return { busy, pending, denied, error, notice, observed, run, consult, acknowledge, canAcknowledge, locked: busy || pending || denied || !http }

@@ -8,4 +8,5 @@ public sealed record CreateTenantCommand(
     DateTimeOffset ExpiresAt,
     int MaxBranches,
     LicenseStatus Status,
-    Guid ActorId);
+    Guid ActorId,
+    string? OwnerEmail = null);

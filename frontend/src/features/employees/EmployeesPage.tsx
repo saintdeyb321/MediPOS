@@ -16,6 +16,7 @@ import { SearchField } from '../../shared/ui/TextField'
 import { Badge } from '../../shared/ui/Badge'
 import { DateText } from '../../shared/ui/DateText'
 import { employeesApi, sameId } from './api'
+import type { Employee } from './api'
 import { windowLabel } from './schedule'
 import { useEmployeeWrite } from './useEmployeeWrite'
 import { EmployeeBranchesForm, EmployeeDeactivation, EmployeeScheduleForm } from './EmployeeForms'
@@ -37,6 +38,7 @@ function EmployeesWorkspace() {
   const [tab, setTab] = useState<'profile' | 'branches' | 'schedule' | 'status'>('profile')
   const [task, setTask] = useState<'branches' | 'schedule' | 'status' | null>(null); const [dirty, setDirty] = useState(false)
   const [taskOpen, setTaskOpen] = useState(false)
+  const [editSnapshot, setEditSnapshot] = useState<Employee | null>(null)
   const [filter, setFilter] = useState('')
   const [viewMode, setViewMode] = useState<'cards' | 'list'>('list')
   const key = scopedKey(w, 'employees', w.session.userId, w.access.membershipId, offset)
@@ -46,7 +48,10 @@ function EmployeesWorkspace() {
   const employee = !employees.isError ? employees.data?.find(row => sameId(row.membershipId, selected)) : undefined
   function select(id: string) { setReviewed(false); setTab('profile'); setDrawerOpen(true); setParams(current => { const next = new URLSearchParams(current); next.set('employee', id); return next }, { replace: true }) }
   function page(value: number) { setReviewed(false); setParams(current => { const next = new URLSearchParams(current); next.set('employeePage', String(value)); if (!write.pending) next.delete('employee'); return next }, { replace: true }) }
-  function edit(value: 'branches' | 'schedule' | 'status') { setDrawerOpen(false); setDirty(false); setTask(value); setTaskOpen(true) }
+  function edit(value: 'branches' | 'schedule' | 'status') { setDrawerOpen(false); setDirty(false); setEditSnapshot(employee ?? null); setTask(value); setTaskOpen(true) }
+  function closeTask() { setTaskOpen(false); setTask(null); setDirty(false); setEditSnapshot(null) }
+  const taskEmployee = editSnapshot ?? employee
+  const deactivationVerified = task === 'status' && editSnapshot?.isActive && write.observed?.isActive === false && sameId(write.observed.membershipId, editSnapshot.membershipId) && !write.pending && !write.busy
   const visibleEmployees = employees.data?.filter(row => row.displayName.toLocaleLowerCase('es-PE').includes(filter.toLocaleLowerCase('es-PE')))
   return <div className="operations"><PageHeader icon={UsersRound} eyebrow="Equipo · acceso por rol y sucursal" title="Personal" description={`Equipo y accesos de ${w.tenantName}`} action={<Button disabled={!http || write.locked} onClick={() => setInvitationOpen(true)}>Invitar integrante</Button>} />
     {!http && <Notice tone="warning">Esta pantalla requiere conexión HTTPS real.</Notice>}
@@ -91,22 +96,22 @@ function EmployeesWorkspace() {
       {tab === 'status' && <><p>La desactivación conserva el historial y afecta las nuevas operaciones autorizadas.</p><Button variant="secondary" disabled={write.locked} onClick={() => edit('status')}>Revisar estado y desactivación</Button></>}
     </div>}
     </Drawer>
-    <Modal open={taskOpen && task !== null} title={task === 'branches' ? 'Asignar sucursales' : task === 'schedule' ? 'Configurar horario' : 'Estado del integrante'} onClose={() => { setTaskOpen(false); setTask(null); setDirty(false) }} onRecoveryClose={() => setTaskOpen(false)} dirty={dirty || task === 'schedule'} busy={write.busy} recovery={Boolean(write.pending)} wide={task === 'schedule'}>
-      <div className="operation-body" onChangeCapture={() => setDirty(true)}>
+    <Modal open={taskOpen && task !== null && !deactivationVerified} title={task === 'branches' ? 'Asignar sucursales' : task === 'schedule' ? 'Configurar horario' : 'Estado del integrante'} onClose={closeTask} onRecoveryClose={() => setTaskOpen(false)} dirty={dirty} busy={write.busy} recovery={Boolean(write.pending)} wide={task === 'schedule'}>
+      <div className="operation-body">
         {write.error != null && <ApiErrorState error={write.error} />}{write.notice && <p role="status">{write.notice}</p>}
         {!employee && <Notice tone="warning">El integrante no está disponible en esta consulta. Conserva la operación original y vuelve a consultarlo antes de editar.</Notice>}
         {write.pending && <Notice tone="warning"><p>No repitas el cambio. Consulta la misma membresía y compara todas las asignaciones y ventanas.</p><Button disabled={write.busy} onClick={() => { setReviewed(false); void write.consult() }}>Consultar integrante original</Button>
           {write.observed && <><p>{write.observed.displayName} · {roleLabels[write.observed.role]} · {write.observed.isActive ? 'Activo' : 'Inactivo'}</p>
             <ul>{write.observed.branchIds.map(id => <li key={id}>{branches.data?.find(branch => sameId(branch.id, id))?.name ?? 'Sucursal no disponible en la consulta'}</li>)}</ul>
             <ul>{write.observed.schedule.map(window => <li key={windowLabel(window)}>{windowLabel(window)}</li>)}</ul>
-            {write.pending !== 'deactivate' && employee && sameId(write.observed.membershipId, employee.membershipId) && <><label><input type="checkbox" checked={reviewed} onChange={event => setReviewed(event.target.checked)} /> Verifiqué el conjunto solicitado y la finalización, sin otra escritura en curso.</label><Button disabled={!reviewed || write.busy} onClick={() => { write.acknowledge(); setReviewed(false) }}>Continuar tras conciliación verificada</Button></>}
+            {write.pending !== 'deactivate' && employee && sameId(write.observed.membershipId, employee.membershipId) && <><label><input type="checkbox" checked={reviewed} onChange={event => setReviewed(event.target.checked)} /> Verifiqué el conjunto solicitado y la finalización, sin otra escritura en curso.</label><Button disabled={!reviewed || write.busy} onClick={() => { write.acknowledge(); setReviewed(false); closeTask() }}>Continuar tras conciliación verificada</Button></>}
           </>}
         </Notice>}
-        {employee && <div key={JSON.stringify(employee)}>
-          {sameId(employee.userId, w.session.userId) && <Notice>Modificar tu propia membresía obliga a volver a verificar el acceso.</Notice>}
-          {task === 'branches' && <EmployeeBranchesForm employee={employee} branches={branches.data ?? []} complete={complete} write={write} />}
-          {task === 'schedule' && <EmployeeScheduleForm employee={employee} write={write} />}
-          {task === 'status' && <EmployeeDeactivation employee={employee} write={write} />}
+        {taskEmployee && <div key={JSON.stringify(taskEmployee)}>
+          {sameId(taskEmployee.userId, w.session.userId) && <Notice>Modificar tu propia membresía obliga a volver a verificar el acceso.</Notice>}
+          {task === 'branches' && <EmployeeBranchesForm employee={taskEmployee} branches={branches.data ?? []} complete={complete} write={write} onDirty={setDirty} onSaved={closeTask} />}
+          {task === 'schedule' && <EmployeeScheduleForm employee={taskEmployee} write={write} onDirty={setDirty} onSaved={closeTask} />}
+          {task === 'status' && <EmployeeDeactivation employee={taskEmployee} write={write} onDirty={setDirty} onSaved={closeTask} />}
         </div>}
       </div>
     </Modal>

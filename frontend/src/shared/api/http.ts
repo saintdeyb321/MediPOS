@@ -59,7 +59,7 @@ export class HttpClient {
     const url = new URL(path, window.location.origin)
     if (url.origin !== window.location.origin || !/^\/(api|auth|platform)\//.test(url.pathname)) throw new ApiError(0, 'client.invalid_path')
     const method = options.method ?? 'GET'
-    if (options.idempotencyKey !== undefined && (method !== 'POST' || path !== '/platform/tenants' ||
+    if (options.idempotencyKey !== undefined && (method !== 'POST' || !['/platform/tenants', '/platform/tenants/with-owner'].includes(path) ||
       !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(options.idempotencyKey) ||
       options.idempotencyKey === '00000000-0000-0000-0000-000000000000')) throw new ApiError(0, 'client.invalid_request')
     if (options.intention && (method === 'GET' || !/^[0-9a-f-]{36}$/i.test(options.intention.id) || !/^[0-9a-f-]{36}$/i.test(options.intention.branchId))) throw new ApiError(0, 'client.invalid_request')

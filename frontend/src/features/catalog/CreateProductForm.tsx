@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { TextField } from '../../shared/ui/TextField'
 import { Button } from '../../shared/ui/Button'
 import { Steps } from '../../shared/ui/Steps'
@@ -11,7 +11,7 @@ import { emptyMedicine, medicineInput, prices, required } from './forms'
 import { MedicineFieldsForm, MedicineView, PriceInputs } from './ProductFields'
 import type { CatalogWrite } from './useCatalogWrite'
 
-export function CreateProductForm({ categories, global, write, onDirty }: { categories: Category[]; global: GlobalProduct | null; write: CatalogWrite; onDirty?: () => void }) {
+export function CreateProductForm({ categories, global, write, onDirty }: { categories: Category[]; global: GlobalProduct | null; write: CatalogWrite; onDirty?: (dirty: boolean) => void }) {
   const w = useWorkspace(); const { http } = useRuntime()
   const [code, setCode] = useState(''); const [name, setName] = useState(''); const [brand, setBrand] = useState(''); const [barcode, setBarcode] = useState('')
   const [categoryId, setCategory] = useState(''); const [type, setType] = useState<'' | 'medicine' | 'retail'>('')
@@ -25,7 +25,9 @@ export function CreateProductForm({ categories, global, write, onDirty }: { cate
   const identificationValid = Boolean(required(code, 64) && (global || type && required(name, 256)))
   const attributesValid = Boolean(global || required(brand, 200) && barcode.trim().length <= 128 && categories.some(row => row.id === categoryId && row.isActive) && (type === 'retail' || clinical))
   const saved = Boolean(submittedCode && write.notice && write.observed?.product.internalCode === submittedCode && !write.pending && !write.busy && write.error == null)
-  return <form aria-label={global ? 'Asociar producto global' : 'Crear producto local'} onChange={onDirty} onSubmit={event => {
+  const [baseline] = useState(() => JSON.stringify({ code, name, brand, barcode, categoryId, type, price, active, medicine }))
+  useEffect(() => { onDirty?.(!saved && JSON.stringify({ code, name, brand, barcode, categoryId, type, price, active, medicine }) !== baseline) }, [code, name, brand, barcode, categoryId, type, price, active, medicine, baseline, saved, onDirty])
+  return <form aria-label={global ? 'Asociar producto global' : 'Crear producto local'} onSubmit={event => {
     event.preventDefault(); if (saved || write.locked || step !== 3 || !http || !valid || !reviewed || !priceInput) return
     setReviewed(false); setSubmittedCode(code.trim())
     const api = catalogApi(http)

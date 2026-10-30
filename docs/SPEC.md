@@ -68,6 +68,8 @@ Priority: P0 MVP mandatory, P1 immediately after/optional integration, P2 later.
 
 Administration of memberships, assignments and schedules requires an authenticated Owner. The initial Owner may only be provisioned by an independently authenticated platform administrator; inactive historical Owners do not reopen that initial provisioning path.
 
+Initial Owner onboarding by email (SA1–SA2): the independently approved platform administrator may designate an unregistered Google email atomically with tenant/license creation. This persists a pending assignment, never a fictitious user or an active membership. Only a completed, server-validated Google login with `email_verified=true` and the exact normalized email may claim it, bound permanently to the real Google subject/internal user under the tenant license lock. No invitation link, prior login, manual UUID or second administrative approval is required. Pending recipients may be corrected/revoked by platform authority before claiming; historical Owners cannot be transferred through this flow. Trial begins at creation as before; an inoperable license leaves the assignment pending for a later verified login after license recovery. Email matching preserves dots and plus aliases. Commercial authorization and platform authority remain independent.
+
 ### Catalog
 - **FR-CAT-001 P0** Global reference catalog + tenant-specific business products; price/cost/stock never global.
 - **FR-CAT-002 P0** Distinguish medicine vs retail product.

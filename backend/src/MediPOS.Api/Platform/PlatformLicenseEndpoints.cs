@@ -30,6 +30,7 @@ public static partial class PlatformLicenseEndpoints
     public static void MapPlatformLicenseEndpoints(this WebApplication app)
     {
         app.MapPlatformDirectoryEndpoints();
+        MapInitialOwnerEndpoints(app);
         var group = app.MapGroup("/platform/tenants/{tenantId}/licenses/{licenseId}").RequireAuthorization();
         group.MapPost("/renew", (HttpContext context, RenewLicenseHandler handler) => Execute<RenewRequest>(context, async (request, tenant, license, actor, token) =>
         {
@@ -44,6 +45,9 @@ public static partial class PlatformLicenseEndpoints
             (request, tenant, license, actor, token) => handler.HandleAsync(new(tenant, license, Status(request.Status), actor), token)))
             .WithName("medipos.platform.license.reactivate");
         app.MapPost("/platform/tenants", Create).RequireAuthorization().WithName("medipos.platform.tenant.create");
+        app.MapPost("/platform/tenants/with-owner", CreateWithOwner).RequireAuthorization()
+            .Accepts<CreateWithOwnerRequest>("application/json").Produces<LicenseResponse>(201).Produces<LicenseResponse>(200)
+            .WithName("medipos.platform.tenant.create_with_owner");
         app.MapPost("/platform/tenants/{tenantId}/bootstrap-owner", BootstrapOwner).RequireAuthorization().WithName("medipos.platform.tenant.bootstrap_owner");
         app.MapPost("/platform/catalog/categories", async (HttpContext context, MediPOS.Application.Modules.Catalog.CreateCategory.CreateCategoryHandler handler) =>
         {
@@ -76,7 +80,9 @@ public static partial class PlatformLicenseEndpoints
         return id;
     }
 
-    private static async Task<IResult> Create(HttpContext context, CreateTenantIdempotentlyHandler handler)
+    private static Task<IResult> Create(HttpContext context, CreateTenantIdempotentlyHandler handler) => CreateCore(context, handler, false);
+    private static Task<IResult> CreateWithOwner(HttpContext context, CreateTenantIdempotentlyHandler handler) => CreateCore(context, handler, true);
+    private static async Task<IResult> CreateCore(HttpContext context, CreateTenantIdempotentlyHandler handler, bool requireOwner)
     {
         var actor = await PlatformAdministrationAccess.RequireAsync(context.RequestServices.GetRequiredService<IPlatformAdministration>(), null, context.RequestAborted);
         using var lease = context.RequestServices.GetRequiredService<PlatformApiRateLimiter>().AttemptAcquire(actor);
@@ -86,12 +92,13 @@ public static partial class PlatformLicenseEndpoints
         if (keys.Count != 1 || keys[0] is not { Length: 36 } keyText || !Guid.TryParseExact(keyText, "D", out var key) || key == Guid.Empty)
             throw new HttpBoundaryException(400, "platform.idempotency_key_invalid");
         var request = await Read<CreateRequest>(context);
+        if (requireOwner && string.IsNullOrWhiteSpace(request.OwnerEmail)) throw new HttpBoundaryException(400, "platform.owner_email_required");
         if (!DateTimeOffset.TryParseExact(request.StartsAt, DateFormats, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out var starts) ||
             !DateTimeOffset.TryParseExact(request.ExpiresAt, DateFormats, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out var expires))
             throw new HttpBoundaryException(400, "platform.invalid_json");
         var status = Status(request.Status);
         TenantCreationStatusPolicy.RequireAllowed(status);
-        var result = await handler.HandleAsync(new(request.TradingName, starts, expires, request.MaxBranches, status, actor), key, context.RequestAborted);
+        var result = await handler.HandleAsync(new(request.TradingName, starts, expires, request.MaxBranches, status, actor, request.OwnerEmail), key, context.RequestAborted);
         context.Response.Headers["Idempotency-Replayed"] = result.Replayed ? "true" : "false";
         return Results.Json(Response(result.License), statusCode: result.Replayed ? 200 : 201);
     }
@@ -162,7 +169,9 @@ public static partial class PlatformLicenseEndpoints
     };
     private sealed record RenewRequest([property: JsonRequired] string ExpiresAt);
     private sealed record CreateRequest([property: JsonRequired] string TradingName, [property: JsonRequired] string StartsAt,
-        [property: JsonRequired] string ExpiresAt, [property: JsonRequired] int MaxBranches, [property: JsonRequired] string Status);
+        [property: JsonRequired] string ExpiresAt, [property: JsonRequired] int MaxBranches, [property: JsonRequired] string Status, string? OwnerEmail = null);
+    private sealed record CreateWithOwnerRequest([property: JsonRequired] string TradingName, [property: JsonRequired] string StartsAt,
+        [property: JsonRequired] string ExpiresAt, [property: JsonRequired] int MaxBranches, [property: JsonRequired] string Status, [property: JsonRequired] string OwnerEmail);
     private sealed record ReactivateRequest([property: JsonRequired] string Status);
     private sealed record SuspendRequest;
     private sealed record BootstrapOwnerRequest([property: JsonRequired] string UserId);

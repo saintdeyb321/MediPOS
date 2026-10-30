@@ -18,6 +18,7 @@ internal sealed class AuditLogConfiguration : IEntityTypeConfiguration<AuditLog>
                 (entity_type = 'electronic_document' AND action IN ('cpe.requested','cpe.reviewed','cpe.delivery_changed')) OR
                 (entity_type = 'supplier_ubl_import' AND action IN ('supplier_ubl.imported','supplier_ubl.reviewed','supplier_ubl.rejected','supplier_ubl.converted','supplier_ubl.file_rejected')) OR
                 (entity_type = 'tenant' AND action IN ('tenant.created', 'tenant.purge_requested')) OR
+                (entity_type = 'initial_owner_invitation' AND action IN ('initial_owner.invited', 'initial_owner.claimed', 'initial_owner.revoked')) OR
                 (entity_type = 'license' AND action IN ('license.renewed', 'license.suspended', 'license.reactivated')) OR
                 (entity_type = 'legal_entity' AND action = 'legal_entity.created') OR
                 (entity_type = 'branch' AND action IN ('branch.created', 'branch.main_hub_changed')) OR

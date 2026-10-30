@@ -149,6 +149,8 @@ public sealed partial class MediPosDbContext(DbContextOptions<MediPosDbContext> 
         modelBuilder.ApplyConfiguration(new LegalEntityConfiguration());
         modelBuilder.ApplyConfiguration(new BranchConfiguration());
         modelBuilder.ApplyConfiguration(new UserConfiguration());
+        modelBuilder.ApplyConfiguration(new InitialOwnerInvitationConfiguration());
+        modelBuilder.Entity<InitialOwnerInvitation>().HasQueryFilter(value => SelectedTenantId.HasValue && value.TenantId == SelectedTenantId);
         modelBuilder.ApplyConfiguration(new MembershipConfiguration());
         modelBuilder.ApplyConfiguration(new EmployeeInvitationConfiguration());
         modelBuilder.ApplyConfiguration(new MembershipBranchConfiguration());
@@ -605,6 +607,7 @@ public sealed partial class MediPosDbContext(DbContextOptions<MediPosDbContext> 
                 Branch value => value.TenantId,
                 Membership value => value.TenantId,
                 EmployeeInvitation value => value.TenantId,
+                InitialOwnerInvitation value => value.TenantId,
                 MembershipBranch value => value.TenantId,
                 WorkSchedule value => value.TenantId,
                 AuditLog value => value.TenantId,

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useRuntime, useWorkspace } from '../access'
 import { catalogApi } from './api'
 import type { Category, ProductDetail } from './api'
@@ -9,11 +9,13 @@ import { MedicineFieldsForm } from './ProductFields'
 import { TextField } from '../../shared/ui/TextField'
 import { Button } from '../../shared/ui/Button'
 
-export function EditLocalProduct({ detail, categories, write }: { detail: ProductDetail; categories: Category[]; write: CatalogWrite }) {
+export function EditLocalProduct({ detail, categories, write, onDirty }: { detail: ProductDetail; categories: Category[]; write: CatalogWrite; onDirty?: (dirty: boolean) => void }) {
   const w = useWorkspace(); const { http } = useRuntime(); const p = detail.product
   const [name, setName] = useState(p.name); const [brand, setBrand] = useState(p.brandOrLaboratory); const [barcode, setBarcode] = useState(p.barcode ?? ''); const [categoryId, setCategory] = useState(p.categoryId)
   const [medicine, setMedicine] = useState<MedicineFields>({ components: p.medicine?.components.map(c => ({ ...c })) ?? [{ ingredient: '', strengthNormalized: '' }], dosageForm: p.medicine?.dosageForm ?? '', route: p.medicine?.route ?? '', sanitaryRegistration: p.medicine?.sanitaryRegistration ?? '' })
   const [reviewed, setReviewed] = useState(false)
+  const [baseline] = useState(() => JSON.stringify({ name, brand, barcode, categoryId, medicine }))
+  useEffect(() => { onDirty?.(JSON.stringify({ name, brand, barcode, categoryId, medicine }) !== baseline) }, [name, brand, barcode, categoryId, medicine, baseline, onDirty])
   const clinical = p.productType === 'medicine' ? medicineInput(medicine) : null
   const valid = !p.globalProductId && Boolean(detail.revision) && required(name, 256) && required(brand, 200) && barcode.trim().length <= 128 && categories.some(c => c.id === categoryId && c.isActive) && (p.productType !== 'medicine' || Boolean(clinical))
   return <form aria-label="Corregir producto local" onSubmit={event => { event.preventDefault(); if (http && valid && reviewed) { setReviewed(false); void write.run('metadata', p.id, async signal => (await catalogApi(http).correctLocal(w, p.id, { expectedRevision: detail.revision, name: name.trim(), categoryId, brandOrLaboratory: brand.trim(), barcode: barcode.trim() || null, medicine: clinical }, signal)).id) } }}>

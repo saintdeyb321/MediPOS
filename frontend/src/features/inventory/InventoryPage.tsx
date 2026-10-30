@@ -35,6 +35,7 @@ function InventoryWorkspace() {
   const [product, setProduct] = useState<ProductDetail | null>(null); const [lot, setLot] = useState<LotStock | null>(null)
   const [filterOpen, setFilterOpen] = useState(false); const [minimumOpen, setMinimumOpen] = useState(false)
   const [adjustmentOpen, setAdjustmentOpen] = useState(false)
+  const [minimumEpoch, setMinimumEpoch] = useState(0)
   const [dirty, setDirty] = useState(false)
   const key = (resource: string) => scopedKey(w, resource, w.session.userId, w.access.membershipId, product?.product.id, offset)
   const api = () => { if (!http) throw new ApiError(0, 'client.https_required'); return inventoryApi(http) }
@@ -73,15 +74,15 @@ function InventoryWorkspace() {
       <PageControls offset={offset} count={current.isError ? undefined : current.data?.length} busy={current.isFetching} change={value => { setOffset(value); if (!write.pending) setLot(null) }} refresh={() => { if (!write.pending) setLot(null); void current.refetch() }} />
     </div></Panel>
     <Modal open={adjustmentOpen && lot !== null} title="Ajustar lote" onClose={() => { setAdjustmentOpen(false); setLot(null); setDirty(false) }} onRecoveryClose={() => setAdjustmentOpen(false)} dirty={dirty} busy={write.busy} recovery={write.pending}>
-      <div className="operation-body" onChangeCapture={() => setDirty(true)}>{write.error != null && <ApiErrorState error={write.error} />}
+      <div className="operation-body">{write.error != null && <ApiErrorState error={write.error} />}
         {write.pending && <Notice tone="warning">Resultado pendiente. Conserva esta dirección y concilia el movimiento antes de otra escritura; consultar el saldo no identifica el ajuste.</Notice>}
-        {lot && <AdjustmentForm key={lot.inventoryLotId + ':' + decimalLabel(lot.quantityAvailableBase)} lot={lot} write={write} onSaved={() => { setAdjustmentOpen(false); setLot(null); setDirty(false) }} />}
+        {lot && <AdjustmentForm key={lot.inventoryLotId + ':' + decimalLabel(lot.quantityAvailableBase)} lot={lot} write={write} onDirty={setDirty} onSaved={() => { setAdjustmentOpen(false); setLot(null); setDirty(false) }} />}
       </div>
     </Modal>
-    <Modal open={minimumOpen && Boolean(product)} title="Configurar mínimo de stock" onClose={() => { setMinimumOpen(false); setDirty(false) }} onRecoveryClose={() => setMinimumOpen(false)} dirty={dirty} busy={write.busy} recovery={write.pending}>
-      <div className="operation-body" onChangeCapture={() => setDirty(true)}>{write.error != null && <ApiErrorState error={write.error} />}
+    <Modal open={minimumOpen && Boolean(product)} title="Configurar mínimo de stock" onClose={() => { setMinimumOpen(false); setDirty(false); setMinimumEpoch(value => value + 1) }} onRecoveryClose={() => setMinimumOpen(false)} dirty={dirty} busy={write.busy} recovery={write.pending}>
+      <div className="operation-body">{write.error != null && <ApiErrorState error={write.error} />}
         {write.pending && <Notice tone="warning">Resultado pendiente. La API no permite consultar el mínimo actual; no lo vuelvas a guardar sin conciliación.</Notice>}
-        {w.access.role === 'owner' && product && <MinimumForm key={product.product.id} productId={product.product.id} write={write} onSaved={() => { setMinimumOpen(false); setDirty(false) }} />}
+        {w.access.role === 'owner' && product && <MinimumForm key={`${product.product.id}/${minimumEpoch}`} productId={product.product.id} write={write} onDirty={setDirty} onSaved={() => { setMinimumOpen(false); setDirty(false) }} />}
         {write.result && !('stockMovementId' in write.result) && <p role="status">Mínimo guardado: {decimalLabel(write.result.minimumStockBase)} unidades base.</p>}
       </div>
     </Modal>

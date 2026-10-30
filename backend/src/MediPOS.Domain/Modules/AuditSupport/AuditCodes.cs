@@ -15,14 +15,18 @@ public enum AuditAction
     SyncDeviceRegistered, SyncDeviceRevoked, OfflineSaleConflictResolved,
     SupplierUblImported, SupplierUblReviewed, SupplierUblRejected, SupplierUblConverted, SupplierUblFileRejected,
     BusinessProductDataCorrected,
+    InitialOwnerInvited, InitialOwnerClaimed, InitialOwnerRevoked,
 }
 
-public enum AuditEntityType { ElectronicSeries, ElectronicDocument, Tenant, License, LegalEntity, Branch, Membership, BusinessProduct, Purchase, InventoryLot, ImportJob, CashSession, Sale, Transfer, CashTransfer, TenantCommissionSettings, CommissionRule, BranchStockThreshold, SyncDevice, OfflineSaleConflict, SupplierUblImport, EmployeeInvitation }
+public enum AuditEntityType { ElectronicSeries, ElectronicDocument, Tenant, License, LegalEntity, Branch, Membership, BusinessProduct, Purchase, InventoryLot, ImportJob, CashSession, Sale, Transfer, CashTransfer, TenantCommissionSettings, CommissionRule, BranchStockThreshold, SyncDevice, OfflineSaleConflict, SupplierUblImport, EmployeeInvitation, InitialOwnerInvitation }
 
 public static class AuditCodes
 {
     public static string ActionToCode(AuditAction action) => action switch
     {
+        AuditAction.InitialOwnerInvited => "initial_owner.invited",
+        AuditAction.InitialOwnerClaimed => "initial_owner.claimed",
+        AuditAction.InitialOwnerRevoked => "initial_owner.revoked",
         AuditAction.ElectronicSeriesConfigured => "cpe.series_configured",
         AuditAction.ElectronicDocumentRequested => "cpe.requested",
         AuditAction.ElectronicDocumentReviewed => "cpe.reviewed",
@@ -80,6 +84,9 @@ public static class AuditCodes
 
     public static AuditAction ActionFromCode(string code) => code switch
     {
+        "initial_owner.invited" => AuditAction.InitialOwnerInvited,
+        "initial_owner.claimed" => AuditAction.InitialOwnerClaimed,
+        "initial_owner.revoked" => AuditAction.InitialOwnerRevoked,
         "cpe.series_configured" => AuditAction.ElectronicSeriesConfigured,
         "cpe.requested" => AuditAction.ElectronicDocumentRequested,
         "cpe.reviewed" => AuditAction.ElectronicDocumentReviewed,
@@ -137,6 +144,7 @@ public static class AuditCodes
 
     public static AuditEntityType EntityFor(AuditAction action) => action switch
     {
+        AuditAction.InitialOwnerInvited or AuditAction.InitialOwnerClaimed or AuditAction.InitialOwnerRevoked => AuditEntityType.InitialOwnerInvitation,
         AuditAction.ElectronicSeriesConfigured => AuditEntityType.ElectronicSeries,
         AuditAction.ElectronicDocumentRequested or AuditAction.ElectronicDocumentReviewed or AuditAction.ElectronicDeliveryChanged => AuditEntityType.ElectronicDocument,
 
@@ -167,6 +175,7 @@ public static class AuditCodes
 
     public static string EntityToCode(AuditEntityType entityType) => entityType switch
     {
+        AuditEntityType.InitialOwnerInvitation => "initial_owner_invitation",
         AuditEntityType.ElectronicSeries => "electronic_series",
         AuditEntityType.ElectronicDocument => "electronic_document",
 
@@ -195,6 +204,7 @@ public static class AuditCodes
 
     public static AuditEntityType EntityFromCode(string code) => code switch
     {
+        "initial_owner_invitation" => AuditEntityType.InitialOwnerInvitation,
         "electronic_series" => AuditEntityType.ElectronicSeries,
         "electronic_document" => AuditEntityType.ElectronicDocument,
 

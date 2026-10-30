@@ -17,7 +17,7 @@ import { PageToolbar } from '../../shared/ui/PageToolbar'
 import { Badge } from '../../shared/ui/Badge'
 import { EmptyState } from '../../shared/ui/States'
 import { catalogApi } from './api'
-import type { Category, GlobalProduct } from './api'
+import type { Category, GlobalProduct, ProductDetail } from './api'
 import { useCatalogWrite } from './useCatalogWrite'
 import { CreateProductForm } from './CreateProductForm'
 import { MedicineView } from './ProductFields'
@@ -38,12 +38,13 @@ function CatalogWorkspace() {
   const [task, setTask] = useState<ProductTask | null>(null)
   const [taskOpen, setTaskOpen] = useState(false)
   const [dirty, setDirty] = useState(false); const [formEpoch, setFormEpoch] = useState(0)
+  const [editSnapshot, setEditSnapshot] = useState<ProductDetail | null>(null); const [editEpoch, setEditEpoch] = useState(0)
   const [filter, setFilter] = useState(''); const [status, setStatus] = useState('all')
   const [categoryFilter, setCategoryFilter] = useState(''); const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid')
   const [selected, setSelected] = useState(''); const [global, setGlobal] = useState<GlobalProduct | null>(null)
   const [reviewed, setReviewed] = useState(false)
   const [recoveryCode, setRecoveryCode] = useState('')
-  const write = useCatalogWrite(id => { setSelected(id) })
+  const write = useCatalogWrite(id => { setSelected(id) }, verified => { setEditSnapshot(verified); setDirty(false); setEditEpoch(value => value + 1) })
   const key = (resource: string, ...values: unknown[]) => scopedKey(w, resource, w.session.userId, w.access.membershipId, ...values)
   const api = () => { if (!http) throw new ApiError(0, 'client.https_required'); return catalogApi(http) }
   const products = useQuery({ queryKey: key('catalog-products', offset), queryFn: ({ signal }) => api().list(w, offset, 50, signal), enabled: Boolean(http), retry: false, staleTime: 0 })
@@ -62,7 +63,8 @@ function CatalogWorkspace() {
   function openDetail(id: string) { setReviewed(false); setSelected(id); setDetailOpen(true) }
   function closeCreate() { setCreateOpen(false); setDirty(false); setGlobal(null); setFormEpoch(value => value + 1) }
   function openCreate(reference: GlobalProduct | null) { setTask(null); setTaskOpen(false); setGlobal(reference); setDirty(false); setFormEpoch(value => value + 1); setCreateOpen(true) }
-  function edit(value: ProductTask) { setDetailOpen(false); setDirty(false); setTask(value); setTaskOpen(true) }
+  function edit(value: ProductTask) { setDetailOpen(false); setDirty(false); setEditSnapshot(detail.data ?? null); setEditEpoch(epoch => epoch + 1); setTask(value); setTaskOpen(true) }
+  const taskDetail = editSnapshot ?? detail.data
   const recovery = write.pending && <Panel><div className="catalog-body"><h2>Operación pendiente de conciliación</h2><p>No reenvíes la solicitud. Conserva el código original; una consulta sin cambios no demuestra que la escritura falló.</p>
     <Button variant="secondary" disabled={write.busy} onClick={() => { setReviewed(false); void write.consult(selected || undefined) }}>Consultar producto de la operación</Button>
     {write.observed && <><p>Producto consultado: {write.observed.product.name} · Código {write.observed.product.internalCode}. Revisa sus atributos contra la solicitud original.</p>
@@ -88,7 +90,7 @@ function CatalogWorkspace() {
     {categories.isError && <Button variant="quiet" onClick={() => void categories.refetch()}>Consultar categorías</Button>}
     <Modal open={createOpen} wide title={global ? 'Añadir referencia a mi botica' : 'Nuevo producto'} description="Registra sus datos, revisa los precios y configura las presentaciones después de guardar." onClose={closeCreate} onRecoveryClose={() => setCreateOpen(false)} dirty={dirty} busy={write.busy} recovery={write.pending}>
       <div className="catalog-body">{write.error != null && <ApiErrorState error={write.error} />}{recovery}
-        {categories.isPending ? <p>Consultando categorías…</p> : categories.data && !categories.isError && <CreateProductForm key={`${global?.id ?? 'local'}/${formEpoch}`} categories={categories.data} global={global} write={write} onDirty={() => setDirty(true)} />}
+        {categories.isPending ? <p>Consultando categorías…</p> : categories.data && !categories.isError && <CreateProductForm key={`${global?.id ?? 'local'}/${formEpoch}`} categories={categories.data} global={global} write={write} onDirty={setDirty} />}
         {categories.isError && <ApiErrorState error={categories.error} retry={() => void categories.refetch()} />}
         {write.notice && selected && <Button disabled={write.locked} onClick={() => { closeCreate(); edit('units') }}>Configurar presentaciones del producto guardado</Button>}
       </div>
@@ -127,14 +129,14 @@ function CatalogWorkspace() {
       {detail.data && !detail.isError && <ProductDetailPanel key={detail.data.product.id} detail={detail.data} write={write} onEdit={edit} />}
       <Button variant="quiet" disabled={detail.isFetching} onClick={() => void detail.refetch()}>Actualizar detalle</Button>
     </Drawer>
-    <Modal open={taskOpen && task !== null} wide={task === 'units'} title={task === 'metadata' ? 'Corregir datos locales' : task === 'prices' ? 'Editar precios' : task === 'units' ? 'Configurar presentaciones' : 'Cambiar estado del producto'} onClose={() => { setTaskOpen(false); setTask(null); setDirty(false) }} onRecoveryClose={() => setTaskOpen(false)} dirty={dirty || task === 'units'} busy={write.busy} recovery={write.pending}>
-      <div className="catalog-body" onChangeCapture={() => setDirty(true)}>
+    <Modal open={taskOpen && task !== null} wide={task === 'units'} title={task === 'metadata' ? 'Corregir datos locales' : task === 'prices' ? 'Editar precios' : task === 'units' ? 'Configurar presentaciones' : 'Cambiar estado del producto'} onClose={() => { setTaskOpen(false); setTask(null); setDirty(false) }} onRecoveryClose={() => setTaskOpen(false)} dirty={dirty} busy={write.busy} recovery={write.pending}>
+      <div className="catalog-body">
         {write.error != null && <ApiErrorState error={write.error} />}{recovery}{write.notice && <p role="status">{write.notice}</p>}
-        {detail.data && !detail.isError && <>
-          {task === 'metadata' && <EditLocalProduct key={detail.data.revision} detail={detail.data} categories={categories.data ?? []} write={write} />}
-          {task === 'prices' && <EditPrices key={`${detail.data.product.id}/${detail.data.product.retailPrice.literal}/${detail.data.product.wholesalePrice?.literal}`} detail={detail.data} write={write} />}
-          {task === 'status' && <EditStatus key={`${detail.data.product.id}/${detail.data.product.isActive}`} detail={detail.data} write={write} />}
-          {task === 'units' && <UnitEditor key={detail.data.product.id} detail={detail.data} write={write} />}
+        {taskDetail && <>
+          {task === 'metadata' && <EditLocalProduct key={editEpoch} detail={taskDetail} categories={categories.data ?? []} write={write} onDirty={setDirty} />}
+          {task === 'prices' && <EditPrices key={editEpoch} detail={taskDetail} write={write} onDirty={setDirty} />}
+          {task === 'status' && <EditStatus key={editEpoch} detail={taskDetail} write={write} onDirty={setDirty} />}
+          {task === 'units' && <UnitEditor key={editEpoch} detail={taskDetail} write={write} onDirty={setDirty} />}
         </>}
       </div>
     </Modal>

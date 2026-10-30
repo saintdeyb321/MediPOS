@@ -49,6 +49,8 @@ public sealed class PlatformLicenseHttpTests
         var expected = BaseRoutes
             .Concat(Operations.Select(operation => "/platform/tenants/{tenantId}/licenses/{licenseId}/" + operation)).Append("/platform/tenants")
             .Append("/platform/tenants/{tenantId}/bootstrap-owner").Append("/platform/catalog/categories")
+            .Append("/platform/tenants/with-owner").Append("/platform/tenants/{tenantId}/initial-owner")
+            .Append("/platform/tenants/{tenantId}/initial-owner/change").Append("/platform/tenants/{tenantId}/initial-owner/revoke")
             .Concat(DirectoryRoutes).Order().ToArray();
         Assert.Equal(expected, Routes(enabled));
         await Login(enabled);

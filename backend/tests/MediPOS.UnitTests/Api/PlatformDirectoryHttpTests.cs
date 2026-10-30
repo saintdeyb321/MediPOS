@@ -15,7 +15,23 @@ namespace MediPOS.UnitTests.Api;
 public sealed class PlatformDirectoryHttpTests
 {
     private static CancellationToken Token => TestContext.Current.CancellationToken;
-    private static readonly string[] SummaryFields = ["tenantId", "tradingName", "createdAt"];
+
+    [Theory]
+    [InlineData("change", false, HttpStatusCode.Forbidden)]
+    [InlineData("revoke", false, HttpStatusCode.Forbidden)]
+    [InlineData("change", true, HttpStatusCode.BadRequest)]
+    [InlineData("revoke", true, HttpStatusCode.BadRequest)]
+    public async Task PendingOwnerWritesRequireIndependentPlatformAndCsrfBeforePersistence(string action, bool approved, HttpStatusCode expected)
+    {
+        var reader = new Reader(); await using var host = await Host(reader, approved: approved);
+        await PlatformLicenseHttpTests.Login(host);
+        using var request = new HttpRequestMessage(HttpMethod.Post, $"/platform/tenants/{reader.Tenant}/initial-owner/{action}")
+        { Content = new StringContent("{}", System.Text.Encoding.UTF8, "application/json") };
+        request.Headers.Add("Origin", "https://medipos.example.test");
+        using var response = await host.Client.SendAsync(request, Token);
+        Assert.Equal(expected, response.StatusCode); Assert.Equal(0, reader.Calls);
+    }
+    private static readonly string[] SummaryFields = ["tenantId", "tradingName", "createdAt", "administration"];
 
     [Theory]
     [InlineData("same-origin", "approved", HttpStatusCode.OK)]
@@ -84,6 +100,7 @@ public sealed class PlatformDirectoryHttpTests
     [InlineData("/platform/tenants/019a0162-0000-7000-8000-000000000002/details")]
     [InlineData("/platform/identities/019a0162-0000-7000-8000-000000000002")]
     [InlineData("/platform/tenant-requests/019a0162-0000-7000-8000-000000000002")]
+    [InlineData("/platform/tenants/019a0162-0000-7000-8000-000000000002/initial-owner")]
     public async Task AnonymousAndOrdinaryGoogleSessionsCannotReadPlatform(string path)
     {
         var reader = new Reader(); await using var host = await Host(reader, approved: false);

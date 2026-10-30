@@ -172,6 +172,8 @@ public static class DependencyInjection
         services.AddScoped<CreateBranchHandler>();
         services.AddScoped<SetMainHubBranchHandler>();
         services.AddScoped<IIdentityAccessStore, IdentityAccessStore>();
+        services.AddScoped<MediPOS.Application.Modules.IdentityAccess.Invitations.IInitialOwnerInvitationStore, MediPOS.Infrastructure.Modules.IdentityAccess.Persistence.InitialOwnerInvitationStore>();
+        services.AddScoped<MediPOS.Application.Modules.IdentityAccess.Invitations.InitialOwnerInvitations>();
         services.AddScoped<MediPOS.Application.Modules.IdentityAccess.Directory.IMyTenantDirectoryReader, MyTenantDirectoryReader>();
         services.AddScoped<MediPOS.Application.Modules.IdentityAccess.Directory.IEmployeeDirectoryReader, EmployeeDirectoryReader>();
         services.AddScoped<MediPOS.Application.Modules.IdentityAccess.Directory.EmployeeDirectoryQueries>();

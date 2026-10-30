@@ -5,11 +5,12 @@ using System.Text.Json;
 using MediPOS.Application.Errors;
 using MediPOS.Application.Modules.IdentityAccess.Authentication;
 using MediPOS.Domain.Modules.TenancyLicensing;
+using MediPOS.Application.Modules.IdentityAccess.Invitations;
 
 namespace MediPOS.Application.Modules.TenancyLicensing.CreateTenant;
 
 public sealed class CreateTenantIdempotentlyHandler(
-    CreateTenantHandler create, ITenantCreationRequests requests, IPlatformAdministration administration)
+    CreateTenantHandler create, ITenantCreationRequests requests, IPlatformAdministration administration, InitialOwnerInvitations? owners = null)
 {
     public const string Operation = "platform.tenant.create.v1";
     public static readonly ApplicationError PayloadConflict = new("platform.idempotency_conflict", ErrorCategory.Conflict,
@@ -20,6 +21,8 @@ public sealed class CreateTenantIdempotentlyHandler(
         ArgumentNullException.ThrowIfNull(command);
         await PlatformAdministrationAccess.RequireAsync(administration, command.ActorId, cancellationToken).ConfigureAwait(false);
         TenantCreationStatusPolicy.RequireAllowed(command.Status);
+        var ownerEmail = command.OwnerEmail is null ? null : GoogleEmailAddress.Normalize(command.OwnerEmail) ?? throw new ApplicationErrorException(ApplicationErrors.InvalidRequest);
+        if (ownerEmail is not null && owners is null) throw new InvalidOperationException("Initial Owner provisioning is unavailable.");
         if (key == Guid.Empty || string.IsNullOrWhiteSpace(command.TradingName))
             throw new ApplicationErrorException(ApplicationErrors.InvalidRequest);
         // PostgreSQL timestamptz stores microseconds. Use precisely the same values for the
@@ -29,20 +32,24 @@ public sealed class CreateTenantIdempotentlyHandler(
         {
             TradingName = command.TradingName.Trim(),
             StartsAt = UtcMicroseconds(command.StartsAt),
-            ExpiresAt = UtcMicroseconds(command.ExpiresAt)
+            ExpiresAt = UtcMicroseconds(command.ExpiresAt),
+            OwnerEmail = ownerEmail
         };
-        var canonical = JsonSerializer.Serialize(new[]
+        var fields = new[]
         {
             Operation, normalized.TradingName,
             normalized.StartsAt.ToString("O", CultureInfo.InvariantCulture), normalized.ExpiresAt.ToString("O", CultureInfo.InvariantCulture),
             normalized.MaxBranches.ToString(CultureInfo.InvariantCulture), StatusCode(normalized.Status)
-        });
+        };
+        // Preserve historical v1 hashes; new email-aware creations include the exact normalized recipient.
+        var canonical = JsonSerializer.Serialize(ownerEmail is null ? fields : [.. fields, "owner-email.v1", ownerEmail]);
         var hash = SHA256.HashData(Encoding.UTF8.GetBytes(canonical));
         await using var reservation = await requests.BeginAsync(command.ActorId, key, hash, cancellationToken).ConfigureAwait(false);
         // A waiter may have lost authorization while another request held the unique key.
         await PlatformAdministrationAccess.RequireAsync(administration, command.ActorId, cancellationToken).ConfigureAwait(false);
         if (reservation.OriginalResult is { } original) return new(original, true);
-        var result = await create.HandleAsync(normalized, cancellationToken).ConfigureAwait(false);
+        var result = await create.HandleAsync(normalized with { OwnerEmail = null }, cancellationToken).ConfigureAwait(false);
+        if (ownerEmail is not null) await owners!.AddToCreationAsync(result.TenantId, ownerEmail, command.ActorId, key, cancellationToken).ConfigureAwait(false);
         await PlatformAdministrationAccess.RequireAsync(administration, command.ActorId, cancellationToken).ConfigureAwait(false);
         await reservation.CompleteAsync(result, cancellationToken).ConfigureAwait(false);
         return new(result, false);

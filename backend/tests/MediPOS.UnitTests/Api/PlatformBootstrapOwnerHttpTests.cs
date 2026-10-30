@@ -4,6 +4,7 @@ using System.Text.Json;
 using MediPOS.Application.Errors;
 using MediPOS.Application.Modules.IdentityAccess;
 using MediPOS.Application.Modules.IdentityAccess.Authentication;
+using MediPOS.Application.Modules.IdentityAccess.Invitations;
 using MediPOS.Application.Modules.IdentityAccess.CreateMembership;
 using MediPOS.Application.Modules.IdentityAccess.OperationalAccess;
 using MediPOS.Application.Modules.TenancyLicensing;
@@ -23,6 +24,16 @@ namespace MediPOS.UnitTests.Api;
 public sealed class PlatformBootstrapOwnerHttpTests
 {
     private static CancellationToken Token => TestContext.Current.CancellationToken;
+
+    [Fact]
+    public async Task PendingEmailCannotBeBypassedByTheLegacyUuidBootstrap()
+    {
+        var state = new State { HasPendingEmail = true }; await using var host = await Host(state);
+        await PlatformLicenseHttpTests.Login(host);
+        using var response = await Send(host, state, await host.Csrf());
+        await Problem(response, HttpStatusCode.Conflict, "platform.owner_invitation_conflict");
+        Assert.Empty(state.Members); Assert.Empty(state.Audits);
+    }
 
     [Fact]
     public async Task PriorGoogleRegistrationOwnMeAndVerifiedUuidProvisionOnlyTargetWithServerActor()
@@ -281,6 +292,7 @@ public sealed class PlatformBootstrapOwnerHttpTests
         {
             services.AddSingleton<TimeProvider>(state.Clock); services.AddScoped(_ => new Store(state));
             services.AddScoped<IIdentityAccessStore>(provider => provider.GetRequiredService<Store>());
+            services.AddScoped<IInitialOwnerInvitationStore>(provider => provider.GetRequiredService<Store>());
             services.AddScoped<ITenantLicenseProvisioning>(provider => provider.GetRequiredService<Store>());
             services.AddScoped<IOperationalAccessReader>(_ => new Reader(state));
         });
@@ -306,6 +318,7 @@ public sealed class PlatformBootstrapOwnerHttpTests
     private sealed class Clock : TimeProvider { internal TimeSpan Offset; public override DateTimeOffset GetUtcNow() => DateTimeOffset.UtcNow + Offset; }
     private sealed class State
     {
+        internal bool HasPendingEmail;
         internal readonly User Actor = PlatformLicenseHttpTests.Operator();
         internal User Target = User.Create("synthetic-owner-subject", "same@example.test", "Synthetic owner", DateTimeOffset.UtcNow);
         internal readonly Dictionary<Guid, User> Users = []; internal readonly List<Membership> Members = []; internal readonly List<AuditLog> Audits = [];
@@ -317,8 +330,16 @@ public sealed class PlatformBootstrapOwnerHttpTests
             License = License.Create(Guid.NewGuid(), DateTimeOffset.UtcNow.AddDays(-1), DateTimeOffset.UtcNow.AddDays(30), 3, LicenseStatus.Active, Actor.Id, DateTimeOffset.UtcNow);
         }
     }
-    private sealed class Store(State state) : IIdentityAccessStore, ITenantLicenseProvisioning
+    private sealed class Store(State state) : IIdentityAccessStore, ITenantLicenseProvisioning, IInitialOwnerInvitationStore
     {
+        // This legacy fixture has no invitation unless explicitly arranged; never reach a real database port.
+        public Task SetPlatformAsync(Guid actorId, CancellationToken token) => Task.CompletedTask;
+        public Task<InitialOwnerInvitation?> CurrentAsync(Guid tenantId, CancellationToken token) => Task.FromResult(state.HasPendingEmail ? InitialOwnerInvitation.Create(tenantId, "pending@example.test", state.Actor.Id, Guid.NewGuid(), DateTimeOffset.UtcNow) : null);
+        public Task SetClaimantAsync(Guid userId, CancellationToken token) => throw new NotSupportedException();
+        public Task AddAsync(InitialOwnerInvitation row, AuditLog audit, CancellationToken token) => throw new NotSupportedException();
+        public Task SaveAsync(InitialOwnerInvitation row, AuditLog audit, CancellationToken token) => throw new NotSupportedException();
+        public Task<InitialOwnerDetails?> ReadAsync(Guid tenantId, Guid actorId, CancellationToken token) => throw new NotSupportedException();
+        public Task<IReadOnlyList<Guid>> PendingTenantsAsync(Guid userId, string subject, string email, CancellationToken token) => throw new NotSupportedException();
         private Membership? _member; private AuditLog? _audit;
         public Task<User> UpsertGoogleUserAsync(User candidate, CancellationToken token)
         { var user = state.Users.Values.SingleOrDefault(value => value.GoogleSubject == candidate.GoogleSubject) ?? candidate; state.Users[user.Id] = user; return Task.FromResult(user); }

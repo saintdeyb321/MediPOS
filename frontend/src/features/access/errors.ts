@@ -5,6 +5,8 @@ const messages: Record<string, string> = {
   'platform.identity_not_found': 'La cuenta destino debe iniciar sesión con Google en este mismo entorno antes de asignarle Owner.',
   'platform.request_not_found': 'La constancia aún no está visible para este operador. Conserva la clave original y reconsulta; no crees otra botica.',
   'platform.idempotency_conflict': 'La clave original ya corresponde a otros datos. Consulta su constancia antes de continuar.',
+  'platform.owner_invitation_conflict': 'El destinatario pendiente cambió o ya existe un propietario. Actualiza el estado; no repitas la asignación ni crees otra botica.',
+  'platform.owner_email_required': 'Indica el Gmail del primer propietario antes de crear la botica.',
   'platform.rate_limited': 'Alcanzaste el límite administrativo. Espera un minuto y reconsulta antes de repetir una operación.',
   'catalog.internal_code_duplicate': 'Ese código interno ya existe en tu negocio. Consulta el producto antes de intentar otra alta.',
   'catalog.business_product_not_found': 'No encontramos el producto en este negocio.',

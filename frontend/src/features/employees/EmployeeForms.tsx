@@ -1,4 +1,4 @@
-import { useId, useState } from 'react'
+import { useEffect, useId, useState } from 'react'
 import type { Branch } from '../access'
 import { Button } from '../../shared/ui/Button'
 import { TextField } from '../../shared/ui/TextField'
@@ -9,10 +9,11 @@ import { dayLabels, days, timeInput, validSchedule, weekday, windowLabel } from 
 import type { Weekday, WorkWindow } from './schedule'
 import type { EmployeeWrite } from './useEmployeeWrite'
 
-export function EmployeeBranchesForm({ employee, branches, complete, write }: { employee: Employee; branches: readonly Branch[]; complete: boolean; write: EmployeeWrite }) {
+export function EmployeeBranchesForm({ employee, branches, complete, write, onDirty, onSaved }: { employee: Employee; branches: readonly Branch[]; complete: boolean; write: EmployeeWrite; onDirty?: (dirty: boolean) => void; onSaved?: () => void }) {
   const [ids, setIds] = useState([...employee.branchIds]); const [reviewed, setReviewed] = useState(false)
   const unresolved = employee.branchIds.some(id => !branches.some(branch => sameId(branch.id, id)))
-  return <form aria-label="Asignar sucursales" onSubmit={event => { event.preventDefault(); if (complete && !unresolved && reviewed) void write.branches(employee, ids, branches.map(row => row.id)) }}>
+  useEffect(() => { onDirty?.([...ids].map(id => id.toLowerCase()).sort().join('/') !== [...employee.branchIds].map(id => id.toLowerCase()).sort().join('/')) }, [ids, employee.branchIds, onDirty])
+  return <form aria-label="Asignar sucursales" onSubmit={event => { event.preventDefault(); if (complete && !unresolved && reviewed) void write.branches(employee, ids, branches.map(row => row.id)).then(saved => { if (saved) onSaved?.() }) }}>
     <h3>Sucursales asignadas</h3><p>Guardar reemplaza el conjunto completo. Una asignación vacía no habilita todas las sucursales. Owner conserva el alcance definido por su rol; no depende de estas asignaciones para administrar.</p>
     {(!complete || unresolved) && <p role="alert">Falta consultar todas las sucursales o resolver una asignación existente. No se enviará una lista incompleta ni se eliminarán asignaciones ocultas.</p>}
     <fieldset disabled={write.locked || !employee.isActive || !complete || unresolved}><legend>Sucursales consultables de esta botica</legend>
@@ -23,13 +24,17 @@ export function EmployeeBranchesForm({ employee, branches, complete, write }: { 
     </fieldset>
   </form>
 }
-export function EmployeeScheduleForm({ employee, write }: { employee: Employee; write: EmployeeWrite }) {
+export function EmployeeScheduleForm({ employee, write, onDirty, onSaved }: { employee: Employee; write: EmployeeWrite; onDirty?: (dirty: boolean) => void; onSaved?: () => void }) {
   const [windows, setWindows] = useState<WorkWindow[]>(employee.schedule.map(row => ({ ...row })))
   const [day, setDay] = useState<Weekday>('monday'); const [start, setStart] = useState(''); const [end, setEnd] = useState(''); const [reviewed, setReviewed] = useState(false)
   const id = useId(); const from = timeInput(start); const to = timeInput(end)
   const candidate: WorkWindow | null = from && to ? { dayOfWeek: day!, startTime: from, endTime: to } : null
   const canAdd = candidate && validSchedule([...windows, candidate])
-  return <form aria-label="Configurar horario" onSubmit={event => { event.preventDefault(); if (reviewed && validSchedule(windows)) void write.schedule(employee, windows) }}>
+  useEffect(() => {
+    const key = (rows: readonly WorkWindow[]) => rows.map(row => `${row.dayOfWeek}/${row.startTime}/${row.endTime}`).sort().join('|')
+    onDirty?.(Boolean(start || end) || key(windows) !== key(employee.schedule))
+  }, [windows, start, end, employee.schedule, onDirty])
+  return <form aria-label="Configurar horario" onSubmit={event => { event.preventDefault(); if (reviewed && validSchedule(windows)) void write.schedule(employee, windows).then(saved => { if (saved) onSaved?.() }) }}>
     <h3>Horario operacional · Lima</h3><p>Guardar reemplaza todas las ventanas. Para Pharmacist/Cashier, el horario vacío deniega la operación; el inicio se incluye y el fin se excluye. Owner tiene la excepción de horario definida por el backend.</p>
     <fieldset disabled={write.locked || !employee.isActive}><legend>Ventanas de trabajo</legend>
       <label htmlFor={id}>Día de la semana</label><select id={id} value={day} onChange={event => setDay(weekday(event.target.value))}>{days.map(value => <option key={value} value={value}>{dayLabels[value]}</option>)}</select>
@@ -44,11 +49,12 @@ export function EmployeeScheduleForm({ employee, write }: { employee: Employee; 
     </fieldset>
   </form>
 }
-export function EmployeeDeactivation({ employee, write }: { employee: Employee; write: EmployeeWrite }) {
+export function EmployeeDeactivation({ employee, write, onDirty, onSaved }: { employee: Employee; write: EmployeeWrite; onDirty?: (dirty: boolean) => void; onSaved?: () => void }) {
   const [reviewed, setReviewed] = useState(false)
+  useEffect(() => { onDirty?.(reviewed) }, [reviewed, onDirty])
   if (employee.role === 'owner') return <section aria-label="Desactivación de Owner bloqueada"><h3>Desactivación Owner: BLOCKED</h3><p>El servidor incorpora la protección del último Owner, pero su validación crítica de concurrencia PostgreSQL sigue pendiente. Se mantiene bloqueada toda desactivación de Owner, incluida la propia; contar una página de empleados no demuestra que sea segura.</p><Button disabled>Desactivar Owner · bloqueado</Button></section>
   if (!employee.isActive) return <p>Esta membresía está inactiva. Se conserva su historial; no hay endpoint de reactivación de esta membresía.</p>
-  return <form aria-label="Desactivar empleado" onSubmit={event => { event.preventDefault(); if (reviewed && canDeactivate(employee)) void write.deactivate(employee) }}><h3>Desactivación segura de trabajador</h3>
+  return <form aria-label="Desactivar empleado" onSubmit={event => { event.preventDefault(); if (reviewed && canDeactivate(employee)) void write.deactivate(employee).then(saved => { if (saved) onSaved?.() }) }}><h3>Desactivación segura de trabajador</h3>
     <p>Empleado: {employee.displayName}. Desactivar impide nuevas operaciones autorizadas y conserva el historial. La aplicación del trabajador deberá volver a verificar su acceso; el backend lo valida en cada operación.</p>
     <label><input type="checkbox" disabled={write.locked} checked={reviewed} onChange={event => setReviewed(event.target.checked)} /> Confirmo que deseo desactivar a {employee.displayName}.</label>
     <FormFooter><Button type="submit" variant="danger" disabled={write.locked || !reviewed} pending={write.busy}>Desactivar empleado una vez</Button></FormFooter>

@@ -1,12 +1,13 @@
 using MediPOS.Application.Modules.IdentityAccess.Authentication;
 using MediPOS.Domain.Modules.IdentityAccess;
+using MediPOS.Application.Modules.IdentityAccess.Invitations;
 
 namespace MediPOS.Application.Modules.IdentityAccess.UpsertGoogleUser;
 
 public sealed record GoogleUserDetails(Guid Id, string Email, string DisplayName);
 
 public sealed class UpsertGoogleUserHandler(
-    IVerifiedGoogleIdentitySource verifiedIdentitySource, IIdentityAccessStore store, TimeProvider timeProvider)
+    IVerifiedGoogleIdentitySource verifiedIdentitySource, IIdentityAccessStore store, TimeProvider timeProvider, InitialOwnerInvitations? owners = null)
 {
     public async Task<GoogleUserDetails> HandleAsync(CancellationToken cancellationToken)
     {
@@ -14,6 +15,7 @@ public sealed class UpsertGoogleUserHandler(
             ?? throw new UnauthorizedAccessException("A server-verified Google identity is required.");
         var candidate = User.Create(identity.Subject, identity.Email, identity.DisplayName, timeProvider.GetUtcNow(), identity.EmailVerified);
         var user = await store.UpsertGoogleUserAsync(candidate, cancellationToken).ConfigureAwait(false);
+        if (owners is not null) await owners.ClaimAsync(user.Id, identity, cancellationToken).ConfigureAwait(false);
         return new GoogleUserDetails(user.Id, user.Email, user.DisplayName);
     }
 }

@@ -13,6 +13,9 @@ public sealed class CreateTenantHandler(ITenancyLicensingStore store, TimeProvid
         ArgumentNullException.ThrowIfNull(command);
         AuditTrail.RequireActor(command.ActorId);
         await PlatformAdministrationAccess.RequireAsync(administration, command.ActorId, cancellationToken).ConfigureAwait(false);
+        // Email onboarding must never silently degrade to a tenant-only write outside its reservation.
+        if (command.OwnerEmail is not null)
+            throw new ApplicationErrorException(new("platform.owner_requires_idempotent_creation", ErrorCategory.Validation, "Owner onboarding requires the idempotent creation coordinator."));
         var now = timeProvider.GetUtcNow();
         Tenant tenant;
         try
