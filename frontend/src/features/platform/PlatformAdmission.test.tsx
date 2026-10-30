@@ -1,11 +1,12 @@
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { focusManager } from '@tanstack/react-query'
 import { afterEach, expect, it, vi } from 'vitest'
-import { MemoryRouter, useLocation } from 'react-router'
+import { MemoryRouter, Route, Routes, useLocation } from 'react-router'
 import { RuntimeProvider } from '../../app/providers/runtime'
 import { createMediPosService } from '../access'
 import { HttpClient } from '../../shared/api/http'
 import { PlatformPage } from './PlatformPage'
+import { PlatformLayout } from '../../app/layouts/PlatformLayout'
 
 // Transport-only regressions: no real identity, PostgreSQL or commercial writes.
 const id = (n: number) => `019a0162-0000-7000-8000-${String(n).padStart(12, '0')}`
@@ -25,7 +26,7 @@ function mount(query = '') {
     return json({ code: 'unit.not_found' }, 404)
   })
   const http = new HttpClient(fetcher)
-  render(<RuntimeProvider runtime={{ service: createMediPosService(http), http, preview: false }}><MemoryRouter initialEntries={['/plataforma' + query]}><PlatformPage /><Location /></MemoryRouter></RuntimeProvider>)
+  render(<RuntimeProvider runtime={{ service: createMediPosService(http), http, preview: false }}><MemoryRouter initialEntries={['/plataforma' + query]}><Routes><Route path="/plataforma" element={<PlatformLayout />}><Route index element={<PlatformPage />} /></Route></Routes><Location /></MemoryRouter></RuntimeProvider>)
   return { state, fetcher, admissions: () => fetcher.mock.calls.filter(([path]) => path === '/platform/session').length, lists: () => fetcher.mock.calls.filter(([path]) => String(path).startsWith('/platform/tenants?')).length }
 }
 afterEach(() => { cleanup(); vi.useRealTimers(); focusManager.setFocused(undefined) })
@@ -52,7 +53,7 @@ it('waits after a 429 without polling, preserves pending intent and recovers onl
   expect(retry).toBeEnabled()
   expect(screen.getByTestId('location')).toHaveTextContent(`creationKey=${id(8)}`)
   app.state.admission = 200; fireEvent.click(retry)
-  await screen.findByRole('heading', { name: 'Administración de plataforma' })
+  await screen.findByRole('heading', { name: 'Inicio de plataforma' })
   expect(app.admissions()).toBe(2)
   expect(screen.getByTestId('location')).toHaveTextContent('platformPending=create')
   expect(screen.getByRole('button', { name: 'Nueva botica' })).toBeDisabled()
@@ -60,7 +61,7 @@ it('waits after a 429 without polling, preserves pending intent and recovers onl
 })
 
 it('reuses a fresh directory when selecting a tenant instead of fetching the same page again', async () => {
-  const app = mount()
+  const app = mount('?area=businesses')
   await screen.findByRole('button', { name: 'Gestionar Synthetic admission regression' })
   expect(app.lists()).toBe(1)
   fireEvent.click(screen.getByRole('button', { name: 'Gestionar Synthetic admission regression' }))
@@ -74,7 +75,7 @@ it('still revalidates authority periodically and blocks the console on a real 40
   await screen.findByRole('button', { name: 'Nueva botica' })
   app.state.admission = 403
   await act(async () => { vi.advanceTimersByTime(60_000) })
-  await screen.findByText(/requiere activación protegida/)
+  await screen.findByText(/Esta cuenta no tiene autoridad de plataforma/)
   expect(screen.queryByRole('button', { name: 'Nueva botica' })).not.toBeInTheDocument()
   await waitFor(() => expect(app.admissions()).toBe(2))
 })

@@ -22,6 +22,8 @@ import { OwnerDashboard } from '../../features/reporting'
 import { useWorkspace } from '../../features/access'
 import { WorkspaceLayout } from '../layouts/WorkspaceLayout'
 import { SelectionLayout } from '../layouts/SelectionLayout'
+import { PlatformLayout } from '../layouts/PlatformLayout'
+import { EntryRouter } from './EntryRouter'
 import { availableNavigation } from '../navigation'
 import { ModulePage } from './ModulePage'
 
@@ -38,7 +40,8 @@ export function AppRoutes() {
       <Route path="/aceptar-invitacion" element={<AcceptInvitationPage />} />
       <Route path="/contingencia" element={<ContingencyPage />} />
       <Route element={<SessionGate />}>
-        <Route path="/plataforma" element={<SelectionLayout><PlatformPage /></SelectionLayout>} />
+        <Route path="/entrada" element={<EntryRouter />} />
+        <Route path="/plataforma" element={<PlatformLayout />}><Route index element={<PlatformPage />} /></Route>
         <Route path="/seleccionar-botica" element={<SelectionLayout><TenantSelection /></SelectionLayout>} />
         <Route path="/boticas/:tenantId/sucursales" element={<SelectionLayout><BranchSelection /></SelectionLayout>} />
         <Route path="/boticas/:tenantId/configuracion" element={<SelectionLayout><TenantOnboardingPage /></SelectionLayout>} />

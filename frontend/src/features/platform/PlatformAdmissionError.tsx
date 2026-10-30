@@ -19,7 +19,12 @@ export function PlatformAdmissionError({ error, failedAt, fetching, retry }: { e
     }, 1000)
     return () => window.clearInterval(timer)
   }, [limited, deadline])
-  if (!limited) return <><Notice tone="warning">La plataforma requiere activación protegida y aprobación independiente. Ser Owner no concede este acceso.</Notice><ApiErrorState error={error} retry={retry} /></>
+  if (!limited) return <>
+    {error instanceof ApiError && error.status === 403 && error.code === 'access.platform_denied'
+      ? <Notice tone="warning">Esta cuenta no tiene autoridad de plataforma. Ser Owner no concede este acceso.</Notice>
+      : <Notice tone="warning">No pudimos verificar tu acceso. Un problema de conexión o del servicio no cambia los permisos de tu cuenta.</Notice>}
+    <ApiErrorState error={error} retry={retry} />
+  </>
   return <>
     <ApiErrorState error={error} title="Pausa por límite administrativo" />
     <Notice>La consola permanece bloqueada hasta verificar el acceso. Las solicitudes pendientes se conservan; no se reenviará ninguna operación.</Notice>

@@ -4,13 +4,11 @@ import { ApiError, HttpClient } from '../../shared/api/http'
 const license = object({ tenantId: uuid, licenseId: uuid, status: oneOf('trial', 'active', 'grace', 'suspended', 'cancelled', 'purge_pending', 'purged'), startsAt: utc, expiresAt: utc, maxBranches: uint })
 const administration = object({ licenseStatus: text, expiresAt: utc, maxBranches: uint, ownerStatus: oneOf('active', 'inactive', 'pending', 'claimed', 'revoked', 'unassigned'), ownerEmail: nullable(text), ownerName: nullable(text) })
 const summary = object({ tenantId: uuid, tradingName: text, createdAt: utc, administration: nullable(administration) })
-const identity = object({ userId: uuid, displayName: text, email: text })
 const details = object({ tenant: summary, license, initialOwnerUserId: nullable(uuid) })
 const category = object({ id: uuid, name: text, isActive: boolean, createdAt: utc })
 const ownerInvitation = object({ invitationId: uuid, email: text, status: oneOf('pending', 'claimed', 'revoked'), createdAt: utc, userId: nullable(uuid) })
 export type InitialOwner = ReturnType<typeof ownerInvitation>
 export type PlatformTenant = ReturnType<typeof details>
-export type VerifiedIdentity = ReturnType<typeof identity>
 export type TrialInput = { tradingName: string; ownerEmail: string; startsAt: string; expiresAt: string; maxBranches: number; status: 'trial' }
 export type LicenseAction = 'renew' | 'suspend' | 'reactivate'
 export function platformApi(http: HttpClient) {
@@ -39,13 +37,8 @@ export function platformApi(http: HttpClient) {
       if (result.tenant.tenantId !== tenantId || result.license.tenantId !== tenantId) throw new ApiError(0, 'client.unexpected_response')
       if (result.license.maxBranches < 1 || result.license.maxBranches > 5) throw new ApiError(0, 'client.unexpected_response'); return result
     },
-    async identity(userId: string, signal?: AbortSignal) { const result = identity(await http.request(`/platform/identities/${uuid(userId)}`, { signal })); if (result.userId !== userId) throw new ApiError(0, 'client.unexpected_response'); return result },
     create: (input: TrialInput, key: string, signal?: AbortSignal) => mutate('/platform/tenants/with-owner', input, validLicense, signal, uuid(key)),
     async receipt(key: string, signal?: AbortSignal) { return validLicense(await http.request(`/platform/tenant-requests/${uuid(key)}`, { signal, exactNumbers: true })) },
-    bootstrap: (tenantId: string, userId: string, signal?: AbortSignal) => mutate(`/platform/tenants/${uuid(tenantId)}/bootstrap-owner`, { userId: uuid(userId) }, value => {
-      const result = object({ membershipId: uuid, tenantId: uuid, userId: uuid, role: oneOf('owner'), isActive: boolean, createdAt: utc })(value)
-      if (result.tenantId !== tenantId || result.userId !== userId || !result.isActive) throw new Error('scope'); return result
-    }, signal),
     change: (tenant: PlatformTenant, action: LicenseAction, input: { expiresAt: string } | { status: 'trial' | 'active' | 'grace' } | Record<string, never>, signal?: AbortSignal) =>
       mutate(`/platform/tenants/${uuid(tenant.tenant.tenantId)}/licenses/${uuid(tenant.license.licenseId)}/${action}`, input, value => {
         const result = validLicense(value); if (result.tenantId !== tenant.tenant.tenantId || result.licenseId !== tenant.license.licenseId) throw new Error('scope'); return result

@@ -5,7 +5,7 @@ import { Steps } from '../../shared/ui/Steps'
 import { FormFooter, InlineHelp } from '../../shared/ui/FormLayout'
 import type { TrialInput } from './api'
 
-export function NewTenantForm({ locked, create, dirty }: { locked: boolean; create: (input: TrialInput) => Promise<void>; dirty: (value: boolean) => void }) {
+export function NewTenantForm({ locked, create, dirty }: { locked: boolean; create: (input: TrialInput) => Promise<boolean | undefined>; dirty: (value: boolean) => void }) {
   const [step, setStep] = useState(0)
   const [name, setName] = useState(''); const [email, setEmail] = useState(''); const [branches, setBranches] = useState(2)
   const [reviewed, setReviewed] = useState(false)

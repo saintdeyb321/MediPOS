@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { act, render, screen, waitFor } from '@testing-library/react'
+import { act, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router'
 import { AppRoutes } from './routes'
@@ -15,7 +15,9 @@ import { offlineStorage } from '../../features/offline'
 const tenantId = '019a0162-0000-7000-8000-000000000002'
 const branchId = '019a0162-0000-7000-8000-000000000005'
 const workspace = `/boticas/${tenantId}/sucursales/${branchId}`
-function mount(scenario: Scenario = 'owner', path = '/', overrides?: Partial<Runtime>) {
+// Commercial navigation doubles start after authority routing. EntryRouter.test
+// covers the real HTTP admission contract from /, including denial and failures.
+function mount(scenario: Scenario = 'owner', path = '/seleccionar-botica', overrides?: Partial<Runtime>) {
   const runtime: Runtime = { service: createPreviewService(scenario), preview: true, initiallyExpired: scenario === 'expired', ...overrides }
   render(<RuntimeProvider runtime={runtime}><MemoryRouter initialEntries={[path]}><AppRoutes /></MemoryRouter></RuntimeProvider>)
   return runtime.service
@@ -25,14 +27,13 @@ describe('F1 navigation and access boundaries', () => {
     const blocked = vi.spyOn(offlineStorage, 'lock').mockImplementation(() => new Promise<void>(() => undefined))
     try {
       const service = createPreviewService('owner'); const logout = vi.spyOn(service, 'logout'); const user = userEvent.setup()
-      mount('owner', workspace, { service }); await screen.findByRole('heading', { name: 'Todo listo para empezar.' })
-      await user.click(screen.getByText('Propietario', { selector: '.account-label' }))
+      mount('owner', workspace, { service }); await screen.findByRole('heading', { name: 'Inicio' })
       await user.click(screen.getByRole('button', { name: 'Cerrar sesión' }))
       await screen.findByRole('heading', { name: 'Un buen día empieza aquí.' })
       expect(logout).toHaveBeenCalledTimes(1); expect(blocked).toHaveBeenCalledTimes(1)
     } finally { blocked.mockRestore() }
   })
-  it.each([['notificaciones', 'Notificaciones'], ['configuracion', 'Configuración'], ['auditoria', 'Auditoría'], ['importacion', 'Importación de productos Excel']])('connects block 08 route %s to its functional page', async (path, heading) => {
+  it.each([['notificaciones', 'Notificaciones'], ['configuracion', 'Configuración'], ['auditoria', 'Auditoría'], ['importacion', 'Importar productos desde Excel']])('connects block 08 route %s to its functional page', async (path, heading) => {
     mount('owner', workspace + '/' + path)
     expect(await screen.findByRole('heading', { name: heading, level: 1 })).toBeInTheDocument()
   })
@@ -46,15 +47,14 @@ describe('F1 navigation and access boundaries', () => {
     const user = userEvent.setup(); mount()
     await user.click(await screen.findByRole('button', { name: /seleccionar botica/i }))
     await user.click(await screen.findByRole('link', { name: /sucursal principal/i }))
-    expect(await screen.findByRole('heading', { name: 'Todo listo para empezar.' })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'Inicio' })).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'Reportes' })).toBeInTheDocument()
-    await user.click(screen.getByRole('link', { name: 'Abrir punto de venta' }))
+    await user.click(within(screen.getByRole('navigation', { name: 'Tareas frecuentes' })).getByRole('link', { name: 'Punto de venta' }))
     expect(await screen.findByRole('heading', { name: 'Punto de venta', level: 1 })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /^cobrar$/i })).toBeDisabled()
-    expect(screen.getByRole('searchbox', { name: /buscar un producto/i })).toBeDisabled()
-    expect(screen.getByRole('searchbox')).toHaveAccessibleDescription(/conexión real con MediPOS/)
-    expect(screen.getByRole('button', { name: /^cobrar$/i })).toHaveAccessibleDescription(/Agrega productos y abre tu caja/)
-    await user.click(screen.getByText('Propietario', { selector: '.account-label' }))
+    expect(screen.queryByRole('button', { name: /^cobrar$/i })).not.toBeInTheDocument()
+    expect(screen.getByRole('searchbox', { name: 'Buscar producto' })).toBeDisabled()
+    expect(screen.getByRole('searchbox')).toHaveAccessibleDescription(/Requiere conexión HTTPS/)
+    expect(screen.queryByRole('button', { name: /Confirmar venta/ })).not.toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'Cerrar sesión' }))
     expect(await screen.findByRole('heading', { name: 'Un buen día empieza aquí.' })).toBeInTheDocument()
   }, 15_000)
@@ -62,11 +62,11 @@ describe('F1 navigation and access boundaries', () => {
     const service = createPreviewService('cashier'); const original = service.tenants
     service.tenants = async (...args) => { const page = await original(...args); return { ...page, items: page.items.map(t => ({ ...t, role: 'owner' as const })) } }
     mount('cashier', workspace, { service })
-    expect(await screen.findByRole('heading', { name: 'Todo listo para empezar.' })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'Inicio' })).toBeInTheDocument()
     expect(screen.queryByRole('link', { name: 'Reportes' })).not.toBeInTheDocument()
     expect(screen.queryByRole('link', { name: 'Empleados' })).not.toBeInTheDocument()
     expect(screen.queryByRole('link', { name: 'Inventario' })).not.toBeInTheDocument()
-    expect(screen.getByRole('link', { name: /^punto de venta/i })).toBeInTheDocument()
+    expect(within(screen.getByRole('navigation', { name: 'Navegación principal' })).getByRole('link', { name: /^punto de venta/i })).toBeInTheDocument()
   })
   it('blocks a manually entered managerial page for a cashier', async () => {
     mount('cashier', workspace + '/reportes')
@@ -76,7 +76,7 @@ describe('F1 navigation and access boundaries', () => {
   it('rechecks access after navigation and removes an Owner menu after a role change', async () => {
     const owner = createPreviewService('owner'); const cashier = createPreviewService('cashier')
     const access = vi.spyOn(owner, 'access'); mount('owner', workspace, { service: owner })
-    await screen.findByRole('heading', { name: 'Todo listo para empezar.' })
+    await screen.findByRole('heading', { name: 'Inicio' })
     access.mockImplementation((...args) => cashier.access(...args))
     await userEvent.click(screen.getByRole('link', { name: 'Reportes' }))
     expect(await screen.findByRole('heading', { name: 'Esta sección requiere otro acceso' })).toBeInTheDocument()
@@ -111,9 +111,10 @@ describe('F1 navigation and access boundaries', () => {
   })
   it('shows inventory and purchasing for Pharmacist without owner reports', async () => {
     mount('pharmacist', workspace)
-    await screen.findByRole('heading', { name: 'Todo listo para empezar.' })
-    expect(screen.getByRole('link', { name: 'Inventario' })).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: 'Compras' })).toBeInTheDocument()
+    await screen.findByRole('heading', { name: 'Inicio' })
+    const menu = within(screen.getByRole('navigation', { name: 'Navegación principal' }))
+    expect(menu.getByRole('link', { name: 'Inventario' })).toBeInTheDocument()
+    expect(menu.getByRole('link', { name: 'Compras' })).toBeInTheDocument()
     expect(screen.queryByRole('link', { name: 'Reportes' })).not.toBeInTheDocument()
   })
   it.each([['scheduleDenied', /fuera de tu horario/i], ['licenseDenied', /licencia/i]] as const)('blocks operational content for %s', async (scenario, message) => {
@@ -160,7 +161,7 @@ describe('F1 navigation and access boundaries', () => {
     for (let i = 0; i < 6 && document.activeElement !== selection; i++) await user.tab()
     expect(selection).toHaveFocus()
     await user.keyboard('{Enter}')
-    expect(await screen.findByRole('heading', { name: 'Cada sucursal, bajo control.' })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'Selecciona una sucursal' })).toBeInTheDocument()
     expect(screen.getByText('Sucursal', { selector: '[aria-current="step"]' })).toBeInTheDocument()
   })
   it('describes the connected reports navigation without an unavailable label', async () => {
@@ -185,7 +186,9 @@ describe('F1 navigation and access boundaries', () => {
     mount('owner', '/', { service: createMediPosService(http), http, preview: false })
     expect(await screen.findByText(/Tu sesión terminó. Ingresa de nuevo/i)).toBeInTheDocument()
     expect(screen.queryByRole('navigation')).not.toBeInTheDocument()
-    expect(fetcher.mock.calls.some(([path]) => typeof path === 'string' && path.startsWith('/api/me/tenants'))).toBe(true)
+    // Post-login now checks independent platform authority before choosing a directory.
+    expect(fetcher.mock.calls.some(([path]) => path === '/platform/session')).toBe(true)
+    expect(fetcher.mock.calls.some(([path]) => typeof path === 'string' && path.startsWith('/api/me/tenants'))).toBe(false)
     expect(screen.getByRole('button', { name: 'Continuar con Google' })).toBeEnabled()
   })
 })

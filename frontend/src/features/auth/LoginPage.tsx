@@ -10,7 +10,7 @@ import './auth.css'
 
 export function LoginPage() {
   const { preview, expired, session, login } = useLogin()
-  if (session.data && !expired) return <Navigate to="/seleccionar-botica" replace />
+  if (session.data && !expired) return <Navigate to="/entrada" replace />
   const checkingSession = !expired && session.isPending
   const busy = checkingSession || login.isPending || login.isSuccess
   return (

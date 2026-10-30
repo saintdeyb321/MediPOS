@@ -12,7 +12,7 @@ export function NavigationSafety({ identity, children }: { identity?: string; ch
   const [storageError, setStorageError] = useState(false)
   const location = useLocation(); const navigationType = useNavigationType()
   const storageKey = identity ? 'medipos-operation-addresses-v1/' + identity : null
-  function read(): string[] { try { const stored: unknown = JSON.parse(storageKey ? sessionStorage.getItem(storageKey) ?? '[]' : '[]'); return Array.isArray(stored) ? stored.filter((v): v is string => typeof v === 'string' && /^\/boticas\/[0-9a-f-]+\/sucursales\/[0-9a-f-]+\//i.test(v) && !v.includes('#')) : [] } catch { return [] } }
+  function read(): string[] { try { const stored: unknown = JSON.parse(storageKey ? sessionStorage.getItem(storageKey) ?? '[]' : '[]'); return Array.isArray(stored) ? stored.filter((v): v is string => typeof v === 'string' && (/^\/boticas\/[0-9a-f-]+\/sucursales\/[0-9a-f-]+\//i.test(v) || /^\/plataforma\?/.test(v)) && !v.includes('#')) : [] } catch { return [] } }
   function remember() {
     if (!storageKey || !hasPending(location.search)) return false
     try { const address = location.pathname + location.search; sessionStorage.setItem(storageKey, JSON.stringify([...read().filter(v => v.split('?')[0] !== location.pathname), address])); return true } catch { return false }

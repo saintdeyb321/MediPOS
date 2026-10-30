@@ -56,3 +56,14 @@ it('retains an invitation intention instead of treating it as a disposable filte
   fireEvent.click(await screen.findByRole('button', { name: 'Salir conservando recuperación' }))
   expect(await screen.findByRole('link', { name: 'Volver a la operación original sin reenviar' })).toHaveAttribute('href', purchase + search)
 })
+it('retains a platform recovery address across context navigation, scoped to the same identity', async () => {
+  const address = '/plataforma?creationKey=019a0162-0000-7000-8000-000000000021&platformPending=create'
+  function Content() { return <><Link to="/seleccionar-botica">Cambiar de contexto</Link><output>{useLocation().pathname}</output></> }
+  const router = createMemoryRouter([{ path: '*', element: <NavigationSafety identity="synthetic-admin"><Content /></NavigationSafety> }], { initialEntries: [address] })
+  render(<RouterProvider router={router} />)
+  fireEvent.click(screen.getByRole('link', { name: 'Cambiar de contexto' }))
+  fireEvent.click(await screen.findByRole('button', { name: 'Salir conservando recuperación' }))
+  expect(await screen.findByRole('link', { name: 'Volver a la operación original sin reenviar' })).toHaveAttribute('href', address)
+  expect(sessionStorage.getItem('medipos-operation-addresses-v1/synthetic-admin')).toContain('creationKey')
+  expect(sessionStorage.getItem('medipos-operation-addresses-v1/another-user')).toBeNull()
+})
