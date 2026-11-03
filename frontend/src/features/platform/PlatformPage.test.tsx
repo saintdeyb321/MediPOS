@@ -13,7 +13,7 @@ const time = '2026-10-17T12:00:00Z'
 const json = (value: unknown, status = 200) => new Response(JSON.stringify(value), { status, headers: { 'Content-Type': 'application/json' } })
 type Invitation = { invitationId: string; email: string; status: 'pending' | 'claimed' | 'revoked'; createdAt: string; userId: string | null }
 function fixture() {
-  const state = { admission: 200, lost: false, invisible: false, duplicateCategory: false, reject: 0, listFailure: 0, detailFailure: 0, receipt: false, owner: null as string | null, invitation: null as Invitation | null, status: 'trial', categories: [] as { id: string; name: string; isActive: boolean; createdAt: string }[] }
+  const state = { admission: 200, lost: false, invisible: false, duplicateCategory: false, reject: 0, listFailure: 0, afterReceiptListFailure: 0, detailFailure: 0, receipt: false, owner: null as string | null, invitation: null as Invitation | null, status: 'trial', categories: [] as { id: string; name: string; isActive: boolean; createdAt: string }[] }
   const license = () => ({ tenantId: id(2), licenseId: id(3), status: state.status, startsAt: time, expiresAt: '2026-11-16T12:00:00Z', maxBranches: 2 })
   const tenant = () => ({ tenantId: id(2), tradingName: 'Synthetic QA botica', createdAt: time, administration: { licenseStatus: state.status, expiresAt: license().expiresAt, maxBranches: 2, ownerStatus: state.invitation?.status ?? (state.owner ? 'active' : 'unassigned'), ownerEmail: state.invitation?.email ?? null, ownerName: null } })
   const fetcher = vi.fn<typeof fetch>().mockImplementation(async (path, init) => {
@@ -27,7 +27,11 @@ function fixture() {
       state.receipt = true; state.invitation = { invitationId: id(6), email: input.ownerEmail, status: 'pending', createdAt: time, userId: null }
       if (state.lost) throw new TypeError('Synthetic lost response'); return json(license(), 201)
     }
-    if (p?.startsWith('/platform/tenant-requests/')) return state.receipt && !state.invisible ? json(license()) : json({ code: 'platform.request_not_found' }, 404)
+    if (p?.startsWith('/platform/tenant-requests/')) {
+      if (!state.receipt || state.invisible) return json({ code: 'platform.request_not_found' }, 404)
+      state.listFailure = state.afterReceiptListFailure
+      return json(license())
+    }
     if (p === '/platform/catalog/categories' && method === 'POST') {
       const name = (JSON.parse(String(init?.body)) as { name: string }).name
       const row = { id: id(9), name, isActive: true, createdAt: time }; state.categories.push(row)
@@ -119,6 +123,17 @@ it('recovers the original creation after reload without any POST', async () => {
   fireEvent.click(await screen.findByRole('button', { name: 'Consultar constancia original sin repetir POST' }))
   await screen.findByRole('dialog', { name: 'Ficha de botica' }); expect(fake.writes()).toHaveLength(0)
   await waitFor(() => expect(screen.getByTestId('location')).not.toHaveTextContent('creationKey'))
+})
+it.each(['create', 'recover'])('closes a receipt-confirmed %s even if the subsequent directory refresh fails', async operation => {
+  const fake = fixture(); fake.state.afterReceiptListFailure = 503
+  if (operation === 'recover') { fake.state.receipt = true; fake.state.invitation = pending(); mount(fake, '?creationKey=' + id(8) + '&platformPending=create'); fireEvent.click(await screen.findByRole('button', { name: 'Consultar constancia original sin repetir POST' })) }
+  else { mount(fake); await create() }
+  await screen.findAllByText(/Alta confirmada por su constancia/)
+  await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Nueva botica' })).not.toBeInTheDocument())
+  await waitFor(() => expect(screen.getByTestId('location')).not.toHaveTextContent('creationKey'))
+  expect(screen.getByTestId('location')).not.toHaveTextContent('platformPending')
+  expect(fake.writes()).toHaveLength(operation === 'create' ? 1 : 0)
+  expect(screen.queryByText(/Alta pendiente de conciliación/)).not.toBeInTheDocument()
 })
 it.each([400, 403, 409, 429, 503])('does not retry a rejected or uncertain creation with HTTP %i', async status => {
   const fake = fixture(); fake.state.reject = status; mount(fake); await create()

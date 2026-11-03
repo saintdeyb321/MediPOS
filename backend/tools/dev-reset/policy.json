@@ -1,0 +1,12 @@
+{
+  "database": "medipos_dev",
+  "port": 5432,
+  "migrationCount": 39,
+  "forceRlsCount": 56,
+  "resetTables": [
+    "audit_logs", "branch_catalog_changes", "branch_catalog_sync_states", "branch_product_stock_thresholds", "branches", "business_products", "cash_sessions", "cash_transfers", "commission_entries", "commission_rules", "electronic_document_attempts", "electronic_document_series", "electronic_documents", "employee_invitations", "import_jobs", "import_row_results", "initial_owner_invitations", "inventory_lots", "legal_entities", "license_changes", "licenses", "membership_branches", "memberships", "notification_read_states", "notifications", "offline_sale_conflicts", "platform_tenant_creation_requests", "product_units", "purchase_lines", "purchases", "sale_lines", "sale_payment_reversals", "sale_payments", "sales", "stock_movements", "supplier_ubl_import_lines", "supplier_ubl_imports", "supplier_ubl_purchase_line_links", "suppliers", "sync_devices", "sync_events", "tenant_commission_settings", "tenant_operation_receipts", "tenants", "transfer_events", "transfer_lines", "transfer_lot_allocations", "transfers", "work_schedules"
+  ],
+  "keepTables": [
+    "__EFMigrationsHistory", "categories", "global_products", "medicine_profiles", "official_catalog_curations", "official_catalog_import_batches", "official_catalog_platform_audits", "official_catalog_publications", "official_catalog_refreshes", "official_catalog_revisions", "official_catalog_staging_rows", "official_catalog_version_history", "users"
+  ]
+}

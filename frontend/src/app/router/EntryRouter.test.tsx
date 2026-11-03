@@ -15,11 +15,12 @@ import { EntryRouter } from './EntryRouter'
 const userId = '019a0162-0000-7000-8000-000000000001'
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } })
 function Location() { const location = useLocation(); return <output data-testid="path">{location.pathname}</output> }
-function mount(decision: number | 'network' = 200, code = 'access.platform_denied', path = '/') {
+function mount(decision: number | 'network' | 'empty-404' = 200, code = 'access.platform_denied', path = '/') {
   const fetcher = vi.fn<typeof fetch>().mockImplementation(async (route, init) => {
     if (route === '/auth/me') return json({ userId })
     if (route === '/platform/session') {
       if (decision === 'network') throw new TypeError('Synthetic network loss')
+      if (decision === 'empty-404') return new Response(null, { status: 404 })
       return decision === 200 ? json({ allowed: true }) : json({ code }, decision)
     }
     if (String(route).split('?')[0] === '/api/me/tenants') return json({ items: [], nextAfterTenantId: null })
@@ -78,4 +79,16 @@ it('expires a 401 session instead of treating it as an ordinary Owner or looping
   expect(screen.getByRole('button', { name: 'Continuar con Google' })).toBeEnabled()
   expect(fetcher.mock.calls.filter(([path]) => path === '/platform/session')).toHaveLength(1)
   expect(fetcher.mock.calls.some(([path]) => String(path).startsWith('/api/me/tenants'))).toBe(false)
+})
+it.each([404, 'empty-404'] as const)('requires an explicit commercial-context choice after platform %s, without granting authority', async decision => {
+  const fetcher = mount(decision, 'http.404')
+  const proceed = await screen.findByRole('link', { name: 'Continuar a mis boticas' })
+  expect(screen.getByTestId('path')).toHaveTextContent('/entrada')
+  expect(screen.getAllByRole('alert').length).toBeGreaterThan(0)
+  expect(fetcher.mock.calls.some(([path]) => String(path).startsWith('/api/me/tenants'))).toBe(false)
+  fireEvent.click(proceed)
+  await screen.findByText('Aún no tienes boticas asignadas')
+  expect(screen.queryByRole('link', { name: 'Cambiar a Plataforma' })).not.toBeInTheDocument()
+  expect(screen.queryByRole('navigation', { name: 'Navegación de plataforma' })).not.toBeInTheDocument()
+  expect(fetcher.mock.calls.filter(([path]) => path === '/platform/session')).toHaveLength(1)
 })

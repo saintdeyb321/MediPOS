@@ -197,4 +197,129 @@ Lectura real únicamente: PostgreSQL18.4/localhost5432/`medipos_dev`;39 IDs EF c
 | A — preferida, limpieza selectiva | Conservar esquema/39 migraciones/usuarios/globales; requiere un procedimiento de mantenimiento/purga expresamente revisado que trate los13 guards inmutables. Hoy no existe un reset ordinario seguro; A18 no se implementa aquí. No ejecutar TRUNCATE/DELETE improvisados ni deshabilitar protecciones. | Respaldo fresco de esquema39 y datos, roles/GRANT y exportes privados preservados; validación de recuperación real externa o mediante mantenimiento separado autorizado, sin crear una base local paralela. Transacción revisada, verificaciones y ROLLBACK antes de COMMIT; después, restauración completa específicamente autorizada. |
 | B — reconstruir la misma DEV, solo con consentimiento destructivo separado | Reaplicar las39 migraciones oficiales únicamente a la misma BD después de respaldo/restauración probados. Reimportar de forma controlada usuarios con UUID originales y catálogos preservados; verificar allowlist y runtime sin cambiar credenciales. Pérdida de datos explícita, sin nuevos entornos. | Ventana de indisponibilidad y plan completo de restauración de la misma DEV, con hashes/verificación de identidad/esquema/GRANT. No es un baseline nuevo ni una aprobación para DROP actual. |
 
-**Autorización siguiente, todavía NO solicitada como ejecutable:** elegir A o B solo después de revisar/probar su mecanismo, confirmar datos a perder y aprobar respaldo fresco/recuperación/destino exactos. Hasta entonces: S4 BLOCKED, cero borrados. Se puede aceptar S1–S3 conservando los negocios actuales, sin esperar la limpieza.
+**Estado histórico de esta inspección:** cero borrados; el mecanismo propuesto posteriormente está en §9. Se puede aceptar S1–S3 conservando los negocios actuales, sin esperar la limpieza.
+
+## 9. Correctivos acotados y procedimiento S4 preparado (base e61cf352, 2026-10-30)
+
+**S1–S2 CODE_READY, sin instalar:** EntryRouter conserva el error404 (incluido cuerpo vacío) de `/platform/session` y ofrece «Continuar a mis boticas» únicamente por decisión explícita; no convierte404 en autorización ni oculta fallos429/403/red. Tras una constancia válida, `usePlatformConsole` separa el fallo del refresco del resultado de escritura: cierra/limpia el asistente, informa «Alta confirmada» y permite reconsultar sin otro POST. La pérdida real de respuesta/constancia conserva la recuperación original.31 casos focalizados en EntryRouter/PlatformPage, ESLint de los4 archivos y build TS/Vite PASS; transportes de prueba, no aceptación Chrome/Google/PG. Build aislado en `frontend/node_modules/.cache/superadmin-s4-fix-dist`; no reemplaza el frontend servido ni reinicia DEV.
+
+### Guards auditados y solución de mantenimiento
+
+Los13 guards privados son BEFORE TRUNCATE de sentencia: disparan incluso sin filas. No contienen un modo autorizado de mantenimiento. Sus cuerpos y migraciones quedan intactos:
+
+| Triggers (tabla) | Función / fuente Infrastructure | Rechazo |
+|---|---|---|
+| `notifications_no_truncate` (notifications), `notification_reads_no_truncate` (notification_read_states) | `protect_notification_history`; Notifications/Persistence/NotificationHistorySql.cs |42501, historial inmutable |
+| `sync_devices_no_truncate` (sync_devices), `sync_events_no_truncate` (sync_events) | `protect_sync_device`, `protect_sync_event`; OfflineSync/Persistence/SyncHistorySql.cs |42501, retención de dispositivos/eventos |
+| `offline_conflicts_no_truncate` (offline_sale_conflicts) | `protect_offline_conflict`; OfflineSync/Persistence/OfflineSaleReconciliationSql.cs |42501, resolución histórica única |
+| `branch_catalog_states_no_truncate` (branch_catalog_sync_states), `branch_catalog_changes_no_truncate` (branch_catalog_changes) | `protect_branch_catalog_sync`; OfflineSync/Persistence/BranchCatalogSyncSql.cs |42501; solo triggers de origen mantienen proyecciones |
+| `ubl_document_no_delete`, `ubl_line_no_delete`, `ubl_link_immutable` (supplier_ubl_imports, supplier_ubl_import_lines, supplier_ubl_purchase_line_links) | `supplier_ubl_append_only`; Purchasing/Ubl/SupplierUblSql.cs |23514, documentos/enlaces append-only |
+| `cpe_document_no_delete`, `cpe_series_no_delete`, `cpe_attempt_immutable` (electronic_documents, electronic_document_series, electronic_document_attempts) | `cpe_no_delete`; ElectronicDocuments/ElectronicDocumentSql.cs |23514, documentos/series/intentos retenidos |
+
+**Propuesta elegida: reconstrucción lógica transaccional de objetos en la misma `medipos_dev`, desde un respaldo fresco39, omitiendo solo los49 TABLE DATA privados.** `pg_restore --clean --if-exists --file` genera SQL sin conectarse; una lista TOC conserva íntegros esquema, funciones, índices, restricciones, triggers, políticas/ACL y los13 TABLE DATA preservados. PostgreSQL documenta `--clean` y la selección `--use-list` en [pg_restore18](https://www.postgresql.org/docs/18/app-pgrestore.html). No es TRUNCATE ni una excepción permanente a los guards. Tampoco es A18/purga de producción.
+
+**Impacto destructivo explícito:** se eliminarían/recrearían objetos del esquema durante la transacción, incluidos los que contienen datos preservados; al commit sus definiciones/datos verificados vuelven desde el mismo archivo. No se elimina/recrea la base, no se ejecuta EF ni se cambia el historial de39 IDs. Los49 conjuntos privados de §8/`tools/dev-reset/policy.json` quedan vacíos: boticas, licencias/cambios, Owners/membresías/invitaciones, entidades/sedes, productos locales/presentaciones, compras/proveedores, stock/lotes/ledger, ventas/pagos/tickets derivados, cajas/transferencias, comisiones, auditoría privada, UBL/CPE, constancias/idempotencia, importaciones privadas, notificaciones y offline. Se perderían también sus historiales y posibilidades de conciliación: confirmar expresamente que TODO es simulación; vaciar colas/carritos pendientes de los navegadores antes de reabrir, sin reproducir intenciones antiguas.
+
+Los13 conjuntos preservados son `users` completos (subject/correo verificado/UUID), `__EFMigrationsHistory`, `categories`, `global_products`, `medicine_profiles` y los8 `official_catalog_*` enumerados en policy. Sus hashes incluyen todas las columnas, sin excluir `google_email_verified`. La allowlist/UUID administrativo, User Secrets/OAuth, credenciales, TLS y keyring/DP permanecen fuera de BD y no se cambian. Se cotejan39 IDs,56 FORCE RLS, guards habilitados, esquema/ACL/propietarios/roles y cada tabla preservada; runtime nunca recibe autoridad de mantenimiento. Los guards adicionales del catálogo global también se recrean con su definición exacta.
+
+### Gates y recuperación, antes de aprobar pérdida
+
+- Herramienta preparada: `backend/tools/New-DevS4RestorePlan.ps1`, plantillas `tools/dev-reset/{policy.json,preflight.sql,capture.sql,verify.sql}`. No contiene llamada a psql ni ejecución SQL: genera archivos privados desde pg_restore y exige SHA de archivo/raíz física no redirigida/ACL usuario+SYSTEM/ruta nueva. `-SelfTest`:8 casos offline TOC/plantillas PASS en PowerShell5.1, sin conexiones, herramientas nativas ni escrituras. Parser PS5.1 PASS. No se generó un plan privado ni se ejecutó restauración.
+- Antes del SQL: detener solo DEV desde su consola, cerrar todos los clientes de esa BD, congelar altas/mutaciones/login; verificar loopback5432, `medipos_dev`, postgres temporal por pgpass, versión18,39 IDs exactos,62 tablas exactas,13 guards privados,56 FORCE RLS/runtime restringido,0 dependencias entrantes desde preservadas. El script toma advisory lock y ACCESS EXCLUSIVE sobre las62 tablas. Detiene ante cualquier discrepancia, sin CASCADE improvisado.
+- Ensayo obligatorio **en la misma base y una sola transacción**: fotografía completa → restauración de TODO el archivo → comparar todas las filas/esquema/permisos → ROLLBACK → volver a comparar la base original. Solo entonces exporta `approved-baseline.csv` privado. No basta listar/decodificar el archivo. El SQL incluye DROP de objetos aunque termine en rollback: requiere autorización específica incluso para el ensayo. No existe prueba de recuperación ejecutada todavía.
+- Se rechazan secuencias/setval, LOB, objetos foráneos/materializados, replicación/publicaciones/suscripciones, event triggers, esquemas/extensiones no revisados o drift. Las secuencias no se revierten transaccionalmente según [PostgreSQL18](https://www.postgresql.org/docs/18/functions-sequence.html); por eso no se presupone que cualquier dump admita este ensayo. Ante estos casos, NO-GO, no cambiar el método silenciosamente.
+- Aplicación: exige baseline del ensayo, mismo cluster/base/OID/versión/roles y estado original exacto, además de autorización `RESET_MEDIPOS_DEV_39`; inserta únicamente los13 conjuntos preservados y confirma después de comparar. Un fallo anterior a COMMIT revierte por transacción/cierre de conexión. Una respuesta incierta de COMMIT exige `inspect.psql`: distingue estado original, comercial vacío o drift; no repetir reset a ciegas.
+- Recuperación después de commit: con DEV aún detenido y **otra autorización expresa**, `rollback.psql` restaura TODO el archivo39 en esa misma base y solo confirma si coincide con el baseline. El gate conserva cluster/esquema/roles y exige archivo/manifiesto intactos; drift de esquema/configuración = detener y revisar. Si se reanudaron ventas, restaurar el archivo perdería esas nuevas escrituras: no usarlo sin un nuevo alcance aprobado. Conservar archivo/plan/logs/secretos originales, nunca ejecutar Down ni resetear credenciales.
+- El `RecoveryWorkflow` existente conserva su guard de cluster aislado para restauraciones operativas; no se le pasa DEV disfrazada de destino ni se debilita. Este procedimiento DEV se verifica por separado. No crea QA/staging/otra BD ni una función persistente de bypass.
+
+### Comandos futuros exactos — NO autorizados ni ejecutados
+
+Ejecutar desde **Windows PowerShell5.1 normal**, después de aprobar respaldo privado fresco, ventana DEV y ensayo con DROP/ROLLBACK sobre la misma base. No desde AppData virtualizado de Codex. Nunca mostrar SQL generado, logs, datos, contraseñas o hashes de identidad por chat. El cierre de DEV es Ctrl+C en su consola; si7243 está ocupado por una instancia desconocida, detener este procedimiento, no matar procesos por nombre.
+
+```powershell
+Set-Location C:\Proyectos\MediPOS
+$ErrorActionPreference='Stop'
+if(Get-NetTCPConnection -LocalPort 7243 -State Listen -ErrorAction SilentlyContinue){throw 'DEV sigue activo'}
+$pg='C:\Program Files\PostgreSQL\18\bin'
+$root=Join-Path $env:APPDATA ('MediPOS\DevAdministration\maintenance-s4-'+[DateTime]::UtcNow.ToString('yyyyMMddTHHmmssfffZ'))
+if(Test-Path -LiteralPath $root){throw 'Destino existente: no sobrescribir'}
+$null=New-Item -ItemType Directory -Path $root
+$sid=[Security.Principal.WindowsIdentity]::GetCurrent().User
+$acl=New-Object Security.AccessControl.DirectorySecurity
+$acl.SetAccessRuleProtection($true,$false)
+$acl.SetOwner($sid)
+foreach($identity in @($sid,(New-Object Security.Principal.SecurityIdentifier('S-1-5-18')))){
+  $rule=New-Object Security.AccessControl.FileSystemAccessRule($identity,'FullControl','ContainerInherit,ObjectInherit','None','Allow')
+  $acl.AddAccessRule($rule)
+}
+Set-Acl -LiteralPath $root -AclObject $acl
+# pgpass externo ya configurado; -w nunca pide/imprime contraseña.
+$backup=Join-Path $root 'medipos_dev-schema39.dump'
+& "$pg\pg_dump.exe" -w -h localhost -p 5432 -U postgres -d medipos_dev --format=custom --no-statistics --lock-wait-timeout=5s --file $backup 2> "$root\dump.private.log"
+if($LASTEXITCODE -ne 0){throw 'Backup fallido: conservar y detener'}
+$sha=(Get-FileHash -LiteralPath $backup -Algorithm SHA256).Hash
+[IO.File]::WriteAllText("$root\archive.sha256",$sha)
+$secretId=(Select-Xml -Path backend/src/MediPOS.Api/MediPOS.Api.csproj -XPath '//UserSecretsId').Node.InnerText
+$secret=Join-Path $env:APPDATA ('Microsoft\UserSecrets\'+$secretId+'\secrets.json')
+Copy-Item -LiteralPath $secret -Destination "$root\secrets.original.private.json"
+if((Get-FileHash $secret).Hash -cne (Get-FileHash "$root\secrets.original.private.json").Hash){throw 'Configuración no coincide'}
+$plan=Join-Path $root 'plan'
+& .\backend\tools\New-DevS4RestorePlan.ps1 -Archive $backup -ExpectedArchiveSha256 $sha -PrivateDirectory $plan
+if(-not $? -or -not(Test-Path "$plan\manifest.json")){throw 'Plan incompleto: no ejecutar SQL'}
+$manifestSha=(Get-FileHash "$plan\manifest.json" -Algorithm SHA256).Hash
+[IO.File]::WriteAllText("$root\plan.sha256",$manifestSha)
+```
+
+El generador lista y decodifica completamente el archivo a SQL privado (`all.toc`, `full-restore.sql`); verifica62 entradas TABLE DATA y omite49 en `reset.toc`. No basta que pg_dump termine: la restauración ensayada debe pasar. La carpeta privada contiene datos personales/comerciales, no subirla al repositorio. Si se interrumpe el aprovisionamiento del plan, conservarla para diagnóstico y detener; no ejecutar archivos parciales.
+
+En la **misma consola** (o recuperar `$root` como la ruta privada exacta ya registrada, nunca seleccionar automáticamente «la más reciente»), comprobar integridad **antes de cada invocación**:
+
+```powershell
+function Test-S4Files {
+  if((Get-FileHash "$plan\manifest.json" -Algorithm SHA256).Hash -cne $manifestSha){throw 'Manifiesto modificado'}
+  $m=Get-Content "$plan\manifest.json" -Raw|ConvertFrom-Json
+  if($m.State -cne 'PREPARED_NOT_EXECUTED' -or $m.Database -cne 'medipos_dev' -or $m.Port -ne 5432 -or $m.Migrations -ne 39 -or $m.ArchiveSha256 -cne $sha){throw 'Manifiesto distinto'}
+  if((Get-FileHash $backup -Algorithm SHA256).Hash -cne $sha){throw 'Backup distinto'}
+  foreach($file in $m.Files){
+    if($file.Name -notmatch '^[A-Za-z0-9_.-]+$'){throw 'Ruta inesperada'}
+    $path=Join-Path $plan $file.Name
+    if((Get-Item -LiteralPath $path).Length -ne $file.Length -or (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash -cne $file.Sha256){throw 'Artefacto distinto'}
+  }
+}
+$connection=@('-X','-w','-h','localhost','-p','5432','-U','postgres','-d','medipos_dev','-v','ON_ERROR_STOP=1')
+Test-S4Files
+& "$pg\psql.exe" @connection -f "$plan\rehearse.psql" *> "$root\rehearse.private.log"
+if($LASTEXITCODE -ne 0 -or -not(Test-Path "$plan\approved-baseline.csv") -or -not(Select-String -LiteralPath "$root\rehearse.private.log" -SimpleMatch 'S4_REHEARSAL_PASS_ROLLBACK_VERIFIED' -Quiet)){throw 'Ensayo/rollback NO-GO; no limpiar'}
+$baselineSha=(Get-FileHash "$plan\approved-baseline.csv" -Algorithm SHA256).Hash
+[IO.File]::WriteAllText("$root\baseline.sha256",$baselineSha)
+```
+
+**Punto de consentimiento separado:** revisar resultado real del ensayo y aprobar pérdida de las49 tablas de simulación. Mantener DEV detenido, preservar hash de `approved-baseline.csv` y cotejarlo antes de las invocaciones posteriores. Solo tras esa autorización:
+
+```powershell
+Test-S4Files
+if((Get-FileHash "$plan\approved-baseline.csv").Hash -cne $baselineSha){throw 'Baseline distinto'}
+& "$pg\psql.exe" @connection -v approved_action=RESET_MEDIPOS_DEV_39 -f "$plan\reset.psql" *> "$root\reset.private.log"
+# Incluso ante respuesta incierta: inspeccionar primero, no reenviar reset.
+Test-S4Files
+if((Get-FileHash "$plan\approved-baseline.csv").Hash -cne $baselineSha){throw 'Baseline distinto'}
+& "$pg\psql.exe" @connection -f "$plan\inspect.psql" *> "$root\inspect.private.log"
+if($LASTEXITCODE -ne 0 -or -not(Select-String -LiteralPath "$root\inspect.private.log" -SimpleMatch 'S4_STATE_EMPTY_COMMERCIAL' -Quiet)){throw 'Estado distinto: no arrancar; revisar logs privados'}
+```
+
+El reset debe terminar con `S4_RESET_PASS` y la inspección con `S4_STATE_EMPTY_COMMERCIAL`; `FULL_SOURCE` significa que la limpieza no quedó aplicada. Los mensajes se consultan localmente sin publicar logs. Después de cotejar configuración privada original,39/RLS/permisos/usuarios/globales y sin errores, arrancar con `Set-Location C:\Proyectos\MediPOS\backend; dotnet run --project src/MediPOS.Api --launch-profile https-local`, verificar readiness y nuevo login en perfiles separados. No cambiar flags/allowlist ni usar administrador SQL como runtime. Rehabilitar simulaciones únicamente tras lectura real del estado esperado.
+
+**Rollback completo, únicamente si se autoriza posteriormente y aún no hay nuevas operaciones:**
+
+```powershell
+Test-S4Files
+if((Get-FileHash "$plan\approved-baseline.csv").Hash -cne $baselineSha){throw 'Baseline distinto'}
+& "$pg\psql.exe" @connection -v approved_action=RESTORE_MEDIPOS_DEV_39 -f "$plan\rollback.psql" *> "$root\rollback.private.log"
+if($LASTEXITCODE -ne 0){throw 'Restauración no confirmada: mantener DEV detenido'}
+# Debe observarse S4_ROLLBACK_PASS y luego S4_STATE_FULL_SOURCE.
+Test-S4Files
+& "$pg\psql.exe" @connection -f "$plan\inspect.psql" *> "$root\inspect-after-rollback.private.log"
+if($LASTEXITCODE -ne 0 -or -not(Select-String -LiteralPath "$root\inspect-after-rollback.private.log" -SimpleMatch 'S4_STATE_FULL_SOURCE' -Quiet)){throw 'Recuperación NO-GO'}
+```
+
+**Bloqueos reales actuales:** no autorización de mantenimiento destructivo, backup39 fresco ni recuperación ensayada; compatibilidad del SQL nativo con ese respaldo aún no ejecutada. Plan preparado/static checks no equivalen a restauración PASS. S4 **PREPARED / NO-GO para ejecución**, sin datos/configuración/permisos cambiados, sin servicios reiniciados. Los dos Gmail/Chrome y pruebas externas SA1–SA3 conservan sus pendientes anteriores.

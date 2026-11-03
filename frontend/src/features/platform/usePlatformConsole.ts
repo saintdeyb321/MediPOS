@@ -81,7 +81,7 @@ export function usePlatformConsole(http: HttpClient, userId: string) {
       const receipt = await api.receipt(requestKey, signal)
       if (created.tenantId !== receipt.tenantId || created.licenseId !== receipt.licenseId) throw new ApiError(0, 'client.outcome_unknown', undefined, true)
       signal.throwIfAborted(); mark({ tenant: receipt.tenantId, creationKey: null, platformPending: null }); setNotice('Botica creada; resultado original conciliado mediante su constancia de idempotencia.')
-      await client.invalidateQueries({ queryKey: [...key, 'tenants'] })
+      await refreshAfterConfirmedCreation(signal)
       return true
     })
   }
@@ -90,9 +90,20 @@ export function usePlatformConsole(http: HttpClient, userId: string) {
     return perform(async signal => {
       const receipt = await api.receipt(creationKey, signal); signal.throwIfAborted()
       mark({ tenant: receipt.tenantId, creationKey: null, platformPending: null }); setNotice('Resultado original recuperado. No se repitió la creación.')
-      await client.invalidateQueries({ queryKey: [...key, 'tenants'] })
+      await refreshAfterConfirmedCreation(signal)
       return true
     })
+  }
+  async function refreshAfterConfirmedCreation(signal: AbortSignal) {
+    // Receipt verification already established the write's outcome. A directory
+    // failure must be displayed separately and must not change that outcome.
+    try { await client.invalidateQueries({ queryKey: [...key, 'tenants'] }, { throwOnError: true }) }
+    catch (failure) {
+      if (signal.aborted) return
+      setError(failure)
+      setNotice('Alta confirmada por su constancia. No pudimos actualizar la lista; reconsúltala sin repetir la creación.')
+      if (failure instanceof ApiError && [401, 403].includes(failure.status)) setDenied(true)
+    }
   }
   async function change(action: LicenseAction, input: { expiresAt: string } | { status: 'trial' | 'active' | 'grace' } | Record<string, never>) {
     if (locked || !data) return
