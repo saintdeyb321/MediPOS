@@ -3,8 +3,10 @@ import { array, dateOnly, decimal, nullable, object, oneOf, text, utc, uuid } fr
 import type { BranchScope } from '../../shared/api/contracts'
 import type { JsonNumber } from '../../shared/api/exactJson'
 import { compare } from '../../shared/api/decimal'
+import { recoverOperation } from '../../shared/api/operations'
+import type { OperationIntention } from '../../shared/api/operations'
 
-// TransferEndpoints / TransferContracts / GetTransfersHandler. No optimistic version or idempotency key.
+// TransferEndpoints / TransferContracts / GetTransfersHandler. The initial request accepts an intention key.
 export const states = ['requested', 'approved', 'in_transit', 'received', 'cancelled'] as const
 export type TransferState = typeof states[number]
 export const stateLabel: Record<TransferState, string> = { requested: 'Solicitada', approved: 'Aprobada', in_transit: 'EN TRÁNSITO', received: 'RECIBIDA', cancelled: 'CANCELADA' }
@@ -38,8 +40,8 @@ function scoped(data: unknown, scope: BranchScope, id?: string) {
 }
 export function transfersApi(http: HttpClient) {
   const root = (scope: BranchScope) => `/api/tenants/${uuid(scope.tenantId)}/transfers`
-  async function post(scope: BranchScope, path: string, body: unknown, signal?: AbortSignal, id?: string) {
-    const data = await http.request(root(scope) + path, { method: 'POST', body, signal, exactNumbers: true })
+  async function post(scope: BranchScope, path: string, body: unknown, signal?: AbortSignal, id?: string, intention?: OperationIntention) {
+    const data = await http.request(root(scope) + path, { method: 'POST', body, signal, exactNumbers: true, intention })
     try { return scoped(data, scope, id) } catch { throw new ApiError(0, 'client.outcome_unknown', undefined, true) }
   }
   return {
@@ -50,8 +52,14 @@ export function transfersApi(http: HttpClient) {
       return result
     },
     async read(scope: BranchScope, id: string, signal?: AbortSignal) { return scoped(await http.request(`${root(scope)}/${uuid(id)}`, { signal, exactNumbers: true }), scope, id) },
-    async create(scope: BranchScope, sourceBranchId: string, destinationBranchId: string, lines: TransferLineInput[], signal?: AbortSignal) {
-      const result = await post(scope, '', { sourceBranchId: uuid(sourceBranchId), destinationBranchId: uuid(destinationBranchId), lines }, signal)
+    async recoverCreation(scope: BranchScope, requestId: string, actorId: string, signal?: AbortSignal) {
+      const result = scoped(await recoverOperation(http, scope, requestId, 'transfer-request', signal), scope)
+      if (!equalId(result.destinationBranchId, scope.branchId) || result.status !== 'requested' || !result.events.some(event => event.eventType === 'requested' && equalId(event.actorId, actorId)))
+        throw new ApiError(0, 'client.unexpected_response')
+      return result
+    },
+    async create(scope: BranchScope, sourceBranchId: string, destinationBranchId: string, lines: TransferLineInput[], requestId: string, signal?: AbortSignal) {
+      const result = await post(scope, '', { sourceBranchId: uuid(sourceBranchId), destinationBranchId: uuid(destinationBranchId), lines }, signal, undefined, { id: uuid(requestId), branchId: uuid(destinationBranchId) })
       if (!equalId(result.sourceBranchId, sourceBranchId) || !equalId(result.destinationBranchId, destinationBranchId) || result.lines.length !== lines.length || lines.some(line => !result.lines.some(row => equalId(row.businessProductId, line.businessProductId) && equalId(row.productUnitIdSnapshot, line.productUnitId) && compare(row.requestedQuantity, line.quantity) === 0))) throw new ApiError(0, 'client.outcome_unknown', undefined, true)
       return result
     },

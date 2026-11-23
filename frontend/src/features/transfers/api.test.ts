@@ -9,10 +9,12 @@ it('uses the official paths, branch/state pagination and exact numeric bodies wi
   await api.list(workspace, workspace.branchId, 'requested', 20)
   expect(String(fake.fetcher.mock.calls[0]?.[0])).toContain(`/transfers?offset=20&limit=20&branchId=${workspace.branchId}&status=requested`)
   await api.read(workspace, transfer.id)
-  await api.create(workspace, transfer.sourceBranchId, transfer.destinationBranchId, [{ businessProductId: id(10), productUnitId: id(11), quantity: n('0.000000000001') }])
+  await api.create(workspace, transfer.sourceBranchId, transfer.destinationBranchId, [{ businessProductId: id(10), productUnitId: id(11), quantity: n('0.000000000001') }], id(80))
   const write = fake.writes()[0]![1]!
   expect(write.body).toContain('"quantity":0.000000000001'); expect(write.credentials).toBe('same-origin')
   expect(new Headers(write.headers).get('X-CSRF-TOKEN')).toBe('transfers-unit-csrf')
+  expect(new Headers(write.headers).get('Idempotency-Key')).toBe(id(80))
+  expect(new Headers(write.headers).get('X-MediPOS-Branch')).toBe(transfer.destinationBranchId)
   expect(String(fake.writes()[0]![0])).toBe(`/api/tenants/${workspace.tenantId}/transfers`)
   await api.approve(workspace, transfer.id)
   await api.cancel(workspace, transfer.id, 'Motivo sintético')
@@ -29,6 +31,6 @@ it('rejects invalid pages, unknown enum values, foreign scopes, mismatched IDs a
 })
 it('marks malformed successful mutation results unknown instead of claiming failure or fabricating a record', async () => {
   const fake = transferServer(); fake.state.malformed = true; const api = transfersApi(new HttpClient(fake.fetcher))
-  await expect(api.create(workspace, transfer.sourceBranchId, transfer.destinationBranchId, [{ businessProductId: id(10), productUnitId: id(11), quantity: n('1') }])).rejects.toMatchObject({ outcomeUnknown: true })
+  await expect(api.create(workspace, transfer.sourceBranchId, transfer.destinationBranchId, [{ businessProductId: id(10), productUnitId: id(11), quantity: n('1') }], id(80))).rejects.toMatchObject({ outcomeUnknown: true })
   expect(fake.writes()).toHaveLength(1)
 })

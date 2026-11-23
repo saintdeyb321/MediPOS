@@ -1,7 +1,10 @@
 using System.Net;
+using MediPOS.Application.Errors;
+using MediPOS.Application.Modules.IdentityAccess.OperationalAccess;
 using MediPOS.Domain.Modules.AuditSupport;
 using MediPOS.Domain.Modules.Branches;
 using MediPOS.Domain.Modules.IdentityAccess;
+using Microsoft.Extensions.DependencyInjection;
 using static MediPOS.UnitTests.Api.TenantApiHttpTests;
 
 namespace MediPOS.UnitTests.Api;
@@ -9,6 +12,55 @@ namespace MediPOS.UnitTests.Api;
 [Collection("Observability")]
 public sealed class TenantTransferHttpTests
 {
+    [Fact]
+    public async Task KeyedRequestBindsTheTypedDestinationAndReplaysTheOriginal201()
+    {
+        var state = SeedTransfer(); var receipts = new ReceiptDouble();
+        await using var host = await Host(state, configureServices: services => services.AddSingleton<IRecoverableOperations>(receipts));
+        await PlatformLicenseHttpTests.Login(host);
+        var csrf = await host.Csrf(); var requestId = Guid.NewGuid(); var destination = state.Branches[1].Id;
+        async Task<HttpResponseMessage> Post(object body, Guid branch)
+        {
+            using var request = Request("POST", $"/api/tenants/{state.TenantId:D}/transfers", body, csrf);
+            request.Headers.Add("Idempotency-Key", requestId.ToString("D"));
+            request.Headers.Add("X-MediPOS-Branch", branch.ToString("D"));
+            return await host.Client.SendAsync(request, TestContext.Current.CancellationToken);
+        }
+
+        using (var wrong = await Post(Input(state), state.Branches[0].Id)) await Problem(wrong, 403, "access.branch_denied");
+        Assert.Null(receipts.Key); Assert.Empty(state.Transfers);
+        using var first = await Post(Input(state), destination);
+        using var replay = await Post(Input(state), destination);
+        Assert.Equal(HttpStatusCode.Created, first.StatusCode); Assert.Equal(HttpStatusCode.Created, replay.StatusCode);
+        Assert.Equal(await first.Content.ReadAsStringAsync(TestContext.Current.CancellationToken), await replay.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
+        Assert.Equal((state.TenantId, destination, requestId, "transfer-request"), receipts.Key);
+        using var changed = await Post(new { sourceBranchId = state.Branches[0].Id, destinationBranchId = destination,
+            lines = new[] { new { businessProductId = state.Products[0].Id, productUnitId = state.Units[0].Id, quantity = 3m } } }, destination);
+        await Problem(changed, 409, "operation.intention_conflict");
+        Assert.Single(state.Transfers); Assert.Single(state.Audits); Assert.Empty(state.Movements);
+    }
+
+    private sealed class ReceiptDouble : IRecoverableOperations
+    {
+        public (Guid Tenant, Guid Branch, Guid Request, string Kind)? Key { get; private set; }
+        private string? _hash;
+        private OperationReceipt? _receipt;
+
+        public async Task<OperationReceipt> ExecuteAsync(Guid tenantId, Guid branchId, Guid requestId, string kind, string payloadHash,
+            Func<CancellationToken, Task<string>> execute, CancellationToken token)
+        {
+            if (_receipt is not null)
+            {
+                if (Key != (tenantId, branchId, requestId, kind) || payloadHash != _hash)
+                    throw new ApplicationErrorException(new("operation.intention_conflict", ErrorCategory.Conflict, "Synthetic intent conflict."));
+                return _receipt;
+            }
+            Key = (tenantId, branchId, requestId, kind); _hash = payloadHash;
+            return _receipt = new(requestId, kind, await execute(token));
+        }
+
+        public Task<OperationReceipt> ReadAsync(Guid tenantId, Guid branchId, Guid requestId, CancellationToken token) => throw new NotSupportedException();
+    }
     [Fact]
     public async Task RequestApproveDispatchReceivePreservesLotTraceabilityAndRejectsReplays()
     {

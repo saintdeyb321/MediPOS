@@ -52,6 +52,20 @@ it('recovers known job after reload and pages server row cursors without rerunni
   const fake = managementServer(); fake.management.jobs[0] = { ...importJob, rows: Array.from({ length: 21 }, (_, i) => ({ rowNumber: i + 4, status: 'invalid', businessProductId: null, errorCode: 'unit.invalid', errorMessage: 'Fila ' + i })), totalRows: 21, validRows: 0, invalidRows: 21, importedRows: 0 }
   mountTransfers(fake, <ImportPage />, '?importJob=' + importJob.importJobId + '&importPending=1&importAck=1'); await screen.findByText('Fila 0'); fireEvent.click(screen.getByRole('button', { name: 'Resultados siguientes' })); await screen.findByText('Fila 20'); expect(screen.queryByText('Fila 0')).not.toBeInTheDocument(); expect(fake.fetcher.mock.calls.some(([path]) => String(path).includes('afterRowNumber=23&limit=20'))).toBe(true); expect(fake.writes()).toHaveLength(0)
 })
+it('shows a terminal legacy job for consultation but its URL cannot settle the original import', async () => {
+  const fake = managementServer()
+  const legacy = `?importPending=1&importJob=${importJob.importJobId}&importAck=1`
+  const view = mountTransfers(fake, <ImportPage />, legacy)
+  await screen.findByRole('heading', { name: 'Resultado: Completado' })
+  expect(screen.queryByRole('button', { name: 'Finalizar revisión de importación' })).not.toBeInTheDocument()
+  expect(screen.getByRole('button', { name: 'Importar archivo confirmado' })).toBeDisabled()
+  const address = screen.getByTestId('location').textContent ?? ''
+  view.unmount(); mountTransfers(fake, <ImportPage />, address)
+  await screen.findByRole('heading', { name: 'Resultado: Completado' })
+  expect(screen.getByTestId('location')).toHaveTextContent('importPending=1')
+  expect(screen.queryByRole('button', { name: 'Finalizar revisión de importación' })).not.toBeInTheDocument()
+  expect(fake.writes()).toHaveLength(0)
+})
 it('does not treat a processing or failed query as a completed import', async () => {
   const fake = managementServer(); fake.management.jobs[0] = { ...importJob, status: 'processing', completedAt: null }; mountTransfers(fake, <ImportPage />, '?importJob=' + importJob.importJobId + '&importPending=1'); await screen.findByRole('heading', { name: 'Resultado: En proceso' }); expect(screen.queryByRole('button', { name: 'Finalizar revisión de importación' })).not.toBeInTheDocument()
   fake.management.failGet = true; fireEvent.click(screen.getByRole('button', { name: 'Actualizar mismo trabajo' })); await screen.findAllByRole('alert'); expect(screen.queryByRole('heading', { name: 'Resultado: En proceso' })).not.toBeInTheDocument(); expect(fake.writes()).toHaveLength(0)

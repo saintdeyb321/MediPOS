@@ -24,13 +24,16 @@ internal sealed class TransferRequestStore(MediPosDbContext context) : ITransfer
     public async Task CreateAsync(Transfer transfer, TransferEvent requested, AuditLog audit, CancellationToken cancellationToken)
     {
         context.SelectTenant(transfer.TenantId);
-        await using var transaction = await context.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+        var ownsTransaction = context.Database.CurrentTransaction is null;
+        if (!ownsTransaction && !context.RecoverableWriteActive) throw new InvalidOperationException("Unexpected ambient transaction.");
+        // Keyed requests join the coordinator's transaction, which commits the receipt with these rows.
+        await using var transaction = ownsTransaction ? await context.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false) : null;
         try
         {
             context.Transfers.Add(transfer); context.TransferEvents.Add(requested);
             context.AddAudit(audit, transfer.TenantId, AuditAction.TransferRequested, transfer.Id);
             await context.SaveAuditedChangesAsync(cancellationToken).ConfigureAwait(false);
-            await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+            if (transaction is not null) await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
         }
         catch { context.ChangeTracker.Clear(); throw; }
     }

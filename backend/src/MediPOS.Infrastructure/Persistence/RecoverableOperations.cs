@@ -15,7 +15,7 @@ internal sealed class RecoverableOperations(MediPosDbContext db, IAuthenticatedM
     {
         "supplier" or "minimum" or "product-import" => TenantOperation.Administration,
         "adjustment" => TenantOperation.Inventory,
-        "sale-draft" => TenantOperation.ProductSearch,
+        "sale-draft" or "transfer-request" => TenantOperation.ProductSearch,
         "purchase-draft" => TenantOperation.Purchasing,
         _ => throw new ApplicationErrorException(ApplicationErrors.InvalidRequest),
     };
@@ -38,16 +38,24 @@ internal sealed class RecoverableOperations(MediPosDbContext db, IAuthenticatedM
         db.SelectTenant(tenantId);
         // A session lock also spans XLSX's independently committed rows. Never return it to the pool held.
         await db.Database.OpenConnectionAsync(token);
-        var lockId = BitConverter.ToInt64(SHA256.HashData(Encoding.UTF8.GetBytes($"{tenantId:D}/{branchId:D}/{access.UserId:D}/{requestId:D}")), 0);
-        var acquired = false;
+        var branchLock = LockId($"{tenantId:D}/{branchId:D}/{access.UserId:D}/{requestId:D}");
+        var transferRequest = kind == "transfer-request";
+        // The extra lock binds a goods intention to its first destination, even if the same actor is authorized elsewhere.
+        long[] lockIds = transferRequest ? [LockId($"transfer-request/{tenantId:D}/{access.UserId:D}/{requestId:D}"), branchLock] : [branchLock];
+        var acquired = 0;
         try
         {
-            acquired = await db.Database.SqlQuery<bool>($"SELECT pg_try_advisory_lock({lockId}) AS \"Value\"").SingleAsync(token);
-            if (!acquired) throw new ApplicationErrorException(new("operation.in_progress", ErrorCategory.Conflict, "The original intention is still executing. Consult its receipt without creating another intention."));
-            var existing = await db.Set<OperationReceiptRow>().AsNoTracking().SingleOrDefaultAsync(x => x.TenantId == tenantId && x.BranchId == branchId && x.ActorId == access.UserId && x.RequestId == requestId, token);
+            foreach (var lockId in lockIds)
+            {
+                if (!await db.Database.SqlQuery<bool>($"SELECT pg_try_advisory_lock({lockId}) AS \"Value\"").SingleAsync(token))
+                    throw new ApplicationErrorException(new("operation.in_progress", ErrorCategory.Conflict, "The original intention is still executing. Consult its receipt without creating another intention."));
+                acquired++;
+            }
+            var existing = await db.Set<OperationReceiptRow>().AsNoTracking().FirstOrDefaultAsync(x => x.TenantId == tenantId &&
+                x.ActorId == access.UserId && x.RequestId == requestId && (x.BranchId == branchId || (transferRequest && x.Kind == kind)), token);
             if (existing is not null)
             {
-                if (existing.Kind != kind || existing.PayloadHash != payloadHash || existing.MembershipId != access.MembershipId) throw Conflict();
+                if (existing.BranchId != branchId || existing.Kind != kind || existing.PayloadHash != payloadHash || existing.MembershipId != access.MembershipId) throw Conflict();
                 var current = await authorization.RequireAsync(tenantId, branchId, access.UserId, Policy(kind), token);
                 if (current.MembershipId != existing.MembershipId) throw Conflict();
                 return new(requestId, kind, existing.ResultJson);
@@ -79,8 +87,12 @@ internal sealed class RecoverableOperations(MediPosDbContext db, IAuthenticatedM
         }
         finally
         {
-            try { if (acquired) await db.Database.ExecuteSqlAsync($"SELECT pg_advisory_unlock({lockId})", CancellationToken.None); }
+            try
+            {
+                while (acquired > 0) await db.Database.ExecuteSqlAsync($"SELECT pg_advisory_unlock({lockIds[--acquired]})", CancellationToken.None);
+            }
             finally { await db.Database.CloseConnectionAsync(); }
         }
     }
+    private static long LockId(string scope) => BitConverter.ToInt64(SHA256.HashData(Encoding.UTF8.GetBytes(scope)), 0);
 }

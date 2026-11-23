@@ -1,5 +1,6 @@
 using System.Text.Json;
 using MediPOS.Application.Errors;
+using MediPOS.Application.Modules.Branches.CreateBranch;
 using MediPOS.Application.Modules.Catalog;
 using MediPOS.Application.Modules.Catalog.CreateCategory;
 using MediPOS.Application.Modules.Catalog.CreateLocalBusinessProduct;
@@ -18,6 +19,8 @@ using MediPOS.Application.Modules.Purchasing.CreatePurchase;
 using MediPOS.Application.Modules.Purchasing.CreateSupplier;
 using MediPOS.Application.Modules.Purchasing.ReplacePurchaseLines;
 using MediPOS.Application.Modules.SalesPos.CreateSaleDraft;
+using MediPOS.Application.Modules.Transfers.RequestTransfer;
+using MediPOS.Domain.Modules.AuditSupport;
 using MediPOS.Domain.Modules.Catalog;
 using MediPOS.Domain.Modules.IdentityAccess;
 using MediPOS.Infrastructure;
@@ -75,6 +78,8 @@ public sealed class RecoverableOperationPostgreSqlTests(PostgreSqlFixture fixtur
             var second = await recovery.ExecuteAsync(data.Owner.TenantId, data.Owner.BranchId, Guid.NewGuid(), kind, Hash, token => Write(recoveryScope.ServiceProvider, data, kind, token), Token);
             var independent = JsonSerializer.Deserialize<PurchaseDetails>(second.ResultJson, Json)!;
             Assert.NotEqual(original.Id, independent.Id);
+            Assert.Equal(data.Owner.BranchId, original.BranchId);
+            Assert.True(await db.Purchases.AnyAsync(x => x.Id == original.Id && x.BranchId == original.BranchId, Token));
             Assert.Equal(original.DocumentReference, independent.DocumentReference);
             Assert.Equal(2, await db.Purchases.CountAsync(x => x.DocumentReference == original.DocumentReference, Token));
             Assert.False(await db.PurchaseLines.AnyAsync(x => x.PurchaseId == original.Id || x.PurchaseId == independent.Id, Token));
@@ -82,6 +87,90 @@ public sealed class RecoverableOperationPostgreSqlTests(PostgreSqlFixture fixtur
             Assert.Equal(5m, (await db.InventoryLots.SingleAsync(x => x.Id == data.LotId, Token)).QuantityAvailableBase);
         }
     }
+
+    [Fact]
+    public async Task TransferRequestCommitsOneOriginalAndBindsTheKeyToItsDestination()
+    {
+        var data = await Prepare(); var owner = data.Owner;
+        await using var services = Runtime(); await using var firstScope = services.CreateAsyncScope(); await using var secondScope = services.CreateAsyncScope();
+        var firstSource = Authenticate(firstScope.ServiceProvider, owner.UserId);
+        var replay = Authenticate(secondScope.ServiceProvider, owner.UserId).GetRequiredService<IRecoverableOperations>();
+        var operations = firstSource.GetRequiredService<IRecoverableOperations>();
+        await using var db = fixture.CreateContext(owner.TenantId);
+        var command = await TransferCommand(firstSource, data, db);
+        var entity = await db.Branches.Where(b => b.Id == owner.BranchId).Select(b => b.LegalEntityId).SingleAsync(Token);
+        var other = await firstSource.GetRequiredService<CreateBranchHandler>().HandleAsync(new(owner.TenantId, entity, "Alterna", owner.UserId), Token);
+        var stockBefore = await db.StockMovements.CountAsync(Token);
+        var key = Guid.NewGuid();
+        var saved = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        Task<string> Write(CancellationToken token) => WriteTransfer(firstSource, command, token);
+        var original = operations.ExecuteAsync(owner.TenantId, command.DestinationBranchId, key, "transfer-request", Hash, async token =>
+        {
+            var result = await Write(token);
+            saved.SetResult(); await release.Task.WaitAsync(token);
+            return result;
+        }, Token);
+        try
+        {
+            await saved.Task.WaitAsync(TimeSpan.FromSeconds(10), Token);
+            Assert.Equal(0, await db.Transfers.CountAsync(Token));
+            Assert.Equal("operation.not_observed", (await Assert.ThrowsAsync<ApplicationErrorException>(() => replay.ReadAsync(owner.TenantId, command.DestinationBranchId, key, Token))).Error.Code);
+            var busy = await Assert.ThrowsAsync<ApplicationErrorException>(() => replay.ExecuteAsync(owner.TenantId, other.Id, key, "transfer-request", Hash,
+                _ => throw new InvalidOperationException("A competing branch cannot write this intention."), Token));
+            Assert.Equal("operation.in_progress", busy.Error.Code);
+        }
+        finally { release.TrySetResult(); await original; }
+
+        var receipt = await original;
+        using var result = JsonDocument.Parse(receipt.ResultJson); var transferId = result.RootElement.GetProperty("id").GetGuid();
+        Assert.Equal(receipt, await replay.ReadAsync(owner.TenantId, command.DestinationBranchId, key, Token));
+        Assert.Equal("operation.not_observed", (await Assert.ThrowsAsync<ApplicationErrorException>(() => replay.ReadAsync(owner.TenantId, other.Id, key, Token))).Error.Code);
+        Task<string> UnexpectedWrite(CancellationToken _) => throw new InvalidOperationException("Replay cannot dispatch the write.");
+        Assert.Equal(receipt, await replay.ExecuteAsync(owner.TenantId, command.DestinationBranchId, key, "transfer-request", Hash, UnexpectedWrite, Token));
+        var branchConflict = await Assert.ThrowsAsync<ApplicationErrorException>(() => replay.ExecuteAsync(owner.TenantId, other.Id, key, "transfer-request", Hash, UnexpectedWrite, Token));
+        var payloadConflict = await Assert.ThrowsAsync<ApplicationErrorException>(() => replay.ExecuteAsync(owner.TenantId, command.DestinationBranchId, key, "transfer-request", new string('B', 64), UnexpectedWrite, Token));
+        Assert.Equal("operation.intention_conflict", branchConflict.Error.Code); Assert.Equal(branchConflict.Error, payloadConflict.Error);
+        var independent = await operations.ExecuteAsync(owner.TenantId, command.DestinationBranchId, Guid.NewGuid(), "transfer-request", Hash, Write, Token);
+        Assert.NotEqual(receipt.ResultJson, independent.ResultJson);
+        Assert.Equal(2, await db.Transfers.CountAsync(Token));
+        Assert.Single(await db.TransferLines.Where(x => x.TransferId == transferId).ToListAsync(Token));
+        Assert.Single(await db.TransferEvents.Where(x => x.TransferId == transferId).ToListAsync(Token));
+        Assert.Equal(1, await db.AuditLogs.CountAsync(x => x.EntityId == transferId && x.Action == AuditAction.TransferRequested, Token));
+        Assert.Equal(stockBefore, await db.StockMovements.CountAsync(Token));
+    }
+
+    [Fact]
+    public async Task TransferRequestFailureBetweenBusinessSaveAndReceiptRollsBackEverything()
+    {
+        var data = await Prepare(); var owner = data.Owner;
+        await using var services = Runtime(); await using var scope = services.CreateAsyncScope();
+        var source = Authenticate(scope.ServiceProvider, owner.UserId); var operations = source.GetRequiredService<IRecoverableOperations>();
+        await using var db = fixture.CreateContext(owner.TenantId); var command = await TransferCommand(source, data, db);
+        var key = Guid.NewGuid();
+        await Assert.ThrowsAsync<IOException>(() => operations.ExecuteAsync(owner.TenantId, command.DestinationBranchId, key, "transfer-request", Hash, async token =>
+        {
+            await WriteTransfer(source, command, token);
+            throw new IOException("Injected after the inner SaveChanges and before the receipt.");
+        }, Token));
+        Assert.Empty(await db.Transfers.ToListAsync(Token));
+        Assert.Empty(await db.TransferLines.ToListAsync(Token));
+        Assert.Empty(await db.TransferEvents.ToListAsync(Token));
+        Assert.False(await db.AuditLogs.AnyAsync(x => x.Action == AuditAction.TransferRequested, Token));
+        Assert.Equal("operation.not_observed", (await Assert.ThrowsAsync<ApplicationErrorException>(() => operations.ReadAsync(owner.TenantId, command.DestinationBranchId, key, Token))).Error.Code);
+    }
+
+    private static async Task<RequestTransferCommand> TransferCommand(IServiceProvider source, Data data, MediPosDbContext db)
+    {
+        var owner = data.Owner;
+        var legalEntity = await db.Branches.Where(b => b.Id == owner.BranchId).Select(b => b.LegalEntityId).SingleAsync(Token);
+        var destination = await source.GetRequiredService<CreateBranchHandler>().HandleAsync(new(owner.TenantId, legalEntity, "Destino", owner.UserId), Token);
+        var unit = await db.ProductUnits.Where(u => u.BusinessProductId == data.ProductId && u.IsBaseUnit).Select(u => u.Id).SingleAsync(Token);
+        return new(owner.TenantId, owner.BranchId, destination.Id, [new(data.ProductId, unit, 1m)]);
+    }
+
+    private static async Task<string> WriteTransfer(IServiceProvider source, RequestTransferCommand command, CancellationToken token) =>
+        JsonSerializer.Serialize(await source.GetRequiredService<RequestTransferHandler>().HandleAsync(command, token), Json);
 
     [Theory]
     [InlineData("supplier")]

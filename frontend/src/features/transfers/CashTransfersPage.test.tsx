@@ -4,10 +4,12 @@ import { CashTransfersPage } from './CashTransfersPage'
 import { cashServer, sentCash } from './cash.test.support'
 import { id, mountTransfers, other, workspace } from './transfers.test.support'
 
+function openDispatch() { fireEvent.click(screen.getByRole('button', { name: 'Nuevo envío de sencillo' })) }
 async function selectCash() {
   await screen.findAllByRole('option', { name: /apertura UTC/ }); fireEvent.change(screen.getByRole('combobox', { name: 'Caja para sencillo' }), { target: { value: id(302) } }); await screen.findByText(/Caja ABIERTA/)
 }
 async function dispatch() {
+  openDispatch()
   await selectCash(); fireEvent.change(screen.getByRole('combobox', { name: 'Sucursal destino de sencillo' }), { target: { value: other.id } }); fireEvent.change(screen.getByRole('textbox', { name: 'Importe de sencillo PEN' }), { target: { value: '1.0001' } })
   fireEvent.click(screen.getByRole('checkbox', { name: /Revisé caja origen/ })); const button = screen.getByRole('button', { name: 'Confirmar despacho de sencillo' }); fireEvent.click(button); fireEvent.click(button)
 }
@@ -29,22 +31,24 @@ it('receives the entire pending amount once into another open destination sessio
 it('denies Pharmacist before all cash requests and limits Cashier to its own session', async () => {
   const fake = cashServer(); const view = mountTransfers(fake, <CashTransfersPage />, '', { ...workspace, access: { ...workspace.access, role: 'pharmacist' } })
   expect(screen.getByText(/Pharmacist no tiene este permiso/)).toBeInTheDocument(); expect(fake.fetcher).not.toHaveBeenCalled(); view.unmount()
-  mountTransfers(fake, <CashTransfersPage />, '', { ...workspace, access: { ...workspace.access, role: 'cashier' } }); await selectCash()
+  mountTransfers(fake, <CashTransfersPage />, '', { ...workspace, access: { ...workspace.access, role: 'cashier' } }); openDispatch(); await selectCash()
   expect(fake.fetcher.mock.calls.some(([path]) => String(path).includes('/cash-sessions/active'))).toBe(false); expect(screen.getByRole('combobox', { name: 'Destino de consulta' })).toBeDisabled()
 })
 it('does not open cash automatically and blocks zero, excessive, out-of-range and overprecision amounts', async () => {
   const fake = cashServer(); fake.cash.open = false; const view = mountTransfers(fake, <CashTransfersPage />)
+  openDispatch()
   await screen.findByRole('link', { name: /Ir a Caja/ }); expect(screen.getByRole('button', { name: 'Confirmar despacho de sencillo' })).toBeDisabled(); expect(fake.writes()).toHaveLength(0)
-  view.unmount(); fake.cash.open = true; mountTransfers(fake, <CashTransfersPage />); await selectCash(); fireEvent.change(screen.getByRole('combobox', { name: 'Sucursal destino de sencillo' }), { target: { value: other.id } })
+  view.unmount(); fake.cash.open = true; mountTransfers(fake, <CashTransfersPage />); openDispatch(); await selectCash(); fireEvent.change(screen.getByRole('combobox', { name: 'Sucursal destino de sencillo' }), { target: { value: other.id } })
   for (const value of ['0', '10.0001', '0.00001', '100000000000000']) { fireEvent.change(screen.getByRole('textbox', { name: 'Importe de sencillo PEN' }), { target: { value } }); fireEvent.click(screen.getByRole('checkbox', { name: /Revisé caja origen/ })); expect(screen.getByRole('button', { name: 'Confirmar despacho de sencillo' })).toBeDisabled() }
   expect(fake.writes()).toHaveLength(0)
 })
 it('requires a new review after changing the cash session and rejects a foreign-membership cashier session', async () => {
-  const fake = cashServer(); fake.cash.sessions.push(id(303)); const view = mountTransfers(fake, <CashTransfersPage />); await selectCash()
+  const fake = cashServer(); fake.cash.sessions.push(id(303)); const view = mountTransfers(fake, <CashTransfersPage />); openDispatch(); await selectCash()
   fireEvent.change(screen.getByRole('combobox', { name: 'Sucursal destino de sencillo' }), { target: { value: other.id } }); fireEvent.change(screen.getByRole('textbox', { name: 'Importe de sencillo PEN' }), { target: { value: '1' } }); fireEvent.click(screen.getByRole('checkbox', { name: /Revisé caja origen/ }))
   expect(screen.getByRole('button', { name: 'Confirmar despacho de sencillo' })).toBeEnabled(); fireEvent.change(screen.getByRole('combobox', { name: 'Caja para sencillo' }), { target: { value: id(303) } })
   await waitFor(() => expect(screen.getByRole('checkbox', { name: /Revisé caja origen/ })).not.toBeChecked()); expect(fake.writes()).toHaveLength(0)
   view.unmount(); fake.cash.membershipId = id(999); mountTransfers(fake, <CashTransfersPage />, '', { ...workspace, access: { ...workspace.access, role: 'cashier' } })
+  openDispatch()
   await screen.findByText('No pudimos consultar cajas'); expect(screen.getByRole('button', { name: 'Confirmar despacho de sencillo' })).toBeDisabled()
 })
 it('preserves uncertain dispatch across reload, even after a matching pending record is consulted', async () => {
