@@ -93,9 +93,10 @@ export const offlineStorage = {
         const row = await request(store.get(result.eventId)) as OutboxRow | undefined
         if (!row || row.scope !== scopeKey(scope)) throw new Error('Respuesta de otro contexto.')
         if (row.status !== 'pending') {
+          const storedReceipt = row.result
           // A pending observation of the same server receipt may arrive after its terminal acknowledgment.
-          if (result.status === 'pending' && result.receiptId !== null && result.receiptId === row.result?.receiptId) continue
-          if (row.status !== result.status || row.result?.resultReferenceId !== result.resultReferenceId) throw new Error('Resultado terminal incompatible.')
+          if (result.status === 'pending' && result.receiptId !== null && result.receiptId === storedReceipt?.receiptId) continue
+          if (!storedReceipt || row.status !== result.status || storedReceipt.receiptId !== result.receiptId || storedReceipt.resultReferenceId !== result.resultReferenceId) throw new Error('Resultado terminal incompatible.')
           continue
         }
         row.status = result.status; row.result = result; row.attempts++; row.nextAttemptAt = Date.now() + Math.min(60_000, 2000 * 2 ** Math.min(row.attempts, 5))

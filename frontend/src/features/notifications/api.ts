@@ -3,6 +3,7 @@ import type { BranchScope } from '../../shared/api/contracts'
 import { ApiError, HttpClient } from '../../shared/api/http'
 import { JsonNumber } from '../../shared/api/exactJson'
 
+export const notificationCountStaleTime = 30_000
 export const notificationCount = (value: unknown): JsonNumber => {
   const result = decimal(value)
   if (!/^\d+$/.test(result.literal) || BigInt(result.literal) > 9223372036854775807n) throw new ApiError(0, 'client.unexpected_response')

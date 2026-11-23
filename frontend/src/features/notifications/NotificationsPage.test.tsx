@@ -1,5 +1,6 @@
-import { act, fireEvent, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, screen, waitFor, within } from '@testing-library/react'
 import { expect, it } from 'vitest'
+import { useState } from 'react'
 import { NotificationsPage } from './NotificationsPage'
 import { NotificationCounter } from './NotificationCounter'
 import { alert, id, json, managementServer, mountTransfers, n, workspace } from './management.test.support'
@@ -7,10 +8,38 @@ import { alert, id, json, managementServer, mountTransfers, n, workspace } from 
 it('shows exact server count, historical/actionable states and rereads list/counter after explicit read', async () => {
   const fake = managementServer(); fake.management.notifications = [alert, { ...alert, notificationId: id(501), title: 'Alerta histórica unitaria', isRead: true, readAt: alert.createdAt, isCurrentlyActionable: false }]; fake.management.totalCount = n('2'); fake.management.unread = n('9007199254740993')
   mountTransfers(fake, <><NotificationCounter /><NotificationsPage /></>)
-  await screen.findByText('Total del filtro: 2'); expect(screen.getByText('9007199254740993', { selector: 'small' })).toBeInTheDocument(); expect(screen.getByText(/Alerta histórica · ya no accionable/)).toBeInTheDocument()
+  await screen.findByText('Total del filtro: 2'); expect(screen.getByText('9007199254740993', { selector: 'small' })).toBeInTheDocument()
+  const historical = screen.getByRole('heading', { name: 'Alerta histórica unitaria' }).closest('article')!
+  expect(within(historical).getByText('Histórica')).toBeInTheDocument()
   fireEvent.click(screen.getAllByRole('button', { name: 'Marcar como leída' })[0]!)
   await screen.findByText(/Lectura registrada para tu membresía/); await waitFor(() => expect(screen.getAllByRole('button', { name: 'Marcar como leída' }).every(b => b.hasAttribute('disabled'))).toBe(true))
   expect(fake.writes()).toHaveLength(1); expect(fake.fetcher.mock.calls.filter(([path]) => String(path).includes('/unread-count')).length).toBeGreaterThan(1)
+})
+it('keeps the acknowledged read and reports a failed list or count refresh separately', async () => {
+  const fake = managementServer(); const normal = fake.fetcher.getMockImplementation()!
+  fake.fetcher.mockImplementation(async (path, init) => {
+    const response = await normal(path, init)
+    if (init?.method === 'POST' && String(path).endsWith('/read')) fake.management.failGet = true
+    return response
+  })
+  mountTransfers(fake, <NotificationsPage />)
+  fireEvent.click(await screen.findByRole('button', { name: 'Marcar como leída' }))
+  await screen.findByText(/Lectura registrada para tu membresía. No pudimos actualizar la lista o el contador/)
+  await waitFor(() => expect(screen.getByTestId('location')).not.toHaveTextContent('notificationRead'))
+  expect(fake.writes()).toHaveLength(1)
+})
+it('reuses the fresh branch counter when opening the page and still refetches on manual refresh', async () => {
+  const fake = managementServer()
+  function Navigation() {
+    const [open, setOpen] = useState(false)
+    return <><NotificationCounter /><button type="button" onClick={() => setOpen(true)}>Abrir notificaciones</button>{open && <NotificationsPage />}</>
+  }
+  mountTransfers(fake, <Navigation />)
+  const countCalls = () => fake.fetcher.mock.calls.filter(([path]) => String(path).includes('/unread-count')).length
+  await screen.findByLabelText('1 notificaciones no leídas en esta sucursal'); expect(countCalls()).toBe(1)
+  fireEvent.click(screen.getByRole('button', { name: 'Abrir notificaciones' })); await screen.findByText('Total del filtro: 1')
+  expect(countCalls()).toBe(1)
+  fireEvent.click(screen.getByRole('button', { name: 'Actualizar consulta' })); await waitFor(() => expect(countCalls()).toBe(2))
 })
 it.each(['pharmacist', 'cashier'] as const)('sends authorized branch for %s, never asks for unfiltered notifications or branches', async role => {
   const fake = managementServer(); mountTransfers(fake, <NotificationsPage />, '', { ...workspace, access: { ...workspace.access, role } })

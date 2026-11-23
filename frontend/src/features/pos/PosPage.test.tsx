@@ -119,12 +119,18 @@ function mount(fake: ReturnType<typeof server>, search = '') {
   const view = render(tree())
   return { ...view, changeContext: (workspace: Workspace) => view.rerender(tree(workspace)) }
 }
-async function select(quantity = '2') {
+async function select(quantity = '2', unitId?: string) {
   fireEvent.change(screen.getByRole('searchbox'), { target: { value: 'producto' } })
   fireEvent.click(await screen.findByRole('button', { name: 'Elegir presentación' }))
-  const button = await screen.findByRole('button', { name: `Seleccionar ${product.name}` })
-  fireEvent.change(screen.getByRole('textbox', { name: /Cantidad a agregar/ }), { target: { value: quantity } })
+  const choice = within(await screen.findByRole('dialog', { name: 'Agregar al ticket' }))
+  const button = choice.getByRole('button', { name: `Seleccionar ${product.name}` })
+  if (unitId) fireEvent.change(choice.getByRole('combobox', { name: /Presentación de/ }), { target: { value: unitId } })
+  fireEvent.change(choice.getByRole('textbox', { name: /Cantidad a agregar/ }), { target: { value: quantity } })
   fireEvent.click(button)
+}
+async function openCashForm() {
+  fireEvent.click(await screen.findByRole('button', { name: 'Abrir caja' }))
+  return screen.getByRole('button', { name: 'Confirmar apertura' })
 }
 async function createDraft() {
   const button = screen.getByRole('button', { name: 'Cobrar' })
@@ -149,7 +155,7 @@ async function prepareVoid(fake: ReturnType<typeof server>) {
   fireEvent.click(screen.getByRole('button', { name: 'Confirmar venta y registrar pagos' }))
   await screen.findByRole('article', { name: 'Ticket interno' })
   await waitFor(() => expect(screen.getByRole('button', { name: 'Seguir vendiendo sin imprimir' })).toBeEnabled())
-  fireEvent.click(screen.getByText('Anular esta venta', { selector: 'summary' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Anular esta venta' }))
   fireEvent.change(screen.getByRole('textbox', { name: 'Motivo de anulación' }), { target: { value: ' Motivo unitario ' } })
   fireEvent.click(screen.getByRole('checkbox', { name: /Revisé la devolución/ }))
   return view
@@ -169,13 +175,13 @@ describe('POS local cart, cash and persisted draft', () => {
   it('does not interpret an early confirmed state as failure of an uncertain void', async () => {
     const fake = server(); fake.state.loseVoid = true; fake.state.storeVoid = false; const view = await prepareVoid(fake)
     fireEvent.click(screen.getByRole('button', { name: 'Confirmar anulación' }))
-    await screen.findByText(/Que aún aparezca confirmada no demuestra/)
+    await screen.findAllByText(/Que aún aparezca confirmada no demuestra/)
     expect(screen.queryByRole('button', { name: 'Seguir vendiendo sin imprimir' })).not.toBeInTheDocument()
     const search = screen.getByTestId('location').textContent!
     expect(search).toContain('voidPending')
     view.unmount(); mount(fake, search)
     await screen.findByRole('article', { name: 'Ticket interno' })
-    expect(screen.getByRole('button', { name: 'Confirmar anulación' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Anular esta venta' })).toBeDisabled()
     fake.state.sale = { ...fake.state.sale!, status: 'voided', version: 4 }
     fireEvent.click(screen.getByRole('button', { name: 'Consultar resultado de venta' }))
     await screen.findByText('Ticket interno · ANULADA')
@@ -214,7 +220,7 @@ describe('POS local cart, cash and persisted draft', () => {
     expect(fake.writes()).toHaveLength(1)
     await waitFor(() => expect(screen.getByRole('button', { name: 'Seguir vendiendo sin imprimir' })).toBeEnabled())
     fireEvent.click(screen.getByRole('button', { name: 'Seguir vendiendo sin imprimir' }))
-    expect(screen.getByText('Tu carrito está vacío')).toBeInTheDocument()
+    expect(screen.getByText('Agrega productos desde el buscador.')).toBeInTheDocument()
     expect(screen.getByText('Caja abierta')).toBeInTheDocument()
     expect(screen.getByTestId('location').textContent).toBe('')
     expect(fake.writes()).toHaveLength(1)
@@ -245,7 +251,7 @@ describe('POS local cart, cash and persisted draft', () => {
     const fake = server(); fake.state.loseConfirm = true; fake.state.storeConfirm = false
     const view = await preparePayment(fake)
     fireEvent.click(screen.getByRole('button', { name: 'Confirmar venta y registrar pagos' }))
-    await screen.findByText(/Incluso si una lectura aún muestra borrador/)
+    await screen.findAllByText(/Incluso si una lectura aún muestra borrador/)
     expect(screen.getByRole('button', { name: 'Confirmar venta y registrar pagos' })).toBeDisabled()
     const search = screen.getByTestId('location').textContent!
     expect(search).toContain('confirmPending')
@@ -263,7 +269,18 @@ describe('POS local cart, cash and persisted draft', () => {
   it('preserves uncertainty when confirmation-state reads fail and recovers with GET only', async () => {
     const fake = server(); await preparePayment(fake); fake.state.loseConfirm = true; fake.state.failReads = true
     fireEvent.click(screen.getByRole('button', { name: 'Confirmar venta y registrar pagos' }))
-    await screen.findByText(/Incluso si una lectura aún muestra borrador/)
+    await screen.findAllByText(/Incluso si una lectura aún muestra borrador/)
+    expect(screen.getByRole('button', { name: 'Confirmar venta y registrar pagos' })).toBeDisabled()
+    fake.state.failReads = false
+    fireEvent.click(screen.getByRole('button', { name: 'Consultar resultado de venta' }))
+    await screen.findByRole('article', { name: 'Ticket interno' })
+    expect(fake.writes()).toHaveLength(1)
+  })
+  it('keeps a confirmed POST locked when the state GET fails until the original sale becomes observable', async () => {
+    const fake = server(); await preparePayment(fake); fake.state.failReads = true
+    fireEvent.click(screen.getByRole('button', { name: 'Confirmar venta y registrar pagos' }))
+    await screen.findAllByText(/El servidor respondió al envío, pero falta verificar el estado/)
+    expect(screen.getByTestId('location')).toHaveTextContent('confirmPending')
     expect(screen.getByRole('button', { name: 'Confirmar venta y registrar pagos' })).toBeDisabled()
     fake.state.failReads = false
     fireEvent.click(screen.getByRole('button', { name: 'Consultar resultado de venta' }))
@@ -325,10 +342,8 @@ describe('POS local cart, cash and persisted draft', () => {
   })
   it('retains multiple presentations across searches, edits/removes quantities, and never writes on selection', async () => {
     const fake = server(); mount(fake); await select()
-    fireEvent.change(screen.getByRole('combobox', { name: /Presentación de/ }), { target: { value: product.units[1]!.id } })
-    fireEvent.change(screen.getByRole('textbox', { name: /Cantidad a agregar/ }), { target: { value: '1' } })
-    fireEvent.click(screen.getByRole('button', { name: `Seleccionar ${product.name}` }))
-    const cart = within(screen.getByRole('region', { name: 'Carrito local' }))
+    await select('1', product.units[1]!.id)
+    const cart = within(screen.getByRole('region', { name: 'Ticket en preparación' }))
     expect(cart.getByText('2 líneas')).toBeInTheDocument()
     expect(cart.getByText('S/ 1.20')).toBeInTheDocument()
     fireEvent.change(screen.getByRole('searchbox'), { target: { value: '' } })
@@ -343,18 +358,16 @@ describe('POS local cart, cash and persisted draft', () => {
   })
   it('blocks evident aggregate shortage and invalid quantities before any write', async () => {
     const fake = server(); mount(fake); await select('1')
-    fireEvent.change(screen.getByRole('combobox', { name: /Presentación de/ }), { target: { value: product.units[1]!.id } })
-    fireEvent.change(screen.getByRole('textbox', { name: /Cantidad a agregar/ }), { target: { value: '2' } })
-    fireEvent.click(screen.getByRole('button', { name: `Seleccionar ${product.name}` }))
-    expect(within(screen.getByRole('region', { name: 'Carrito local' })).getByRole('status')).toHaveTextContent(/supera el stock/)
+    await select('2', product.units[1]!.id)
+    expect(within(screen.getByRole('region', { name: 'Ticket en preparación' })).getByRole('status')).toHaveTextContent(/supera el stock/)
     fireEvent.change(screen.getByRole('textbox', { name: /Cantidad en carrito/ }), { target: { value: '21' } })
     expect(screen.getByRole('button', { name: 'Cobrar' })).toBeDisabled()
     expect(fake.writes()).toHaveLength(0)
   })
   it('opens cash only on explicit submission, exactly serializes the amount, prevents double click and rereads current cash', async () => {
     const fake = server(); fake.state.cash = null; mount(fake); await select()
-    expect(screen.getByRole('button', { name: 'Cobrar' })).toBeDisabled()
-    const button = await screen.findByRole('button', { name: 'Abrir mi caja' })
+    expect(screen.queryByRole('button', { name: 'Cobrar' })).not.toBeInTheDocument()
+    const button = await openCashForm()
     fireEvent.change(screen.getByRole('textbox', { name: /Monto inicial/ }), { target: { value: '0.10' } })
     expect(fake.writes()).toHaveLength(0)
     fireEvent.click(button); fireEvent.click(button)
@@ -366,20 +379,20 @@ describe('POS local cart, cash and persisted draft', () => {
   })
   it('reconciles a lost cash-opening response by reads, without a second opening', async () => {
     const fake = server(); fake.state.cash = null; fake.state.loseOpen = true; mount(fake)
-    const button = await screen.findByRole('button', { name: 'Abrir mi caja' })
+    const button = await openCashForm()
     fireEvent.change(screen.getByRole('textbox', { name: /Monto inicial/ }), { target: { value: '0' } }); fireEvent.click(button)
     await screen.findByText('Caja abierta')
     expect(fake.writes()).toHaveLength(1)
-    expect(screen.queryByRole('button', { name: 'Abrir mi caja' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Abrir caja' })).not.toBeInTheDocument()
   })
   it('keeps an unresolved cash opening blocked across reload when current is still null', async () => {
     const fake = server(); fake.state.cash = null; fake.state.loseOpen = true; fake.state.storeOpen = false
-    const view = mount(fake); const button = await screen.findByRole('button', { name: 'Abrir mi caja' })
+    const view = mount(fake); const button = await openCashForm()
     fireEvent.change(screen.getByRole('textbox', { name: /Monto inicial/ }), { target: { value: '0' } }); fireEvent.click(button)
     await screen.findByText(/La apertura tiene un resultado pendiente/)
     const search = screen.getByTestId('location').textContent!; view.unmount(); mount(fake, search)
     await screen.findByText(/La apertura tiene un resultado pendiente/)
-    expect(screen.queryByRole('button', { name: 'Abrir mi caja' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Abrir caja' })).not.toBeInTheDocument()
     expect(fake.writes()).toHaveLength(1)
   })
   it('creates once on command, persists exact inputs/expectedVersion, and restores the same draft after reload', async () => {
@@ -415,9 +428,7 @@ describe('POS local cart, cash and persisted draft', () => {
   })
   it('restores both presentations and exact totals, then explicitly persists removal with the recovered version', async () => {
     const fake = server(); const view = mount(fake); await select('2')
-    fireEvent.change(screen.getByRole('combobox', { name: /Presentación de/ }), { target: { value: product.units[1]!.id } })
-    fireEvent.change(screen.getByRole('textbox', { name: /Cantidad a agregar/ }), { target: { value: '1' } })
-    fireEvent.click(screen.getByRole('button', { name: `Seleccionar ${product.name}` }))
+    await select('1', product.units[1]!.id)
     await createDraft()
     fireEvent.click(screen.getByRole('button', { name: 'Cobrar' }))
     await screen.findByText('Total a cobrar: S/ 1.20')
@@ -425,7 +436,7 @@ describe('POS local cart, cash and persisted draft', () => {
     const search = screen.getByTestId('location').textContent!
     view.unmount(); mount(fake, search)
     await screen.findByText(/Venta recuperada del servidor/)
-    const cart = within(screen.getByRole('region', { name: 'Carrito local' }))
+    const cart = within(screen.getByRole('region', { name: 'Ticket en preparación' }))
     expect(cart.getByRole('textbox', { name: /Cantidad en carrito.*Tableta/ })).toHaveValue('2')
     expect(cart.getByRole('textbox', { name: /Cantidad en carrito.*Caja de 10/ })).toHaveValue('1')
     expect(cart.getByText('S/ 1.20')).toBeInTheDocument()
@@ -508,7 +519,7 @@ describe('POS local cart, cash and persisted draft', () => {
     const search = screen.getByTestId('location').textContent!; view.unmount(); mount(fake, search)
     expect(screen.getByRole('searchbox')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: `Seleccionar ${product.name}` })).not.toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Cobrar' })).toBeDisabled()
+    expect(await screen.findByRole('button', { name: 'Cobrar' })).toBeDisabled()
     expect(fake.writes()).toHaveLength(1)
     expect(fake.state.sale?.saleId).toBe(saleId)
   })
@@ -526,7 +537,7 @@ describe('POS local cart, cash and persisted draft', () => {
     if (type === 'branch') { next.branchId = id('6'); next.branch = { ...next.branch, id: next.branchId }; next.access = { ...next.access, branchId: next.branchId } }
     else { next.session = { userId: id('99') }; next.access = { ...next.access, userId: id('99') } }
     view.changeContext(next)
-    expect(await screen.findByText('Tu carrito está vacío')).toBeInTheDocument()
+    expect(await screen.findByText('Agrega productos desde el buscador.')).toBeInTheDocument()
     expect(screen.getByRole('searchbox')).toHaveValue('')
     expect(fake.writes()).toHaveLength(0)
   })
@@ -545,7 +556,7 @@ describe('POS local cart, cash and persisted draft', () => {
     await act(async () => release(denied ? { isAllowed: false, code: 'access.membership_inactive', context: null } : result))
     if (denied) {
       expect(await screen.findByText('Tu acceso está restringido')).toBeInTheDocument()
-      expect(screen.queryByRole('region', { name: 'Carrito local' })).not.toBeInTheDocument()
+      expect(screen.queryByRole('region', { name: 'Ticket en preparación' })).not.toBeInTheDocument()
     } else expect(screen.getByRole('textbox', { name: /Cantidad en carrito/ })).toHaveValue('2')
     expect(fake.writes()).toHaveLength(0)
     view.unmount(); focusManager.setFocused(undefined)

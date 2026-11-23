@@ -13,7 +13,7 @@ import { Drawer } from '../../shared/ui/Modal'
 import { Badge } from '../../shared/ui/Badge'
 import { DateText } from '../../shared/ui/DateText'
 import type { NotificationDetails } from './api'
-import { notificationsApi } from './api'
+import { notificationCountStaleTime, notificationsApi } from './api'
 import '../../shared/styles/operations.css'
 
 export function NotificationsPage() {
@@ -29,13 +29,21 @@ function NotificationsWorkspace() {
   useEffect(() => () => abort.current?.abort(), [])
   const branches = useQuery({ queryKey: scopedKey(w, 'notification-branches', w.session.userId, w.access.membershipId), queryFn: ({ signal }) => service.branches(w.tenantId, signal), enabled: Boolean(api) && w.access.role === 'owner', retry: false, refetchOnWindowFocus: false })
   const query = useQuery({ queryKey: scopedKey(w, 'notifications', w.session.userId, w.access.membershipId, branchId, onlyUnread, offset), queryFn: ({ signal }) => api!.list(w, branchId, onlyUnread, offset, signal), enabled: Boolean(api), retry: false, refetchOnWindowFocus: false })
-  const count = useQuery({ queryKey: scopedKey(w, 'notification-count', w.session.userId, w.access.membershipId, branchId), queryFn: ({ signal }) => api!.count(w, branchId, signal), enabled: Boolean(api), retry: false, refetchOnWindowFocus: false })
+  const count = useQuery({ queryKey: scopedKey(w, 'notification-count', w.session.userId, w.access.membershipId, branchId), queryFn: ({ signal }) => api!.count(w, branchId, signal), enabled: Boolean(api), retry: false, staleTime: notificationCountStaleTime, refetchOnWindowFocus: false })
   function mark(id: string | null) { const next = new URLSearchParams(params); if (id) next.set('notificationRead', id); else next.delete('notificationRead'); setParams(next, { replace: true }) }
-  async function refresh() { await Promise.all([client.invalidateQueries({ predicate: q => q.queryKey[0] === 'tenant' && q.queryKey[1] === w.tenantId && ['notifications', 'notification-count'].includes(String(q.queryKey[3])) })]) }
+  function refresh() {
+    return client.invalidateQueries({ predicate: q => q.queryKey[0] === 'tenant' && q.queryKey[1] === w.tenantId && ['notifications', 'notification-count'].includes(String(q.queryKey[3])) }, { throwOnError: true }).then(() => true, () => false)
+  }
   async function read(id: string) {
     if (!api || running.current || pending || denied) return
     running.current = true; setBusy(true); setError(null); setNotice(''); mark(id); const controller = new AbortController(); abort.current = controller
-    try { await api.read(w, id, controller.signal); if (controller.signal.aborted) return; mark(null); setNotice('Lectura registrada para tu membresía. Se reconsultaron la lista y el contador.'); await refresh() }
+    try {
+      await api.read(w, id, controller.signal)
+      if (controller.signal.aborted) return
+      mark(null)
+      const refreshed = await refresh()
+      if (!controller.signal.aborted) setNotice(refreshed ? 'Lectura registrada para tu membresía.' : 'Lectura registrada para tu membresía. No pudimos actualizar la lista o el contador. Actualiza la consulta.')
+    }
     catch (failure) { if (!controller.signal.aborted) { setError(failure); if (failure instanceof ApiError && !failure.outcomeUnknown) mark(null); if (failure instanceof ApiError && [401, 403].includes(failure.status)) setDenied(true); await refresh() } }
     finally { running.current = false; if (!controller.signal.aborted) setBusy(false) }
   }

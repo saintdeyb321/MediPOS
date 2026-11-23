@@ -28,17 +28,20 @@ export function useCatalogWrite(select: (id: string) => void, onConfirmed?: (det
   }
   async function refresh(id: string, signal?: AbortSignal) {
     if (!http) throw new ApiError(0, 'client.https_required')
-    const result = await catalogApi(http).detail(w, id, signal)
-    if (!mounted.current) return
-    setObserved(result); select(id)
+    const api = catalogApi(http)
+    const result = await api.detail(w, id, signal)
+    if (!mounted.current || signal?.aborted) return
     client.setQueryData(scopedKey(w, 'catalog-detail', w.session.userId, w.access.membershipId, id), result)
+    let observed = result
     if (latest.current.get('catalogPending') === 'units') {
-      const configuration = await catalogApi(http).unitConfiguration(w, id, signal)
-      if (!mounted.current) return
+      const configuration = await api.unitConfiguration(w, id, signal)
+      if (!mounted.current || signal?.aborted) return
       client.setQueryData(scopedKey(w, 'unit-configuration', w.session.userId, w.access.membershipId, id), configuration)
+      observed = { ...result, units: configuration.units }
     }
+    setObserved(observed); select(id)
     for (const resource of ['catalog-products', 'product-search']) void client.invalidateQueries({ queryKey: scopedKey(w, resource) })
-    return result
+    return observed
   }
   async function run(kind: Kind, id: string | undefined, write: (signal: AbortSignal) => Promise<string>, code?: string) {
     if (running.current || pending || denied || !http || w.access.role !== 'owner') return
@@ -65,9 +68,10 @@ export function useCatalogWrite(select: (id: string) => void, onConfirmed?: (det
       if (affected) { try { await refresh(affected, controller.current.signal) } catch { /* Keep the original failure. */ } }
     } finally { running.current = false; if (mounted.current) setBusy(false) }
   }
-  async function consult(id = parameters.get('catalogProduct') ?? '') {
+  async function consult(selected = '') {
+    const id = latest.current.get('catalogProduct') || selected
     if (!isUuid(id) || running.current) return
-    running.current = true; setBusy(true); controller.current = new AbortController()
+    running.current = true; setBusy(true); setObserved(null); setError(null); controller.current = new AbortController()
     try { await refresh(id, controller.current.signal) } catch (failure) { if (mounted.current) setError(failure) }
     finally { running.current = false; if (mounted.current) setBusy(false) }
   }

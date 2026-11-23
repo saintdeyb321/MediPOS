@@ -22,12 +22,13 @@ const workspace: Workspace = { tenantId: id(2), branchId: id(3), tenantName: 'Pr
   access: { userId: id(1), tenantId: id(2), branchId: id(3), membershipId: id(5), role: 'owner', membershipIsActive: true, branchAssigned: true, withinSchedule: true, licenseStatus: 'trial', licenseStartsAt: null, licenseExpiresAt: null, evaluatedAtUtc: now } }
 function mount(lost = false) {
   let units = [unit]; let version = 1
+  let failConfiguration = false
   const json = (value: unknown) => new Response(stringifyExactJson(value), { headers: { 'Content-Type': 'application/json' } })
   const fetcher = vi.fn<typeof fetch>().mockImplementation(async (path, init) => {
     if (String(path) === '/auth/csrf') return json({ requestToken: 'synthetic-csrf' })
     if (String(path).endsWith('/unit-configuration')) {
       if (init?.method === 'PUT') { units = (parseExactJson(String(init.body)) as { units: ProductUnit[] }).units; version++; if (lost) { units = [{ ...unit, name: 'Lectura concurrente sintética' }]; throw new TypeError('Synthetic lost response') } }
-      return json({ units, version })
+      return failConfiguration ? new Response('{"code":"unit.configuration_unavailable"}', { status: 503, headers: { 'Content-Type': 'application/json' } }) : json({ units, version })
     }
     return json({ ...detail, revision: String(version), units })
   })
@@ -35,16 +36,18 @@ function mount(lost = false) {
     const [open, setOpen] = useState(true); const [dirty, setDirty] = useState(false); const [epoch, setEpoch] = useState(0)
     const write = useCatalogWrite(() => {}, () => { setDirty(false); setEpoch(value => value + 1) })
     return <><output data-testid="dirty">{String(dirty)}</output><output data-testid="pending">{String(write.pending)}</output>
+      <output data-testid="can-reconcile">{String(write.canAcknowledge)}</output>
+      <button type="button" disabled={write.busy} onClick={() => void write.consult(detail.product.id)}>Reconsultar para conciliar</button>
       <Modal open={open} title="Editar presentaciones" dirty={dirty} busy={write.busy} recovery={write.pending} onClose={() => setOpen(false)} onRecoveryClose={() => setOpen(false)}>
         <UnitEditor key={epoch} detail={detail} write={write} onDirty={setDirty} />
       </Modal></>
   }
   const http = new HttpClient(fetcher)
   render(<RuntimeProvider runtime={{ http, service: createMediPosService(http), preview: false }}><MemoryRouter><WorkspaceContext.Provider value={workspace}><Editor /></WorkspaceContext.Provider></MemoryRouter></RuntimeProvider>)
-  return fetcher
+  return { fetcher, failConfiguration: () => { failConfiguration = true } }
 }
 it('opening and reverting presentation edits are clean; confirmed save closes without false discard', async () => {
-  const fetcher = mount()
+  const { fetcher } = mount()
   const input = await screen.findByLabelText('Nombre de presentación 1')
   expect(screen.getByTestId('dirty')).toHaveTextContent('false')
   fireEvent.change(input, { target: { value: 'Edición sintética' } }); expect(screen.getByTestId('dirty')).toHaveTextContent('true')
@@ -59,7 +62,7 @@ it('opening and reverting presentation edits are clean; confirmed save closes wi
   expect(fetcher.mock.calls.filter(([, init]) => init?.method === 'PUT')).toHaveLength(1)
 })
 it('a recovery read preserves original edits and blocks resubmission while allowing a safe exit', async () => {
-  const fetcher = mount(true)
+  const { fetcher } = mount(true)
   fireEvent.change(await screen.findByLabelText('Nombre de presentación 1'), { target: { value: 'Intención original' } })
   fireEvent.click(screen.getByRole('checkbox', { name: /Revisé nombres/ })); fireEvent.click(screen.getByRole('button', { name: 'Guardar presentaciones' }))
   await waitFor(() => expect(fetcher.mock.calls.filter(([path]) => String(path).endsWith('/unit-configuration')).length).toBeGreaterThanOrEqual(3))
@@ -68,5 +71,17 @@ it('a recovery read preserves original edits and blocks resubmission while allow
   expect(screen.getByRole('button', { name: 'Guardar presentaciones' })).toBeDisabled()
   fireEvent.click(screen.getByRole('button', { name: 'Volver a la página' }))
   expect(screen.getByTestId('pending')).toHaveTextContent('true')
+  expect(fetcher.mock.calls.filter(([, init]) => init?.method === 'PUT')).toHaveLength(1)
+})
+it('clears reconciliation evidence when the new versioned configuration GET fails after product detail succeeds', async () => {
+  const { fetcher, failConfiguration } = mount(true)
+  fireEvent.change(await screen.findByLabelText('Nombre de presentación 1'), { target: { value: 'Intención original' } })
+  fireEvent.click(screen.getByRole('checkbox', { name: /Revisé nombres/ })); fireEvent.click(screen.getByRole('button', { name: 'Guardar presentaciones' }))
+  await waitFor(() => expect(screen.getByTestId('can-reconcile')).toHaveTextContent('true'))
+  const consult = screen.getByRole('button', { name: 'Reconsultar para conciliar' })
+  await waitFor(() => expect(consult).toBeEnabled()); failConfiguration(); fireEvent.click(consult)
+  await waitFor(() => expect(consult).toBeEnabled())
+  expect(screen.getByTestId('pending')).toHaveTextContent('true')
+  expect(screen.getByTestId('can-reconcile')).toHaveTextContent('false')
   expect(fetcher.mock.calls.filter(([, init]) => init?.method === 'PUT')).toHaveLength(1)
 })
