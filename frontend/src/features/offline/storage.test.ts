@@ -47,6 +47,9 @@ it('never treats a pending receipt as confirmed and preserves terminal idempoten
   const accepted = { ...pending, status: 'accepted' as const, resultCode: 'sync.sale_accepted', resultReferenceId: id(13), processedAtUtc: new Date().toISOString(), retryable: false }
   await offlineStorage.acknowledge(l, [accepted]); await offlineStorage.acknowledge(l, [{ ...accepted, isReplay: true }])
   expect((await offlineStorage.outbox(l))[0]?.status).toBe('accepted')
+  await offlineStorage.acknowledge(l, [pending]) // A tab's earlier observation can arrive after the final receipt.
+  expect((await offlineStorage.outbox(l))[0]?.result).toEqual(accepted)
+  await expect(offlineStorage.acknowledge(l, [{ ...pending, receiptId: id(99) }])).rejects.toThrow()
   await expect(offlineStorage.acknowledge(l, [{ ...accepted, status: 'rejected' }])).rejects.toThrow()
 })
 it('locks catalog and quarantines pending writes on logout/context change without cross-user access', async () => {

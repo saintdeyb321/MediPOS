@@ -6,7 +6,12 @@ import { ApiError } from '../../shared/api/http'
 import type { HttpClient } from '../../shared/api/http'
 import { isUuid } from '../access'
 import { platformApi } from './api'
-import type { LicenseAction, TrialInput } from './api'
+import type { LicenseAction, PlatformTenant, TrialInput } from './api'
+
+type License = PlatformTenant['license']
+function sameLicense(a: License, b: License) {
+  return a.licenseId === b.licenseId && a.status === b.status && a.startsAt === b.startsAt && a.expiresAt === b.expiresAt && a.maxBranches === b.maxBranches
+}
 
 export function usePlatformConsole(http: HttpClient, userId: string) {
   const api = useMemo(() => platformApi(http), [http]); const client = useQueryClient()
@@ -21,6 +26,7 @@ export function usePlatformConsole(http: HttpClient, userId: string) {
   const [busy, setBusy] = useState(false); const running = useRef(false)
   const [error, setError] = useState<unknown>(null); const [notice, setNotice] = useState(''); const [denied, setDenied] = useState(false)
   const [reconciliationRead, setReconciliationRead] = useState(false)
+  const [licenseAck, setLicenseAck] = useState<{ action: LicenseAction; license: License } | null>(null)
   const abort = useRef<AbortController | null>(null)
   useEffect(() => () => abort.current?.abort(), [])
   function mark(values: Record<string, string | null>) {
@@ -48,6 +54,8 @@ export function usePlatformConsole(http: HttpClient, userId: string) {
     }
   }
   const pending = params.get('platformPending'); const creationKey = params.get('creationKey')
+  const pendingLicense = pending === 'renew' || pending === 'suspend' || pending === 'reactivate'
+  const confirmedLicense = licenseAck?.action === pending && licenseAck.license.tenantId === tenantId ? licenseAck.license : null
   const categoryPending = params.get('categoryPending')
   const data = detail.isSuccess && !detail.isFetching ? detail.data : null
   const locked = busy || denied || Boolean(pending || creationKey || categoryPending)
@@ -107,12 +115,14 @@ export function usePlatformConsole(http: HttpClient, userId: string) {
   }
   async function change(action: LicenseAction, input: { expiresAt: string } | { status: 'trial' | 'active' | 'grace' } | Record<string, never>) {
     if (locked || !data) return
-    const observed = data; setReconciliationRead(false); mark({ platformPending: action })
+    const observed = data; setReconciliationRead(false); setLicenseAck(null); mark({ platformPending: action })
     return perform(async signal => {
-      await send(() => api.change(observed, action, input, signal))
+      const updated = await send(() => api.change(observed, action, input, signal)); signal.throwIfAborted()
+      setLicenseAck({ action, license: updated })
       const current = await api.tenant(observed.tenant.tenantId, signal); signal.throwIfAborted()
       client.setQueryData([...key, 'tenant', observed.tenant.tenantId], current)
-      mark({ platformPending: null }); setNotice('El servidor respondió y la licencia fue reconsultada. Los cambios conservan su auditoría.')
+      mark({ platformPending: null }); setLicenseAck(null)
+      setNotice(sameLicense(updated, current.license) ? 'El servidor confirmó el cambio y se reconsultó la licencia.' : 'El servidor confirmó el cambio. La licencia actual difiere del acuse recibido.')
       return true
     })
   }
@@ -121,6 +131,11 @@ export function usePlatformConsole(http: HttpClient, userId: string) {
     setReconciliationRead(false)
     await perform(async signal => {
       const current = await api.tenant(tenantId, signal)
+      signal.throwIfAborted()
+      if (pendingLicense) {
+        client.setQueryData([...key, 'tenant', tenantId], current); setReconciliationRead(true)
+        return
+      }
       const owner = await api.initialOwner(tenantId, signal); signal.throwIfAborted()
       client.setQueryData([...key, 'tenant', tenantId], current); client.setQueryData([...key, 'initial-owner', tenantId], owner); setReconciliationRead(true)
       await client.invalidateQueries({ queryKey: [...key, 'tenants'] })
@@ -142,11 +157,12 @@ export function usePlatformConsole(http: HttpClient, userId: string) {
   }
   useNavigationProtection({ busy, pending: Boolean(pending || creationKey || categoryPending) })
   return { list, detail, initialOwner, changeOwner, data, tenantId, busy, locked, error, notice, pending, creationKey, denied, reconciliationRead, refresh,
+    pendingLicense, confirmedLicense: Boolean(confirmedLicense), licenseDiffers: Boolean(confirmedLicense && reconciliationRead && data && !sameLicense(confirmedLicense, data.license)),
     categories, categoriesRead, categoryPending, readCategories, createCategory,
     acknowledgeCategory: () => { if (!busy && categoryPending && categoriesRead && categories.data?.filter(row => row.name.trim().toLocaleLowerCase('es-PE') === categoryPending.trim().toLocaleLowerCase('es-PE')).length === 1) { mark({ categoryPending: null }); setNotice('Conciliación manual registrada en esta vista. No se repitió el POST ni se afirmó idempotencia de categorías.') } },
     select: (id: string) => { if (!locked) { setNotice(''); setError(null); setReconciliationRead(false); mark({ tenant: id }) } },
     page: (id: string | null) => { if (!locked) mark({ after: id }) },
     create, reconcileCreation, change,
-    acknowledge: () => { if (!busy && data && reconciliationRead) { mark({ platformPending: null, ownerExpected: null }); setReconciliationRead(false); setNotice('El operador concilió el resultado reconsultado; no se repitió ninguna escritura.') } },
+    acknowledge: () => { if (!busy && data && reconciliationRead) { mark({ platformPending: null, ownerExpected: null }); setLicenseAck(null); setReconciliationRead(false); setNotice('El operador concilió el resultado reconsultado; no se repitió ninguna escritura.') } },
   }
 }

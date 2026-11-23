@@ -9,7 +9,9 @@ export function PlatformRecovery({ p, kind, recovered }: { p: PlatformConsoleSta
     <Button disabled={p.busy || p.denied} onClick={() => void p.reconcileCreation().then(saved => { if (saved) recovered?.() })}>Consultar constancia original sin repetir POST</Button>
   </Notice>
   if (kind === 'operation') return p.pending && !p.creationKey && <Notice tone="warning">Operación pendiente: {p.pending}. No repitas la escritura.
-    <Button disabled={p.busy} onClick={() => { setConfirmed(false); void p.refresh() }}>Reconsultar licencia y propietario</Button>
+    {p.confirmedLicense && <p>El servidor confirmó el cambio de licencia. Verifica el estado actual antes de continuar.</p>}
+    {p.licenseDiffers && <p>La licencia consultada difiere del acuse. Comprueba el estado actual de la botica.</p>}
+    <Button disabled={p.busy || p.denied} onClick={() => { setConfirmed(false); void p.refresh() }}>{p.pendingLicense ? 'Reconsultar licencia' : 'Reconsultar licencia y propietario'}</Button>
     <label><input type="checkbox" disabled={p.busy || !p.reconciliationRead} checked={confirmed} onChange={event => setConfirmed(event.target.checked)} /> Verifiqué el resultado original y que no hay solicitud en curso.</label>
     <Button disabled={p.busy || !confirmed || !p.reconciliationRead} onClick={() => { p.acknowledge(); setConfirmed(false); recovered?.() }}>Continuar tras conciliación</Button>
   </Notice>

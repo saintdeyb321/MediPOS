@@ -11,6 +11,9 @@ using MediPOS.Application.Modules.TenancyLicensing.CreateTenant;
 using MediPOS.Domain.Modules.AuditSupport;
 using MediPOS.Domain.Modules.IdentityAccess;
 using MediPOS.UnitTests.Modules.TenancyLicensing;
+using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Authentication.OpenIdConnect;
+using Microsoft.AspNetCore.Http;
 
 namespace MediPOS.UnitTests.Modules.IdentityAccess;
 
@@ -72,6 +75,43 @@ public sealed class InitialOwnerOnboardingTests
         Assert.Single(state.Audits, audit => audit.Action == AuditAction.InitialOwnerClaimed);
     }
     [Fact]
+    public async Task CallbackFailureInSecondTenantDoesNotIssueMediPosIdentityAndRetryClaimsOnlyTheRemainingTenant()
+    {
+        var state = new State();
+        var rows = new[] { state.Invite("owner@example.test"), state.Invite("owner@example.test") }.OrderBy(row => row.TenantId).ToArray();
+        state.TenantWithReadFailure = rows[1].TenantId;
+        var google = new ClaimsPrincipal(new ClaimsIdentity([
+            new Claim("sub", "stable-subject"), new Claim("email", "owner@example.test"),
+            new Claim("name", "Owner"), new Claim("email_verified", "true")], "validated-provider-test"));
+
+        static (GoogleAuthenticationEvents Events, TicketReceivedContext Ticket) Callback(State state, ClaimsPrincipal google)
+        {
+            const string scheme = "synthetic-oidc";
+            var source = new VerifiedGoogleIdentitySource();
+            var clock = new Clock();
+            var settings = new GoogleAuthenticationSettings("", "", new Uri("https://unit.test"), 30, "", "", "", false, []);
+            return (new(source, new(source, state, clock, state.Service()), settings, clock),
+                new(new DefaultHttpContext { RequestAborted = Token }, new AuthenticationScheme(scheme, null, typeof(OpenIdConnectHandler)),
+                    new OpenIdConnectOptions(), new AuthenticationTicket(google, new AuthenticationProperties(), scheme)));
+        }
+
+        var failed = Callback(state, google);
+        await Assert.ThrowsAsync<IOException>(() => failed.Events.TicketReceived(failed.Ticket));
+        Assert.Same(google, failed.Ticket.Principal);
+        Assert.Null(failed.Ticket.Properties!.ExpiresUtc);
+        Assert.Equal("claimed", rows[0].Status);
+        Assert.Equal("pending", rows[1].Status);
+
+        state.TenantWithReadFailure = null;
+        var retry = Callback(state, google);
+        await retry.Events.TicketReceived(retry.Ticket);
+        Assert.Equal("/", retry.Ticket.ReturnUri);
+        Assert.Equal(rows[0].ClaimedUserId, rows[1].ClaimedUserId);
+        Assert.Equal(rows[0].ClaimedUserId!.Value.ToString("D"), Assert.Single(retry.Ticket.Principal!.Claims).Value);
+        Assert.Equal(2, state.Memberships.Count);
+        Assert.Equal(2, state.Audits.Count(audit => audit.Action == AuditAction.InitialOwnerClaimed));
+    }
+    [Fact]
     public async Task RevocationAndReplacementRequireTheOriginalPendingIdentityAndNeverTransferClaimedOwner()
     {
         var state = new State(); var row = state.Invite("wrong@example.test"); var service = state.Service();
@@ -131,6 +171,7 @@ public sealed class InitialOwnerOnboardingTests
     {
         public Guid Actor { get; } = Guid.NewGuid(); public bool Operable = true; public bool PlatformAllowed = true;
         public Guid? ScopeTenantOverride;
+        public Guid? TenantWithReadFailure;
         public List<InitialOwnerInvitation> Invitations { get; } = []; public List<Membership> Memberships { get; } = []; public List<AuditLog> Audits { get; } = [];
         private readonly Dictionary<string, User> _users = new(StringComparer.Ordinal);
         public InitialOwnerInvitations Service() => new(this, this, this, this, new Clock());
@@ -140,7 +181,9 @@ public sealed class InitialOwnerOnboardingTests
         public Task SetClaimantAsync(Guid actor, CancellationToken token) => Task.CompletedTask;
         public Task AddAsync(InitialOwnerInvitation row, AuditLog audit, CancellationToken token) { Invitations.Add(row); Audits.Add(audit); return Task.CompletedTask; }
         public Task SaveAsync(InitialOwnerInvitation row, AuditLog audit, CancellationToken token) { Audits.Add(audit); return Task.CompletedTask; }
-        public Task<InitialOwnerInvitation?> CurrentAsync(Guid tenant, CancellationToken token) => Task.FromResult(Invitations.LastOrDefault(row => row.TenantId == tenant));
+        public Task<InitialOwnerInvitation?> CurrentAsync(Guid tenant, CancellationToken token) => tenant == TenantWithReadFailure
+            ? Task.FromException<InitialOwnerInvitation?>(new IOException("Synthetic invitation persistence failure."))
+            : Task.FromResult(Invitations.LastOrDefault(row => row.TenantId == tenant));
         public async Task<InitialOwnerDetails?> ReadAsync(Guid tenant, Guid actor, CancellationToken token) => await CurrentAsync(tenant, token) is { } row ? InitialOwnerInvitations.Details(row) : null;
         public Task<IReadOnlyList<Guid>> PendingTenantsAsync(Guid user, string subject, string email, CancellationToken token) => Task.FromResult<IReadOnlyList<Guid>>(Invitations.Where(row => row.Status == "pending" && row.NormalizedEmail == email).Select(row => row.TenantId).ToArray());
         public Task<User> UpsertGoogleUserAsync(User user, CancellationToken token)

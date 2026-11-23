@@ -13,8 +13,8 @@ const time = '2026-10-17T12:00:00Z'
 const json = (value: unknown, status = 200) => new Response(JSON.stringify(value), { status, headers: { 'Content-Type': 'application/json' } })
 type Invitation = { invitationId: string; email: string; status: 'pending' | 'claimed' | 'revoked'; createdAt: string; userId: string | null }
 function fixture() {
-  const state = { admission: 200, lost: false, invisible: false, duplicateCategory: false, reject: 0, listFailure: 0, afterReceiptListFailure: 0, detailFailure: 0, receipt: false, owner: null as string | null, invitation: null as Invitation | null, status: 'trial', categories: [] as { id: string; name: string; isActive: boolean; createdAt: string }[] }
-  const license = () => ({ tenantId: id(2), licenseId: id(3), status: state.status, startsAt: time, expiresAt: '2026-11-16T12:00:00Z', maxBranches: 2 })
+  const state = { admission: 200, lost: false, invisible: false, duplicateCategory: false, reject: 0, listFailure: 0, afterReceiptListFailure: 0, detailFailure: 0, ownerReadFailure: 0, receipt: false, owner: null as string | null, invitation: null as Invitation | null, status: 'trial', expiresAt: '2026-11-16T12:00:00Z', categories: [] as { id: string; name: string; isActive: boolean; createdAt: string }[] }
+  const license = () => ({ tenantId: id(2), licenseId: id(3), status: state.status, startsAt: time, expiresAt: state.expiresAt, maxBranches: 2 })
   const tenant = () => ({ tenantId: id(2), tradingName: 'Synthetic QA botica', createdAt: time, administration: { licenseStatus: state.status, expiresAt: license().expiresAt, maxBranches: 2, ownerStatus: state.invitation?.status ?? (state.owner ? 'active' : 'unassigned'), ownerEmail: state.invitation?.email ?? null, ownerName: null } })
   const fetcher = vi.fn<typeof fetch>().mockImplementation(async (path, init) => {
     const p = String(path).split('?')[0]; const method = init?.method ?? 'GET'
@@ -41,7 +41,7 @@ function fixture() {
     if (p === '/platform/catalog/categories') return json(state.invisible ? [] : state.categories)
     if (p === '/platform/tenants') return state.listFailure ? json({ code: 'unit.read_failed' }, state.listFailure) : json({ items: [tenant()], nextAfterTenantId: null })
     if (p?.endsWith('/details')) return state.detailFailure ? json({ code: 'access.platform_denied' }, state.detailFailure) : json({ tenant: tenant(), license: license(), initialOwnerUserId: state.owner })
-    if (p?.endsWith('/initial-owner')) return json({ invitation: state.invitation })
+    if (p?.endsWith('/initial-owner')) return state.ownerReadFailure ? json({ code: 'unit.read_failed' }, state.ownerReadFailure) : json({ invitation: state.invitation })
     if (p?.endsWith('/initial-owner/change') || p?.endsWith('/initial-owner/revoke')) {
       const body = JSON.parse(String(init?.body)) as { expectedInvitationId: string; email?: string }
       expect(body.expectedInvitationId).toBe(state.invitation?.invitationId)
@@ -50,6 +50,7 @@ function fixture() {
     }
     if (method === 'POST' && /\/(suspend|renew|reactivate)$/.test(p!)) {
       state.status = p?.endsWith('/suspend') ? 'suspended' : 'active'
+      if (p?.endsWith('/renew')) state.expiresAt = (JSON.parse(String(init?.body)) as { expiresAt: string }).expiresAt
       if (state.lost) throw new TypeError('Synthetic lost response'); return json(license())
     }
     throw new Error('Unexpected or retired UI route: ' + p)
@@ -158,19 +159,45 @@ it('shows an already claimed Owner without permitting an initial reassignment', 
   await screen.findByText(/Propietario inicial registrado/)
   expect(screen.queryByRole('button', { name: 'Corregir o revocar Gmail pendiente' })).not.toBeInTheDocument(); expect(fake.writes()).toHaveLength(0)
 })
-it('reconciles an uncertain suspension with fresh reads before clearing its marker, without repeating POST', async () => {
-  const fake = fixture(); fake.state.lost = true; mount(fake, '?tenant=' + id(2))
+it('reconciles an uncertain suspension without consulting the unavailable Owner or repeating POST', async () => {
+  const fake = fixture(); fake.state.lost = true; fake.state.ownerReadFailure = 503; mount(fake, '?tenant=' + id(2))
   fireEvent.click(await screen.findByRole('button', { name: 'Gestionar licencia' }))
   fireEvent.change(screen.getByRole('combobox', { name: 'Operación de licencia' }), { target: { value: 'suspend' } })
   fireEvent.click(screen.getByRole('checkbox', { name: 'Confirmo el cambio de la licencia seleccionada.' })); fireEvent.click(screen.getByRole('button', { name: 'Aplicar cambio de licencia' }))
   const dialog = screen.getByRole('dialog', { name: 'Gestionar licencia' })
-  const read = await within(dialog).findByRole('button', { name: 'Reconsultar licencia y propietario' })
+  const read = await within(dialog).findByRole('button', { name: /Reconsultar licencia/ })
+  const ownerReads = fake.fetcher.mock.calls.filter(([path]) => String(path).endsWith('/initial-owner')).length
   await waitFor(() => expect(read).toBeEnabled()); fireEvent.click(read)
   const confirm = within(dialog).getByRole('checkbox', { name: /Verifiqué el resultado original/ })
   await waitFor(() => expect(confirm).toBeEnabled()); fireEvent.click(confirm)
   fireEvent.click(within(dialog).getByRole('button', { name: 'Continuar tras conciliación' }))
   await screen.findByRole('dialog', { name: 'Ficha de botica' }); expect(fake.writes()).toHaveLength(1)
   expect(screen.getByTestId('location')).not.toHaveTextContent('platformPending')
+  expect(fake.fetcher.mock.calls.filter(([path]) => String(path).endsWith('/initial-owner'))).toHaveLength(ownerReads)
+})
+it('identifies a confirmed suspension after a failed detail GET and distinguishes a later state', async () => {
+  const fake = fixture(); const normal = fake.fetcher.getMockImplementation()!
+  fake.fetcher.mockImplementation(async (path, init) => {
+    const response = await normal(path, init)
+    if (init?.method === 'POST' && String(path).endsWith('/suspend')) fake.state.detailFailure = 503
+    return response
+  })
+  mount(fake, '?tenant=' + id(2))
+  fireEvent.click(await screen.findByRole('button', { name: 'Gestionar licencia' }))
+  fireEvent.change(screen.getByRole('combobox', { name: 'Operación de licencia' }), { target: { value: 'suspend' } })
+  fireEvent.click(screen.getByRole('checkbox', { name: 'Confirmo el cambio de la licencia seleccionada.' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Aplicar cambio de licencia' }))
+  const dialog = within(screen.getByRole('dialog', { name: 'Gestionar licencia' }))
+  await dialog.findByText(/El servidor confirmó el cambio de licencia/)
+  const confirm = dialog.getByRole('checkbox', { name: /Verifiqué el resultado original/ })
+  expect(confirm).toBeDisabled()
+  expect(screen.getByTestId('location')).toHaveTextContent('platformPending=suspend')
+  fake.state.status = 'active'; fake.state.detailFailure = 0
+  fireEvent.click(await dialog.findByRole('button', { name: /Reconsultar licencia/ }))
+  await dialog.findByText(/La licencia consultada difiere del acuse/)
+  await waitFor(() => expect(confirm).toBeEnabled()); fireEvent.click(confirm)
+  fireEvent.click(dialog.getByRole('button', { name: 'Continuar tras conciliación' }))
+  await screen.findByRole('dialog', { name: 'Ficha de botica' }); expect(fake.writes()).toHaveLength(1)
 })
 it.each(['renew', 'reactivate'] as const)('closes a confirmed %s and keeps the server license identity', async action => {
   const fake = fixture(); if (action === 'reactivate') fake.state.status = 'suspended'; mount(fake, '?tenant=' + id(2))

@@ -1,6 +1,6 @@
 # Estado actual de MediPOS
 
-Revisión documental del 23 de noviembre de 2026. Rama local `ci/postgres-diagnostics-8bc6b4c`, HEAD y referencia auditada `ecfb687f4eaaca2e850249e3d94519803c99cd32`. El árbol ya incluía ajustes locales de S4 y documentación. [SPEC](SPEC.md), [ARCHITECTURE](ARCHITECTURE.md) y [ADR](ADR.md) definen el producto y sus límites.
+Revisión del 23 de noviembre de 2026. Rama local `ci/postgres-diagnostics-8bc6b4c`, HEAD `d21630319d79fc40bf29e41f108561d53d9271c9`. El árbol inicial estaba limpio y ahora contiene los cambios del Lote 2 sin commit. [SPEC](SPEC.md), [ARCHITECTURE](ARCHITECTURE.md) y [ADR](ADR.md) definen el producto y sus límites.
 
 - **CODE_READY** indica que el flujo existe en código y puede pasar a verificación.
 - **Probado** exige evidencia de una comprobación concreta con SHA, alcance y entorno registrados.
@@ -19,6 +19,12 @@ El 2 de noviembre se observaron HTTP 200 en React y readiness, 401 en sesión de
 **Próxima simulación.** Confirmar readiness, abrir DEV con Gmail A en un perfil Chrome y verificar la entrada automática a Plataforma. Si se requieren cero boticas antes de las altas, aprobar primero A de S4 (respaldo privado de esquema 39 y ensayo real con rollback). B (limpieza comercial) requiere el PASS de A y otra aprobación. Después, A designa a B al crear una botica Trial y B reclama acceso iniciando Google en otro perfil. Repetir con C para verificar aislamiento. Registrar resultados por cuenta, operación y SHA, sin datos privados. El [procedimiento S4](MEDIPOS_AUDITORIA_SUPERADMIN_V2_PLAN_CIERRE.md#9-correctivos-acotados-y-procedimiento-s4-preparado-base-e61cf352-2026-10-30) contiene el alcance y los gates.
 
 **Bloqueos del MVP.** Quedan pendientes la evidencia integral del candidato, el cierre de aceptación Chrome/PostgreSQL por roles y boticas y la verificación de recuperación operativa. S4 solo condiciona empezar con datos comerciales vacíos. La preparación de un piloto público exige sus propios gates de despliegue y operación. SUNAT/SIRE y la purga física A18 conservan su alcance diferido.
+
+### A360 · Identidad, permisos y continuidad
+
+- **Lote 1 parcialmente abierto.** Se conserva la evidencia previa de Caja (12/12) y Compras (30/30 frontend y 31/31 .NET). Cuatro casos PostgreSQL de Compras siguen pendientes. Mercadería y sencillo requieren demostrar la atomicidad entre sus transacciones y la constancia antes de integrar la recuperación.
+- **Lote 2 probado localmente.** Licencias distingue el acuse del POST de la lectura posterior y permite recuperar la licencia aunque falle la consulta de Owner. Offline conserva el acuse terminal frente a un `pending` tardío de la misma constancia. En Google, una regresión comprueba que un fallo en la segunda botica interrumpe el callback antes de emitir la identidad local y que el reintento reclama la pendiente una sola vez. Las pruebas de Personal siguen la ficha y los diálogos actuales. Vitest 62/62 y xUnit 201/201, con ESLint focalizado y builds PASS.
+- **Pendiente de aceptación.** En perfiles Chrome separados, A designa a B y C en boticas distintas. Cada cuenta verifica su reclamo y la denegación cruzada. Con una sesión comercial abierta, A comprueba suspensión y reactivación. B incorpora a C como trabajador de su botica y comprueba sede, horario y revocación. En un entorno de pruebas autorizado, verificar el mismo evento offline en dos pestañas, pérdida de respuesta y revocación de dispositivo con PostgreSQL 18 real. El Lote 3 queda para revisión posterior.
 
 ## CI y primer candidato
 
