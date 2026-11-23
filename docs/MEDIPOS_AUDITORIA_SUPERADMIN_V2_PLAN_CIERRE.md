@@ -1,3 +1,5 @@
+> **Registro histórico de Superadmin V2.** La sección 9 conserva el procedimiento S4 sujeto a aprobación. El estado vigente se mantiene en [CURRENT_STATE.md](CURRENT_STATE.md).
+
 # MediPOS — Auditoría y plan de cierre Superadmin V2
 
 **Fecha:** 2026-10-30  
@@ -262,7 +264,8 @@ $sha=(Get-FileHash -LiteralPath $backup -Algorithm SHA256).Hash
 $secretId=(Select-Xml -Path backend/src/MediPOS.Api/MediPOS.Api.csproj -XPath '//UserSecretsId').Node.InnerText
 $secret=Join-Path $env:APPDATA ('Microsoft\UserSecrets\'+$secretId+'\secrets.json')
 Copy-Item -LiteralPath $secret -Destination "$root\secrets.original.private.json"
-if((Get-FileHash $secret).Hash -cne (Get-FileHash "$root\secrets.original.private.json").Hash){throw 'Configuración no coincide'}
+$settingsSha=(Get-FileHash -LiteralPath $secret -Algorithm SHA256).Hash
+if($settingsSha -cne (Get-FileHash "$root\secrets.original.private.json").Hash){throw 'Configuración no coincide'}
 $plan=Join-Path $root 'plan'
 & .\backend\tools\New-DevS4RestorePlan.ps1 -Archive $backup -ExpectedArchiveSha256 $sha -PrivateDirectory $plan
 if(-not $? -or -not(Test-Path "$plan\manifest.json")){throw 'Plan incompleto: no ejecutar SQL'}
@@ -276,6 +279,7 @@ En la **misma consola** (o recuperar `$root` como la ruta privada exacta ya regi
 
 ```powershell
 function Test-S4Files {
+  if((Get-FileHash -LiteralPath $secret).Hash -cne $settingsSha -or (Get-FileHash "$root\secrets.original.private.json").Hash -cne $settingsSha){throw 'Configuración o respaldo privado cambió'}
   if((Get-FileHash "$plan\manifest.json" -Algorithm SHA256).Hash -cne $manifestSha){throw 'Manifiesto modificado'}
   $m=Get-Content "$plan\manifest.json" -Raw|ConvertFrom-Json
   if($m.State -cne 'PREPARED_NOT_EXECUTED' -or $m.Database -cne 'medipos_dev' -or $m.Port -ne 5432 -or $m.Migrations -ne 39 -or $m.ArchiveSha256 -cne $sha){throw 'Manifiesto distinto'}
@@ -323,3 +327,10 @@ if($LASTEXITCODE -ne 0 -or -not(Select-String -LiteralPath "$root\inspect-after-
 ```
 
 **Bloqueos reales actuales:** no autorización de mantenimiento destructivo, backup39 fresco ni recuperación ensayada; compatibilidad del SQL nativo con ese respaldo aún no ejecutada. Plan preparado/static checks no equivalen a restauración PASS. S4 **PREPARED / NO-GO para ejecución**, sin datos/configuración/permisos cambiados, sin servicios reiniciados. Los dos Gmail/Chrome y pruebas externas SA1–SA3 conservan sus pendientes anteriores.
+
+**Revisión operativa del 2 de noviembre de 2026.** DEV 18.4 tiene 39 migraciones, 62 tablas, 56 FORCE RLS, 13 guards privados y runtime restringido. Una consulta de solo lectura confirmó tres usuarios, el UUID aprobado con correo Google verificado, una categoría y tres boticas. Las vistas, tablas particionadas, secuencias y objetos de replicación inventariados están ausentes. La decodificación offline del respaldo histórico 38 mostró 61 TABLE DATA, DROP/CREATE de `unaccent` y `pg_trgm` sin CASCADE y triggers creados después de COPY. El archivo 39 y su recuperación siguen pendientes.
+
+El generador admite únicamente los tipos de entrada TOC revisados y conserva los límites de espera locales. La comprobación con SQL nativo del respaldo histórico verificó que solo cambiaron ocho bytes de su preámbulo. El preflight exige que la versión predeterminada de cada extensión coincida con la instalada. La captura incluye privilegios efectivos predeterminados, propietarios y otorgantes. Si se pierde la respuesta de COMMIT, ejecutar únicamente `inspect.psql`. El rollback exige que los 49 conjuntos sigan vacíos y que los 13 preservados coincidan con el ensayo. Las entradas operativas son los archivos `.psql` de §9. Los dos `*-restore.sql` contienen DDL para inclusión dentro de sus transacciones.
+
+- **A. Pendiente de autorización.** Detener únicamente DEV 7243, congelar operaciones, respaldar privadamente `medipos_dev` y su configuración según §9, comprobar SHA/TOC, ensayar la restauración completa en la misma base y exigir igualdad de filas, esquema y permisos antes y después del ROLLBACK. Conservar evidencia privada. Al finalizar, reabrir DEV con los datos originales. Cualquier escritura posterior al ensayo exige un nuevo respaldo y validación antes de B.
+- **B. Pendiente de una segunda autorización y del PASS real de A.** Confirmar expresamente la pérdida de los datos de simulación de las 49 tablas, incluidas las tres boticas y su historial. Verificar de nuevo el baseline bajo bloqueo, preservar las 13 tablas, la identidad aprobada, RLS y permisos. Reanudar simulaciones solo con `S4_STATE_EMPTY_COMMERCIAL` verificado.

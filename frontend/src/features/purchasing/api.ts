@@ -32,12 +32,13 @@ export function purchasingApi(http: HttpClient) {
   const root = (scope: BranchScope) => `/api/tenants/${uuid(scope.tenantId)}`
   return {
     async recoverSupplier(scope: BranchScope, id: string, signal?: AbortSignal) { return supplier(await recoverOperation(http, scope, id, 'supplier', signal)) },
+    async recoverCreation(scope: BranchScope, id: string, signal?: AbortSignal) { return scoped(await recoverOperation(http, scope, id, 'purchase-draft', signal), scope) },
     async suppliers(scope: BranchScope, offset = 0, limit = 20, signal?: AbortSignal) {
       return array(supplier)(await http.request(`${branchPath(scope)}/suppliers?${purchasePage(offset, limit)}`, { signal, exactNumbers: true }))
     },
     createSupplier: (scope: BranchScope, input: SupplierInput, signal?: AbortSignal, intention?: OperationIntention) => write(http, root(scope) + '/suppliers', 'POST', input, supplier, signal, intention),
-    create: (scope: BranchScope, supplierId: string | null, documentReference: string | null, signal?: AbortSignal) =>
-      write(http, branchPath(scope) + '/purchases', 'POST', { supplierId: supplierId === null ? null : uuid(supplierId), documentReference }, data => scoped(data, scope), signal),
+    create: (scope: BranchScope, supplierId: string | null, documentReference: string | null, signal: AbortSignal, intention: OperationIntention) =>
+      write(http, branchPath(scope) + '/purchases', 'POST', { supplierId: supplierId === null ? null : uuid(supplierId), documentReference }, data => scoped(data, scope), signal, intention),
     async read(scope: BranchScope, id: string, signal?: AbortSignal): Promise<PurchaseView> {
       const result = object({ purchase, lines: array(line), revision: text })(await http.request(`${branchPath(scope)}/purchases/${uuid(id)}`, { signal, exactNumbers: true }))
       scoped(result.purchase, scope, id); return result

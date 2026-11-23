@@ -25,6 +25,7 @@ const messages: Record<string, string> = {
   'client.precision_unsupported': 'Este navegador no puede conservar los decimales del servidor. Usa una versión actualizada.',
   'client.network_error': 'No pudimos conectar con MediPOS. Comprueba tu conexión y vuelve a intentarlo.',
   'client.unexpected_response': 'El servidor no devolvió una respuesta de MediPOS válida. Revisa la conexión y la configuración del sitio.',
+  'client.purchase_recovery_storage_unavailable': 'Habilita el almacenamiento de este sitio en el navegador para poder recuperar el alta si se pierde la respuesta.',
   'client.invalid_sale_id': 'El identificador del borrador no es válido. Usa su dirección guardada o recupera el identificador correcto.',
   'cash_session.already_open': 'Ya tienes una caja abierta en esta sucursal. Consulta su estado antes de continuar.',
   'cash_session.invalid_opening_amount': 'El monto inicial debe ser no negativo y tener como máximo cuatro decimales.',

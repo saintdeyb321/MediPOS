@@ -2,10 +2,12 @@ import { act, fireEvent, screen, waitFor, within } from '@testing-library/react'
 import { useEffect } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import type { QueryClient } from '@tanstack/react-query'
-import { expect, it } from 'vitest'
+import { beforeEach, expect, it } from 'vitest'
 import { scopedKey } from '../../shared/api/contracts'
 import { id, json, mountOperation, operationServer, purchase, storedLine, time, workspace } from '../../test/operations'
 import { PurchasesPage } from './PurchasesPage'
+
+beforeEach(() => sessionStorage.clear())
 
 async function begin(fake: ReturnType<typeof operationServer>) {
   fireEvent.click(screen.getByRole('button', { name: 'Nueva recepción' }))
@@ -80,33 +82,59 @@ it('invalidates receipt stock, lots, expiration and POS search only in the affec
     expect(client.getQueryState(scopedKey({ ...workspace, branchId: id(99) }, resource))?.isInvalidated).toBe(false)
   }
 })
-it('blocks another creation on lost response and reference lookup does not silently acknowledge it', async () => {
-  const fake = operationServer(); fake.state.loseCreate = true; const view = mountOperation(fake, <PurchasesPage />)
-  if (!screen.queryByRole('textbox', { name: 'Referencia documental (opcional)' })) fireEvent.click(screen.getByRole('button', { name: 'Nueva recepción' }))
+it('recovers the original creation after a lost response and reload, even with another purchase sharing the reference', async () => {
+  const fake = operationServer(); fake.state.loseCreate = true
+  fake.state.purchases = [{ ...purchase, id: id(99), documentReference: 'REF-UNIT', status: 'confirmed', confirmedAt: time, confirmedByActorId: id(1) }]
+  let receiptStatus = 404
+  const normal = fake.fetcher.getMockImplementation()!
+  fake.fetcher.mockImplementation((path, init) => {
+    if (init?.method !== 'GET' || !String(path).includes('/operations/')) return normal(path, init)
+    const requestId = new Headers(fake.writes()[0]?.[1]?.headers).get('Idempotency-Key')
+    expect(String(path)).toBe(`/api/tenants/${workspace.tenantId}/branches/${workspace.branchId}/operations/${requestId}`)
+    return Promise.resolve(receiptStatus === 200
+      ? json({ requestId, kind: 'purchase-draft', resultJson: JSON.stringify(fake.state.purchases[1]) })
+      : json({ code: 'operation.not_observed' }, receiptStatus))
+  })
+  const view = mountOperation(fake, <PurchasesPage />)
+  fireEvent.click(screen.getByRole('button', { name: 'Nueva recepción' }))
   fireEvent.change(screen.getByRole('textbox', { name: 'Referencia documental (opcional)' }), { target: { value: 'REF-UNIT' } })
-  if (screen.getByRole('button', { name: 'Nueva recepción' }).getAttribute('disabled') === null && !screen.queryByRole('textbox', { name: 'Referencia documental (opcional)' })) fireEvent.click(screen.getByRole('button', { name: 'Nueva recepción' }))
   fireEvent.click(screen.getByRole('button', { name: 'Continuar con productos y lotes' }))
-  await screen.findByRole('heading', { name: 'Recepción pendiente de conciliación' })
+  await screen.findByRole('heading', { name: 'No pudimos completar la operación de compra' })
+  const address = screen.getByTestId('location').textContent ?? ''
+  const requestId = new Headers(fake.writes()[0]?.[1]?.headers).get('Idempotency-Key')
+  expect(requestId).toMatch(/^[a-f\d-]{36}$/); expect(address).toContain('receiptRequest=' + requestId)
+  view.unmount(); mountOperation(fake, <PurchasesPage />)
+  const recover = screen.getByRole('button', { name: 'Consultar constancia del alta' })
   expect(screen.getByRole('button', { name: 'Nueva recepción' })).toBeDisabled()
-  fireEvent.change(screen.getByRole('textbox', { name: 'Referencia de la recepción a consultar' }), { target: { value: 'REF-UNIT' } })
-  fireEvent.click(screen.getByRole('button', { name: 'Buscar referencia' }))
-  fireEvent.click(await screen.findByRole('button', { name: 'Consultar recepción de ' + time }))
+  expect(screen.queryByRole('button', { name: 'Buscar referencia' })).not.toBeInTheDocument()
+  fireEvent.click(recover)
+  await screen.findByText(/Aún no se observa una constancia confirmada/)
+  expect(screen.getByRole('button', { name: 'Nueva recepción' })).toBeDisabled()
+  receiptStatus = 200; fireEvent.click(recover)
   await screen.findByRole('region', { name: 'Productos y lotes' })
-  expect(screen.getByRole('button', { name: 'Continuar tras conciliación verificada' })).toBeDisabled()
-  expect(screen.getByTestId('location').textContent).toContain('receiptPending=create'); expect(fake.writes()).toHaveLength(1)
-  view.unmount(); mountOperation(fake, <PurchasesPage />, '?receiptPending=create&purchase=' + id(20))
-  await screen.findByRole('region', { name: 'Productos y lotes' }); expect(screen.getByRole('button', { name: 'Nueva recepción' })).toBeDisabled(); expect(fake.writes()).toHaveLength(1)
+  expect(screen.getByTestId('location').textContent).toBe('?purchase=' + id(20))
+  expect(fake.writes()).toHaveLength(1)
+  expect(fake.fetcher.mock.calls.filter(([path, init]) => init?.method === 'GET' && String(path).includes('/operations/'))).toHaveLength(2)
 })
-it('never reconciles a lost creation merely by finding an older confirmed receipt with that reference', async () => {
-  const fake = operationServer(); fake.state.loseCreate = true; fake.state.purchases = [{ ...purchase, id: id(99), status: 'confirmed', confirmedAt: time, confirmedByActorId: id(1) }]
-  mountOperation(fake, <PurchasesPage />)
-  if (!screen.queryByRole('textbox', { name: 'Referencia documental (opcional)' })) fireEvent.click(screen.getByRole('button', { name: 'Nueva recepción' }))
-  fireEvent.change(screen.getByRole('textbox', { name: 'Referencia documental (opcional)' }), { target: { value: 'REF-UNIT' } }); fireEvent.click(screen.getByRole('button', { name: 'Continuar con productos y lotes' }))
-  await screen.findByRole('heading', { name: 'Recepción pendiente de conciliación' })
+it('preserves manual verification for a legacy unkeyed marker without using an older purchase as proof', async () => {
+  const fake = operationServer(); fake.state.purchases = [{ ...purchase, id: id(99), documentReference: 'REF-UNIT', status: 'confirmed', confirmedAt: time, confirmedByActorId: id(1) }]
+  mountOperation(fake, <PurchasesPage />, '?receiptPending=create')
   fireEvent.change(screen.getByRole('textbox', { name: 'Referencia de la recepción a consultar' }), { target: { value: 'REF-UNIT' } }); fireEvent.click(screen.getByRole('button', { name: 'Buscar referencia' }))
-  const matches = await screen.findAllByRole('button', { name: 'Consultar recepción de ' + time }); fireEvent.click(matches[0]!)
+  fireEvent.click(await screen.findByRole('button', { name: 'Consultar recepción de ' + time }))
   await screen.findByRole('heading', { name: 'MERCADERÍA REGISTRADA' })
-  expect(screen.getByTestId('location').textContent).toContain('receiptPending=create'); expect(screen.getByRole('button', { name: 'Nueva recepción' })).toBeDisabled(); expect(fake.writes()).toHaveLength(1)
+  expect(screen.getByTestId('location').textContent).toContain('receiptPending=create'); expect(screen.getByRole('button', { name: 'Nueva recepción' })).toBeDisabled(); expect(fake.writes()).toHaveLength(0)
+})
+it.each([401, 403, 404, 409, 429, 503])('keeps a confirmed POST pending if the detail GET returns %s', async status => {
+  const fake = operationServer(); const normal = fake.fetcher.getMockImplementation()!
+  fake.fetcher.mockImplementation((path, init) => init?.method === 'GET' && String(path).endsWith('/purchases/' + id(20)) ? Promise.resolve(json({ code: 'unit.unavailable' }, status)) : normal(path, init))
+  mountOperation(fake, <PurchasesPage />)
+  fireEvent.click(screen.getByRole('button', { name: 'Nueva recepción' })); fireEvent.click(screen.getByRole('button', { name: 'Continuar con productos y lotes' }))
+  await screen.findByText('No pudimos completar la operación de compra')
+  expect(screen.getByRole('button', { name: 'Consultar constancia del alta' })).toBeEnabled()
+  expect(screen.getByRole('button', { name: 'Nueva recepción' })).toBeDisabled()
+  expect(screen.getByTestId('location').textContent).toContain('receiptRequest=')
+  expect(fake.writes()).toHaveLength(1)
+  expect(fake.fetcher.mock.calls.filter(([path, init]) => init?.method === 'GET' && String(path).endsWith('/purchases/' + id(20)))).toHaveLength(1)
 })
 it('keeps an uncertain line replacement blocked even when an early read shows a draft', async () => {
   const fake = operationServer(); fake.state.loseSave = true; mountOperation(fake, <PurchasesPage />)

@@ -1,3 +1,5 @@
+> **Referencia histórica.** Los hitos, estados de aprobación y comandos que siguen corresponden a su fecha de registro. Consulta [CURRENT_STATE.md](CURRENT_STATE.md) para retomar el MVP.
+
 # MediPOS — Plan maestro de integración funcional y flujo operativo
 
 **Versión de planificación:** 2026-10-16  

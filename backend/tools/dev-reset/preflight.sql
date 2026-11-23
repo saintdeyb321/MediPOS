@@ -1,19 +1,24 @@
 -- Run inside the future approved transaction, before any restore statement.
 SET LOCAL lock_timeout='5s';
+SET LOCAL statement_timeout='120s';
+SET LOCAL idle_in_transaction_session_timeout='60s';
+SET LOCAL transaction_timeout='5min';
 DO $guard$
-DECLARE names text[]; history text[]; t record;
+DECLARE names text[]; history text[]; locked_table record;
 BEGIN
   IF current_database()<>'medipos_dev' OR session_user<>'postgres' OR current_user<>session_user
     OR inet_server_port() IS DISTINCT FROM 5432 OR inet_server_addr() IS NULL OR inet_server_addr() NOT IN ('127.0.0.1'::inet,'::1'::inet)
     OR current_setting('server_version_num')::int NOT BETWEEN 180000 AND 189999 THEN RAISE EXCEPTION 'S4 target/identity mismatch'; END IF;
   IF NOT pg_try_advisory_xact_lock(1840397243) THEN RAISE EXCEPTION 'Another S4 maintenance owns the lock'; END IF;
   IF EXISTS(SELECT 1 FROM pg_stat_activity WHERE datname=current_database() AND pid<>pg_backend_pid()) THEN RAISE EXCEPTION 'Stop DEV and all other database clients first'; END IF;
-  IF EXISTS(SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname NOT LIKE 'pg_%' AND n.nspname<>'information_schema' AND c.relkind IN ('S','f','m'))
+  IF EXISTS(SELECT 1 FROM pg_class c WHERE c.relnamespace='public'::regnamespace AND c.relkind IN ('S','f','m','p','v'))
     OR EXISTS(SELECT 1 FROM pg_event_trigger) OR EXISTS(SELECT 1 FROM pg_publication)
     OR EXISTS(SELECT 1 FROM pg_subscription WHERE subdbid=(SELECT oid FROM pg_database WHERE datname=current_database()))
     OR EXISTS(SELECT 1 FROM pg_largeobject_metadata) OR EXISTS(SELECT 1 FROM pg_foreign_server)
+    OR (SELECT count(*) FROM pg_extension WHERE extname IN ('plpgsql','pg_trgm','unaccent'))<>3
     OR EXISTS(SELECT 1 FROM pg_extension WHERE extname NOT IN ('plpgsql','pg_trgm','unaccent'))
-    OR EXISTS(SELECT 1 FROM pg_namespace WHERE nspname NOT LIKE 'pg_%' AND nspname NOT IN ('public','information_schema')) THEN
+    OR EXISTS(SELECT 1 FROM pg_extension e LEFT JOIN pg_available_extensions v ON v.name=e.extname WHERE v.default_version IS DISTINCT FROM e.extversion)
+    OR EXISTS(SELECT 1 FROM pg_namespace WHERE nspname !~ '^pg_(toast|temp)(_|$)' AND nspname NOT IN ('public','information_schema','pg_catalog')) THEN
     RAISE EXCEPTION 'Unreviewed sequence/foreign object/replication/event trigger/schema: no rollback rehearsal'; END IF;
   SELECT array_agg(c.relname::text ORDER BY c.relname::text COLLATE "C") INTO names FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='public' AND c.relkind='r';
   IF names IS DISTINCT FROM ARRAY[{{ALL_TABLES}}]::text[] THEN RAISE EXCEPTION 'S4 table allowlist drift'; END IF;
@@ -28,7 +33,7 @@ BEGIN
     OR EXISTS(SELECT 1 FROM pg_auth_members WHERE member='medipos_runtime'::regrole)
     OR has_schema_privilege('medipos_runtime','public','CREATE') THEN RAISE EXCEPTION 'S4 runtime/RLS drift'; END IF;
   IF EXISTS(SELECT 1 FROM pg_constraint k JOIN pg_class c ON c.oid=k.conrelid JOIN pg_namespace n ON n.oid=c.relnamespace WHERE k.contype='f' AND k.confrelid IN (SELECT oid FROM pg_class WHERE relname=ANY(ARRAY[{{RESET_TABLES}}]::text[]) AND relnamespace='public'::regnamespace) AND (n.nspname<>'public' OR c.relname<>ALL(ARRAY[{{RESET_TABLES}}]::text[]))) THEN RAISE EXCEPTION 'Incoming dependency from preserved objects'; END IF;
-  FOR t IN SELECT c.relname FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='public' AND c.relkind='r' ORDER BY c.relname LOOP
-    EXECUTE format('LOCK TABLE public.%I IN ACCESS EXCLUSIVE MODE',t.relname);
+  FOR locked_table IN SELECT c.relname FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='public' AND c.relkind='r' ORDER BY c.relname LOOP
+    EXECUTE format('LOCK TABLE public.%I IN ACCESS EXCLUSIVE MODE',locked_table.relname);
   END LOOP;
 END $guard$;

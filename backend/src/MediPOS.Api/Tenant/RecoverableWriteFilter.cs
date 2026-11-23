@@ -12,7 +12,7 @@ public sealed class RecoverableWriteFilter(string kind) : IEndpointFilter
 {
     internal static int ReplayStatus(string operationKind) => operationKind switch
     {
-        "supplier" or "sale-draft" or "product-import" => StatusCodes.Status201Created,
+        "supplier" or "sale-draft" or "purchase-draft" or "product-import" => StatusCodes.Status201Created,
         "adjustment" or "minimum" => StatusCodes.Status200OK,
         _ => throw new InvalidOperationException("Unsupported recoverable operation."),
     };

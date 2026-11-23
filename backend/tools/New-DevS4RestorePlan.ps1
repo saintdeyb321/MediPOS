@@ -23,7 +23,10 @@ function Filter-Toc([string[]]$lines){
     $seen=@();$filtered=@()
     if(-not($lines -match '^;\s*dbname:\s*medipos_dev\s*$')){throw 'Archive is not medipos_dev'}
     foreach($line in $lines){
-        if($line -match '^\d+;\s+\d+\s+\d+\s+(SEQUENCE|BLOB|BLOBS|LARGE OBJECT|FOREIGN TABLE|MATERIALIZED VIEW|PUBLICATION|SUBSCRIPTION|DATABASE|STATISTICS DATA)\b'){throw 'Unreviewed archive object; no plan generated'}
+        if($line.Trim() -and -not $line.StartsWith(';') -and
+           $line -cnotmatch '^\d+;\s+\d+\s+\d+\s+(ACL|COMMENT|CONSTRAINT|EXTENSION|FK CONSTRAINT|FUNCTION|INDEX|POLICY|ROW SECURITY|TABLE|TABLE DATA|TRIGGER)\s+(public|-)\s+'){
+            throw 'Unreviewed archive entry type or schema'
+        }
         if($line -match '^\d+;\s+\d+\s+\d+\s+TABLE DATA\s+(\S+)\s+(\S+)\s+'){
             $schema=$matches[1];$table=$matches[2].Trim('"')
             if($schema -cne 'public' -or $table -cnotin $all -or $table -cin $seen){throw 'Unknown/duplicate archive data table'}
@@ -37,6 +40,24 @@ function Filter-Toc([string[]]$lines){
 }
 function Expand([string]$text){
     $text.Replace('{{ALL_TABLES}}',(SqlNames $all)).Replace('{{KEEP_TABLES}}',(SqlNames $policy.keepTables)).Replace('{{RESET_TABLES}}',(SqlNames $policy.resetTables)).Replace('{{MIGRATIONS}}',(SqlNames $migrations)).Replace('{{RECOVERY_SCHEMA_SQL}}',$schemaSql)
+}
+function Protect-RestorePreamble([IO.Stream]$stream){
+    # pg_restore resets the four transaction safeguards to zero. Comment just
+    # those ASCII lines before the first DDL, preserving every COPY/body byte.
+    $bytes=New-Object byte[] 16384
+    $stream.Position=0
+    $read=$stream.Read($bytes,0,$bytes.Length)
+    $prefix=[Text.Encoding]::ASCII.GetString($bytes,0,$read)
+    $ddl=[regex]::Match($prefix,'(?m)^(ALTER|CREATE|DROP) ')
+    if(-not $ddl.Success){throw 'Unrecognized pg_restore prologue'}
+    $prefix=$prefix.Substring(0,$ddl.Index)
+    foreach($setting in @('statement_timeout','lock_timeout','idle_in_transaction_session_timeout','transaction_timeout')){
+        $lines=[regex]::Matches($prefix,"(?m)^SET $setting = 0;\r?$")
+        if($lines.Count -ne 1){throw 'Unexpected pg_restore timeout prologue'}
+        $stream.Position=$lines[0].Index
+        $stream.WriteByte(45)
+        $stream.WriteByte(45)
+    }
 }
 $migrations=@(Get-ChildItem (Join-Path $repo 'backend\src\MediPOS.Infrastructure') -Recurse -File|Where-Object {$_.FullName -notmatch '\\(obj|bin)\\' -and $_.Name -match '^\d{14}_.+\.cs$' -and $_.Name -notmatch '\.Designer\.cs$'}|Select-Object -ExpandProperty BaseName|Sort-Object)
 if($migrations.Count -ne 39 -or $migrations[-1] -cne '20261030041215_AddInitialOwnerEmailOnboarding'){throw 'Only reviewed migration39 is supported'}
@@ -88,6 +109,8 @@ Write-PlanFile 'all.toc' ($toc -join "`r`n");Write-PlanFile 'reset.toc' ($filter
 $null=Native @('--clean','--if-exists','--no-statistics','--file',(Join-Path $plan 'full-restore.sql'),$archivePath)
 $null=Native @('--clean','--if-exists','--no-statistics','--use-list',(Join-Path $plan 'reset.toc'),'--file',(Join-Path $plan 'reset-restore.sql'),$archivePath)
 foreach($name in @('full-restore.sql','reset-restore.sql')){
+    $stream=[IO.File]::Open((Join-Path $plan $name),'Open','ReadWrite','None')
+    try {Protect-RestorePreamble $stream} finally {$stream.Dispose()}
     $sql=[IO.File]::ReadAllText((Join-Path $plan $name))
     if($sql -match '(?im)^\\connect\b|^\s*(?:CREATE|DROP)\s+DATABASE\b|^\s*ALTER\s+ROLE\b|^\s*ALTER\s+TABLE[^\r\n]*\bDISABLE\s+TRIGGER\b|^\s*SET\s+session_replication_role\b|^\s*(?:BEGIN|COMMIT|ROLLBACK)\s*;'){throw 'Unreviewed nontransactional/session/trigger command in archive; plan not executable'}
 }
@@ -97,17 +120,19 @@ $verify=Expand ([IO.File]::ReadAllText((Join-Path $templates 'verify.sql')))
 if(($capture+$preflight+$verify.Replace('{{MODE}}','full')) -match '\{\{'){throw 'Unexpanded maintenance template'}
 $csv=(Join-Path $plan 'approved-baseline.csv').Replace('\','/')
 $base="\set ON_ERROR_STOP on`r`n\set QUIET on`r`nBEGIN;`r`n"+$preflight+"`r`n"+$capture+"`r`n"
-$rehearse=$base+"CREATE TEMP TABLE s4_baseline ON COMMIT DROP AS SELECT pg_temp.s4_capture() snapshot;`r`nSELECT snapshot::text AS s4_expected FROM pg_temp.s4_baseline \gset`r`n\ir full-restore.sql`r`n"+$verify.Replace('{{MODE}}','full')+"`r`nROLLBACK;`r`n"+$capture+"`r`nSELECT pg_temp.s4_capture() = :'s4_expected'::jsonb AS s4_rollback_ok \gset`r`n\if :s4_rollback_ok`r`nCREATE TEMP TABLE s4_export(payload jsonb);`r`nINSERT INTO pg_temp.s4_export VALUES(jsonb_build_object('archive','$ExpectedArchiveSha256','snapshot',:'s4_expected'::jsonb));`r`n\copy pg_temp.s4_export TO '$csv' WITH (FORMAT csv)`r`n\echo S4_REHEARSAL_PASS_ROLLBACK_VERIFIED`r`n\else`r`n\quit 3`r`n\endif`r`n"
+$rehearse=$base+"CREATE TEMP TABLE s4_baseline ON COMMIT DROP AS SELECT pg_temp.s4_capture() snapshot;`r`nSELECT snapshot::text AS s4_expected FROM pg_temp.s4_baseline \gset`r`n\ir full-restore.sql`r`n"+$verify.Replace('{{MODE}}','full')+"`r`nROLLBACK;`r`n"+$capture+"`r`nSELECT pg_temp.s4_capture() = :'s4_expected'::jsonb AS s4_rollback_ok \gset`r`n\if :s4_rollback_ok`r`nCREATE TEMP TABLE s4_export(payload jsonb);`r`nINSERT INTO pg_temp.s4_export VALUES(jsonb_build_object('archive','$ExpectedArchiveSha256','snapshot',:'s4_expected'::jsonb));`r`n\copy pg_temp.s4_export TO '$csv' WITH (FORMAT csv)`r`n\echo S4_REHEARSAL_PASS_ROLLBACK_VERIFIED`r`n\else`r`nDO 'BEGIN RAISE EXCEPTION ''S4 guard failed''; END;';`r`n\endif`r`n"
 Write-PlanFile 'rehearse.psql' $rehearse
 foreach($mode in @('reset','rollback')){
     $approval=if($mode -ceq 'reset'){'RESET_MEDIPOS_DEV_39'}else{'RESTORE_MEDIPOS_DEV_39'}
-    $script="\set ON_ERROR_STOP on`r`n\if :{?approved_action}`r`nSELECT :'approved_action' = '$approval' AS s4_approved \gset`r`n\else`r`n\quit 3`r`n\endif`r`n\if :s4_approved`r`n"+$base
+    $script="\set ON_ERROR_STOP on`r`n\if :{?approved_action}`r`nSELECT :'approved_action' = '$approval' AS s4_approved \gset`r`n\else`r`nDO 'BEGIN RAISE EXCEPTION ''S4 guard failed''; END;';`r`n\endif`r`n\if :s4_approved`r`n"+$base
     $script+="CREATE TEMP TABLE s4_approved(payload jsonb);`r`n\copy pg_temp.s4_approved FROM '$csv' WITH (FORMAT csv)`r`nCREATE TEMP TABLE s4_baseline ON COMMIT DROP AS SELECT payload->'snapshot' snapshot FROM pg_temp.s4_approved;`r`n"
     $condition=if($mode -ceq 'reset'){"pg_temp.s4_capture() IS DISTINCT FROM (SELECT snapshot FROM pg_temp.s4_baseline)"}else{"(pg_temp.s4_capture()-'tables') IS DISTINCT FROM (SELECT snapshot-'tables' FROM pg_temp.s4_baseline)"}
     $script+=(ApprovalGuard $ExpectedArchiveSha256 $condition)+"`r`n"
+    # A recovery must not overwrite new identities, catalog edits or sales.
+    if($mode -ceq 'rollback'){$script+=$verify.Replace('{{MODE}}','reset')+"`r`n"}
     $restoreFile=if($mode -ceq 'reset'){'reset-restore.sql'}else{'full-restore.sql'}
     $verifyMode=if($mode -ceq 'reset'){'reset'}else{'full'}
-    $script+="\ir $restoreFile`r`n"+$verify.Replace('{{MODE}}',$verifyMode)+"`r`nCOMMIT;`r`n\echo S4_"+$mode.ToUpperInvariant()+"_PASS`r`n\else`r`n\quit 3`r`n\endif`r`n"
+    $script+="\ir $restoreFile`r`n"+$verify.Replace('{{MODE}}',$verifyMode)+"`r`nCOMMIT;`r`n\echo S4_"+$mode.ToUpperInvariant()+"_PASS`r`n\else`r`nDO 'BEGIN RAISE EXCEPTION ''S4 guard failed''; END;';`r`n\endif`r`n"
     Write-PlanFile ($mode+'.psql') $script
 }
 $inspect=@'
@@ -127,7 +152,7 @@ ROLLBACK;
 \echo S4_STATE_EMPTY_COMMERCIAL
 \else
 \echo S4_STATE_DRIFT_NO_GO
-\quit 3
+DO 'BEGIN RAISE EXCEPTION ''S4 guard failed''; END;';
 \endif
 '@
 $inspect=Expand ($inspect.Replace('{{CSV}}',$csv).Replace('{{GUARD}}',(ApprovalGuard $ExpectedArchiveSha256 'false')))

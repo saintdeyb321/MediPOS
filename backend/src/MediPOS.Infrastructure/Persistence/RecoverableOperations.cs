@@ -16,6 +16,7 @@ internal sealed class RecoverableOperations(MediPosDbContext db, IAuthenticatedM
         "supplier" or "minimum" or "product-import" => TenantOperation.Administration,
         "adjustment" => TenantOperation.Inventory,
         "sale-draft" => TenantOperation.ProductSearch,
+        "purchase-draft" => TenantOperation.Purchasing,
         _ => throw new ApplicationErrorException(ApplicationErrors.InvalidRequest),
     };
     private static ApplicationErrorException Conflict() => new(new("operation.intention_conflict", ErrorCategory.Conflict, "The original intention is bound to another request."));
@@ -25,7 +26,8 @@ internal sealed class RecoverableOperations(MediPosDbContext db, IAuthenticatedM
         var access = await authorization.RequireAsync(tenantId, branchId, user.UserId, TenantOperation.ProductSearch, token);
         db.SelectTenant(tenantId);
         var row = await db.Set<OperationReceiptRow>().AsNoTracking().SingleOrDefaultAsync(x => x.TenantId == tenantId && x.BranchId == branchId && x.ActorId == access.UserId && x.MembershipId == access.MembershipId && x.RequestId == requestId, token) ?? throw Missing();
-        await authorization.RequireAsync(tenantId, branchId, access.UserId, Policy(row.Kind), token);
+        var current = await authorization.RequireAsync(tenantId, branchId, access.UserId, Policy(row.Kind), token);
+        if (current.MembershipId != row.MembershipId) throw Missing();
         return new(row.RequestId, row.Kind, row.ResultJson);
     }
     public async Task<OperationReceipt> ExecuteAsync(Guid tenantId, Guid branchId, Guid requestId, string kind, string payloadHash,
@@ -46,6 +48,8 @@ internal sealed class RecoverableOperations(MediPosDbContext db, IAuthenticatedM
             if (existing is not null)
             {
                 if (existing.Kind != kind || existing.PayloadHash != payloadHash || existing.MembershipId != access.MembershipId) throw Conflict();
+                var current = await authorization.RequireAsync(tenantId, branchId, access.UserId, Policy(kind), token);
+                if (current.MembershipId != existing.MembershipId) throw Conflict();
                 return new(requestId, kind, existing.ResultJson);
             }
             var row = new OperationReceiptRow { TenantId = tenantId, BranchId = branchId, ActorId = access.UserId, MembershipId = access.MembershipId,
@@ -64,7 +68,8 @@ internal sealed class RecoverableOperations(MediPosDbContext db, IAuthenticatedM
             try
             {
                 row.ResultJson = await execute(token);
-                await authorization.RequireAsync(tenantId, branchId, access.UserId, Policy(kind), token);
+                var current = await authorization.RequireAsync(tenantId, branchId, access.UserId, Policy(kind), token);
+                if (current.MembershipId != row.MembershipId) throw Conflict();
                 db.Set<OperationReceiptRow>().Add(row);
                 await db.SaveChangesAsync(token);
                 await transaction.CommitAsync(token);

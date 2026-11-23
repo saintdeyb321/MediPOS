@@ -1,3 +1,5 @@
+> **Referencia histórica.** Los hitos, estados de aprobación y comandos que siguen corresponden a su fecha de registro. Consulta [CURRENT_STATE.md](CURRENT_STATE.md) para retomar el MVP.
+
 # MediPOS — Plan maestro de refactorización UX/UI del frontend
 
 **Versión:** 1.0 · **Fecha:** 22 de octubre de 2026  

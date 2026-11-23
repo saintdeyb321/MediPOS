@@ -1,3 +1,5 @@
+> **Referencia histórica.** Los hitos, estados de aprobación y comandos que siguen corresponden a su fecha de registro. Consulta [CURRENT_STATE.md](CURRENT_STATE.md) para retomar el MVP.
+
 # MediPOS — Plan UX/IX V4 y cierre de usabilidad del MVP
 
 **Fecha:** 2026-10-26  

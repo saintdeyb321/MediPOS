@@ -3,6 +3,8 @@ import { HttpClient } from '../../shared/api/http'
 import { id, json, n, operationServer, purchase, storedLine, receiptRevision, workspace } from '../../test/operations'
 import { purchasingApi } from './api'
 
+const intention = { id: id(80), branchId: workspace.branchId }
+
 it('uses supplier pagination, official branch reference search and scoped receipt GET, never a general directory', async () => {
   const fake = operationServer(); fake.state.purchases = [purchase]
   const api = purchasingApi(new HttpClient(fake.fetcher))
@@ -18,10 +20,12 @@ it('uses supplier pagination, official branch reference search and scoped receip
 it('sends only official DTOs with exact numbers and CSRF, with the reviewed revision and no identity headers', async () => {
   const fake = operationServer(); const api = purchasingApi(new HttpClient(fake.fetcher))
   await api.createSupplier(workspace, { name: 'Proveedor unitario', ruc: null, contact: null })
-  await api.create(workspace, null, 'REF-UNIT')
+  await api.create(workspace, null, 'REF-UNIT', new AbortController().signal, intention)
   await api.lines(workspace, purchase.id, [{ businessProductId: id(10), productUnitId: id(11), quantity: n('9007199254740993'), unitCost: n('0.1234567890123456789012345678'), batchNumber: 'Lote', expirationDate: '2027-12-31' }], receiptRevision(fake.state.lines))
   await api.confirm(workspace, purchase.id, receiptRevision(fake.state.lines))
   const writes = fake.writes(); expect(writes).toHaveLength(4)
+  expect(new Headers(writes[1]?.[1]?.headers).get('Idempotency-Key')).toBe(intention.id)
+  expect(new Headers(writes[1]?.[1]?.headers).get('X-MediPOS-Branch')).toBe(workspace.branchId)
   expect(String(writes[2]?.[0])).toBe(`/api/tenants/${id(2)}/purchases/${id(20)}/lines`)
   expect(writes[2]?.[1]?.body).toContain('"quantity":9007199254740993,"unitCost":0.1234567890123456789012345678')
   expect(writes[3]?.[1]?.body).toBe(JSON.stringify({ expectedRevision: receiptRevision(fake.state.lines) }))
@@ -33,10 +37,10 @@ it('rejects wrong branch/id on reads and marks malformed successful writes uncer
     await expect(api.read(workspace, purchase.id)).rejects.toThrow('client.unexpected_response')
   }
   const fetcher = vi.fn<typeof fetch>().mockImplementation(async path => String(path) === '/auth/csrf' ? json({ requestToken: 'unit-csrf' }) : json({}))
-  await expect(purchasingApi(new HttpClient(fetcher)).create(workspace, null, null)).rejects.toMatchObject({ outcomeUnknown: true })
+  await expect(purchasingApi(new HttpClient(fetcher)).create(workspace, null, null, new AbortController().signal, intention)).rejects.toMatchObject({ outcomeUnknown: true })
 })
 it.each([403, 409, 429, 503])('preserves HTTP %s and never retries a mutation', async status => {
   const fake = operationServer(); fake.state.reject = status
-  await expect(purchasingApi(new HttpClient(fake.fetcher)).create(workspace, null, null)).rejects.toMatchObject({ status, outcomeUnknown: status >= 500 })
+  await expect(purchasingApi(new HttpClient(fake.fetcher)).create(workspace, null, null, new AbortController().signal, intention)).rejects.toMatchObject({ status, outcomeUnknown: status >= 500 })
   expect(fake.writes()).toHaveLength(1)
 })

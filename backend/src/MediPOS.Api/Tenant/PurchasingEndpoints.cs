@@ -24,7 +24,7 @@ public static partial class TenantEndpoints
         {
             var input = await TenantHttp.Read<PurchaseRequest>(c);
             return TenantHttp.Response(await handler.HandleAsync(new(TenantHttp.Tenant(c), TenantHttp.Branch(c), input.SupplierId, input.DocumentReference, TenantHttp.Actor(c)), c.RequestAborted), 201);
-        }).Accepts<PurchaseRequest>("application/json").Produces<PurchaseDetails>(201).WithName("tenant.purchases.create");
+        }).Accepts<PurchaseRequest>("application/json").Produces<PurchaseDetails>(201).WithName("tenant.purchases.create").AddEndpointFilter(new RecoverableWriteFilter("purchase-draft"));
         tenants.MapGet("/branches/{branchId}/purchases/{purchaseId}", async (HttpContext c, PurchaseDirectoryQueries queries) =>
             TenantHttp.Response(await queries.PurchaseAsync(TenantHttp.Tenant(c), TenantHttp.Branch(c), TenantHttp.Id(c, "purchaseId"), c.RequestAborted)))
             .Produces<PurchaseView>().WithName("tenant.purchases.read");

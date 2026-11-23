@@ -1,3 +1,5 @@
+> **Referencia histórica.** Los hitos, estados de aprobación y comandos que siguen corresponden a su fecha de registro. Consulta [CURRENT_STATE.md](CURRENT_STATE.md) para retomar el MVP.
+
 \# PLAN UX/UI MEDIPOS V2
 
 \## Rediseño visual, interacción y consistencia operativa

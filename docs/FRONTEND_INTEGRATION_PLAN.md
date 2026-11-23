@@ -1,3 +1,5 @@
+> **Referencia histórica.** Los hitos, estados de aprobación y comandos que siguen corresponden a su fecha de registro. Consulta [CURRENT_STATE.md](CURRENT_STATE.md) para retomar el MVP.
+
 # Plan maestro de integración frontend
 
 ## Handoff vigente — Superadmin V2 S1–S3 (2026-10-30)

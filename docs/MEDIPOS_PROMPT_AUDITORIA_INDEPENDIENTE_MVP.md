@@ -1,3 +1,5 @@
+> **Referencia histórica.** Los hitos, estados de aprobación y comandos que siguen corresponden a su fecha de registro. Consulta [CURRENT_STATE.md](CURRENT_STATE.md) para retomar el MVP.
+
 # Prompt maestro — Auditoría independiente de UX/IX, flujos y completitud del MVP MediPOS
 
 **Uso:** entregar este archivo a una IA auditora junto al repositorio GitHub `https://github.com/saintdeyb321/MediPOS.git` **o** un ZIP del árbol local actual, y adjuntar `MEDIPOS_PLAN_UX_IX_V4_Y_CIERRE_MVP.md` y capturas relevantes. No es un prompt para que implemente cambios; la corrección vendrá **después**, en Codex.

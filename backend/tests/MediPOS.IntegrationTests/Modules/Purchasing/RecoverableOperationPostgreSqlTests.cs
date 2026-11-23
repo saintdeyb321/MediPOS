@@ -7,6 +7,8 @@ using MediPOS.Application.Modules.Catalog.ProductImport;
 using MediPOS.Application.Modules.Catalog.ReplaceProductUnits;
 using MediPOS.Application.Modules.Cash.OpenCashSession;
 using MediPOS.Application.Modules.IdentityAccess.Authentication;
+using MediPOS.Application.Modules.IdentityAccess.CreateMembership;
+using MediPOS.Application.Modules.IdentityAccess.DeactivateMembership;
 using MediPOS.Application.Modules.IdentityAccess.OperationalAccess;
 using MediPOS.Application.Modules.Inventory.AdjustStock;
 using MediPOS.Application.Modules.Inventory.SetBranchProductStockThreshold;
@@ -43,10 +45,13 @@ public sealed class RecoverableOperationPostgreSqlTests(PostgreSqlFixture fixtur
     [InlineData("adjustment")]
     [InlineData("minimum")]
     [InlineData("sale-draft")]
+    [InlineData("purchase-draft")]
     public async Task ResponseLossIsRecoveredAndAnIdenticalRetryNeverInvokesTheBusinessWriteAgain(string kind)
     {
         var data = await Prepare();
         await using var services = Runtime();
+        await using var db = fixture.CreateContext(data.Owner.TenantId);
+        var movementsBefore = kind == "purchase-draft" ? await db.StockMovements.CountAsync(Token) : 0;
         var id = Guid.NewGuid();
         OperationReceipt first;
         await using (var scope = services.CreateAsyncScope())
@@ -62,31 +67,50 @@ public sealed class RecoverableOperationPostgreSqlTests(PostgreSqlFixture fixtur
         Assert.Equal(first, await recovery.ExecuteAsync(data.Owner.TenantId, data.Owner.BranchId, id, kind, Hash, _ => throw new InvalidOperationException("Duplicate write"), Token));
         var conflict = await Assert.ThrowsAsync<ApplicationErrorException>(() => recovery.ExecuteAsync(data.Owner.TenantId, data.Owner.BranchId, id, kind, new string('B', 64), _ => throw new InvalidOperationException(), Token));
         Assert.Equal("operation.intention_conflict", conflict.Error.Code);
-        await using var db = fixture.CreateContext(data.Owner.TenantId);
         Assert.Equal(1, await db.Database.SqlQuery<int>($"SELECT count(*)::int AS \"Value\" FROM tenant_operation_receipts WHERE request_id = {id}").SingleAsync(Token));
         if (kind == "adjustment") Assert.Equal(4m, (await db.InventoryLots.SingleAsync(x => x.Id == data.LotId, Token)).QuantityAvailableBase);
+        if (kind == "purchase-draft")
+        {
+            var original = JsonSerializer.Deserialize<PurchaseDetails>(first.ResultJson, Json)!;
+            var second = await recovery.ExecuteAsync(data.Owner.TenantId, data.Owner.BranchId, Guid.NewGuid(), kind, Hash, token => Write(recoveryScope.ServiceProvider, data, kind, token), Token);
+            var independent = JsonSerializer.Deserialize<PurchaseDetails>(second.ResultJson, Json)!;
+            Assert.NotEqual(original.Id, independent.Id);
+            Assert.Equal(original.DocumentReference, independent.DocumentReference);
+            Assert.Equal(2, await db.Purchases.CountAsync(x => x.DocumentReference == original.DocumentReference, Token));
+            Assert.False(await db.PurchaseLines.AnyAsync(x => x.PurchaseId == original.Id || x.PurchaseId == independent.Id, Token));
+            Assert.Equal(movementsBefore, await db.StockMovements.CountAsync(Token));
+            Assert.Equal(5m, (await db.InventoryLots.SingleAsync(x => x.Id == data.LotId, Token)).QuantityAvailableBase);
+        }
     }
 
-    [Fact]
-    public async Task FailureAfterTheInnerSupplierSaveRollsBackBothBusinessDataAndReceipt()
+    [Theory]
+    [InlineData("supplier")]
+    [InlineData("purchase-draft")]
+    public async Task FailureAfterTheInnerSaveRollsBackBothBusinessDataAndReceipt(string kind)
     {
         var data = await Prepare(); await using var services = Runtime();
         await using var scope = services.CreateAsyncScope(); var source = Authenticate(scope.ServiceProvider, data.Owner.UserId);
         var operations = source.GetRequiredService<IRecoverableOperations>(); var id = Guid.NewGuid(); var name = "Rollback-" + id.ToString("N");
-        await Assert.ThrowsAsync<OperationCanceledException>(() => operations.ExecuteAsync(data.Owner.TenantId, data.Owner.BranchId, id, "supplier", Hash, async token =>
+        await Assert.ThrowsAsync<OperationCanceledException>(() => operations.ExecuteAsync(data.Owner.TenantId, data.Owner.BranchId, id, kind, Hash, async token =>
         {
-            await source.GetRequiredService<CreateSupplierHandler>().HandleAsync(new(data.Owner.TenantId, name, null, null, data.Owner.UserId), token);
+            if (kind == "supplier")
+                await source.GetRequiredService<CreateSupplierHandler>().HandleAsync(new(data.Owner.TenantId, name, null, null, data.Owner.UserId), token);
+            else
+                await source.GetRequiredService<CreatePurchaseHandler>().HandleAsync(new(data.Owner.TenantId, data.Owner.BranchId, null, name, data.Owner.UserId), token);
             throw new OperationCanceledException("Injected before the receipt commit.");
         }, Token));
         Assert.Empty(source.GetRequiredService<MediPosDbContext>().ChangeTracker.Entries());
         await using var db = fixture.CreateContext(data.Owner.TenantId);
-        Assert.False(await db.Suppliers.AnyAsync(x => x.Name == name, Token));
+        if (kind == "supplier") Assert.False(await db.Suppliers.AnyAsync(x => x.Name == name, Token));
+        else Assert.False(await db.Purchases.AnyAsync(x => x.DocumentReference == name, Token));
         var missing = await Assert.ThrowsAsync<ApplicationErrorException>(() => operations.ReadAsync(data.Owner.TenantId, data.Owner.BranchId, id, Token));
         Assert.Equal("operation.not_observed", missing.Error.Code);
     }
 
-    [Fact]
-    public async Task ConcurrentOriginalIntentIsBusyAndBecomesOneImmutableReceipt()
+    [Theory]
+    [InlineData("supplier")]
+    [InlineData("purchase-draft")]
+    public async Task ConcurrentOriginalIntentIsBusyAndBecomesOneImmutableReceipt(string kind)
     {
         var data = await Prepare(); await using var services = Runtime();
         await using var firstScope = services.CreateAsyncScope();
@@ -96,16 +120,16 @@ public sealed class RecoverableOperationPostgreSqlTests(PostgreSqlFixture fixtur
         var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var id = Guid.NewGuid();
-        var first = firstSource.GetRequiredService<IRecoverableOperations>().ExecuteAsync(data.Owner.TenantId, data.Owner.BranchId, id, "supplier", Hash, async token =>
+        var first = firstSource.GetRequiredService<IRecoverableOperations>().ExecuteAsync(data.Owner.TenantId, data.Owner.BranchId, id, kind, Hash, async token =>
         {
             entered.SetResult();
             await release.Task.WaitAsync(token);
-            return await Write(firstSource, data, "supplier", token);
+            return await Write(firstSource, data, kind, token);
         }, Token);
         try
         {
             await entered.Task.WaitAsync(TimeSpan.FromSeconds(10), Token);
-            var busy = await Assert.ThrowsAsync<ApplicationErrorException>(() => competing.ExecuteAsync(data.Owner.TenantId, data.Owner.BranchId, id, "supplier", Hash,
+            var busy = await Assert.ThrowsAsync<ApplicationErrorException>(() => competing.ExecuteAsync(data.Owner.TenantId, data.Owner.BranchId, id, kind, Hash,
                 _ => throw new InvalidOperationException("A busy intention must not execute twice."), Token));
             Assert.Equal("operation.in_progress", busy.Error.Code);
             var missing = await Assert.ThrowsAsync<ApplicationErrorException>(() => competing.ReadAsync(data.Owner.TenantId, data.Owner.BranchId, id, Token));
@@ -113,10 +137,11 @@ public sealed class RecoverableOperationPostgreSqlTests(PostgreSqlFixture fixtur
         }
         finally { release.TrySetResult(); await first; }
         var committed = await first;
-        Assert.Equal(committed, await competing.ExecuteAsync(data.Owner.TenantId, data.Owner.BranchId, id, "supplier", Hash,
+        Assert.Equal(committed, await competing.ExecuteAsync(data.Owner.TenantId, data.Owner.BranchId, id, kind, Hash,
             _ => throw new InvalidOperationException("A committed intention must replay."), Token));
         await using var db = fixture.CreateContext(data.Owner.TenantId);
-        Assert.Equal(1, await db.Suppliers.CountAsync(x => x.Name == "Synthetic supplier", Token));
+        if (kind == "supplier") Assert.Equal(1, await db.Suppliers.CountAsync(x => x.Name == "Synthetic supplier", Token));
+        else Assert.Equal(1, await db.Purchases.CountAsync(x => x.DocumentReference == "Synthetic draft", Token));
         var denied = await Assert.ThrowsAsync<PostgresException>(() => db.Database.ExecuteSqlInterpolatedAsync(
             $"UPDATE tenant_operation_receipts SET result_json = '{{}}' WHERE request_id = {id}", Token));
         Assert.Equal(PostgresErrorCodes.InsufficientPrivilege, denied.SqlState);
@@ -127,13 +152,15 @@ public sealed class RecoverableOperationPostgreSqlTests(PostgreSqlFixture fixtur
         Assert.Equal(1, await db.Database.SqlQuery<int>($"SELECT count(*)::int AS \"Value\" FROM tenant_operation_receipts WHERE request_id = {id}").SingleAsync(Token));
     }
 
-    [Fact]
-    public async Task ReceiptsAreBoundToMembershipBranchTenantAndCurrentAuthorization()
+    [Theory]
+    [InlineData("supplier")]
+    [InlineData("purchase-draft")]
+    public async Task ReceiptsAreBoundToMembershipBranchTenantAndCurrentAuthorization(string kind)
     {
         var data = await Prepare(); await using var services = Runtime();
         await using var scope = services.CreateAsyncScope(); var source = Authenticate(scope.ServiceProvider, data.Owner.UserId);
         var id = Guid.NewGuid(); var operations = source.GetRequiredService<IRecoverableOperations>();
-        await operations.ExecuteAsync(data.Owner.TenantId, data.Owner.BranchId, id, "supplier", Hash, token => Write(source, data, "supplier", token), Token);
+        await operations.ExecuteAsync(data.Owner.TenantId, data.Owner.BranchId, id, kind, Hash, token => Write(source, data, kind, token), Token);
         await using var otherScope = services.CreateAsyncScope();
         var other = Authenticate(otherScope.ServiceProvider, data.Owner.ActorId).GetRequiredService<IRecoverableOperations>();
         await Assert.ThrowsAsync<ApplicationErrorException>(() => other.ReadAsync(data.Owner.TenantId, data.Owner.BranchId, id, Token));
@@ -141,6 +168,24 @@ public sealed class RecoverableOperationPostgreSqlTests(PostgreSqlFixture fixtur
         Assert.Equal(0, await absentScope.Database.SqlQuery<int>($"SELECT count(*)::int AS \"Value\" FROM tenant_operation_receipts WHERE request_id = {id}").SingleAsync(Token));
         var error = await Assert.ThrowsAsync<ApplicationErrorException>(() => operations.ReadAsync(data.Owner.TenantId, Guid.NewGuid(), id, Token));
         Assert.NotNull(error);
+        if (kind == "purchase-draft")
+        {
+            var owner = data.Owner;
+            var secondOwner = await IdentityAccessTestSetup.CreateUserAsync(source);
+            await source.GetRequiredService<CreateMembershipHandler>().CreateTenantMembershipAsync(new(owner.TenantId, secondOwner.Id, TenantRole.Owner, owner.UserId), Token);
+            var secondSource = Authenticate(otherScope.ServiceProvider, secondOwner.Id);
+            var otherActor = await Assert.ThrowsAsync<ApplicationErrorException>(() => other.ReadAsync(owner.TenantId, owner.BranchId, id, Token));
+            Assert.Equal("operation.not_observed", otherActor.Error.Code);
+
+            await secondSource.GetRequiredService<DeactivateMembershipHandler>().HandleAsync(new(owner.TenantId, owner.MembershipId, secondOwner.Id), Token);
+            var replacement = await secondSource.GetRequiredService<CreateMembershipHandler>().CreateTenantMembershipAsync(new(owner.TenantId, owner.UserId, TenantRole.Owner, secondOwner.Id), Token);
+            Assert.NotEqual(owner.MembershipId, replacement.Id);
+            var otherMembership = await Assert.ThrowsAsync<ApplicationErrorException>(() => operations.ReadAsync(owner.TenantId, owner.BranchId, id, Token));
+            Assert.Equal("operation.not_observed", otherMembership.Error.Code);
+            var replay = await Assert.ThrowsAsync<ApplicationErrorException>(() => operations.ExecuteAsync(owner.TenantId, owner.BranchId, id, kind, Hash,
+                _ => throw new InvalidOperationException("A new membership cannot replay an old intention."), Token));
+            Assert.Equal("operation.intention_conflict", replay.Error.Code);
+        }
     }
 
     [Fact]
@@ -266,6 +311,7 @@ public sealed class RecoverableOperationPostgreSqlTests(PostgreSqlFixture fixtur
     {
         object result;
         if (kind == "supplier") result = await source.GetRequiredService<CreateSupplierHandler>().HandleAsync(new(data.Owner.TenantId, "Synthetic supplier", null, null, data.Owner.UserId), token);
+        else if (kind == "purchase-draft") result = await source.GetRequiredService<CreatePurchaseHandler>().HandleAsync(new(data.Owner.TenantId, data.Owner.BranchId, null, "Synthetic draft", data.Owner.UserId), token);
         else if (kind == "adjustment") result = await source.GetRequiredService<AdjustStockHandler>().HandleAsync(new(data.Owner.TenantId, data.LotId, -1m, "Synthetic adjustment", data.Owner.UserId), token);
         else if (kind == "minimum") result = await source.GetRequiredService<SetBranchProductStockThresholdHandler>().HandleAsync(new(data.Owner.TenantId, data.Owner.BranchId, data.ProductId, 2m), token);
         else

@@ -26,42 +26,59 @@ export function useCashClose() {
     if (uncertain) next.set('closingCash', '1'); else next.delete('closingCash')
     latest.current = next; setParameters(next, { replace: true })
   }
-  async function read(selected: string, signal: AbortSignal) {
+  async function readReconciliation(selected: string, signal: AbortSignal) {
     if (!http) throw new ApiError(0, 'client.https_required')
-    const api = cashApi(http); const current = await api.status({ tenantId, branchId }, selected, signal)
-    if (!mounted.current) return
+    const result = await cashApi(http).reconciliation({ tenantId, branchId }, selected, signal)
+    if (mounted.current && !signal.aborted) { setReceipt(result); setError(null) }
+  }
+  async function readStatus(selected: string, signal: AbortSignal) {
+    if (!http) throw new ApiError(0, 'client.https_required')
+    const current = await cashApi(http).status({ tenantId, branchId }, selected, signal)
+    if (!mounted.current || signal.aborted) return
     setStatus(current)
-    if (current.status !== 'closed') return false
+    if (current.status !== 'closed') return
     // A closed status is sufficient to prevent another close; receipt failure is a separate read error.
     mark(selected, false)
     void client.invalidateQueries({ queryKey: scopedKey({ tenantId, branchId }, 'current-cash') })
     void client.invalidateQueries({ queryKey: scopedKey({ tenantId, branchId }, 'active-cash') })
-    const result = await api.reconciliation({ tenantId, branchId }, selected, signal)
-    if (mounted.current) { setReceipt(result); setError(null) }
-    return true
+    await readReconciliation(selected, signal)
   }
   async function consult(selected = id) {
-    if (!isUuid(selected) || running.current) return
-    running.current = true; setBusy(true); setError(null); setReceipt(null); setStatus(null)
-    controller.current = new AbortController(); mark(selected, pending)
-    try { await read(selected, controller.current.signal) }
+    const unresolved = latest.current.has('closingCash')
+    if (!isUuid(selected) || running.current || (unresolved && latest.current.get('cash') !== selected)) return
+    const alreadyClosed = !unresolved && status?.cashSessionId === selected && status.status === 'closed'
+    running.current = true; setBusy(true); setError(null); setReceipt(null)
+    if (!alreadyClosed) setStatus(null)
+    controller.current = new AbortController(); mark(selected, unresolved)
+    try {
+      if (alreadyClosed) await readReconciliation(selected, controller.current.signal)
+      else await readStatus(selected, controller.current.signal)
+    }
     catch (failure) { if (mounted.current) setError(failure) }
     finally { running.current = false; if (mounted.current) setBusy(false) }
   }
   async function close(selected: string, amount: string) {
     const counted = decimalInput(amount, maximumMoney, 4, true)
-    if (!http || !counted || !isUuid(selected) || pending || running.current || denied || status?.cashSessionId !== selected || status.status !== 'open') return
-    running.current = true; setBusy(true); setError(null); controller.current = new AbortController(); mark(selected, true)
+    if (!http || !counted || !isUuid(selected) || latest.current.has('closingCash') || running.current || denied ||
+      latest.current.get('cash') !== selected || status?.cashSessionId !== selected || status.status !== 'open') return
+    running.current = true; setBusy(true); setError(null); setStatus(null); setReceipt(null)
+    controller.current = new AbortController(); mark(selected, true)
+    const signal = controller.current.signal
     try {
-      await cashApi(http).close({ tenantId, branchId }, selected, counted, controller.current.signal)
-      if (mounted.current) await read(selected, controller.current.signal)
-    } catch (failure) {
-      if (!mounted.current) return
-      setError(failure)
-      if (failure instanceof ApiError && (failure.status === 401 || failure.status === 403)) setDenied(true)
-      // Only a definitive rejection permits a new explicit attempt. An early open read cannot prove rollback.
-      if (failure instanceof ApiError && !failure.outcomeUnknown) mark(selected, false)
-      try { await read(selected, controller.current.signal) } catch { /* Preserve the original error and unresolved marker. */ }
+      try {
+        await cashApi(http).close({ tenantId, branchId }, selected, counted, signal)
+      } catch (failure) {
+        if (!mounted.current || signal.aborted) return
+        setError(failure)
+        if (failure instanceof ApiError && (failure.status === 401 || failure.status === 403)) setDenied(true)
+        // Only the POST can definitively reject the write.
+        if (failure instanceof ApiError && !failure.outcomeUnknown) mark(selected, false)
+      }
+      if (!mounted.current || signal.aborted) return
+      try { await readStatus(selected, signal) }
+      catch (failure) {
+        if (mounted.current && !signal.aborted) setError((previous: unknown) => previous ?? failure)
+      }
     } finally { running.current = false; if (mounted.current) setBusy(false) }
   }
   useNavigationProtection({ busy, pending })

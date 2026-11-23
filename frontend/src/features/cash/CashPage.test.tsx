@@ -22,7 +22,7 @@ const workspace: Workspace = { tenantId, branchId, tenantName: 'Prueba unitaria'
     licenseStatus: 'trial', licenseStartsAt: null, licenseExpiresAt: null, evaluatedAtUtc: timestamp } }
 function json(data: unknown, status = 200) { return new Response(stringifyExactJson(data), { status, headers: { 'Content-Type': 'application/json' } }) }
 function server() {
-  const state = { closed: false, loseClose: false, storeClose: true, denied: false, failReceipt: false, foreignReceipt: false, counted: n('5.00') }
+  const state = { closed: false, loseClose: false, storeClose: true, denied: false, failReceipt: false, foreignReceipt: false, statusFailure: 0, counted: n('5.00') }
   const receipt = () => ({ cashSessionId: cashId, tenantId: state.foreignReceipt ? id('99') : tenantId,
     employeeBranch: { branchId, branchName: 'Sede unitaria', membershipId, userId, displayName: 'Empleado unitario' },
     openingAmount: n('0.0000'), paymentTotals: { cash: n('5.0000'), yape: n('7.0000'), plin: n('0'), card: n('0'), transfer: n('0') },
@@ -42,10 +42,14 @@ function server() {
       return json(receipt())
     }
     if (path.endsWith('/reconciliation')) return state.failReceipt ? json({ code: 'server.unavailable' }, 503) : json(receipt())
-    if (path.endsWith('/' + cashId)) return json({ ...session, status: state.closed ? 'closed' : 'open', closedAt: state.closed ? timestamp : null, expectedCashAmount: state.closed ? n('5') : null })
+    if (path.endsWith('/' + cashId)) return state.statusFailure
+      ? json({ code: 'test.status_failed' }, state.statusFailure)
+      : json({ ...session, status: state.closed ? 'closed' : 'open', closedAt: state.closed ? timestamp : null, expectedCashAmount: state.closed ? n('5') : null })
     throw new Error('Unexpected test route')
   })
-  return { state, fetcher, posts: () => fetcher.mock.calls.filter(([, init]) => init?.method === 'POST') }
+  const gets = (suffix: string) => fetcher.mock.calls.filter(([path, init]) => init?.method !== 'POST' && String(path).endsWith(suffix))
+  return { state, fetcher, posts: () => fetcher.mock.calls.filter(([, init]) => init?.method === 'POST'),
+    statusGets: () => gets('/' + cashId), receiptGets: () => gets('/reconciliation') }
 }
 function Location() { return <output data-testid="location">{useLocation().search}</output> }
 function mount(fake: ReturnType<typeof server>, search = '', role: 'owner' | 'cashier' = 'owner') {
@@ -59,7 +63,7 @@ async function prepare(fake: ReturnType<typeof server>) {
   await waitFor(() => expect(button).toBeEnabled()); fireEvent.click(button)
   await screen.findByRole('form', { name: 'Cierre de caja' })
   expect(fake.posts()).toHaveLength(0)
-  fireEvent.change(screen.getByRole('textbox', { name: 'Efectivo contado (S/)' }), { target: { value: '5.00' } })
+  fireEvent.change(screen.getByRole('textbox', { name: 'Efectivo físico contado (S/)' }), { target: { value: '5.00' } })
   fireEvent.click(screen.getByRole('checkbox', { name: /Revisé el conteo/ }))
   return view
 }
@@ -71,7 +75,7 @@ it('requires explicit reviewed counting, closes once with CSRF, and reads the sa
   expect(fake.posts()).toHaveLength(1)
   expect(fake.posts()[0]?.[1]?.body).toBe('{"countedCashAmount":5.00}')
   expect(new Headers(fake.posts()[0]?.[1]?.headers).get('X-CSRF-TOKEN')).toBe('unit-csrf')
-  expect(screen.getByText(/Diferencia: S\/ 0.00/)).toBeInTheDocument()
+  expect(screen.getByText('Cuadre exacto')).toBeInTheDocument()
   expect(screen.queryByRole('button', { name: 'Confirmar cierre de caja' })).not.toBeInTheDocument()
 })
 it('reconciles a lost close response without repeating the POST', async () => {
@@ -83,18 +87,30 @@ it('reconciles a lost close response without repeating the POST', async () => {
 it('keeps uncertain closure blocked across reload while still open, then reads a late close', async () => {
   const fake = server(); fake.state.loseClose = true; fake.state.storeClose = false; const view = await prepare(fake)
   fireEvent.click(screen.getByRole('button', { name: 'Confirmar cierre de caja' }))
-  await screen.findByText(/No pudimos confirmar el resultado/)
+  await screen.findByText('Revisa el estado de la caja')
+  expect(screen.getAllByText(/No pudimos confirmar el resultado/).length).toBeGreaterThan(0)
+  await waitFor(() => expect(fake.statusGets()).toHaveLength(2))
   const search = screen.getByTestId('location').textContent!
   expect(search).toContain('closingCash')
+  expect(fake.posts()).toHaveLength(1)
+  expect(fake.statusGets()).toHaveLength(2)
+  expect(fake.receiptGets()).toHaveLength(0)
   view.unmount(); mount(fake, search)
   expect(screen.queryByRole('button', { name: 'Abrir mi caja' })).not.toBeInTheDocument()
   fireEvent.click(screen.getByRole('button', { name: 'Consultar cierre guardado' }))
   await waitFor(() => expect(screen.getByRole('button', { name: 'Consultar cierre guardado' })).toBeEnabled())
+  expect(screen.getByTestId('location')).toHaveTextContent('closingCash')
   expect(screen.queryByRole('button', { name: 'Confirmar cierre de caja' })).not.toBeInTheDocument()
+  expect(fake.posts()).toHaveLength(1)
+  expect(fake.statusGets()).toHaveLength(3)
+  expect(fake.receiptGets()).toHaveLength(0)
   fake.state.closed = true
   await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Consultar cierre guardado' })) })
   await screen.findByRole('region', { name: 'Arqueo registrado' })
   expect(fake.posts()).toHaveLength(1)
+  expect(fake.statusGets()).toHaveLength(4)
+  expect(fake.receiptGets()).toHaveLength(1)
+  await waitFor(() => expect(screen.getByTestId('location')).not.toHaveTextContent('closingCash'))
 })
 it('does not expose Owner active-cash queries to a cashier', async () => {
   const fake = server(); mount(fake, '', 'cashier')
@@ -103,11 +119,52 @@ it('does not expose Owner active-cash queries to a cashier', async () => {
   expect(fake.fetcher.mock.calls.some(([path]) => String(path).includes('/active?'))).toBe(false)
   expect(fake.posts()).toHaveLength(0)
 })
-it.each(['denied', 'receipt'] as const)('does not repeat closure after %s failure', async failure => {
-  const fake = server(); fake.state.denied = failure === 'denied'; fake.state.failReceipt = failure === 'receipt'; await prepare(fake)
+it.each([401, 403, 404, 429, 503])('keeps the same closure pending when status GET returns %i after an acknowledged POST', async status => {
+  const fake = server(); await prepare(fake); fake.state.statusFailure = status
   fireEvent.click(screen.getByRole('button', { name: 'Confirmar cierre de caja' }))
   await screen.findByText('Revisa el estado de la caja')
-  await waitFor(() => expect(screen.queryByRole('button', { name: 'Confirmar cierre de caja' })).not.toBeInTheDocument())
+  expect(screen.getByTestId('location')).toHaveTextContent('cash=' + cashId + '&closingCash=1')
+  expect(screen.queryByRole('form', { name: 'Cierre de caja' })).not.toBeInTheDocument()
+  expect(screen.queryByText('Caja cerrada en el servidor.', { exact: false })).not.toBeInTheDocument()
+  expect(fake.statusGets()).toHaveLength(2)
+  expect(fake.receiptGets()).toHaveLength(0)
+  const retry = screen.getByRole('button', { name: 'Consultar esta misma caja' })
+  await waitFor(() => expect(retry).toBeEnabled())
+  fireEvent.click(retry)
+  await waitFor(() => expect(fake.statusGets()).toHaveLength(3))
+  await screen.findByText('Revisa el estado de la caja')
+  expect(screen.getByTestId('location')).toHaveTextContent('cash=' + cashId + '&closingCash=1')
+  expect(screen.queryByRole('form', { name: 'Cierre de caja' })).not.toBeInTheDocument()
+  expect(fake.receiptGets()).toHaveLength(0)
+  expect(fake.posts()).toHaveLength(1)
+})
+it('keeps the verified closed status and retries only the failed reconciliation GET', async () => {
+  const fake = server(); fake.state.failReceipt = true; await prepare(fake)
+  fireEvent.click(screen.getByRole('button', { name: 'Confirmar cierre de caja' }))
+  await screen.findByText('Revisa el estado de la caja')
+  expect(screen.getByText(/Caja cerrada en el servidor/)).toBeInTheDocument()
+  await waitFor(() => expect(screen.getByTestId('location')).not.toHaveTextContent('closingCash'))
+  expect(screen.queryByRole('form', { name: 'Cierre de caja' })).not.toBeInTheDocument()
+  expect(fake.statusGets()).toHaveLength(2)
+  expect(fake.receiptGets()).toHaveLength(1)
+  fake.state.failReceipt = false
+  const consult = screen.getByRole('button', { name: 'Consultar cierre guardado' })
+  await waitFor(() => expect(consult).toBeEnabled())
+  fireEvent.click(consult)
+  await screen.findByRole('region', { name: 'Arqueo registrado' })
+  expect(fake.statusGets()).toHaveLength(2)
+  expect(fake.receiptGets()).toHaveLength(2)
+  expect(fake.posts()).toHaveLength(1)
+})
+it('clears the marker for an actual POST denial and keeps closing disabled', async () => {
+  const fake = server(); fake.state.denied = true; await prepare(fake)
+  fireEvent.click(screen.getByRole('button', { name: 'Confirmar cierre de caja' }))
+  await screen.findByText('Revisa el estado de la caja')
+  await waitFor(() => expect(screen.getByTestId('location')).not.toHaveTextContent('closingCash'))
+  expect(screen.queryByRole('form', { name: 'Cierre de caja' })).not.toBeInTheDocument()
+  expect(fake.state.closed).toBe(false)
+  expect(fake.statusGets()).toHaveLength(2)
+  expect(fake.receiptGets()).toHaveLength(0)
   expect(fake.posts()).toHaveLength(1)
 })
 it('rejects reconciliation belonging to another tenant without displaying its data', async () => {

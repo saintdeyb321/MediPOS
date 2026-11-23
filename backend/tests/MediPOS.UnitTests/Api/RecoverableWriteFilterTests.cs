@@ -12,6 +12,7 @@ public sealed class RecoverableWriteFilterTests
     [Theory]
     [InlineData("supplier", 201)]
     [InlineData("sale-draft", 201)]
+    [InlineData("purchase-draft", 201)]
     [InlineData("product-import", 201)]
     [InlineData("minimum", 200)]
     [InlineData("adjustment", 200)]
