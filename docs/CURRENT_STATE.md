@@ -1,6 +1,6 @@
 # Estado actual de MediPOS
 
-Revisión del 23 de noviembre de 2026. Rama `ci/postgres-diagnostics-8bc6b4c`, HEAD `db1af8f27b89f9f7ee52f6e7badc98d4da8d56d2`. Los correctivos E0 están en el árbol local, sin commit. [SPEC](SPEC.md), [ARCHITECTURE](ARCHITECTURE.md) y [ADR](ADR.md) definen el producto y sus límites.
+Revisión del 23 de noviembre de 2026. Rama `ci/postgres-diagnostics-8bc6b4c`, HEAD publicado y verificado `e865625ca1108569420ec24f3804604486e5898d`. El ajuste mecánico de E0-FINAL está en el árbol local, sin commit. [SPEC](SPEC.md), [ARCHITECTURE](ARCHITECTURE.md) y [ADR](ADR.md) definen el producto y sus límites.
 
 - **CODE_READY** indica que el flujo existe en código y puede pasar a verificación.
 - **Probado** exige evidencia de una comprobación concreta con SHA, alcance y entorno registrados.
@@ -106,9 +106,13 @@ Publicar el candidato según el procedimiento de revisión y ejecutar en GitHub 
 | E0.2 | El inventario HTTP conservaba 95 rutas y omitía cinco contratos ya aprobados: catálogo operacional, edición local, consulta de constancias y recuperación XLSX. La prueba comprueba las 100 rutas. El plan offline apunta a esquema 40, con seis pasos desde 34 y el prefijo 34→37 intacto. Sucursales, licencias y readiness comparten el fallo de composición observado antes de sus verificaciones PostgreSQL. |
 | E0.3 | El bootstrap de plataforma del seed consultaba `initial_owner_invitations` con el rol comercial del benchmark (`42501`). La importación de usuarios también referenciaba `google_email_verified` en esquema 34 (`42703`). El seed sintético usa la conexión de preparación de la base desechable y columnas comunes. La carga y el acceso comercial conservan el runtime restringido. La regresión histórica reutiliza el permiso de fixture de invitaciones solo después de verificar el upgrade 34→37 y la sonda de lectura. |
 | E0.4 | La prueba de sencillo comprueba `55P03` directamente en Npgsql porque EF envuelve el error esperado. Excel distingue un trabajo terminal autorizado del bloqueo de escritura por RLS y conserva el candado al verificar revocación. El caso de anulación tropezaba con la misma composición de E0.1. |
-| E0.5 | Se corrigieron los 45 `WHITESPACE` ajenos a migraciones y los siete `IMPORTS` del CI. La verificación completa local salió con código 2: 120 `WHITESPACE` en la migración 39, dos `CHARSET` en 38/39 y 4 754 `ENDOFLINE` en 43 archivos del checkout Windows. **NO-GO** hasta resolver el formato histórico con autorización y repetir CI. |
+| E0.5 | E0 corrigió los 45 `WHITESPACE` ajenos a migraciones y los siete `IMPORTS` del CI. E0-FINAL resuelve los 120 `WHITESPACE` de la migración 39 y los dos `CHARSET` de 38/39. La verificación focalizada da PASS en LF, con los mismos blobs que produciría Git. El checkout CRLF solo reporta 242 `ENDOFLINE` en esos dos archivos. |
 
-Build backend PASS, 0 advertencias y 0 errores. Pruebas focalizadas: 189 de lógica y composición más 60 de contrato HTTP con Kestrel y dobles, todas PASS, 0 FAIL, 0 SKIP en la ejecución final. `git diff --check` PASS. Descubrimiento de integración: 77 casos en las nueve clases afectadas, 0 ejecutados. Repetir en el CI PostgreSQL completo los 38 fallos del run de referencia, con especial atención a 34→37, permisos del runtime, sencillo, recuperación XLSX repetida y revocación, y aislamiento de anulación. DEV, S4, RLS, configuración fiscal y migraciones 1–40 quedan intactos.
+**Evidencia previa de E0.** Build backend y `git diff --check` PASS. Pruebas focalizadas con 189 de lógica y composición y 60 de contrato HTTP con Kestrel y dobles, todas PASS, 0 FAIL, 0 SKIP. Descubrimiento de integración con 77 casos en nueve clases afectadas y 0 ejecutados.
+
+**Evidencia de E0-FINAL.** Con SDK 10.0.401 y las mismas opciones offline, los 22 scripts EF/Recovery y los cinco literales SQL de 38/39 coincidieron byte por byte y por SHA-256. Se verificaron seis planes de `RecoveryWorkflow.MigrationPlan` y sus `PlanHash`. En 34→40 ambos producen `8EC172A6173E63EAC745C10FBF5D0A9795940902BE14C593B554593D7411284A`. Los tres descensos que cruzan 37 siguen rechazados por la misma guarda. La evidencia anterior/posterior y el manifiesto de hashes se conservaron fuera del repositorio. Builds focalizados PASS con 0 advertencias y 0 errores. `RecoveryMigrationIntegrityTests` 27 PASS, 0 FAIL, 0 SKIP. `git diff --check` PASS.
+
+**GO para publicar el candidato y repetir el workflow manual.** El gate integral permanece pendiente. El CI debe revalidar los 9 fallos unitarios y los 38 PostgreSQL del run de referencia, con especial atención a 34→37, permisos del runtime, sencillo, recuperación XLSX repetida y revocación, y aislamiento de anulación. DEV, S4, RLS y configuración fiscal quedan intactos.
 
 ## CI y primer candidato
 
