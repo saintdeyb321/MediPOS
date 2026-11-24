@@ -1,6 +1,6 @@
 using MediPOS.Application.Modules.IdentityAccess.Authentication;
-using MediPOS.Domain.Modules.IdentityAccess;
 using MediPOS.Application.Modules.IdentityAccess.Invitations;
+using MediPOS.Domain.Modules.IdentityAccess;
 
 namespace MediPOS.Application.Modules.IdentityAccess.UpsertGoogleUser;
 

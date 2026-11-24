@@ -84,20 +84,22 @@ public sealed class RecoveryMigrationIntegrityTests
     }
 
     [Fact]
-    public void CurrentOfflinePlanPreservesTheHistoricalReviewedPrefixAndAddsOnlyRecoverableStorage()
+    public void CurrentOfflinePlanPreservesTheHistoricalReviewedPrefixAndIncludesTheAdditiveMigrationsThrough40()
     {
         var (before, _) = Snapshots();
         var manifest = new BackupManifest(new string('a', 32), DateTimeOffset.UtcNow, "RecoveryLab", "operator", "protected",
             new string('B', 64), 18, "postgresql18-custom-full", 1, new string('C', 64), before);
         using var model = RecoveryInspection.ModelContext();
         var script = RecoveryWorkflow.MigrationPlan(manifest);
-        Assert.Equal(model.GetService<IMigrator>().GenerateScript(RecoveryMigrationIntegrity.Source34, "20261027043336_AddRecoverableOperationsAndLocalCorrections"), script);
+        Assert.Equal(model.GetService<IMigrator>().GenerateScript(RecoveryMigrationIntegrity.Source34, "20261124011936_AddInterruptedProductImportAudit"), script);
         Assert.StartsWith(model.GetService<IMigrator>().GenerateScript(RecoveryMigrationIntegrity.Source34, RecoveryMigrationIntegrity.Target37), script, StringComparison.Ordinal);
-        Assert.Equal(4, script.Split("INSERT INTO \"__EFMigrationsHistory\"", StringSplitOptions.None).Length - 1);
+        Assert.Equal(6, script.Split("INSERT INTO \"__EFMigrationsHistory\"", StringSplitOptions.None).Length - 1);
         Assert.Contains("CREATE TABLE employee_invitations", script, StringComparison.Ordinal);
         Assert.Contains("CREATE OR REPLACE FUNCTION official_refresh_global_guard", script, StringComparison.Ordinal);
         Assert.Contains("CREATE OR REPLACE FUNCTION official_refresh_guard", script, StringComparison.Ordinal);
         Assert.Contains("CREATE TABLE tenant_operation_receipts", script, StringComparison.Ordinal);
+        Assert.Contains("CREATE TABLE initial_owner_invitations", script, StringComparison.Ordinal);
+        Assert.Contains("catalog.product_import_interrupted", script, StringComparison.Ordinal);
         Assert.DoesNotContain("DROP TABLE", script, StringComparison.OrdinalIgnoreCase);
         Assert.Equal(RecoveryWorkflow.PlanHash(script), RecoveryWorkflow.PlanHash(RecoveryWorkflow.MigrationPlan(manifest)));
     }

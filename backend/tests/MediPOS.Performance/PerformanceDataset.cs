@@ -11,7 +11,6 @@ using MediPOS.Application.Modules.IdentityAccess.CreateMembership;
 using MediPOS.Application.Modules.IdentityAccess.OperationalAccess;
 using MediPOS.Application.Modules.IdentityAccess.ReplaceWorkSchedule;
 using MediPOS.Application.Modules.IdentityAccess.SetMembershipBranches;
-using MediPOS.Application.Modules.IdentityAccess.UpsertGoogleUser;
 using MediPOS.Application.Modules.Inventory.AdjustStock;
 using MediPOS.Application.Modules.Purchasing.ConfirmPurchase;
 using MediPOS.Application.Modules.Purchasing.CreatePurchase;
@@ -69,13 +68,8 @@ public sealed class PerformanceDataset : IAsyncDisposable
     }
     public SeedTenant Tenant(Guid id) => Tenants.Single(tenant => tenant.Id == id);
 
-    private async Task<Guid> UserAsync(int tenant, int ordinal, CancellationToken token)
-    {
-        await using var scope = Scope();
-        ((SyntheticIdentity)scope.ServiceProvider.GetRequiredService<IVerifiedGoogleIdentitySource>()).Identity =
-            new("perf-" + _options.RunId + "-" + tenant + "-" + ordinal, "synthetic-" + ordinal + "@example.invalid", "Synthetic operator");
-        return (await scope.ServiceProvider.GetRequiredService<UpsertGoogleUserHandler>().HandleAsync(token).ConfigureAwait(false)).Id;
-    }
+    private Task<Guid> UserAsync(int tenant, int ordinal, CancellationToken token) => _database.CreateSyntheticUserAsync(
+        "perf-" + _options.RunId + "-" + tenant + "-" + ordinal, "synthetic-" + ordinal + "@example.invalid", BusinessTime, token);
 
     public async Task GenerateAsync(CancellationToken token)
     {
@@ -92,9 +86,8 @@ public sealed class PerformanceDataset : IAsyncDisposable
                 tenantId = (await bootstrap.ServiceProvider.GetRequiredService<CreateTenantHandler>().HandleAsync(
                     new("Synthetic performance " + tenantIndex, BusinessTime.AddDays(-1), BusinessTime.AddYears(1), _options.Branches,
                         LicenseStatus.Active, admin), token).ConfigureAwait(false)).TenantId;
-                await bootstrap.ServiceProvider.GetRequiredService<CreateMembershipHandler>().HandleAsync(
-                    new(tenantId, owner, TenantRole.Owner, admin), token).ConfigureAwait(false);
             }
+            await _database.SeedFirstOwnerAsync(tenantId, owner, admin, BusinessTime, token).ConfigureAwait(false);
             var branches = new List<Guid>();
             await using (var scope = Scope(owner))
             {
@@ -115,7 +108,7 @@ public sealed class PerformanceDataset : IAsyncDisposable
                     await using (var scope = Scope(owner))
                     {
                         var provider = scope.ServiceProvider;
-                        membership = (await provider.GetRequiredService<CreateMembershipHandler>().HandleAsync(
+                        membership = (await provider.GetRequiredService<CreateMembershipHandler>().CreateTenantMembershipAsync(
                             new(tenantId, user, operatorIndex % 2 == 0 ? TenantRole.Pharmacist : TenantRole.Cashier, owner), token).ConfigureAwait(false)).Id;
                         await provider.GetRequiredService<SetMembershipBranchesHandler>().HandleAsync(new(tenantId, membership, [branches[branchIndex]], owner), token).ConfigureAwait(false);
                         await provider.GetRequiredService<ReplaceWorkScheduleHandler>().HandleAsync(new(tenantId, membership,
@@ -225,8 +218,7 @@ public sealed class PerformanceDataset : IAsyncDisposable
     public sealed class BusinessClock : TimeProvider { public override DateTimeOffset GetUtcNow() => BusinessTime; }
     public sealed class SyntheticIdentity : IVerifiedGoogleIdentitySource
     {
-        public VerifiedGoogleIdentity? Identity { get; set; }
-        public Task<VerifiedGoogleIdentity?> GetVerifiedIdentityAsync(CancellationToken cancellationToken) => Task.FromResult(Identity);
+        public Task<VerifiedGoogleIdentity?> GetVerifiedIdentityAsync(CancellationToken cancellationToken) => Task.FromResult<VerifiedGoogleIdentity?>(null);
     }
     public sealed class SyntheticSession : IAuthenticatedMediPosUser { public Guid? UserId { get; set; } }
     public sealed class SyntheticPlatform : IPlatformAdministration

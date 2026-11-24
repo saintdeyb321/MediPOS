@@ -52,10 +52,15 @@ public sealed class CashTransferRecoverabilityTests(PostgreSqlFixture fixture)
             Assert.Equal("operation.not_observed", (await Assert.ThrowsAsync<ApplicationErrorException>(() =>
                 retry.ReadAsync(command.TenantId, command.SourceBranchId, key, Token))).Error.Code);
             await using var probe = fixture.CreateContext(command.TenantId);
+            await probe.Database.OpenConnectionAsync(Token);
             Assert.Empty(await probe.CashTransfers.ToListAsync(Token));
             Assert.False(await probe.AuditLogs.AnyAsync(a => a.Action == AuditAction.CashTransferDispatched, Token));
-            var lockError = await Assert.ThrowsAsync<PostgresException>(() => probe.Database.SqlQuery<Guid>(
-                $"SELECT id AS \"Value\" FROM cash_sessions WHERE id = {command.SourceCashSessionId} FOR UPDATE NOWAIT").SingleAsync(Token));
+            // Probe the database error directly, independently of EF's transient exception wrapper.
+            await using var lockProbe = new NpgsqlCommand("SELECT id FROM cash_sessions WHERE tenant_id = @tenant AND id = @session FOR UPDATE NOWAIT",
+                (NpgsqlConnection)probe.Database.GetDbConnection());
+            lockProbe.Parameters.AddWithValue("tenant", command.TenantId);
+            lockProbe.Parameters.AddWithValue("session", command.SourceCashSessionId);
+            var lockError = await Assert.ThrowsAsync<PostgresException>(() => lockProbe.ExecuteScalarAsync(Token));
             Assert.Equal(PostgresErrorCodes.LockNotAvailable, lockError.SqlState);
         }
         finally { release.TrySetResult(); await original; }

@@ -33,6 +33,11 @@ public sealed class SecurityCompositionTests
         using var scope = application.Services.CreateScope();
         Assert.Null(scope.ServiceProvider.GetService<IAuthenticatedMediPosUser>());
         Assert.Null(scope.ServiceProvider.GetService<IVerifiedGoogleIdentitySource>());
+        var operations = scope.ServiceProvider.GetRequiredService<IRecoverableOperations>();
+        var token = TestContext.Current.CancellationToken;
+        var denied = await Assert.ThrowsAsync<ApplicationErrorException>(() =>
+            operations.ReadAsync(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), token));
+        Assert.Equal("access.unauthenticated", denied.Error.Code);
         var provider = scope.ServiceProvider.GetRequiredService<IElectronicDocumentProvider>();
         Assert.False(provider.Capabilities.Operational);
         Assert.False(provider.Capabilities.Simulation);

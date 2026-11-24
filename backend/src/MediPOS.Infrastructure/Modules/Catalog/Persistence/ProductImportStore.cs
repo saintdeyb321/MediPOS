@@ -248,8 +248,16 @@ internal sealed class ProductImportStore(MediPosDbContext context, TimeProvider 
         {
             await using var transaction = await BeginJobTransactionAsync(tenantId, jobId, cancellationToken).ConfigureAwait(false);
             var job = await context.ImportJobs.FromSqlInterpolated($"SELECT * FROM import_jobs WHERE tenant_id = {tenantId} AND id = {jobId} FOR UPDATE NOWAIT")
-                .SingleOrDefaultAsync(cancellationToken).ConfigureAwait(false) ?? throw new ApplicationErrorException(ProductImportErrors.JobNotFound);
+                .SingleOrDefaultAsync(cancellationToken).ConfigureAwait(false);
             await reauthorize(cancellationToken).ConfigureAwait(false);
+            if (job is null)
+            {
+                // SELECT allows terminal jobs; the UPDATE policy deliberately hides them from FOR UPDATE.
+                var status = await context.ImportJobs.AsNoTracking().Where(value => value.TenantId == tenantId && value.Id == jobId)
+                    .Select(value => (ImportJobStatus?)value.Status).SingleOrDefaultAsync(cancellationToken).ConfigureAwait(false);
+                if (status is ImportJobStatus.Completed or ImportJobStatus.Failed) return;
+                throw new ApplicationErrorException(status == ImportJobStatus.Processing ? ProductImportErrors.JobBusy : ProductImportErrors.JobNotFound);
+            }
             if (job.Status != ImportJobStatus.Processing) return;
 
             var counts = await CountsAsync(jobId, cancellationToken).ConfigureAwait(false);
@@ -259,14 +267,17 @@ internal sealed class ProductImportStore(MediPosDbContext context, TimeProvider 
             var audit = AuditTrail.Record(tenantId, actorId, AuditAction.CatalogProductImportInterrupted, jobId, now,
                 """{"status":"processing"}""", JsonSerializer.Serialize(new
                 {
-                    status = "failed", totalRows = job.TotalRows, importedRows = job.ImportedRows, invalidRows = job.InvalidRows,
+                    status = "failed",
+                    totalRows = job.TotalRows,
+                    importedRows = job.ImportedRows,
+                    invalidRows = job.InvalidRows,
                 }));
             context.AddAudit(audit, tenantId, AuditAction.CatalogProductImportInterrupted, jobId);
             await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
             await reauthorize(cancellationToken).ConfigureAwait(false);
             await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
         }
-        catch (PostgresException error) when (error.SqlState == PostgresErrorCodes.LockNotAvailable)
+        catch (Exception error) when ((error as PostgresException ?? error.InnerException as PostgresException)?.SqlState == PostgresErrorCodes.LockNotAvailable)
         { throw new ApplicationErrorException(ProductImportErrors.JobBusy); }
         finally { context.InterruptedImportRecovery = null; context.ChangeTracker.Clear(); }
     }

@@ -1,8 +1,8 @@
+using MediPOS.Application.Modules.IdentityAccess.Authentication;
+using MediPOS.Application.Modules.IdentityAccess.Invitations;
 using MediPOS.Application.Modules.TenancyLicensing;
 using MediPOS.Application.Modules.TenancyLicensing.CreateTenant;
 using MediPOS.Domain.Modules.IdentityAccess;
-using MediPOS.Application.Modules.IdentityAccess.Authentication;
-using MediPOS.Application.Modules.IdentityAccess.Invitations;
 using MediPOS.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
@@ -25,13 +25,16 @@ internal sealed class PlatformDirectoryReader(MediPosDbContext context, IInitial
             context.SelectTenant(row.TenantId);
             var license = await context.Licenses.AsNoTracking().SingleAsync(token).ConfigureAwait(false);
             var owner = await (from membership in context.Memberships.AsNoTracking()
-                join user in context.Users.AsNoTracking() on membership.UserId equals user.Id
-                where membership.Role == TenantRole.Owner
-                orderby membership.CreatedAt, membership.Id
-                select new { user.Email, user.DisplayName, membership.IsActive }).FirstOrDefaultAsync(token).ConfigureAwait(false);
+                               join user in context.Users.AsNoTracking() on membership.UserId equals user.Id
+                               where membership.Role == TenantRole.Owner
+                               orderby membership.CreatedAt, membership.Id
+                               select new { user.Email, user.DisplayName, membership.IsActive }).FirstOrDefaultAsync(token).ConfigureAwait(false);
             var invitation = await invitations.ReadAsync(row.TenantId, actor, token).ConfigureAwait(false);
-            page.Add(row with { Administration = new(Configurations.LicenseCodes.StatusToCode(license.Status), license.ExpiresAt, license.MaxBranches,
-                owner is not null ? owner.IsActive ? "active" : "inactive" : invitation?.Status ?? "unassigned", owner?.Email ?? invitation?.Email, owner?.DisplayName) });
+            page.Add(row with
+            {
+                Administration = new(Configurations.LicenseCodes.StatusToCode(license.Status), license.ExpiresAt, license.MaxBranches,
+                owner is not null ? owner.IsActive ? "active" : "inactive" : invitation?.Status ?? "unassigned", owner?.Email ?? invitation?.Email, owner?.DisplayName)
+            });
         }
         return new(page, rows.Count > limit ? rows[limit - 1].TenantId : null);
     }

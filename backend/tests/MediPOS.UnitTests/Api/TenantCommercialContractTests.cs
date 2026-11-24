@@ -36,7 +36,18 @@ public sealed partial class TenantCommercialContractTests
         var state = SeedBranch(); await using var host = await Host(state);
         var endpoints = host.App.Services.GetServices<EndpointDataSource>().SelectMany(source => source.Endpoints).OfType<RouteEndpoint>()
             .Where(endpoint => endpoint.RoutePattern.RawText!.StartsWith("/api", StringComparison.Ordinal)).ToArray();
-        Assert.Equal(95, endpoints.Length);
+        (string Method, string Suffix)[] additions =
+        [
+            ("GET", "/branches/{branchId}/operational-products"),
+            ("GET", "/branches/{branchId}/operational-categories"),
+            ("PUT", "/products/{productId}/local-data"),
+            ("GET", "/branches/{branchId}/operations/{requestId}"),
+            ("POST", "/product-imports/{importJobId}/recover-interrupted"),
+        ];
+        Assert.Equal(95 + additions.Length, endpoints.Length);
+        foreach (var (method, suffix) in additions)
+            Assert.Contains(endpoints, endpoint => endpoint.RoutePattern.RawText == "/api/tenants/{tenantId}" + suffix
+                && endpoint.Metadata.GetMetadata<HttpMethodMetadata>()!.HttpMethods.SequenceEqual([method]));
         foreach (var endpoint in endpoints)
         {
             Assert.NotNull(endpoint.Metadata.GetMetadata<IAuthorizeData>());

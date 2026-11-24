@@ -10,9 +10,12 @@ using Microsoft.EntityFrameworkCore;
 
 namespace MediPOS.Infrastructure.Persistence;
 
-internal sealed class RecoverableOperations(MediPosDbContext db, IAuthenticatedMediPosUser user,
-    ITenantOperationAuthorizer authorization, TimeProvider clock) : IRecoverableOperations
+internal sealed class RecoverableOperations(MediPosDbContext db, ITenantOperationAuthorizer authorization,
+    TimeProvider clock, IAuthenticatedMediPosUser? user = null) : IRecoverableOperations
 {
+    private Guid RequireActor() => user?.UserId is { } id && id != Guid.Empty ? id :
+        throw new ApplicationErrorException(new("access.unauthenticated", ErrorCategory.Forbidden, "An authenticated server session is required."));
+
     private static TenantOperation Policy(string kind) => kind switch
     {
         "supplier" or "minimum" or "product-import" => TenantOperation.Administration,
@@ -26,7 +29,7 @@ internal sealed class RecoverableOperations(MediPosDbContext db, IAuthenticatedM
     private static ApplicationErrorException Missing() => new(new("operation.not_observed", ErrorCategory.NotFound, "No committed receipt is visible yet; this does not prove rollback."));
     public async Task<OperationReceipt> ReadAsync(Guid tenantId, Guid branchId, Guid requestId, CancellationToken token)
     {
-        var access = await authorization.RequireAsync(tenantId, branchId, user.UserId, TenantOperation.ProductSearch, token);
+        var access = await authorization.RequireAsync(tenantId, branchId, RequireActor(), TenantOperation.ProductSearch, token);
         db.SelectTenant(tenantId);
         var row = await db.Set<OperationReceiptRow>().AsNoTracking().SingleOrDefaultAsync(x => x.TenantId == tenantId && x.BranchId == branchId && x.ActorId == access.UserId && x.MembershipId == access.MembershipId && x.RequestId == requestId, token) ?? throw Missing();
         var current = await authorization.RequireAsync(tenantId, branchId, access.UserId, Policy(row.Kind), token);
@@ -37,7 +40,7 @@ internal sealed class RecoverableOperations(MediPosDbContext db, IAuthenticatedM
         Func<CancellationToken, Task<string>> execute, CancellationToken token)
     {
         if (requestId == Guid.Empty || payloadHash.Length != 64) throw new ApplicationErrorException(ApplicationErrors.InvalidRequest);
-        var access = await authorization.RequireAsync(tenantId, branchId, user.UserId, Policy(kind), token);
+        var access = await authorization.RequireAsync(tenantId, branchId, RequireActor(), Policy(kind), token);
         db.SelectTenant(tenantId);
         // A session lock also spans XLSX's independently committed rows. Never return it to the pool held.
         await db.Database.OpenConnectionAsync(token);
@@ -64,8 +67,17 @@ internal sealed class RecoverableOperations(MediPosDbContext db, IAuthenticatedM
                 if (current.MembershipId != existing.MembershipId) throw Conflict();
                 return new(requestId, kind, existing.ResultJson);
             }
-            var row = new OperationReceiptRow { TenantId = tenantId, BranchId = branchId, ActorId = access.UserId, MembershipId = access.MembershipId,
-                RequestId = requestId, Kind = kind, PayloadHash = payloadHash, CreatedAt = clock.GetUtcNow() };
+            var row = new OperationReceiptRow
+            {
+                TenantId = tenantId,
+                BranchId = branchId,
+                ActorId = access.UserId,
+                MembershipId = access.MembershipId,
+                RequestId = requestId,
+                Kind = kind,
+                PayloadHash = payloadHash,
+                CreatedAt = clock.GetUtcNow()
+            };
             if (kind == "product-import")
             {
                 db.PendingImportReceipt = row;

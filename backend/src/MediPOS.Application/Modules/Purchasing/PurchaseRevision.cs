@@ -16,9 +16,15 @@ public static class PurchaseRevision
             purchaseId,
             lines = lines.OrderBy(line => line.Id).Select(line => new
             {
-                line.Id, line.BusinessProductId, line.UnitNameSnapshot,
-                quantity = Number(line.Quantity), conversion = Number(line.ConversionToBaseSnapshot),
-                baseQuantity = Number(line.BaseQuantity), cost = Number(line.UnitCost), line.BatchNumber, line.ExpirationDate,
+                line.Id,
+                line.BusinessProductId,
+                line.UnitNameSnapshot,
+                quantity = Number(line.Quantity),
+                conversion = Number(line.ConversionToBaseSnapshot),
+                baseQuantity = Number(line.BaseQuantity),
+                cost = Number(line.UnitCost),
+                line.BatchNumber,
+                line.ExpirationDate,
             }),
         })));
 

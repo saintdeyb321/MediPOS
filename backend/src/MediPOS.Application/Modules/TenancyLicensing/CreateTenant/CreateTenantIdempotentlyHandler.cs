@@ -4,8 +4,8 @@ using System.Text;
 using System.Text.Json;
 using MediPOS.Application.Errors;
 using MediPOS.Application.Modules.IdentityAccess.Authentication;
-using MediPOS.Domain.Modules.TenancyLicensing;
 using MediPOS.Application.Modules.IdentityAccess.Invitations;
+using MediPOS.Domain.Modules.TenancyLicensing;
 
 namespace MediPOS.Application.Modules.TenancyLicensing.CreateTenant;
 

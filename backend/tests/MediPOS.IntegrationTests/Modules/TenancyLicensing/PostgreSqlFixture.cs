@@ -11,6 +11,11 @@ public sealed class PostgreSqlTestGroup : ICollectionFixture<PostgreSqlFixture>;
 
 public sealed class PostgreSqlFixture : IAsyncLifetime
 {
+    internal const string EmployeeInvitationRuntimeGrant = """
+        GRANT SELECT, INSERT, UPDATE (accepted_user_id,accepted_at,status,approved_at,result_membership_id,approved_from_version,revoked_at,revoked_by_user_id,revocation_reason)
+            ON employee_invitations TO medipos_test_runtime;
+        """;
+
     private PostgreSqlContainer? _container;
     private string? _runtimeConnectionString;
     private string? _officialCatalogConnectionString;
@@ -66,8 +71,6 @@ public sealed class PostgreSqlFixture : IAsyncLifetime
             GRANT SELECT, INSERT, UPDATE, DELETE ON tenants, users, licenses, license_changes,
                 legal_entities, branches, memberships, membership_branches, work_schedules TO medipos_test_runtime;
             GRANT SELECT ON "__EFMigrationsHistory" TO medipos_test_runtime;
-            GRANT SELECT, INSERT, UPDATE (accepted_user_id,accepted_at,status,approved_at,result_membership_id,approved_from_version,revoked_at,revoked_by_user_id,revocation_reason)
-                ON employee_invitations TO medipos_test_runtime;
             GRANT SELECT, INSERT ON audit_logs, tenant_operation_receipts TO medipos_test_runtime;
             GRANT SELECT, INSERT, UPDATE (status, claimed_user_id, membership_id, claimed_at, revoked_by, revoked_at)
                 ON initial_owner_invitations TO medipos_test_runtime;
@@ -108,6 +111,8 @@ public sealed class PostgreSqlFixture : IAsyncLifetime
             GRANT SELECT, INSERT ON cash_transfers TO medipos_test_runtime;
             GRANT UPDATE (status, destination_cash_session_id, received_at, received_by_actor_id) ON cash_transfers TO medipos_test_runtime;
             """;
+        await command.ExecuteNonQueryAsync(timeout.Token);
+        command.CommandText = EmployeeInvitationRuntimeGrant;
         await command.ExecuteNonQueryAsync(timeout.Token);
         _runtimeConnectionString = new NpgsqlConnectionStringBuilder(_container.GetConnectionString())
         {

@@ -32,7 +32,10 @@ public sealed class InitialOwnerOnboardingTests
     public void NormalizationDoesNotStripDotsAliasesOrAcceptDisplayAddresses(string value, string? expected) => Assert.Equal(expected, GoogleEmailAddress.Normalize(value));
 
     [Theory]
-    [InlineData("true", true)] [InlineData("false", false)] [InlineData(null, false)] [InlineData("1", false)]
+    [InlineData("true", true)]
+    [InlineData("false", false)]
+    [InlineData(null, false)]
+    [InlineData("1", false)]
     public async Task VerificationComesOnlyFromTheValidatedProviderClaim(string? flag, bool expected)
     {
         var claims = new List<Claim> { new("sub", "subject"), new("email", "owner@example.test"), new("name", "Owner") };

@@ -236,6 +236,7 @@ public sealed class SecurityHardeningTests(PostgreSqlFixture fixture)
         await authorization.RequireAsync(seed.Owner.TenantId, null, seed.Owner.UserId, TenantOperation.Administration, Token);
         var store = provider.GetRequiredService<IProductImportStore>();
         var job = ImportJob.Create(seed.Owner.TenantId, seed.Owner.UserId, "synthetic.xlsx", ProductImportTemplate.Version, 1, Now);
+        await using var lease = await store.AcquireJobAsync(job.TenantId, job.Id, Token);
         await store.StartAsync(job, Token);
         var product = BusinessProduct.CreateLocal(seed.Owner.TenantId, "SEC-" + Guid.NewGuid().ToString("N"), ProductType.Retail,
             "Synthetic retail product", category, "Synthetic brand", null, null, 1m, null, Now);

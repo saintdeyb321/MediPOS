@@ -1,6 +1,6 @@
 # Estado actual de MediPOS
 
-Revisión del 23 de noviembre de 2026. Rama `ci/postgres-diagnostics-8bc6b4c`, HEAD publicado `cd39a9e90c414cfce7a1a9a4b0262b3bc82e418b` (L4A-FINAL). El candidato de migración 40 está en el árbol local, sin commit. [SPEC](SPEC.md), [ARCHITECTURE](ARCHITECTURE.md) y [ADR](ADR.md) definen el producto y sus límites.
+Revisión del 23 de noviembre de 2026. Rama `ci/postgres-diagnostics-8bc6b4c`, HEAD `db1af8f27b89f9f7ee52f6e7badc98d4da8d56d2`. Los correctivos E0 están en el árbol local, sin commit. [SPEC](SPEC.md), [ARCHITECTURE](ARCHITECTURE.md) y [ADR](ADR.md) definen el producto y sus límites.
 
 - **CODE_READY** indica que el flujo existe en código y puede pasar a verificación.
 - **Probado** exige evidencia de una comprobación concreta con SHA, alcance y entorno registrados.
@@ -59,7 +59,7 @@ Evidencia del L4A publicado: 44 Vitest con dobles HTTP, 246 xUnit de lógica y 1
 
 Evidencia de L4A-R publicado: 44 Vitest con dobles HTTP, 161 xUnit de lógica y 20 xUnit de contrato HTTP con Kestrel en loopback y dobles de identidad/persistencia. Cada grupo tuvo 0 FAIL y 0 SKIP. ESLint, builds frontend/backend y `git diff --check` PASS. El despacho recuperable requiere instalar frontend y backend compatibles.
 
-**Gate PostgreSQL pendiente.** El host carece de Docker. PostgreSQL real: 0 ejecutados, versión sin observar. El filtro descubrió 92 casos únicos y conservó los 83 casos verificados en L4A-FINAL. Los 9 nuevos cubren exclusión con y sin clave, pérdida de sesión, filas y constancia, concurrencia, repetición, acceso, estado previo, cancelación, pooling, rollback y migración. Desde `backend/`, compilar con `dotnet build tests/MediPOS.IntegrationTests --no-restore -m:1 -nr:false`.
+**Preparación local del gate PostgreSQL de migración 40.** El filtro previo al CI descubrió 92 casos únicos y conservó los 83 de L4A-FINAL. Los 9 nuevos cubren exclusión con y sin clave, pérdida de sesión, filas y constancia, concurrencia, repetición, acceso, estado previo, cancelación, pooling, rollback y migración. Desde `backend/`, compilar con `dotnet build tests/MediPOS.IntegrationTests --no-restore -m:1 -nr:false`.
 
 ```powershell
 $pg = 'tests/MediPOS.IntegrationTests/bin/Debug/net10.0/MediPOS.IntegrationTests.dll'
@@ -95,6 +95,20 @@ Publicar el candidato según el procedimiento de revisión y ejecutar en GitHub 
 **Candidato 40, evidencia local.** xUnit de lógica, autorización y conversión de auditoría 110 PASS, Kestrel con dobles 2 PASS y Vitest con dobles HTTP 17 PASS, todos con 0 FAIL y 0 SKIP en la ejecución final. ESLint, builds frontend/backend, EF sin cambios pendientes y revisión offline del SQL PASS. La primera compilación frontend detectó un fixture desactualizado y una inferencia de tipo en pruebas; ambos se corrigieron. El build conserva la advertencia de tamaño de bundle de Vite.
 
 **Guion L4B, pendiente de GO.** Con PostgreSQL aprobado, verificar instalación conjunta de API y React. Usar tres perfiles Chrome y datos controlados: A administra plataforma, B y C son Owners de boticas distintas. B valida alta y confirmación de compra con stock único, solicitud de mercadería y despacho de sencillo. Simular pérdida del acuse, recuperar cada intención original y comprobar una sola escritura y su saldo. C valida la denegación en la botica de B y A la separación de plataforma y negocio. Para Excel, verificar primero los resultados parciales y ensayar el cierre solo con la acción auditada habilitada y comprobada.
+
+### A360-LEAN · E0
+
+[CI de referencia](https://github.com/saintdeyb321/MediPOS/actions/runs/45312440841), sobre `db1af8f`: SDK 10.0.402, build, NuGet Audit y 8 pruebas de arquitectura PASS. Unitarias 2 655 PASS y 9 FAIL. PostgreSQL 18.7, 866 PASS y 38 FAIL. Cero SKIP. Formato FAIL y gate `NOT_APPROVED`.
+
+| Grupo | Causa y corrección local |
+|---|---|
+| E0.1 | El coordinador de constancias exigía un servicio de identidad que deliberadamente no se registra con Google deshabilitado. El host compone sin esa dependencia y las constancias exigen una identidad real antes de autorizar o acceder a datos. El doble XLSX implementa el contrato de adquisición del candado. Proveedor fiscal y schedulers conservan sus controles. |
+| E0.2 | El inventario HTTP conservaba 95 rutas y omitía cinco contratos ya aprobados: catálogo operacional, edición local, consulta de constancias y recuperación XLSX. La prueba comprueba las 100 rutas. El plan offline apunta a esquema 40, con seis pasos desde 34 y el prefijo 34→37 intacto. Sucursales, licencias y readiness comparten el fallo de composición observado antes de sus verificaciones PostgreSQL. |
+| E0.3 | El bootstrap de plataforma del seed consultaba `initial_owner_invitations` con el rol comercial del benchmark (`42501`). La importación de usuarios también referenciaba `google_email_verified` en esquema 34 (`42703`). El seed sintético usa la conexión de preparación de la base desechable y columnas comunes. La carga y el acceso comercial conservan el runtime restringido. La regresión histórica reutiliza el permiso de fixture de invitaciones solo después de verificar el upgrade 34→37 y la sonda de lectura. |
+| E0.4 | La prueba de sencillo comprueba `55P03` directamente en Npgsql porque EF envuelve el error esperado. Excel distingue un trabajo terminal autorizado del bloqueo de escritura por RLS y conserva el candado al verificar revocación. El caso de anulación tropezaba con la misma composición de E0.1. |
+| E0.5 | Se corrigieron los 45 `WHITESPACE` ajenos a migraciones y los siete `IMPORTS` del CI. La verificación completa local salió con código 2: 120 `WHITESPACE` en la migración 39, dos `CHARSET` en 38/39 y 4 754 `ENDOFLINE` en 43 archivos del checkout Windows. **NO-GO** hasta resolver el formato histórico con autorización y repetir CI. |
+
+Build backend PASS, 0 advertencias y 0 errores. Pruebas focalizadas: 189 de lógica y composición más 60 de contrato HTTP con Kestrel y dobles, todas PASS, 0 FAIL, 0 SKIP en la ejecución final. `git diff --check` PASS. Descubrimiento de integración: 77 casos en las nueve clases afectadas, 0 ejecutados. Repetir en el CI PostgreSQL completo los 38 fallos del run de referencia, con especial atención a 34→37, permisos del runtime, sencillo, recuperación XLSX repetida y revocación, y aislamiento de anulación. DEV, S4, RLS, configuración fiscal y migraciones 1–40 quedan intactos.
 
 ## CI y primer candidato
 

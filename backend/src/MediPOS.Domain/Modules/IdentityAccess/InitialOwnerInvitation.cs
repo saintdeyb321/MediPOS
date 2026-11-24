@@ -21,8 +21,15 @@ public sealed class InitialOwnerInvitation
     {
         if (tenantId == Guid.Empty || actor == Guid.Empty || requestKey == Guid.Empty || string.IsNullOrWhiteSpace(normalizedEmail) || normalizedEmail.Length > 320)
             throw new ArgumentException("An initial Owner recipient and creation reference are required.");
-        return new() { Id = Guid.CreateVersion7(), TenantId = tenantId, NormalizedEmail = normalizedEmail, InvitedBy = actor,
-            CreationRequestKey = requestKey, CreatedAt = now.ToUniversalTime() };
+        return new()
+        {
+            Id = Guid.CreateVersion7(),
+            TenantId = tenantId,
+            NormalizedEmail = normalizedEmail,
+            InvitedBy = actor,
+            CreationRequestKey = requestKey,
+            CreatedAt = now.ToUniversalTime()
+        };
     }
     public void Revoke(Guid actor, DateTimeOffset now)
     {

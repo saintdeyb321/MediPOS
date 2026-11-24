@@ -34,8 +34,12 @@ public sealed class TenantTransferHttpTests
         Assert.Equal(HttpStatusCode.Created, first.StatusCode); Assert.Equal(HttpStatusCode.Created, replay.StatusCode);
         Assert.Equal(await first.Content.ReadAsStringAsync(TestContext.Current.CancellationToken), await replay.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
         Assert.Equal((state.TenantId, destination, requestId, "transfer-request"), receipts.Key);
-        using var changed = await Post(new { sourceBranchId = state.Branches[0].Id, destinationBranchId = destination,
-            lines = new[] { new { businessProductId = state.Products[0].Id, productUnitId = state.Units[0].Id, quantity = 3m } } }, destination);
+        using var changed = await Post(new
+        {
+            sourceBranchId = state.Branches[0].Id,
+            destinationBranchId = destination,
+            lines = new[] { new { businessProductId = state.Products[0].Id, productUnitId = state.Units[0].Id, quantity = 3m } }
+        }, destination);
         await Problem(changed, 409, "operation.intention_conflict");
         Assert.Single(state.Transfers); Assert.Single(state.Audits); Assert.Empty(state.Movements);
     }

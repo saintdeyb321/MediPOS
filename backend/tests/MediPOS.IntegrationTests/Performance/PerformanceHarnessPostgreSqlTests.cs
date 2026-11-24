@@ -95,6 +95,9 @@ public sealed class PerformanceHarnessPostgreSqlTests(PostgreSqlFixture fixture)
         Assert.Equal(PostgresErrorCodes.DuplicateDatabase, error.SqlState);
         await using var scope = harness.Dataset.Scope();
         var context = scope.ServiceProvider.GetRequiredService<MediPosDbContext>(); context.SelectTenant(harness.Dataset.Tenants[0].Id);
+        Assert.False(await context.Database.SqlQueryRaw<bool>("""
+            SELECT has_table_privilege(current_user, 'public.initial_owner_invitations', 'SELECT') AS "Value"
+            """).SingleAsync(Token));
         Assert.Equal(128, await context.BusinessProducts.CountAsync(Token));
     }
 

@@ -41,6 +41,11 @@ namespace MediPOS.UnitTests.Api;
 // Recording persistence for real HTTP/application composition only. Does not prove PostgreSQL ACID/RLS/locks.
 public sealed partial class TenantHttpTestState
 {
+    private sealed class SyntheticImportLease : IAsyncDisposable
+    {
+        public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+    }
+
     internal readonly Guid TenantId = Guid.NewGuid();
     internal User User { get; } = PlatformLicenseHttpTests.Operator();
     internal Membership? Member { get; set; }
@@ -124,6 +129,7 @@ public sealed partial class TenantHttpTestState
                 "FindLicenseAsync" => Task.FromResult<License?>(License),
                 "FindActiveCategoriesAsync" => Task.FromResult<IReadOnlySet<Guid>>(Categories.Select(value => value.Id).ToHashSet()),
                 "FindExistingCodesAsync" => Task.FromResult<IReadOnlySet<string>>(Products.Select(value => value.InternalCode).ToHashSet(StringComparer.Ordinal)),
+                "AcquireJobAsync" => Task.FromResult<IAsyncDisposable>(new SyntheticImportLease()),
                 "StartAsync" => Save(() => Imports.Add((ImportJob)a[0]!)),
                 "SaveInvalidRowsAsync" => Save(() => ImportRows.AddRange((IReadOnlyList<ImportRowResult>)a[1]!)),
                 "ImportRowAsync" => ImportRowAsync((ImportJob)a[0]!, (int)a[1]!, (BusinessProduct)a[2]!, (ProductUnit)a[3]!, (Func<CancellationToken, Task>)a[4]!, (CancellationToken)a[5]!),

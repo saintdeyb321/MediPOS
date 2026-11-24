@@ -1,4 +1,7 @@
+using MediPOS.Application.Modules.AuditSupport;
 using MediPOS.Application.Tenancy;
+using MediPOS.Domain.Modules.AuditSupport;
+using MediPOS.Domain.Modules.IdentityAccess;
 using MediPOS.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
@@ -124,6 +127,42 @@ public sealed class DisposablePerformanceDatabase : IAsyncDisposable
         context.Categories.Add(category);
         await context.SaveChangesAsync(token).ConfigureAwait(false);
         return category.Id;
+    }
+
+    internal async Task<Guid> CreateSyntheticUserAsync(string subject, string email, DateTimeOffset now, CancellationToken token)
+    {
+        await using var context = CreateSeedContext();
+        var user = User.Create(subject, email, "Synthetic operator", now);
+        // The historical upgrade fixture also seeds schema 34, which predates google_email_verified.
+        await context.Database.ExecuteSqlInterpolatedAsync($"""
+            INSERT INTO users (id, google_subject, email, display_name, created_at)
+            VALUES ({user.Id}, {user.GoogleSubject}, {user.Email}, {user.DisplayName}, {user.CreatedAt})
+            """, token).ConfigureAwait(false);
+        return user.Id;
+    }
+
+    internal async Task SeedFirstOwnerAsync(Guid tenantId, Guid ownerId, Guid platformActor, DateTimeOffset now, CancellationToken token)
+    {
+        // Only the disposable fixture is preloaded. Workloads and employee administration retain the restricted runtime.
+        await using var context = CreateSeedContext();
+        context.SelectTenant(tenantId);
+        await using var transaction = await context.Database.BeginTransactionAsync(token).ConfigureAwait(false);
+        if (await context.Memberships.AnyAsync(value => value.Role == TenantRole.Owner, token).ConfigureAwait(false))
+            throw new InvalidOperationException("Synthetic tenants can have only one initial Owner seed.");
+        var membership = Membership.Create(tenantId, ownerId, TenantRole.Owner, now);
+        context.Memberships.Add(membership);
+        context.AuditLogs.Add(AuditTrail.Record(tenantId, platformActor, AuditAction.MembershipCreated, membership.Id,
+            now, null, AuditTrail.MembershipState(membership)));
+        await context.SaveChangesAsync(token).ConfigureAwait(false);
+        await transaction.CommitAsync(token).ConfigureAwait(false);
+    }
+
+    private MediPosDbContext CreateSeedContext()
+    {
+        if (!_created || Volatile.Read(ref _generationClaimed) != 1)
+            throw new InvalidOperationException("Administrative seeding requires the active disposable generation.");
+        return new MediPosDbContext(new DbContextOptionsBuilder<MediPosDbContext>()
+            .UseNpgsql(_migrationConnection).Options, new TenantDataContext());
     }
 
     internal void ClaimGeneration(string runId)

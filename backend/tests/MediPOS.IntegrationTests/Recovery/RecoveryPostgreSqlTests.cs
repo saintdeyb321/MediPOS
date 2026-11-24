@@ -71,6 +71,8 @@ public sealed class RecoveryPostgreSqlTests(PostgreSqlFixture fixture)
         Assert.Equal(2, runtime.TenantsExamined);
         Assert.Contains("INVITATION_OWNER_AND_TICKET_RLS", runtime.PendingVerifications);
         // Writes below are post-upgrade authorization regressions, not part of the preservation comparison above.
+        await using (var invitations = new NpgsqlCommand(PostgreSqlFixture.EmployeeInvitationRuntimeGrant, owner))
+            await invitations.ExecuteNonQueryAsync(Token);
         await CheckUpgradedInvitationAccessAsync(harness);
     }
 

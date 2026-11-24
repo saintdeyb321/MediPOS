@@ -1,12 +1,12 @@
 using System.Text.Json;
 using MediPOS.Application.Errors;
 using MediPOS.Application.Modules.Branches.CreateBranch;
+using MediPOS.Application.Modules.Cash.OpenCashSession;
 using MediPOS.Application.Modules.Catalog;
 using MediPOS.Application.Modules.Catalog.CreateCategory;
 using MediPOS.Application.Modules.Catalog.CreateLocalBusinessProduct;
 using MediPOS.Application.Modules.Catalog.ProductImport;
 using MediPOS.Application.Modules.Catalog.ReplaceProductUnits;
-using MediPOS.Application.Modules.Cash.OpenCashSession;
 using MediPOS.Application.Modules.IdentityAccess.Authentication;
 using MediPOS.Application.Modules.IdentityAccess.CreateMembership;
 using MediPOS.Application.Modules.IdentityAccess.DeactivateMembership;
@@ -284,8 +284,13 @@ public sealed class RecoverableOperationPostgreSqlTests(PostgreSqlFixture fixtur
         await using var scope = services.CreateAsyncScope(); var source = Authenticate(scope.ServiceProvider, data.Owner.UserId);
         var bytes = await ProductImportTestData.WorkbookAsync(new Dictionary<string, string>(StringComparer.Ordinal)
         {
-            ["InternalCode"] = "IMPORT-RECOVERY", ["ProductType"] = "retail", ["Name"] = "Synthetic import",
-            ["CategoryId"] = data.CategoryId.ToString("D"), ["BrandOrLaboratory"] = "Documented test brand", ["RetailPrice"] = "1.00", ["BaseUnitName"] = "Unidad",
+            ["InternalCode"] = "IMPORT-RECOVERY",
+            ["ProductType"] = "retail",
+            ["Name"] = "Synthetic import",
+            ["CategoryId"] = data.CategoryId.ToString("D"),
+            ["BrandOrLaboratory"] = "Documented test brand",
+            ["RetailPrice"] = "1.00",
+            ["BaseUnitName"] = "Unidad",
         });
         var id = Guid.NewGuid(); var operations = source.GetRequiredService<IRecoverableOperations>();
         await Assert.ThrowsAsync<IOException>(() => operations.ExecuteAsync(data.Owner.TenantId, data.Owner.BranchId, id, "product-import", Hash, async token =>
@@ -330,7 +335,8 @@ public sealed class RecoverableOperationPostgreSqlTests(PostgreSqlFixture fixtur
         var correctedView = await source.GetRequiredService<CatalogDirectoryQueries>().ProductAsync(data.Owner.TenantId, data.Owner.BranchId, original.Id, Token);
         await source.GetRequiredService<UpdateLocalProductHandler>().HandleAsync(command with
         {
-            ExpectedRevision = correctedView.Revision, Name = original.Name,
+            ExpectedRevision = correctedView.Revision,
+            Name = original.Name,
             Medicine = new MedicineInput([new("Paracetamol", "500 mg")], "Tableta", "Oral"),
         }, Token);
         var staleOriginal = await Assert.ThrowsAsync<ApplicationErrorException>(() => source.GetRequiredService<UpdateLocalProductHandler>().HandleAsync(command, Token));
