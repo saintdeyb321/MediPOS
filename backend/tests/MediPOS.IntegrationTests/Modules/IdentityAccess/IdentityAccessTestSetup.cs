@@ -17,7 +17,7 @@ internal static class IdentityAccessTestSetup
 {
     internal static readonly DateTimeOffset Now = new(2026, 10, 6, 14, 0, 0, TimeSpan.Zero);
 
-    internal static ServiceProvider CreateServices(PostgreSqlFixture fixture, TimeProvider? clock = null)
+    internal static ServiceProvider CreateServices(PostgreSqlFixture fixture, TimeProvider? clock = null, bool fixtureAuthorization = true)
     {
         var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
         {
@@ -27,7 +27,7 @@ internal static class IdentityAccessTestSetup
         services.AddSingleton<TimeProvider>(clock ?? new Clock());
         services.AddInfrastructure(configuration);
         services.AddIdentityAuthentication<TestGoogleIdentitySource, TestServerSession>();
-        services.AddPersistenceFixtureAuthorization();
+        if (fixtureAuthorization) services.AddPersistenceFixtureAuthorization();
         return services.BuildServiceProvider(new ServiceProviderOptions { ValidateOnBuild = true, ValidateScopes = true });
     }
 

@@ -3,7 +3,7 @@ using MediPOS.Domain.Modules.IdentityAccess;
 
 namespace MediPOS.Application.Modules.IdentityAccess.OperationalAccess;
 
-public enum TenantOperation { Administration, Purchasing, Inventory, ProductSearch }
+public enum TenantOperation { Administration, Purchasing, Inventory, ProductSearch, CashTransferDispatch }
 
 // Authorization for the foundational use cases. Lookup authenticates before resolving a record's branch;
 // it is never sufficient to read its details or mutate it: Require must check that branch afterwards.
@@ -37,6 +37,7 @@ public sealed class TenantOperationAuthorizer(ResolveAccessContextHandler resolv
             TenantOperation.Administration => access.Role == TenantRole.Owner,
             TenantOperation.Purchasing or TenantOperation.Inventory => access.Role is TenantRole.Owner or TenantRole.Pharmacist,
             TenantOperation.ProductSearch => access.Role is TenantRole.Owner or TenantRole.Pharmacist or TenantRole.Cashier,
+            TenantOperation.CashTransferDispatch => branchId.HasValue && access.Role is TenantRole.Owner or TenantRole.Cashier,
             _ => false,
         };
         if (!roleAllowed) throw Denied("access.role_denied");

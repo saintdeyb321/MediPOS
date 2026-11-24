@@ -7,6 +7,8 @@ namespace MediPOS.Application.Modules.Cash.DispatchCashTransfer;
 public sealed record DispatchCashTransferCommand(Guid TenantId, Guid SourceBranchId, Guid SourceCashSessionId, Guid DestinationBranchId, decimal Amount);
 public sealed class DispatchCashTransferHandler(ResolveAccessContextHandler resolver, ICashTransferTransaction transactions, TimeProvider clock)
 {
+    public const string ReceiptKind = "cash-transfer-dispatch";
+
     public async Task<CashTransferDetails> HandleAsync(DispatchCashTransferCommand command, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(command);

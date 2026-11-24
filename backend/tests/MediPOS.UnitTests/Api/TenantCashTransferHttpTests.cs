@@ -1,6 +1,10 @@
 using System.Net;
+using System.Text.Json;
+using MediPOS.Application.Modules.IdentityAccess.OperationalAccess;
+using MediPOS.Domain.Modules.AuditSupport;
 using MediPOS.Domain.Modules.Cash;
 using MediPOS.Domain.Modules.IdentityAccess;
+using Microsoft.Extensions.DependencyInjection;
 using static MediPOS.UnitTests.Api.TenantApiHttpTests;
 
 namespace MediPOS.UnitTests.Api;
@@ -8,6 +12,45 @@ namespace MediPOS.UnitTests.Api;
 [Collection("Observability")]
 public sealed class TenantCashTransferHttpTests
 {
+    [Fact]
+    public async Task KeyedDispatchBindsSourceCashAmountAndDestinationAndReturnsOriginalReceipt()
+    {
+        var state = Seed(); var receipts = new TenantTransferHttpTests.ReceiptDouble();
+        await using var host = await Host(state, configureServices: services => services.AddSingleton<IRecoverableOperations>(receipts));
+        await PlatformLicenseHttpTests.Login(host);
+        var csrf = await host.Csrf(); var key = Guid.NewGuid();
+        var source = state.Branches[0].Id; var destination = state.Branches[1].Id; var cash = state.Cash[0].Id;
+        var path = $"/api/tenants/{state.TenantId:D}/branches/{source:D}";
+        async Task<HttpResponseMessage> Post(Guid headerBranch, Guid session, Guid to, decimal amount)
+        {
+            using var request = Request("POST", path + "/cash-transfers", new { sourceCashSessionId = session, destinationBranchId = to, amount }, csrf);
+            request.Headers.Add("Idempotency-Key", key.ToString("D"));
+            request.Headers.Add("X-MediPOS-Branch", headerBranch.ToString("D"));
+            return await host.Client.SendAsync(request, TestContext.Current.CancellationToken);
+        }
+
+        using (var wrong = await Post(destination, cash, destination, 20m)) await Problem(wrong, 403, "access.branch_denied");
+        Assert.Null(receipts.Key); Assert.Empty(state.CashTransfers);
+        using var sent = await Post(source, cash, destination, 20m);
+        using var replay = await Post(source, cash, destination, 20.0000m);
+        Assert.Equal(HttpStatusCode.Created, sent.StatusCode); Assert.Equal(HttpStatusCode.Created, replay.StatusCode);
+        var original = await sent.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
+        Assert.Equal(original, await replay.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
+        Assert.Equal((state.TenantId, source, key, "cash-transfer-dispatch"), receipts.Key);
+        using var recovered = await Json(host, "GET", path + $"/operations/{key:D}");
+        Assert.Equal(original, recovered.RootElement.GetProperty("resultJson").GetString());
+        using var detail = JsonDocument.Parse(original);
+        Assert.Equal(Assert.Single(state.CashTransfers).Id, detail.RootElement.GetProperty("id").GetGuid());
+
+        foreach (var (session, to, amount) in new[] { (Guid.NewGuid(), destination, 20m), (cash, Guid.NewGuid(), 20m), (cash, destination, 21m) })
+        {
+            using var conflict = await Post(source, session, to, amount);
+            await Problem(conflict, 409, "operation.intention_conflict");
+        }
+        Assert.Equal(AuditAction.CashTransferDispatched, Assert.Single(state.Audits).Action);
+        Assert.Empty(state.Payments);
+    }
+
     [Fact]
     public async Task DispatchPendingReadReceiveAndBothCashClosesUseExistingFinancialLedger()
     {

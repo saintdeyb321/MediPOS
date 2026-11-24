@@ -40,7 +40,7 @@ public sealed class TenantTransferHttpTests
         Assert.Single(state.Transfers); Assert.Single(state.Audits); Assert.Empty(state.Movements);
     }
 
-    private sealed class ReceiptDouble : IRecoverableOperations
+    internal sealed class ReceiptDouble : IRecoverableOperations
     {
         public (Guid Tenant, Guid Branch, Guid Request, string Kind)? Key { get; private set; }
         private string? _hash;
@@ -59,7 +59,10 @@ public sealed class TenantTransferHttpTests
             return _receipt = new(requestId, kind, await execute(token));
         }
 
-        public Task<OperationReceipt> ReadAsync(Guid tenantId, Guid branchId, Guid requestId, CancellationToken token) => throw new NotSupportedException();
+        public Task<OperationReceipt> ReadAsync(Guid tenantId, Guid branchId, Guid requestId, CancellationToken token) =>
+            _receipt is not null && Key is { } key && (key.Tenant, key.Branch, key.Request) == (tenantId, branchId, requestId)
+                ? Task.FromResult(_receipt)
+                : throw new ApplicationErrorException(new("operation.not_observed", ErrorCategory.NotFound, "Synthetic receipt not found."));
     }
     [Fact]
     public async Task RequestApproveDispatchReceivePreservesLotTraceabilityAndRejectsReplays()

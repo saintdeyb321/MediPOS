@@ -24,6 +24,9 @@ public sealed class TenantOperationAuthorizationTests
     [InlineData(TenantRole.Owner, TenantOperation.ProductSearch, true)]
     [InlineData(TenantRole.Pharmacist, TenantOperation.ProductSearch, true)]
     [InlineData(TenantRole.Cashier, TenantOperation.ProductSearch, true)]
+    [InlineData(TenantRole.Owner, TenantOperation.CashTransferDispatch, true)]
+    [InlineData(TenantRole.Pharmacist, TenantOperation.CashTransferDispatch, false)]
+    [InlineData(TenantRole.Cashier, TenantOperation.CashTransferDispatch, true)]
     public async Task EnforcesApprovedOperationMatrix(TenantRole role, TenantOperation operation, bool allowed)
     {
         var setup = new Setup(role);

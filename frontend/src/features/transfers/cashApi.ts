@@ -3,6 +3,8 @@ import { array, boolean, branchPath, decimal, nullable, object, oneOf, utc, uuid
 import type { BranchScope } from '../../shared/api/contracts'
 import type { JsonNumber } from '../../shared/api/exactJson'
 import { compare, fits, maximumMoney } from '../../shared/api/decimal'
+import { recoverOperation } from '../../shared/api/operations'
+import type { OperationIntention } from '../../shared/api/operations'
 import { equalId, pageQuery } from './api'
 
 // CashTransferEndpoints and CashTransferContracts. Cash is separate from goods transfers.
@@ -17,8 +19,8 @@ function scoped(data: unknown, scope: BranchScope, id?: string) {
 export const cashSettled = (value: CashTransfer, action: string) => action === 'create' || action === 'receive' && value.status === 'received'
 export function cashTransfersApi(http: HttpClient) {
   const root = (scope: BranchScope) => `/api/tenants/${uuid(scope.tenantId)}/cash-transfers`
-  async function post(scope: BranchScope, path: string, body: unknown, signal?: AbortSignal, id?: string) {
-    const data = await http.request(path, { method: 'POST', body, signal, exactNumbers: true })
+  async function post(scope: BranchScope, path: string, body: unknown, signal?: AbortSignal, id?: string, intention?: OperationIntention) {
+    const data = await http.request(path, { method: 'POST', body, signal, exactNumbers: true, intention })
     try { return scoped(data, scope, id) } catch { throw new ApiError(0, 'client.outcome_unknown', undefined, true) }
   }
   return {
@@ -29,8 +31,14 @@ export function cashTransfersApi(http: HttpClient) {
       return result
     },
     async read(scope: BranchScope, id: string, signal?: AbortSignal) { return scoped(await http.request(`${root(scope)}/${uuid(id)}`, { signal, exactNumbers: true }), scope, id) },
-    async dispatch(scope: BranchScope, sourceCashSessionId: string, destinationBranchId: string, amount: JsonNumber, signal?: AbortSignal) {
-      const result = await post(scope, `${branchPath(scope)}/cash-transfers`, { sourceCashSessionId: uuid(sourceCashSessionId), destinationBranchId: uuid(destinationBranchId), amount }, signal)
+    async recoverDispatch(scope: BranchScope, requestId: string, actorId: string, signal?: AbortSignal) {
+      const result = scoped(await recoverOperation(http, scope, requestId, 'cash-transfer-dispatch', signal), scope)
+      if (result.status !== 'in_transit' || !equalId(result.sourceBranchId, scope.branchId) || !equalId(result.dispatchedByActorId, actorId))
+        throw new ApiError(0, 'client.unexpected_response')
+      return result
+    },
+    async dispatch(scope: BranchScope, sourceCashSessionId: string, destinationBranchId: string, amount: JsonNumber, requestId: string, signal?: AbortSignal) {
+      const result = await post(scope, `${branchPath(scope)}/cash-transfers`, { sourceCashSessionId: uuid(sourceCashSessionId), destinationBranchId: uuid(destinationBranchId), amount }, signal, undefined, { id: uuid(requestId), branchId: uuid(scope.branchId) })
       if (!equalId(result.sourceBranchId, scope.branchId) || !equalId(result.sourceCashSessionId, sourceCashSessionId) || !equalId(result.destinationBranchId, destinationBranchId) || compare(result.amount, amount) !== 0) throw new ApiError(0, 'client.outcome_unknown', undefined, true)
       return result
     },

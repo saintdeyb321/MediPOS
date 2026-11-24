@@ -1,7 +1,9 @@
+using System.Data;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using MediPOS.Application.Errors;
+using MediPOS.Application.Modules.Cash.DispatchCashTransfer;
 using MediPOS.Application.Modules.IdentityAccess.Authentication;
 using MediPOS.Application.Modules.IdentityAccess.OperationalAccess;
 using Microsoft.EntityFrameworkCore;
@@ -17,6 +19,7 @@ internal sealed class RecoverableOperations(MediPosDbContext db, IAuthenticatedM
         "adjustment" => TenantOperation.Inventory,
         "sale-draft" or "transfer-request" => TenantOperation.ProductSearch,
         "purchase-draft" => TenantOperation.Purchasing,
+        DispatchCashTransferHandler.ReceiptKind => TenantOperation.CashTransferDispatch,
         _ => throw new ApplicationErrorException(ApplicationErrors.InvalidRequest),
     };
     private static ApplicationErrorException Conflict() => new(new("operation.intention_conflict", ErrorCategory.Conflict, "The original intention is bound to another request."));
@@ -39,9 +42,10 @@ internal sealed class RecoverableOperations(MediPosDbContext db, IAuthenticatedM
         // A session lock also spans XLSX's independently committed rows. Never return it to the pool held.
         await db.Database.OpenConnectionAsync(token);
         var branchLock = LockId($"{tenantId:D}/{branchId:D}/{access.UserId:D}/{requestId:D}");
-        var transferRequest = kind == "transfer-request";
-        // The extra lock binds a goods intention to its first destination, even if the same actor is authorized elsewhere.
-        long[] lockIds = transferRequest ? [LockId($"transfer-request/{tenantId:D}/{access.UserId:D}/{requestId:D}"), branchLock] : [branchLock];
+        var cashDispatch = kind == DispatchCashTransferHandler.ReceiptKind;
+        var bindToFirstBranch = cashDispatch || kind == "transfer-request";
+        // A transfer intention binds to its first branch, even when its actor is authorized elsewhere.
+        long[] lockIds = bindToFirstBranch ? [LockId($"{kind}/{tenantId:D}/{access.UserId:D}/{requestId:D}"), branchLock] : [branchLock];
         var acquired = 0;
         try
         {
@@ -52,7 +56,7 @@ internal sealed class RecoverableOperations(MediPosDbContext db, IAuthenticatedM
                 acquired++;
             }
             var existing = await db.Set<OperationReceiptRow>().AsNoTracking().FirstOrDefaultAsync(x => x.TenantId == tenantId &&
-                x.ActorId == access.UserId && x.RequestId == requestId && (x.BranchId == branchId || (transferRequest && x.Kind == kind)), token);
+                x.ActorId == access.UserId && x.RequestId == requestId && (x.BranchId == branchId || (bindToFirstBranch && x.Kind == kind)), token);
             if (existing is not null)
             {
                 if (existing.BranchId != branchId || existing.Kind != kind || existing.PayloadHash != payloadHash || existing.MembershipId != access.MembershipId) throw Conflict();
@@ -71,8 +75,10 @@ internal sealed class RecoverableOperations(MediPosDbContext db, IAuthenticatedM
                 if (row.ResultJson.Length == 0) throw new InvalidOperationException("Import did not register its original job.");
                 return new(requestId, kind, row.ResultJson);
             }
-            await using var transaction = await db.Database.BeginTransactionAsync(token);
-            db.RecoverableWriteActive = true;
+            await using var transaction = cashDispatch
+                ? await db.Database.BeginTransactionAsync(IsolationLevel.ReadCommitted, token)
+                : await db.Database.BeginTransactionAsync(token);
+            db.RecoverableWriteKind = kind;
             try
             {
                 row.ResultJson = await execute(token);
@@ -83,7 +89,7 @@ internal sealed class RecoverableOperations(MediPosDbContext db, IAuthenticatedM
                 await transaction.CommitAsync(token);
                 return new(requestId, kind, row.ResultJson);
             }
-            finally { db.RecoverableWriteActive = false; db.ChangeTracker.Clear(); }
+            finally { db.RecoverableWriteKind = null; db.ChangeTracker.Clear(); }
         }
         finally
         {

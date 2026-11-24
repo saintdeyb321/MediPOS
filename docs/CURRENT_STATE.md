@@ -1,6 +1,6 @@
 # Estado actual de MediPOS
 
-Revisión del 23 de noviembre de 2026. Rama local `ci/postgres-diagnostics-8bc6b4c`, HEAD `a6ec96866883d979199b24e42190cabf8184f3bf` (Lote 3). El árbol conserva el plan L4 recibido y contiene los cambios locales de L4A sin commit. [SPEC](SPEC.md), [ARCHITECTURE](ARCHITECTURE.md) y [ADR](ADR.md) definen el producto y sus límites.
+Revisión del 23 de noviembre de 2026. Rama `ci/postgres-diagnostics-8bc6b4c`, HEAD publicado `ef2467bba1b3410ed44fdf1a61ea9bf1355156fc` (L4A). L4A-R partió de un árbol limpio y sus cambios están en el árbol local sobre ese HEAD. [SPEC](SPEC.md), [ARCHITECTURE](ARCHITECTURE.md) y [ADR](ADR.md) definen el producto y sus límites.
 
 - **CODE_READY** indica que el flujo existe en código y puede pasar a verificación.
 - **Probado** exige evidencia de una comprobación concreta con SHA, alcance y entorno registrados.
@@ -37,23 +37,25 @@ El 2 de noviembre se observaron HTTP 200 en React y readiness, 401 en sesión de
 
 Offline rechaza acuses terminales del mismo evento con `receiptId` distinto, aunque coincidan estado y referencia de negocio. Gate focalizado con Vitest 86/86 (componentes, transporte e IndexedDB simulado), xUnit 182/182 (lógica y puertos de aplicación), ESLint y builds PASS. La repetición en serie completó la prueba de anulación que agotó el tiempo durante el build paralelo. PostgreSQL real y aceptación Chrome siguen pendientes.
 
-### A360 · L4A · Gates técnicos
+### A360 · L4A-R · Gates técnicos
 
 | Objetivo | Estado y evidencia |
 |---|---|
 | Compras | **PENDIENTE PostgreSQL.** Cuatro casos descubiertos de `purchase-draft` para replay, rollback, competencia y aislamiento. Ahora contrastan el ID y la sucursal de la constancia con el borrador almacenado, junto con las comprobaciones de no mover stock. |
 | Mercadería | **CODE_READY.** La solicitud con clave usa el coordinador existente como único dueño del commit de transferencia, líneas, evento, auditoría y constancia. Autoriza en destino y vincula la clave a actor, membresía, tenant y destino. React consulta la constancia original tras recarga y bloquea nuevas solicitudes mientras no pueda conciliar. Dos regresiones PostgreSQL compiladas para commit, replay, conflicto y rollback. |
-| Sencillo | **BLOQUEADO.** `CashTransferTransaction` adquiere el candado de caja origen y confirma directamente. La constancia debe incorporarse al commit de ese alcance, conservando validación de saldo/ledger bajo el candado. La clave debe ligar origen, caja, destino, importe, actor y membresía. Requiere aprobar el rediseño acotado del despacho y comprobar replay, pérdida de acuse, carreras con cierre/venta/anulación y saldo insuficiente en PostgreSQL. |
+| Sencillo | **CODE_READY.** El despacho con clave entra al mismo `MediPosDbContext` y transacción `ReadCommitted` del coordinador. El orden es candado de intención, candado de sede y `FOR UPDATE` en caja origen. `cash_transfers` es la fuente del egreso del ledger; traslado, auditoría y constancia comparten commit. El actor, membresía, tenant, sede y hash de caja/destino/importe resuelven replay o conflicto. Owner/Cashier se revalidan para replay y recuperación. React conserva el UUID hasta consultar la constancia de la sede origen. El despacho sin clave conserva su transacción propia. |
 | Importación | **PROBADO LOCALMENTE para el marcador heredado.** `importPending=1` permite consultar trabajos autorizados, pero solo un acuse o constancia verificados de una clave propia permite finalizar la revisión. Para `processing`, preservar la clave y el trabajo, consultar su constancia y las filas confirmadas, y escalar a soporte sin reenviar el archivo. Las filas se confirman por separado y el candado de `CompleteAsync`/`FailAsync` no bloquea `ImportRowAsync`. Cerrar un trabajo interrumpido requiere comprobar que no quedan escritores, mediante un candado por trabajo que cubra también el camino legado, antes de registrar un estado terminal, recuentos y auditoría. |
 | Concurrencia y RLS | **PENDIENTE PostgreSQL.** Set de 70 casos, incluido el smoke que acredita `server_version`, para POS, última unidad, stock, caja, anulación/comisiones, sencillo, offline desde conexiones distintas, interrupción y aislamiento. |
 
-En Excel, `StartAsync` confirma el trabajo y la constancia de la solicitud con clave antes de importar filas. Cada fila confirma producto, unidad base y resultado en su propia transacción. La restricción única `(tenant, trabajo, fila)` protege ese trabajo y una nueva carga crea otro identificador. Un fallo abrupto puede impedir el registro terminal aun cuando ya existan filas confirmadas.
+En Excel, `StartAsync` confirma el trabajo y la constancia de la solicitud con clave antes de importar filas. Cada fila confirma producto, unidad base y resultado en su propia transacción. La restricción única `(tenant, trabajo, fila)` protege ese trabajo y una nueva carga crea otro identificador. Un fallo abrupto puede impedir el registro terminal aun cuando ya existan filas confirmadas. **Cierre de `processing` bloqueado:** la exclusión actual por intención solo cubre solicitudes con clave y el candado de fila solo cubre el cierre. La propuesta requiere autorización: usar un candado de sesión por `(tenant, trabajo)` desde antes de `StartAsync` hasta `CompleteAsync`/`FailAsync` en todos los escritores, incluidos los legados. Drenar escritores de versiones anteriores. La recuperación autorizada debe intentar ese candado sin esperar, volver a leer `processing` bajo `FOR UPDATE` y, en una sola transacción, registrar estado terminal, recuentos de filas persistidas y auditoría, conservando constancia y productos. Al operador le corresponde consultar el trabajo y escalar, sin reenviar el archivo.
 
-GitNexus CLI consultó el índice `ecfb687`, tres commits detrás de HEAD. Se contrastaron los símbolos con el código local, incluidas las relaciones por interfaces y DI.
+GitNexus CLI consultó el índice `ecfb687`, cuatro commits detrás de HEAD. Se contrastaron los símbolos con el código local, incluidas las relaciones por interfaces y DI.
 
-Gate local final: 44 Vitest con dobles HTTP, 246 xUnit de lógica y 14 xUnit del contrato HTTP con Kestrel en loopback y servicios de prueba. En cada grupo, 0 FAIL y 0 SKIP. ESLint focalizado, builds frontend/backend y `git diff --check` PASS. El build frontend aisló sus assets de DEV. La aplicación de mercadería con clave requiere publicar API y React compatibles. PostgreSQL y Chrome siguen sin ejecutar para este candidato.
+Evidencia del L4A publicado: 44 Vitest con dobles HTTP, 246 xUnit de lógica y 14 xUnit de contrato HTTP con Kestrel en loopback y servicios de prueba. En cada grupo, 0 FAIL y 0 SKIP. ESLint focalizado, builds frontend/backend y `git diff --check` PASS.
 
-Desde `backend/`, compilar con `dotnet build tests/MediPOS.IntegrationTests --no-restore -m:1 -nr:false`. El siguiente filtro se comprobó solo mediante descubrimiento y seleccionó 76 casos: 4 de compras, 2 de mercadería y 70 del gate.
+Evidencia local de L4A-R: 44 Vitest con dobles HTTP, 161 xUnit de lógica y 20 xUnit de contrato HTTP con Kestrel en loopback y dobles de identidad/persistencia. Cada grupo tuvo 0 FAIL y 0 SKIP. ESLint, builds frontend/backend y `git diff --check` PASS. PostgreSQL y Chrome pendientes. El despacho recuperable requiere instalar frontend y backend compatibles.
+
+Desde `backend/`, compilar con `dotnet build tests/MediPOS.IntegrationTests --no-restore -m:1 -nr:false`. El filtro se verificó por descubrimiento: 79 casos únicos, 4 de compras, 2 de mercadería, 3 nuevos de sencillo y 70 de concurrencia, aislamiento y detección de versión. Se incluye por su nombre el caso de interrupción offline que usa la fixture PostgreSQL y carece del trait `PostgreSql`.
 
 ```powershell
 $pg = 'tests/MediPOS.IntegrationTests/bin/Debug/net10.0/MediPOS.IntegrationTests.dll'
@@ -61,6 +63,7 @@ $names = @(
     '*purchase-draft*',
     '*TransferRequestCommitsOneOriginalAndBindsTheKeyToItsDestination',
     '*TransferRequestFailureBetweenBusinessSaveAndReceiptRollsBackEverything',
+    '*CashTransferRecoverabilityTests.*',
     '*SaleCheckoutConcurrencyTests.*', '*SaleVoidConcurrencyTests.*', '*CashCloseConcurrencyTests.*',
     '*CashTransferConcurrencyTests.*', '*CashTransferIsolationTests.*',
     '*SaleCheckoutIsolationTests.*', '*SaleVoidIsolationTests.*', '*CashCloseIsolationTests.*',
@@ -73,10 +76,10 @@ $names = @(
 $filters = foreach ($name in $names) { '-displayName'; $name }
 dotnet $pg -preEnumerateTheories -list full/json @filters
 # Solo en un runner aislado autorizado:
-dotnet $pg -preEnumerateTheories -showLiveOutput @filters
+dotnet $pg -preEnumerateTheories -showLiveOutput -failSkips -result-trx 'tests/MediPOS.IntegrationTests/bin/Debug/net10.0/l4a-r-postgres.trx' @filters
 ```
 
-Registrar SHA exacto, conteos PASS/FAIL/SKIP y `MEDIPOS_POSTGRES_VERSION=18.x` del smoke real. La fixture usa PostgreSQL 18 efímero y el rol runtime de pruebas sin `SUPERUSER` ni `BYPASSRLS`; el destino DEV queda excluido. Como alternativa sujeta a publicar y autorizar el SHA candidato, el workflow manual `Backend validation - PostgreSQL 18` ejecuta el gate completo. Elegir la rama del candidato en `Run workflow` y verificar el SHA del run. L4B, L4C y la liberación siguen pendientes de evidencia y revisión.
+Registrar SHA exacto, conteos PASS/FAIL/SKIP y `MEDIPOS_POSTGRES_VERSION=18.x` del smoke real. La fixture crea PostgreSQL 18 efímero con datos sintéticos, credenciales generadas y rol runtime sin `SUPERUSER` ni `BYPASSRLS`. Las cadenas de conexión proceden del contenedor, sin seleccionar DEV, LAB ni producción. Como alternativa, tras publicar y autorizar el nuevo SHA, el workflow manual `Backend validation - PostgreSQL 18` ejecuta el gate completo sin secretos comerciales y hace checkout de `github.sha`. Elegir la rama que apunte al SHA candidato en `Run workflow` y cotejar `Tested commit` en el resumen. L4B, L4C y la liberación siguen pendientes de evidencia y revisión.
 
 ## CI y primer candidato
 

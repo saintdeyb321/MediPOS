@@ -1,8 +1,11 @@
 import { fireEvent, screen, waitFor } from '@testing-library/react'
-import { expect, it } from 'vitest'
+import { beforeEach, expect, it } from 'vitest'
+import { stringifyExactJson } from '../../shared/api/exactJson'
 import { CashTransfersPage } from './CashTransfersPage'
 import { cashServer, sentCash } from './cash.test.support'
-import { id, mountTransfers, other, workspace } from './transfers.test.support'
+import { id, json, mountTransfers, other, workspace } from './transfers.test.support'
+
+beforeEach(() => sessionStorage.clear())
 
 function openDispatch() { fireEvent.click(screen.getByRole('button', { name: 'Nuevo envío de sencillo' })) }
 async function selectCash() {
@@ -51,13 +54,42 @@ it('requires a new review after changing the cash session and rejects a foreign-
   openDispatch()
   await screen.findByText('No pudimos consultar cajas'); expect(screen.getByRole('button', { name: 'Confirmar despacho de sencillo' })).toBeDisabled()
 })
-it('preserves uncertain dispatch across reload, even after a matching pending record is consulted', async () => {
+it('preserves the legacy guard when there is no original intention key', async () => {
+  const fake = cashServer(); fake.cash.records = [{ ...sentCash, sourceBranchId: workspace.branchId, destinationBranchId: other.id }]
+  mountTransfers(fake, <CashTransfersPage />, '?cashTransferPending=create&cashTransferUnidentified=1')
+  fireEvent.change(screen.getByRole('combobox', { name: 'Destino de consulta' }), { target: { value: '' } })
+  fireEvent.click(await screen.findByRole('button', { name: 'Consultar sencillo de ' + workspace.branch.name }))
+  await screen.findByRole('heading', { name: 'Sencillo: EN TRÁNSITO' })
+  expect(screen.getByRole('button', { name: 'Preparar otro despacho de sencillo' })).toBeDisabled()
+  expect(screen.getByRole('button', { name: 'Continuar tras conciliación de creación' })).toBeDisabled()
+  expect(fake.writes()).toHaveLength(0)
+})
+it('recovers a lost dispatch after reload with the original source receipt and never repeats the POST', async () => {
   const fake = cashServer(); fake.cash.lose = 'create'; const view = mountTransfers(fake, <CashTransfersPage />); await dispatch()
-  await screen.findByText(/Hay una operación pendiente/); await waitFor(() => expect(fake.writes()).toHaveLength(1))
-  fireEvent.change(screen.getByRole('combobox', { name: 'Destino de consulta' }), { target: { value: '' } }); fireEvent.click(await screen.findByRole('button', { name: 'Consultar sencillo de ' + workspace.branch.name }))
-  await screen.findByRole('heading', { name: 'Sencillo: EN TRÁNSITO' }); expect(screen.getByRole('button', { name: 'Preparar otro despacho de sencillo' })).toBeDisabled()
-  const search = screen.getByTestId('location').textContent!; view.unmount(); mountTransfers(fake, <CashTransfersPage />, search)
-  await screen.findByRole('heading', { name: 'Sencillo: EN TRÁNSITO' }); expect(screen.getByTestId('location')).toHaveTextContent('cashTransferUnidentified=1'); expect(fake.writes()).toHaveLength(1)
+  await screen.findByText('No pudimos completar o consultar el sencillo')
+  const key = new Headers(fake.writes()[0]?.[1]?.headers).get('Idempotency-Key')
+  expect(key).toMatch(/^[a-f\d-]{36}$/); expect(screen.getByTestId('location')).toHaveTextContent(`cashTransferRequest=${key}`)
+  const normal = fake.fetcher.getMockImplementation()!
+  let receipt = 'missing'
+  fake.fetcher.mockImplementation((path, init) => {
+    if (!String(path).includes('/operations/')) return normal(path, init)
+    expect(String(path).endsWith(`/branches/${workspace.branchId}/operations/${key}`)).toBe(true)
+    if (receipt === 'missing') return Promise.resolve(json({ code: 'operation.not_observed' }, 404))
+    const original = fake.cash.records[0]!
+    const result = receipt === 'foreign' ? { ...original, dispatchedByActorId: id(999) } : original
+    return Promise.resolve(json({ requestId: key, kind: 'cash-transfer-dispatch', resultJson: stringifyExactJson(result) }))
+  })
+  view.unmount(); mountTransfers(fake, <CashTransfersPage />)
+  fireEvent.change(screen.getByRole('combobox', { name: 'Destino de consulta' }), { target: { value: '' } })
+  expect(await screen.findByRole('button', { name: 'Consultar sencillo de ' + workspace.branch.name })).toBeDisabled()
+  const recover = screen.getByRole('button', { name: 'Consultar constancia de la solicitud' })
+  fireEvent.click(recover); await screen.findByText(/Aún no se observa una constancia/)
+  receipt = 'foreign'; fireEvent.click(recover); await screen.findByText(/El servidor no devolvió una respuesta/)
+  expect(screen.getByRole('button', { name: 'Nuevo envío de sencillo' })).toBeDisabled()
+  receipt = 'committed'; fireEvent.click(recover)
+  await screen.findByRole('heading', { name: 'Sencillo: EN TRÁNSITO' })
+  expect(screen.getByTestId('location')).not.toHaveTextContent('cashTransferRequest')
+  expect(fake.writes()).toHaveLength(1)
 })
 it('keeps an early in-transit read pending after lost receipt, then reconciles received without another POST', async () => {
   const fake = cashServer(); fake.cash.records = [sentCash]; fake.cash.lose = 'receive'; fake.cash.hold = true
@@ -78,5 +110,5 @@ it('uses hasMore pagination, distinguishes empty and failed pending queries, and
 it.each([403, 409, 429, 503])('handles HTTP %i without repeating dispatch', async status => {
   const fake = cashServer(); fake.cash.reject = status; mountTransfers(fake, <CashTransfersPage />); await dispatch(); await screen.findByText('No pudimos completar o consultar el sencillo')
   expect(fake.writes()).toHaveLength(1)
-  if (status === 503) expect(screen.getByTestId('location')).toHaveTextContent('cashTransferUnidentified=1')
+  if (status === 503) expect(screen.getByTestId('location')).toHaveTextContent('cashTransferRequest=')
 })

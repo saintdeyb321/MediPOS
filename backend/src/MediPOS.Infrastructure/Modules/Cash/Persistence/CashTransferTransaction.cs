@@ -1,6 +1,7 @@
 using System.Data;
 using MediPOS.Application.Errors;
 using MediPOS.Application.Modules.Cash;
+using MediPOS.Application.Modules.Cash.DispatchCashTransfer;
 using MediPOS.Domain.Modules.AuditSupport;
 using MediPOS.Domain.Modules.Cash;
 using MediPOS.Infrastructure.Persistence;
@@ -15,7 +16,11 @@ internal sealed class CashTransferTransaction(MediPosDbContext context) : ICashT
     public async Task<ICashTransferDispatchScope> BeginDispatchAsync(Guid tenantId, Guid branchId, Guid sessionId, Guid destinationBranchId, CancellationToken cancellationToken)
     {
         context.SelectTenant(tenantId);
-        var transaction = await context.Database.BeginTransactionAsync(IsolationLevel.ReadCommitted, cancellationToken).ConfigureAwait(false);
+        var ambient = context.Database.CurrentTransaction;
+        var keyed = context.RecoverableWriteKind == DispatchCashTransferHandler.ReceiptKind;
+        if (keyed ? ambient is null || ambient.GetDbTransaction().IsolationLevel != IsolationLevel.ReadCommitted : ambient is not null)
+            throw new InvalidOperationException("A recoverable dispatch requires its coordinator's ReadCommitted transaction.");
+        var owned = keyed ? null : await context.Database.BeginTransactionAsync(IsolationLevel.ReadCommitted, cancellationToken).ConfigureAwait(false);
         try
         {
             DetachSession(sessionId);
@@ -23,11 +28,11 @@ internal sealed class CashTransferTransaction(MediPosDbContext context) : ICashT
             var session = await LockCashAsync(tenantId, branchId, sessionId, cancellationToken).ConfigureAwait(false);
             if (!await context.Branches.AnyAsync(b => b.TenantId == tenantId && b.Id == destinationBranchId, cancellationToken).ConfigureAwait(false))
                 throw new ApplicationErrorException(CashTransferErrors.NotFound);
-            return new DispatchScope(context, transaction, session, destinationBranchId);
+            return new DispatchScope(context, owned, session, destinationBranchId);
         }
         catch (PostgresException error) when (IsConcurrent(error))
-        { await transaction.DisposeAsync().ConfigureAwait(false); context.ChangeTracker.Clear(); throw new ApplicationErrorException(CashTransferErrors.Concurrent); }
-        catch { await transaction.DisposeAsync().ConfigureAwait(false); context.ChangeTracker.Clear(); throw; }
+        { if (owned is not null) await owned.DisposeAsync().ConfigureAwait(false); context.ChangeTracker.Clear(); throw new ApplicationErrorException(CashTransferErrors.Concurrent); }
+        catch { if (owned is not null) await owned.DisposeAsync().ConfigureAwait(false); context.ChangeTracker.Clear(); throw; }
     }
     public async Task<ICashTransferReceiveScope> BeginReceiveAsync(Guid tenantId, Guid transferId, CancellationToken cancellationToken)
     {
@@ -59,38 +64,44 @@ internal sealed class CashTransferTransaction(MediPosDbContext context) : ICashT
         catch (PostgresException error) when (IsConcurrent(error)) { throw new ApplicationErrorException(CashTransferErrors.Concurrent); }
     }
     private static bool IsConcurrent(PostgresException error) => error.SqlState is PostgresErrorCodes.DeadlockDetected or PostgresErrorCodes.SerializationFailure;
-    private static async Task CommitAsync(MediPosDbContext db, IDbContextTransaction transaction, CashTransfer transfer, AuditLog audit, bool receipt, CancellationToken token)
+    private static async Task PersistAsync(MediPosDbContext db, IDbContextTransaction? owned, CashTransfer transfer, AuditLog audit, bool receipt, CancellationToken token)
     {
         db.AddAudit(audit, transfer.TenantId, receipt ? AuditAction.CashTransferReceived : AuditAction.CashTransferDispatched, transfer.Id);
-        try { await db.SaveAuditedChangesAsync(token).ConfigureAwait(false); await transaction.CommitAsync(token).ConfigureAwait(false); }
+        try
+        {
+            await db.SaveAuditedChangesAsync(token).ConfigureAwait(false);
+            if (owned is not null) await owned.CommitAsync(token).ConfigureAwait(false);
+        }
         catch (DbUpdateConcurrencyException) { throw new ApplicationErrorException(CashTransferErrors.Concurrent); }
         catch (Exception error) when ((error is PostgresException postgres ? postgres : error.InnerException as PostgresException)?.SqlState
             is PostgresErrorCodes.DeadlockDetected or PostgresErrorCodes.SerializationFailure)
         { throw new ApplicationErrorException(CashTransferErrors.Concurrent); }
     }
-    private sealed class DispatchScope(MediPosDbContext db, IDbContextTransaction transaction, CashSession session, Guid destination) : ICashTransferDispatchScope
+    private sealed class DispatchScope(MediPosDbContext db, IDbContextTransaction? owned, CashSession session, Guid destination) : ICashTransferDispatchScope
     {
-        private bool _committed;
+        private bool _completed;
         private CashPaymentLedger? _ledger;
         public CashSession Session => session;
         public async Task<CashPaymentLedger> ReadLedgerAsync(CancellationToken cancellationToken)
         {
-            if (_committed || _ledger is not null || session.Status != CashSessionStatus.Open) throw new InvalidOperationException("Read current ledger after locking an open source session.");
+            if (_completed || _ledger is not null || session.Status != CashSessionStatus.Open) throw new InvalidOperationException("Read current ledger after locking an open source session.");
             _ledger = await CashSessionReconciliationReader.LoadLedgerAsync(db, session, cancellationToken).ConfigureAwait(false); return _ledger;
         }
         public async Task CompleteAsync(CashTransfer transfer, AuditLog audit, CancellationToken cancellationToken)
         {
             transfer.Validate();
-            if (_committed || _ledger is null || session.Status != CashSessionStatus.Open || transfer.Status != CashTransferStatus.InTransit ||
+            if (_completed || _ledger is null || session.Status != CashSessionStatus.Open || transfer.Status != CashTransferStatus.InTransit ||
                 transfer.TenantId != session.TenantId || transfer.SourceBranchId != session.BranchId || transfer.SourceCashSessionId != session.Id || transfer.DestinationBranchId != destination ||
                 transfer.Amount > CashReconciliation.ExpectedCash(session.OpeningAmount, CashReconciliation.Calculate(session, _ledger), CashReconciliation.CalculateTransfers(session, _ledger)))
                 throw new InvalidOperationException("Dispatch must match its locked source and current expected cash.");
             db.CashTransfers.Add(transfer);
-            await CommitAsync(db, transaction, transfer, audit, receipt: false, cancellationToken).ConfigureAwait(false); _committed = true;
+            // A keyed dispatch leaves the source lock held until the coordinator saves and commits the receipt.
+            await PersistAsync(db, owned, transfer, audit, receipt: false, cancellationToken).ConfigureAwait(false);
+            _completed = true;
         }
         public async ValueTask DisposeAsync()
         {
-            try { await transaction.DisposeAsync().ConfigureAwait(false); } finally { if (!_committed) db.ChangeTracker.Clear(); }
+            try { if (owned is not null) await owned.DisposeAsync().ConfigureAwait(false); } finally { if (!_completed) db.ChangeTracker.Clear(); }
         }
     }
     private sealed class ReceiveScope(CashTransferTransaction owner, MediPosDbContext db, IDbContextTransaction transaction, CashTransfer transfer) : ICashTransferReceiveScope
@@ -110,7 +121,7 @@ internal sealed class CashTransferTransaction(MediPosDbContext context) : ICashT
             if (_committed || _destination is null || _destination.Status != CashSessionStatus.Open || transfer.Status != CashTransferStatus.Received ||
                 transfer.DestinationCashSessionId != _destination.Id || transfer.ReceivedAt < _destination.OpenedAt)
                 throw new InvalidOperationException("Receipt must match its locked open destination.");
-            await CommitAsync(db, transaction, transfer, audit, receipt: true, cancellationToken).ConfigureAwait(false); _committed = true;
+            await PersistAsync(db, transaction, transfer, audit, receipt: true, cancellationToken).ConfigureAwait(false); _committed = true;
         }
         public async ValueTask DisposeAsync()
         {

@@ -44,7 +44,8 @@ namespace MediPOS.Infrastructure.Persistence;
 
 public sealed partial class MediPosDbContext(DbContextOptions<MediPosDbContext> options, ITenantDataContext tenantContext) : DbContext(options)
 {
-    internal bool RecoverableWriteActive { get; set; }
+    internal string? RecoverableWriteKind { get; set; }
+    internal bool RecoverableWriteActive => RecoverableWriteKind is not null;
     internal OperationReceiptRow? PendingImportReceipt { get; set; }
     private bool _officialCatalogWrites;
     private int _officialCurationWrites;
