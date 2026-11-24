@@ -1,6 +1,6 @@
 # Estado actual de MediPOS
 
-Revisión del 23 de noviembre de 2026. Rama `ci/postgres-diagnostics-8bc6b4c`, HEAD publicado `ef2467bba1b3410ed44fdf1a61ea9bf1355156fc` (L4A). L4A-R partió de un árbol limpio y sus cambios están en el árbol local sobre ese HEAD. [SPEC](SPEC.md), [ARCHITECTURE](ARCHITECTURE.md) y [ADR](ADR.md) definen el producto y sus límites.
+Revisión del 23 de noviembre de 2026. Rama `ci/postgres-diagnostics-8bc6b4c`, HEAD publicado `dbc15c524c20b6bb8bf3559b60007e8ba03f863f` (L4A-R). L4A-FINAL partió de un árbol limpio. El cambio local registra el gate y el bloqueo de importación. [SPEC](SPEC.md), [ARCHITECTURE](ARCHITECTURE.md) y [ADR](ADR.md) definen el producto y sus límites.
 
 - **CODE_READY** indica que el flujo existe en código y puede pasar a verificación.
 - **Probado** exige evidencia de una comprobación concreta con SHA, alcance y entorno registrados.
@@ -37,7 +37,7 @@ El 2 de noviembre se observaron HTTP 200 en React y readiness, 401 en sesión de
 
 Offline rechaza acuses terminales del mismo evento con `receiptId` distinto, aunque coincidan estado y referencia de negocio. Gate focalizado con Vitest 86/86 (componentes, transporte e IndexedDB simulado), xUnit 182/182 (lógica y puertos de aplicación), ESLint y builds PASS. La repetición en serie completó la prueba de anulación que agotó el tiempo durante el build paralelo. PostgreSQL real y aceptación Chrome siguen pendientes.
 
-### A360 · L4A-R · Gates técnicos
+### A360 · L4A-FINAL · Gates técnicos
 
 | Objetivo | Estado y evidencia |
 |---|---|
@@ -47,15 +47,19 @@ Offline rechaza acuses terminales del mismo evento con `receiptId` distinto, aun
 | Importación | **PROBADO LOCALMENTE para el marcador heredado.** `importPending=1` permite consultar trabajos autorizados, pero solo un acuse o constancia verificados de una clave propia permite finalizar la revisión. Para `processing`, preservar la clave y el trabajo, consultar su constancia y las filas confirmadas, y escalar a soporte sin reenviar el archivo. Las filas se confirman por separado y el candado de `CompleteAsync`/`FailAsync` no bloquea `ImportRowAsync`. Cerrar un trabajo interrumpido requiere comprobar que no quedan escritores, mediante un candado por trabajo que cubra también el camino legado, antes de registrar un estado terminal, recuentos y auditoría. |
 | Concurrencia y RLS | **PENDIENTE PostgreSQL.** Set de 70 casos, incluido el smoke que acredita `server_version`, para POS, última unidad, stock, caja, anulación/comisiones, sencillo, offline desde conexiones distintas, interrupción y aislamiento. |
 
-En Excel, `StartAsync` confirma el trabajo y la constancia de la solicitud con clave antes de importar filas. Cada fila confirma producto, unidad base y resultado en su propia transacción. La restricción única `(tenant, trabajo, fila)` protege ese trabajo y una nueva carga crea otro identificador. Un fallo abrupto puede impedir el registro terminal aun cuando ya existan filas confirmadas. **Cierre de `processing` bloqueado:** la exclusión actual por intención solo cubre solicitudes con clave y el candado de fila solo cubre el cierre. La propuesta requiere autorización: usar un candado de sesión por `(tenant, trabajo)` desde antes de `StartAsync` hasta `CompleteAsync`/`FailAsync` en todos los escritores, incluidos los legados. Drenar escritores de versiones anteriores. La recuperación autorizada debe intentar ese candado sin esperar, volver a leer `processing` bajo `FOR UPDATE` y, en una sola transacción, registrar estado terminal, recuentos de filas persistidas y auditoría, conservando constancia y productos. Al operador le corresponde consultar el trabajo y escalar, sin reenviar el archivo.
+**F1 · Recuperación de Excel bloqueada por esquema.** `StartAsync` confirma el trabajo y la constancia de la solicitud con clave antes de los commits por fila. `FailAsync` puede cerrar con recuentos parciales, pero hoy escribe sin auditoría. `ck_audit_logs_codes` solo admite `catalog.products_imported` para `import_job`, y `ValidateImportHistory` exige que ese evento corresponda a `Completed` y al actor original. Una interrupción con filas faltantes exige poder registrar `Failed` con un evento propio y el Owner que ejecuta la recuperación. Mientras tanto, conservar el trabajo y la constancia, consultar las filas persistidas mediante GET y escalar sin reenviar el archivo.
 
-GitNexus CLI consultó el índice `ecfb687`, cuatro commits detrás de HEAD. Se contrastaron los símbolos con el código local, incluidas las relaciones por interfaces y DI.
+**Cambio mínimo sujeto a autorización.** Migración 40 aditiva en `ck_audit_logs_codes` para un evento `catalog.product_import_interrupted`, con la conversión de auditoría y una guarda que exija la transición `Processing → Failed`, recuentos, actor autenticado y auditoría en el mismo commit. Los privilegios actuales permiten actualizar `import_jobs` e insertar `audit_logs`. Usar un candado de sesión `(tenant, trabajo)` para todos los escritores, antes de `StartAsync` y hasta `CompleteAsync` o `FailAsync`. En el camino con clave, el orden es intención y luego trabajo. Fijar la conexión física entre commits, verificar la pertenencia del candado antes de cada escritura y abortar si se pierde la sesión. Liberar con tiempo acotado incluso al cancelar y descartar la sesión si el desbloqueo queda incierto. Activar el cierre solo tras drenar y verificar todos los escritores antiguos. Owner vigente del tenant toma el mismo candado sin espera, relee `processing` bajo bloqueo de fila acotado, recuenta y confirma el fallo con auditoría. Un terminal existente se devuelve intacto. Se preservan filas, productos, unidades y constancia.
+
+**Contrato y regresiones requeridos para F1.** Propuesta: `POST /api/tenants/{tenantId}/product-imports/{importJobId}/recover-interrupted`, con sesión, Origin y CSRF existentes. Responder 409 ante escritor activo, 200 con el resultado terminal y denegar o devolver 404 fuera del alcance permitido. Pausar un escritor con clave y otro sin clave tras el inicio y verificar que la recuperación no cambia el estado. Simular pérdida de sesión tras confirmar una fila y comprobar que quedan el producto, su unidad, el resultado y la constancia. Enfrentar dos recuperaciones y repetir tras el commit para exigir una sola auditoría. Denegar rol o tenant incorrecto. Leer un terminal existente sin efectos. Comprobar liberación por cancelación y reciclaje del pool antes de repetir con otro tenant.
+
+GitNexus CLI consultó el índice `ecfb687`, cinco commits detrás de HEAD. Se contrastaron los escritores y sus límites de transacción con el código local.
 
 Evidencia del L4A publicado: 44 Vitest con dobles HTTP, 246 xUnit de lógica y 14 xUnit de contrato HTTP con Kestrel en loopback y servicios de prueba. En cada grupo, 0 FAIL y 0 SKIP. ESLint focalizado, builds frontend/backend y `git diff --check` PASS.
 
-Evidencia local de L4A-R: 44 Vitest con dobles HTTP, 161 xUnit de lógica y 20 xUnit de contrato HTTP con Kestrel en loopback y dobles de identidad/persistencia. Cada grupo tuvo 0 FAIL y 0 SKIP. ESLint, builds frontend/backend y `git diff --check` PASS. PostgreSQL y Chrome pendientes. El despacho recuperable requiere instalar frontend y backend compatibles.
+Evidencia de L4A-R publicado: 44 Vitest con dobles HTTP, 161 xUnit de lógica y 20 xUnit de contrato HTTP con Kestrel en loopback y dobles de identidad/persistencia. Cada grupo tuvo 0 FAIL y 0 SKIP. ESLint, builds frontend/backend y `git diff --check` PASS. El despacho recuperable requiere instalar frontend y backend compatibles.
 
-Desde `backend/`, compilar con `dotnet build tests/MediPOS.IntegrationTests --no-restore -m:1 -nr:false`. El filtro se verificó por descubrimiento: 79 casos únicos, 4 de compras, 2 de mercadería, 3 nuevos de sencillo y 70 de concurrencia, aislamiento y detección de versión. Se incluye por su nombre el caso de interrupción offline que usa la fixture PostgreSQL y carece del trait `PostgreSql`.
+**F2/F3 · Bloqueo de infraestructura.** El host carece de CLI, servicios y pipes del motor Docker. PostgreSQL real: 0 ejecutados, versión sin observar. No hay resultados de compras, mercadería ni sencillo que permitan atribuir un fallo al producto o al test. Desde `backend/`, compilar con `dotnet build tests/MediPOS.IntegrationTests --no-restore -m:1 -nr:false`. El descubrimiento verificó 83 casos únicos: 79 del gate (4 compras, 2 mercadería, 3 sencillo, 70 concurrencia/aislamiento/smoke) y cuatro casos existentes de Excel sobre filas parciales, auditoría, RLS y pooling. Las nuevas regresiones del protocolo de cierre dependen de F1.
 
 ```powershell
 $pg = 'tests/MediPOS.IntegrationTests/bin/Debug/net10.0/MediPOS.IntegrationTests.dll'
@@ -71,15 +75,23 @@ $names = @(
     '*SameEventSimultaneousReplayCommitsOneSaleAndRejectedPayloadNeverBecomesASale',
     '*MigrationRlsAndPoolingIsolateConflictsWithoutQueryFiltersOrClientAuthority',
     '*ActualConnectionTerminationDuringSecondReservationKeepsOnlyCommittedPrefixAndRetryRecovers',
+    '*UnitPersistenceFailureRollsBackOnlyThatProductAndPreservesEarlierCommittedRows',
+    '*SummaryAuditFailureCannotLeaveJobCompletedWithoutItsAudit',
+    '*RuntimeRlsIsForcedForJobsAndRowsAndNeverExposesAnotherTenantsProductsUnitsOrImportHistory',
+    '*PooledConnectionClearsImportJobsAndRowsBeforeReuseByAnotherTenant',
     '*ContainerAcceptsConnectionThroughDbContext'
 )
 $filters = foreach ($name in $names) { '-displayName'; $name }
 dotnet $pg -preEnumerateTheories -list full/json @filters
 # Solo en un runner aislado autorizado:
-dotnet $pg -preEnumerateTheories -showLiveOutput -failSkips -result-trx 'tests/MediPOS.IntegrationTests/bin/Debug/net10.0/l4a-r-postgres.trx' @filters
+dotnet $pg -preEnumerateTheories -showLiveOutput -failSkips -result-trx 'tests/MediPOS.IntegrationTests/bin/Debug/net10.0/l4a-final-postgres.trx' @filters
 ```
 
-Registrar SHA exacto, conteos PASS/FAIL/SKIP y `MEDIPOS_POSTGRES_VERSION=18.x` del smoke real. La fixture crea PostgreSQL 18 efímero con datos sintéticos, credenciales generadas y rol runtime sin `SUPERUSER` ni `BYPASSRLS`. Las cadenas de conexión proceden del contenedor, sin seleccionar DEV, LAB ni producción. Como alternativa, tras publicar y autorizar el nuevo SHA, el workflow manual `Backend validation - PostgreSQL 18` ejecuta el gate completo sin secretos comerciales y hace checkout de `github.sha`. Elegir la rama que apunte al SHA candidato en `Run workflow` y cotejar `Tested commit` en el resumen. L4B, L4C y la liberación siguen pendientes de evidencia y revisión.
+Registrar SHA exacto, conteos PASS/FAIL/SKIP y `MEDIPOS_POSTGRES_VERSION=18.x` del smoke real. La fixture crea PostgreSQL 18 efímero con datos sintéticos, credenciales generadas y rol runtime sin `SUPERUSER` ni `BYPASSRLS`. Las cadenas de conexión proceden del contenedor. El workflow manual `Backend validation - PostgreSQL 18` ejecuta el gate completo sin secretos comerciales y hace checkout de `github.sha`. Con autorización externa, elegir la rama en `Run workflow` y cotejar `Tested commit`, versión y resultados. Para el código actualmente publicado, el SHA es `dbc15c524c20b6bb8bf3559b60007e8ba03f863f`. Un cambio posterior de código exige su propio SHA y gate.
+
+**F4 · Evidencia local.** xUnit de lógica y autorización: 161 PASS, 0 FAIL, 0 SKIP. Vitest con dobles HTTP: primera pasada 41 PASS, 1 FAIL, 0 SKIP en la prueba del flujo completo de mercadería. La repetición en serie sin cambios dio 42 PASS, 0 FAIL, 0 SKIP. ESLint, builds frontend/backend y `git diff --check` PASS. El build de React usó un directorio aislado de DEV.
+
+**Guion L4B, pendiente de GO.** Con PostgreSQL aprobado, resolver F1 y verificar la instalación conjunta de API y React. Usar tres perfiles Chrome y datos controlados: A administra plataforma, B y C son Owners de boticas distintas. B valida alta y confirmación de compra con stock único, solicitud de mercadería y despacho de sencillo. Simular pérdida del acuse, recuperar cada intención original y comprobar una sola escritura y su saldo. C valida la denegación en la botica de B y A la separación de plataforma y negocio. Para Excel, revisar primero el trabajo y sus filas, y ensayar el cierre interrumpido solo cuando exista la acción auditada.
 
 ## CI y primer candidato
 
