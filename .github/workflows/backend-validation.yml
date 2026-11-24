@@ -44,6 +44,23 @@ jobs:
         with:
           dotnet-version: '10.0.402'
 
+      - name: Pin SDK selection in backend
+        run: |
+          if [[ -e global.json || -L global.json ]]; then
+            printf '%s\n' 'backend/global.json already exists; refusing to overwrite it.' >&2
+            exit 1
+          fi
+          set -o noclobber
+          cat > global.json <<'JSON'
+          {
+            "sdk": {
+              "version": "10.0.402",
+              "rollForward": "disable",
+              "allowPrerelease": false
+            }
+          }
+          JSON
+
       - name: Record execution identity
         id: identity
         run: |
