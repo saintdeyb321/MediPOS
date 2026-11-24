@@ -1,6 +1,6 @@
 import { recoverOperation } from '../../shared/api/operations'
 import type { OperationIntention } from '../../shared/api/operations'
-import { array, nullable, object, oneOf, text, uint, utc, uuid } from '../../shared/api/contracts'
+import { array, boolean, nullable, object, oneOf, text, uint, utc, uuid } from '../../shared/api/contracts'
 import type { BranchScope } from '../../shared/api/contracts'
 import { ApiError, HttpClient } from '../../shared/api/http'
 
@@ -8,7 +8,7 @@ import { ApiError, HttpClient } from '../../shared/api/http'
 export const excelType = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
 export const maximumFileBytes = 5 * 1024 * 1024
 const row = object({ rowNumber: uint, status: oneOf('imported', 'invalid'), businessProductId: nullable(uuid), errorCode: nullable(text), errorMessage: nullable(text) })
-const job = object({ importJobId: uuid, status: oneOf('processing', 'completed', 'failed'), fileName: text, templateVersion: text, totalRows: uint, validRows: uint, importedRows: uint, invalidRows: uint, createdAt: utc, completedAt: nullable(utc), rows: array(row), nextAfterRowNumber: nullable(uint) })
+const job = object({ importJobId: uuid, status: oneOf('processing', 'completed', 'failed'), fileName: text, templateVersion: text, totalRows: uint, validRows: uint, importedRows: uint, invalidRows: uint, createdAt: utc, completedAt: nullable(utc), rows: array(row), nextAfterRowNumber: nullable(uint), canRecoverInterrupted: value => value === undefined ? false : boolean(value) })
 export type ImportJob = ReturnType<typeof job>
 export function validFile(file: File) { return /\.xlsx$/i.test(file.name) && file.name.length <= 256 && ![...file.name].some(c => c === '/' || c === '\\' || c.charCodeAt(0) < 32 || c.charCodeAt(0) === 127) && (!file.type || file.type === excelType) && file.size > 0 && file.size <= maximumFileBytes }
 function decode(data: unknown, after = 0, limit = 20) {
@@ -21,6 +21,14 @@ export function importApi(http: HttpClient) {
   return {
     async template(w: BranchScope, signal?: AbortSignal) { const data = await http.request(root(w) + '/template', { signal, responseType: 'blob' }); if (!(data instanceof Blob) || data.type !== excelType || !data.size || data.size > maximumFileBytes) throw new ApiError(0, 'client.unexpected_response'); return data },
     async recover(w: BranchScope, requestId: string, signal?: AbortSignal) { return object({ importJobId: uuid })(await recoverOperation(http, w, requestId, 'product-import', signal)) },
+    async recoverInterrupted(w: BranchScope, id: string, signal?: AbortSignal) {
+      const data = await http.request(`${root(w)}/${uuid(id)}/recover-interrupted`, { method: 'POST', signal, exactNumbers: true })
+      try {
+        const result = decode(data, 0, 100)
+        if (result.importJobId !== id || result.status === 'processing' || !result.completedAt) throw new Error('Unconfirmed import recovery')
+        return result
+      } catch { throw new ApiError(0, 'client.outcome_unknown', undefined, true) }
+    },
     async create(w: BranchScope, file: File, signal?: AbortSignal, intention?: OperationIntention) {
       if (!validFile(file)) throw new ApiError(0, 'client.invalid_file')
       let data: unknown

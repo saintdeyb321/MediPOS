@@ -235,6 +235,9 @@ public static class DependencyInjection
         services.AddSingleton<IProductImportTemplateWriter, MediPOS.Infrastructure.Modules.Catalog.ProductImport.ProductImportWorkbook>();
         services.AddScoped<ImportProductsFromExcelHandler>();
         services.AddScoped<GetImportJobResultHandler>();
+        services.AddScoped<RecoverInterruptedImportHandler>();
+        services.AddSingleton(new ProductImportRecoverySettings(
+            bool.TryParse(configuration["ProductImportRecovery:EnabledAfterWriterDrain"], out var recoveryEnabled) && recoveryEnabled));
         services.AddSingleton<GenerateProductImportTemplateHandler>();
         services.AddScoped<GenerateTenantProductImportTemplateHandler>();
 

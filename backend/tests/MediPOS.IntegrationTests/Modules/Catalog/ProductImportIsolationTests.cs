@@ -73,9 +73,17 @@ public sealed class ProductImportIsolationTests(PostgreSqlFixture fixture)
         var firstJob = ImportJob.Create(first.TenantId, first.Identity.ActorId, "first.xlsx", "1", 2, IdentityAccessTestSetup.Now);
         var secondJob = ImportJob.Create(second.TenantId, second.Identity.ActorId, "second.xlsx", "1", 2, IdentityAccessTestSetup.Now);
         await using (var firstScope = services.CreateAsyncScope())
-            await firstScope.ServiceProvider.GetRequiredService<IProductImportStore>().StartAsync(firstJob, TestContext.Current.CancellationToken);
+        {
+            var store = firstScope.ServiceProvider.GetRequiredService<IProductImportStore>();
+            await using var lease = await store.AcquireJobAsync(firstJob.TenantId, firstJob.Id, TestContext.Current.CancellationToken);
+            await store.StartAsync(firstJob, TestContext.Current.CancellationToken);
+        }
         await using (var secondScope = services.CreateAsyncScope())
-            await secondScope.ServiceProvider.GetRequiredService<IProductImportStore>().StartAsync(secondJob, TestContext.Current.CancellationToken);
+        {
+            var store = secondScope.ServiceProvider.GetRequiredService<IProductImportStore>();
+            await using var lease = await store.AcquireJobAsync(secondJob.TenantId, secondJob.Id, TestContext.Current.CancellationToken);
+            await store.StartAsync(secondJob, TestContext.Current.CancellationToken);
+        }
         // Administrator is used only to isolate FK/index behavior, never as evidence of tenant isolation.
         await using var constraints = fixture.CreateConstraintContext(first.TenantId);
         var foreignJob = await Assert.ThrowsAsync<PostgresException>(() => constraints.Database.ExecuteSqlInterpolatedAsync($"""

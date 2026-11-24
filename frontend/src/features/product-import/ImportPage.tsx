@@ -32,11 +32,13 @@ function ImportWorkspace() {
   const [inputId, setInputId] = useState(jobId); const [file, setFile] = useState<File | null>(null); const [confirmed, setConfirmed] = useState(false); const [reviewed, setReviewed] = useState(false)
   const [cursors, setCursors] = useState([0]); const after = cursors.at(-1)!; const [busy, setBusy] = useState(false); const running = useRef(false); const abort = useRef<AbortController | null>(null)
   const [error, setError] = useState<unknown>(null); const [notice, setNotice] = useState(''); const [denied, setDenied] = useState(false)
+  const [recoveryReview, setRecoveryReview] = useState('')
   useEffect(() => () => abort.current?.abort(), [])
   function mark(id: string, blocked: boolean, requestId = latest.current.get('importPending') ?? '') { const next = new URLSearchParams(latest.current); for (const key of ['importJob', 'importPending', 'importAck']) next.delete(key); if (id) next.set('importJob', id); if (blocked) next.set('importPending', requestId); latest.current = next; setParams(next, { replace: true }) }
   const invalidate = () => client.invalidateQueries({ predicate: q => q.queryKey[0] === 'tenant' && q.queryKey[1] === w.tenantId && ['catalog-products', 'catalog-detail', 'product-search'].includes(String(q.queryKey[3])) })
   const query = useQuery({ queryKey: scopedKey(w, 'product-import', w.session.userId, w.access.membershipId, jobId, after), queryFn: async ({ signal }) => { if (!http) throw new ApiError(0, 'client.https_required'); const result = await importApi(http).read(w, jobId, after, signal); await invalidate(); return result }, enabled: Boolean(http) && !awaitingReceipt && isUuid(jobId), retry: false, refetchOnWindowFocus: false })
   const job = !awaitingReceipt && query.isSuccess && !query.isFetching ? query.data : null
+  const canRecoverInterrupted = job?.status === 'processing' && job.canRecoverInterrupted && !legacyPending && !query.isError
   const locked = busy || pending || denied || !http
   async function upload() {
     if (!http || running.current || latest.current.has('importPending') || denied || !file || !validFile(file) || !confirmed) return
@@ -59,6 +61,28 @@ function ImportWorkspace() {
     catch (failure) { if (!controller.signal.aborted) setError(failure) }
     finally { running.current = false; if (!controller.signal.aborted) setBusy(false) }
   }
+  async function recoverInterrupted() {
+    if (!http || running.current || !canRecoverInterrupted || recoveryReview !== jobId || denied) return
+    running.current = true; setBusy(true); setRecoveryReview(''); setError(null); setNotice('')
+    const controller = new AbortController(); abort.current = controller
+    try {
+      await importApi(http).recoverInterrupted(w, jobId, controller.signal)
+      if (!controller.signal.aborted) setNotice('Estado terminal confirmado. Revisa las filas y los productos conservados.')
+    } catch (failure) {
+      if (!controller.signal.aborted) setError(failure)
+    } finally {
+      if (!controller.signal.aborted) {
+        const observed = await query.refetch()
+        if (!controller.signal.aborted) {
+          if (observed.isSuccess && observed.data.status !== 'processing' && observed.data.completedAt) {
+            setError(null); setNotice('Estado terminal confirmado. Revisa las filas y los productos conservados.')
+          }
+          setBusy(false)
+        }
+      }
+      running.current = false
+    }
+  }
   async function download() {
     if (!http || running.current) return
     running.current = true; setBusy(true); setError(null); const controller = new AbortController(); abort.current = controller
@@ -78,11 +102,15 @@ function ImportWorkspace() {
     </div></Panel>
     <Panel><div className="operation-body"><h2>Consultar trabajo persistido</h2>{awaitingReceipt ? <Button disabled={busy || !http} onClick={() => void recover()}>Localizar trabajo por su intención original</Button> : <form onSubmit={e => { e.preventDefault(); if (!busy && isUuid(inputId) && (!acknowledged || inputId === jobId)) { mark(inputId, pending); setCursors([0]); setReviewed(false); if (inputId === jobId && after === 0) void query.refetch() } }}><TextField label={acknowledged ? 'Identificador del trabajo original' : 'Identificador del trabajo a consultar'} value={inputId} readOnly={acknowledged} onChange={e => setInputId(e.target.value.trim())} /><Button type="submit" disabled={busy || !http || !isUuid(inputId)}>Consultar trabajo</Button></form>}
       {query.isFetching && <p role="status">Consultando resultado…</p>}{query.isError && <ApiErrorState error={query.error} retry={() => void query.refetch()} />}
-      {job && <><h3>Resultado: {job.status === 'processing' ? 'En proceso' : job.status === 'completed' ? 'Completado' : job.status}</h3><p>Archivo: {job.fileName} · Plantilla {job.templateVersion} · Creado UTC {job.createdAt} · Finalizado UTC {job.completedAt ?? 'Pendiente'}</p><dl className="summary-grid"><div><dt>Filas totales</dt><dd>{job.totalRows}</dd></div><div><dt>Válidas</dt><dd>{job.validRows}</dd></div><div><dt>Importadas</dt><dd>{job.importedRows}</dd></div><div><dt>Inválidas</dt><dd>{job.invalidRows}</dd></div></dl>
+      {job && <><h3>Resultado: {job.status === 'processing' ? 'En proceso' : job.status === 'completed' ? 'Completado' : 'Fallido'}</h3><p>Archivo: {job.fileName} · Plantilla {job.templateVersion} · Creado UTC {job.createdAt} · Finalizado UTC {job.completedAt ?? 'Pendiente'}</p><dl className="summary-grid"><div><dt>Filas totales</dt><dd>{job.totalRows}</dd></div><div><dt>Válidas</dt><dd>{job.validRows}</dd></div><div><dt>Importadas</dt><dd>{job.importedRows}</dd></div><div><dt>Inválidas</dt><dd>{job.invalidRows}</dd></div></dl>
         <div className="operation-table"><table><caption>Resultados persistidos por fila</caption><thead><tr><th>Fila</th><th>Estado</th><th>Producto creado</th><th>Código</th><th>Error</th></tr></thead><tbody>{job.rows.map(row => <tr key={row.rowNumber}><td>{row.rowNumber}</td><td>{row.status}</td><td>{row.businessProductId ?? 'No creado'}</td><td>{row.errorCode ?? '—'}</td><td>{row.errorMessage ?? '—'}</td></tr>)}</tbody></table></div>{!job.rows.length && <p>No hay filas en esta página del trabajo.</p>}
         <Button disabled={busy || cursors.length < 2} onClick={() => setCursors(cursors.slice(0, -1))}>Resultados anteriores</Button><Button disabled={busy || job.nextAfterRowNumber === null} onClick={() => { if (job.nextAfterRowNumber !== null) setCursors([...cursors, job.nextAfterRowNumber]) }}>Resultados siguientes</Button>
         {acknowledged && job.status !== 'processing' && job.completedAt && <><label><input type="checkbox" checked={reviewed} onChange={e => setReviewed(e.target.checked)} /> Verifiqué que es el trabajo de la solicitud original y que terminó; revisé sus productos importados, incluidos los parciales si falló.</label><Button disabled={!reviewed || busy} onClick={() => { mark(job.importJobId, false); setRecognized(null); setFile(null); setConfirmed(false); setReviewed(false); setError(null); setNotice('Trabajo original conciliado. No se repitió el envío. Puedes preparar otro archivo distinto.') }}>Finalizar revisión de importación</Button></>}
       </>}
+      {canRecoverInterrupted && <fieldset disabled={busy || denied}><legend>Recuperar importación interrumpida</legend>
+        <label><input type="checkbox" checked={recoveryReview === jobId} onChange={event => setRecoveryReview(event.target.checked ? jobId : '')} /> Confirmo cerrar este trabajo y conservar sus filas y productos registrados.</label>
+        <Button type="button" disabled={recoveryReview !== jobId} onClick={() => void recoverInterrupted()}>Cerrar trabajo interrumpido</Button>
+      </fieldset>}
       {jobId && !awaitingReceipt && <Button disabled={busy || query.isFetching} onClick={() => void query.refetch()}>Actualizar mismo trabajo</Button>}
     </div></Panel></div>
 }

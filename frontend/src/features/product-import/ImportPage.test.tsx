@@ -70,6 +70,40 @@ it('does not treat a processing or failed query as a completed import', async ()
   const fake = managementServer(); fake.management.jobs[0] = { ...importJob, status: 'processing', completedAt: null }; mountTransfers(fake, <ImportPage />, '?importJob=' + importJob.importJobId + '&importPending=1'); await screen.findByRole('heading', { name: 'Resultado: En proceso' }); expect(screen.queryByRole('button', { name: 'Finalizar revisión de importación' })).not.toBeInTheDocument()
   fake.management.failGet = true; fireEvent.click(screen.getByRole('button', { name: 'Actualizar mismo trabajo' })); await screen.findAllByRole('alert'); expect(screen.queryByRole('heading', { name: 'Resultado: En proceso' })).not.toBeInTheDocument(); expect(fake.writes()).toHaveLength(0)
 })
+it.each([false, true])('confirms an interrupted job with one scoped POST and resolves a lost acknowledgement (%s)', async lost => {
+  const fake = managementServer()
+  const current = { ...importJob, status: 'processing', completedAt: null, canRecoverInterrupted: true }
+  const terminal = { ...importJob, status: 'failed' as const, canRecoverInterrupted: false }
+  const base = fake.fetcher.getMockImplementation()!
+  fake.fetcher.mockImplementation(async (path, request) => {
+    if (String(path).endsWith(`/product-imports/${importJob.importJobId}/recover-interrupted`)) {
+      expect(request?.method).toBe('POST'); expect(request?.body).toBeUndefined()
+      expect(new Headers(request?.headers).has('X-CSRF-TOKEN')).toBe(true)
+      fake.management.jobs[0] = terminal
+      if (lost) throw new TypeError('synthetic response loss')
+      return json(terminal)
+    }
+    if (String(path).includes('/product-imports/') && fake.management.jobs[0] !== terminal) return json(current)
+    return base(path, request)
+  })
+  mountTransfers(fake, <ImportPage />, `?importJob=${importJob.importJobId}`)
+  const close = await screen.findByRole('button', { name: 'Cerrar trabajo interrumpido' }); expect(close).toBeDisabled()
+  fireEvent.click(screen.getByRole('checkbox', { name: /Confirmo cerrar este trabajo/ })); fireEvent.click(close); fireEvent.click(close)
+  await screen.findByRole('heading', { name: 'Resultado: Fallido' })
+  await screen.findByText(/Estado terminal confirmado/)
+  expect(screen.queryByRole('button', { name: 'Cerrar trabajo interrumpido' })).not.toBeInTheDocument()
+  expect(fake.writes()).toHaveLength(1)
+})
+it.each([false, true])('keeps interrupted recovery unavailable when gated or when the legacy URL lacks proof (%s)', async legacy => {
+  const fake = managementServer()
+  const base = fake.fetcher.getMockImplementation()!
+  fake.fetcher.mockImplementation((path, request) => String(path).includes('/product-imports/')
+    ? Promise.resolve(json({ ...importJob, status: 'processing', completedAt: null, canRecoverInterrupted: legacy })) : base(path, request))
+  mountTransfers(fake, <ImportPage />, `?importJob=${importJob.importJobId}${legacy ? '&importPending=1' : ''}`)
+  await screen.findByRole('heading', { name: 'Resultado: En proceso' })
+  expect(screen.queryByRole('button', { name: 'Cerrar trabajo interrumpido' })).not.toBeInTheDocument()
+  expect(fake.writes()).toHaveLength(0)
+})
 it('downloads the official binary template via the same client without a commercial POST', async () => {
   const fake = managementServer(); const binaryBlob = (await new Response('synthetic').blob()).constructor; vi.stubGlobal('Blob', binaryBlob)
   const create = vi.fn(() => 'blob:synthetic-template'); Object.defineProperty(URL, 'createObjectURL', { configurable: true, value: create }); Object.defineProperty(URL, 'revokeObjectURL', { configurable: true, value: vi.fn() }); const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {})

@@ -57,6 +57,9 @@ internal static class ProductImportTestData
             return result;
         }
         public Task StartAsync(ImportJob job, CancellationToken cancellationToken) => inner.StartAsync(job, cancellationToken);
+        public Task<IAsyncDisposable> AcquireJobAsync(Guid tenantId, Guid jobId, CancellationToken cancellationToken) => inner.AcquireJobAsync(tenantId, jobId, cancellationToken);
+        public Task RecoverInterruptedAsync(Guid tenantId, Guid jobId, Guid actorId, Func<CancellationToken, Task> reauthorize, CancellationToken cancellationToken) =>
+            inner.RecoverInterruptedAsync(tenantId, jobId, actorId, reauthorize, cancellationToken);
         public Task SaveInvalidRowsAsync(ImportJob job, IReadOnlyList<ImportRowResult> rows, CancellationToken cancellationToken) =>
             inner.SaveInvalidRowsAsync(job, rows, cancellationToken);
         public Task<ImportRowResult> ImportRowAsync(ImportJob job, int rowNumber, BusinessProduct product, ProductUnit baseUnit, Func<CancellationToken, Task> reauthorize, CancellationToken cancellationToken) =>

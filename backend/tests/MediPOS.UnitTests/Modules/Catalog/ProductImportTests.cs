@@ -17,6 +17,22 @@ public sealed class ProductImportTests
     private static readonly int[] MixedRowNumbers = [4, 5, 6];
     private static readonly int[] FailedRowNumbers = [4, 6];
 
+    [Theory]
+    [InlineData(false, TenantRole.Owner, "catalog.import_recovery_disabled")]
+    [InlineData(true, TenantRole.Cashier, "access.branch_required")]
+    [InlineData(true, TenantRole.Pharmacist, "access.branch_required")]
+    public async Task RecoveryDoesNotAcquireAJobBeforeActivationAndAuthorization(bool enabled, TenantRole role, string code)
+    {
+        var access = new TenantOperationAuthorizationTests.Setup(role);
+        var actor = access.User.UserId!.Value;
+        var store = new Store(access.Tenant.Id, actor);
+        var useCase = new RecoverInterruptedImportHandler(store, access.Policy, new(store, access.Policy), new(enabled));
+        var denied = await Assert.ThrowsAsync<ApplicationErrorException>(() => useCase.HandleAsync(access.Tenant.Id, Guid.NewGuid(), actor,
+            TestContext.Current.CancellationToken));
+        Assert.Equal(code, denied.Error.Code);
+        Assert.Equal(0, store.LeasesAcquired);
+    }
+
     [Fact]
     public async Task MixedRowsReuseDomainCreateProductAndBaseUnitTogetherAndProduceOnlyOneMinimalAudit()
     {
@@ -292,7 +308,7 @@ public sealed class ProductImportTests
             return Task.FromResult(new ProductImportWorkbook(Version, rows));
         }
     }
-    private sealed class Store(Guid tenant, Guid actor) : IProductImportStore
+    internal sealed class Store(Guid tenant, Guid actor) : IProductImportStore
     {
         internal License? License { get; set; } = License.Create(tenant, Now.AddDays(-1), Now.AddMonths(1), 3, LicenseStatus.Active, actor, Now);
         internal HashSet<string> Existing { get; } = new(StringComparer.Ordinal);
@@ -303,12 +319,28 @@ public sealed class ProductImportTests
         internal int? ConflictRow { get; set; }
         internal int? ThrowRow { get; set; }
         internal Action? BeforeRowCommit { get; set; }
+        internal int LeasesAcquired { get; private set; }
+        internal int OpenLeases { get; private set; }
+        internal Guid? RecoveredBy { get; private set; }
         public Task<License?> FindLicenseAsync(Guid tenantId, CancellationToken cancellationToken) => Task.FromResult(License);
         public Task<IReadOnlySet<Guid>> FindActiveCategoriesAsync(IReadOnlyCollection<Guid> ids, CancellationToken cancellationToken) =>
             Task.FromResult<IReadOnlySet<Guid>>(new HashSet<Guid> { Category });
         public Task<IReadOnlySet<string>> FindExistingCodesAsync(Guid tenantId, IReadOnlyCollection<string> codes, CancellationToken cancellationToken) =>
             Task.FromResult<IReadOnlySet<string>>(Existing);
-        public Task StartAsync(ImportJob job, CancellationToken cancellationToken) { Job = job; return Task.CompletedTask; }
+        public Task<IAsyncDisposable> AcquireJobAsync(Guid tenantId, Guid jobId, CancellationToken cancellationToken)
+        { LeasesAcquired++; OpenLeases++; return Task.FromResult<IAsyncDisposable>(new Lease(this)); }
+        private sealed class Lease(Store owner) : IAsyncDisposable
+        { public ValueTask DisposeAsync() { owner.OpenLeases--; return ValueTask.CompletedTask; } }
+        public async Task RecoverInterruptedAsync(Guid tenantId, Guid jobId, Guid actorId, Func<CancellationToken, Task> reauthorize, CancellationToken cancellationToken)
+        {
+            Assert.Equal(1, OpenLeases);
+            await reauthorize(cancellationToken);
+            if (Job?.Status != ImportJobStatus.Processing) return;
+            await FailAsync(tenantId, jobId, Now, cancellationToken);
+            RecoveredBy = actorId;
+        }
+        public Task StartAsync(ImportJob job, CancellationToken cancellationToken)
+        { Assert.Equal(1, OpenLeases); Job = job; return Task.CompletedTask; }
         public Task SaveInvalidRowsAsync(ImportJob job, IReadOnlyList<ImportRowResult> rows, CancellationToken cancellationToken)
         { Rows.AddRange(rows); return Task.CompletedTask; }
         public async Task<ImportRowResult> ImportRowAsync(ImportJob job, int rowNumber, BusinessProduct product, ProductUnit baseUnit, Func<CancellationToken, Task> reauthorize, CancellationToken cancellationToken)

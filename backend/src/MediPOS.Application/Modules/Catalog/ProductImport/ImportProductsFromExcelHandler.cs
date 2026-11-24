@@ -47,6 +47,7 @@ public sealed class ImportProductsFromExcelHandler(IProductImportWorkbookReader 
         var rows = workbook.Rows.Select(value => ProductImportRowValidation.Validate(value, command.TenantId, now, categories, conflicts)).ToArray();
         var job = ImportJob.Create(command.TenantId, command.ActorId, fileName, workbook.TemplateVersion, rows.Length, now);
         await authorization.RequireAsync(command.TenantId, null, command.ActorId, TenantOperation.Administration, cancellationToken).ConfigureAwait(false);
+        await using var lease = await store.AcquireJobAsync(job.TenantId, job.Id, cancellationToken).ConfigureAwait(false);
         await store.StartAsync(job, cancellationToken).ConfigureAwait(false);
         try
         {

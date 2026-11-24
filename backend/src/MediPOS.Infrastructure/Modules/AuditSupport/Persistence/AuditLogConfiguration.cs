@@ -27,7 +27,7 @@ internal sealed class AuditLogConfiguration : IEntityTypeConfiguration<AuditLog>
                 (entity_type = 'business_product' AND action IN ('business_product.data_corrected', 'business_product.created', 'business_product.price_changed', 'business_product.status_changed', 'business_product.units_changed')) OR
                 (entity_type = 'purchase' AND action = 'purchase.confirmed') OR
                 (entity_type = 'inventory_lot' AND action = 'inventory.adjusted') OR
-                (entity_type = 'import_job' AND action = 'catalog.products_imported') OR
+                (entity_type = 'import_job' AND action IN ('catalog.products_imported', 'catalog.product_import_interrupted')) OR
                 (entity_type = 'cash_session' AND action IN ('cash_session.opened', 'cash_session.closed')) OR
                 (entity_type = 'sale' AND action IN ('sale.confirmed', 'sale.voided')) OR
                 (entity_type = 'transfer' AND action IN ('transfer.requested', 'transfer.approved', 'transfer.dispatched', 'transfer.received', 'transfer.cancelled')) OR

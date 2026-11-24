@@ -4,6 +4,8 @@ namespace MediPOS.Application.Modules.Catalog.ProductImport;
 
 public static class ProductImportErrors
 {
+    public static ApplicationError JobBusy { get; } = new("catalog.import_job_busy", ErrorCategory.Conflict, "The import job is currently being written or recovered.");
+    public static ApplicationError RecoveryDisabled { get; } = new("catalog.import_recovery_disabled", ErrorCategory.NotFound, "Interrupted import recovery is disabled.");
     public static readonly ApplicationError EmptyFile = New("empty_file", "The workbook has no data to import.");
     public static readonly ApplicationError InvalidFile = New("invalid_file", "A valid XLSX workbook is required.");
     public static readonly ApplicationError FileLimit = New("file_limit", "The workbook exceeds the supported file, row or cell limits.");

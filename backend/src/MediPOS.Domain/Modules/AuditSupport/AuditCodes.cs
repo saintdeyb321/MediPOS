@@ -16,6 +16,7 @@ public enum AuditAction
     SupplierUblImported, SupplierUblReviewed, SupplierUblRejected, SupplierUblConverted, SupplierUblFileRejected,
     BusinessProductDataCorrected,
     InitialOwnerInvited, InitialOwnerClaimed, InitialOwnerRevoked,
+    CatalogProductImportInterrupted,
 }
 
 public enum AuditEntityType { ElectronicSeries, ElectronicDocument, Tenant, License, LegalEntity, Branch, Membership, BusinessProduct, Purchase, InventoryLot, ImportJob, CashSession, Sale, Transfer, CashTransfer, TenantCommissionSettings, CommissionRule, BranchStockThreshold, SyncDevice, OfflineSaleConflict, SupplierUblImport, EmployeeInvitation, InitialOwnerInvitation }
@@ -61,6 +62,7 @@ public static class AuditCodes
         AuditAction.PurchaseConfirmed => "purchase.confirmed",
         AuditAction.InventoryAdjusted => "inventory.adjusted",
         AuditAction.CatalogProductsImported => "catalog.products_imported",
+        AuditAction.CatalogProductImportInterrupted => "catalog.product_import_interrupted",
         AuditAction.CashSessionOpened => "cash_session.opened",
         AuditAction.CashSessionClosed => "cash_session.closed",
         AuditAction.SaleConfirmed => "sale.confirmed",
@@ -121,6 +123,7 @@ public static class AuditCodes
         "purchase.confirmed" => AuditAction.PurchaseConfirmed,
         "inventory.adjusted" => AuditAction.InventoryAdjusted,
         "catalog.products_imported" => AuditAction.CatalogProductsImported,
+        "catalog.product_import_interrupted" => AuditAction.CatalogProductImportInterrupted,
         "cash_session.opened" => AuditAction.CashSessionOpened,
         "cash_session.closed" => AuditAction.CashSessionClosed,
         "sale.confirmed" => AuditAction.SaleConfirmed,
@@ -160,7 +163,7 @@ public static class AuditCodes
             AuditAction.BusinessProductDataCorrected or AuditAction.BusinessProductStatusChanged or AuditAction.BusinessProductUnitsChanged => AuditEntityType.BusinessProduct,
         AuditAction.PurchaseConfirmed => AuditEntityType.Purchase,
         AuditAction.InventoryAdjusted => AuditEntityType.InventoryLot,
-        AuditAction.CatalogProductsImported => AuditEntityType.ImportJob,
+        AuditAction.CatalogProductsImported or AuditAction.CatalogProductImportInterrupted => AuditEntityType.ImportJob,
         AuditAction.CashSessionOpened or AuditAction.CashSessionClosed => AuditEntityType.CashSession,
         AuditAction.SaleConfirmed or AuditAction.SaleVoided => AuditEntityType.Sale,
         AuditAction.TransferRequested or AuditAction.TransferApproved or AuditAction.TransferDispatched or AuditAction.TransferReceived or AuditAction.TransferCancelled => AuditEntityType.Transfer,

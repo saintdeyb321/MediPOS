@@ -19,6 +19,8 @@ const messages: Record<string, string> = {
   'catalog.units_atomic_contract_required': 'No se enviaron presentaciones: el contrato necesita una condición atómica para evitar reemplazar una configuración concurrente.',
   'catalog.units_legacy_write_blocked': 'Esta operación requiere la configuración versionada de presentaciones. Recarga el producto y revisa el conjunto vigente.',
   'catalog.category_page_limit': 'El catálogo de categorías supera el límite consultable. No se mostrará una selección incompleta como si fuera completa.',
+  'catalog.import_job_busy': 'Este trabajo sigue en uso. Consulta nuevamente su estado antes de intentar el cierre.',
+  'catalog.import_recovery_disabled': 'El cierre de importaciones interrumpidas aún está deshabilitado en este entorno.',
   'client.https_required': 'La conexión necesita HTTPS y el mismo origen que MediPOS. Contacta al administrador para configurar el acceso.',
   'client.timeout': 'El servidor no respondió a tiempo. Comprueba el estado antes de repetir una operación.',
   'client.outcome_unknown': 'No pudimos confirmar el resultado. Consulta el estado de la operación antes de volver a enviarla.',

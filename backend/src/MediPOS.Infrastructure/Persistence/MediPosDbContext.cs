@@ -1,3 +1,4 @@
+using System.Text.Json;
 using MediPOS.Application.Modules.Reporting.Operational;
 using MediPOS.Application.Tenancy;
 using MediPOS.Domain.Modules.AuditSupport;
@@ -47,6 +48,7 @@ public sealed partial class MediPosDbContext(DbContextOptions<MediPosDbContext> 
     internal string? RecoverableWriteKind { get; set; }
     internal bool RecoverableWriteActive => RecoverableWriteKind is not null;
     internal OperationReceiptRow? PendingImportReceipt { get; set; }
+    internal (Guid JobId, Guid ActorId)? InterruptedImportRecovery { get; set; }
     private bool _officialCatalogWrites;
     private int _officialCurationWrites;
     private int _officialRefreshWrites;
@@ -351,6 +353,26 @@ public sealed partial class MediPosDbContext(DbContextOptions<MediPosDbContext> 
                 audit.ActorId == job.ActorId) != 1) ||
             summaries.Any(audit => !completed.Any(job => job.Id == audit.EntityId && job.TenantId == audit.TenantId))))
             throw new InvalidOperationException("Import completion and its single summary audit require one transaction.");
+
+        var interrupted = ChangeTracker.Entries<AuditLog>().Where(value => value.State == EntityState.Added &&
+            value.Entity.Action == AuditAction.CatalogProductImportInterrupted).Select(value => value.Entity).ToArray();
+        if (InterruptedImportRecovery is null && interrupted.Length == 0) return;
+        if (InterruptedImportRecovery is not { } recovery || Database.CurrentTransaction is null || interrupted.Length != 1)
+            throw new InvalidOperationException("Interrupted import recovery requires its single audit in the same transaction.");
+        var failed = ChangeTracker.Entries<ImportJob>().SingleOrDefault(value => value.State == EntityState.Modified && value.Entity.Id == recovery.JobId);
+        var audit = interrupted[0];
+        if (failed is null || failed.Entity.Status != ImportJobStatus.Failed || failed.Entity.CompletedAt != audit.OccurredAt ||
+            failed.Entity.TenantId != audit.TenantId || audit.EntityId != recovery.JobId || audit.ActorId != recovery.ActorId ||
+            failed.Properties.Any(value => value.IsModified && value.Metadata.Name is not
+                (nameof(ImportJob.Status) or nameof(ImportJob.CompletedAt) or nameof(ImportJob.ValidRows) or nameof(ImportJob.ImportedRows) or nameof(ImportJob.InvalidRows))))
+            throw new InvalidOperationException("The interrupted import audit must match the failed job and recovery actor.");
+        using var before = JsonDocument.Parse(audit.BeforeJson ?? "{}");
+        using var after = JsonDocument.Parse(audit.AfterJson ?? "{}");
+        if (before.RootElement.GetProperty("status").GetString() != "processing" || after.RootElement.GetProperty("status").GetString() != "failed" ||
+            after.RootElement.GetProperty("totalRows").GetInt32() != failed.Entity.TotalRows ||
+            after.RootElement.GetProperty("importedRows").GetInt32() != failed.Entity.ImportedRows ||
+            after.RootElement.GetProperty("invalidRows").GetInt32() != failed.Entity.InvalidRows)
+            throw new InvalidOperationException("Interrupted import audit must describe its terminal counters.");
     }
 
     private void ValidateCashWrites()

@@ -26,8 +26,14 @@ public static partial class TenantEndpoints
             using var file = new MemoryStream(buffer, 0, count, writable: false);
             return TenantHttp.Response(await handler.HandleAsync(new(TenantHttp.Tenant(c), TenantHttp.Query(c, "fileName") ?? "products.xlsx", file, TenantHttp.Actor(c)), c.RequestAborted), 201);
         }).Accepts<byte[]>(ExcelMediaType).Produces<ImportJobResult>(201).WithMetadata(new TenantRequestPolicy(ProductImportLimits.MaximumFileBytes, true)).WithName("tenant.imports.create").AddEndpointFilter(new RecoverableWriteFilter("product-import")).WithQuery<TenantOpenApi.ImportFile>();
-        tenants.MapGet("/product-imports/{importJobId}", async (HttpContext c, GetImportJobResultHandler handler) =>
-            TenantHttp.Response(await handler.HandleAsync(new(TenantHttp.Tenant(c), TenantHttp.Id(c, "importJobId"), TenantHttp.BoundedCount(c, "afterRowNumber", 0, 0, ProductImportLimits.MaximumWorksheetRow), TenantHttp.Limit(c)), c.RequestAborted)))
+        tenants.MapGet("/product-imports/{importJobId}", async (HttpContext c, GetImportJobResultHandler handler, ProductImportRecoverySettings settings) =>
+        {
+            var result = await handler.HandleAsync(new(TenantHttp.Tenant(c), TenantHttp.Id(c, "importJobId"), TenantHttp.BoundedCount(c, "afterRowNumber", 0, 0, ProductImportLimits.MaximumWorksheetRow), TenantHttp.Limit(c)), c.RequestAborted);
+            return TenantHttp.Response(result with { CanRecoverInterrupted = settings.EnabledAfterWriterDrain && result.Status == "processing" });
+        })
             .Produces<ImportJobResult>().WithName("tenant.imports.read").WithQuery<TenantOpenApi.ImportRows>();
+        tenants.MapPost("/product-imports/{importJobId}/recover-interrupted", async (HttpContext c, RecoverInterruptedImportHandler handler) =>
+            TenantHttp.Response(await handler.HandleAsync(TenantHttp.Tenant(c), TenantHttp.Id(c, "importJobId"), TenantHttp.Actor(c), c.RequestAborted)))
+            .Produces<ImportJobResult>().WithName("tenant.imports.recover_interrupted");
     }
 }
