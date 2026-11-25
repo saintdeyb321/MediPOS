@@ -71,7 +71,11 @@ export function usePurchaseReceipt() {
     controller.current = new AbortController(); let acknowledged = false
     const target = server.purchase.id
     try {
-      const confirmed = await write(controller.current.signal); acknowledged = true
+      const confirmed = await write(controller.current.signal)
+      if (confirmed && confirmed.confirmedByActorId?.toLowerCase() !== w.session.userId.toLowerCase()) {
+        throw new ApiError(0, 'client.outcome_unknown', undefined, true)
+      }
+      acknowledged = true
       if (!mounted.current) return
       if (confirmed) {
         // The POST validates this exact reviewed revision inside the confirmation transaction.

@@ -61,15 +61,16 @@ public sealed class SaleConfirmationPosting(ResolveAccessContextHandler resolver
         foreach (var group in groups)
         {
             var product = RequireProduct(catalog, sale.TenantId, group.Key);
+            var lockedProductType = product.ProductType;
             decimal required;
             try { required = SaleStockAllocation.RequiredQuantity(group); }
             catch (ArithmeticException) { throw new ApplicationErrorException(SalesPosErrors.InconsistentDraft); }
             using var lotsRead = Activities.StartActivity("sale.lot-locks");
             IReadOnlyList<InventoryLot> lots;
-            try { lots = await scope.LockLotsAsync(product.Id, product.ProductType, required, today, cancellationToken).ConfigureAwait(false); }
+            try { lots = await scope.LockLotsAsync(product.Id, lockedProductType, required, today, cancellationToken).ConfigureAwait(false); }
             catch (ArithmeticException) { throw new ApplicationErrorException(SalesPosErrors.InconsistentDraft); }
             lotsRead?.Stop();
-            selections.Add((product.Id, product.ProductType, lots));
+            selections.Add((product.Id, lockedProductType, lots));
         }
         // Re-evaluate after potentially long lock waits; never commit with an expired license/schedule/date policy.
         using var recheckRead = Activities.StartActivity("sale.product-recheck");

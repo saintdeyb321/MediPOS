@@ -12,5 +12,7 @@ export default defineConfig({
     environmentOptions: { jsdom: { url: 'https://medipos.test/' } },
     setupFiles: './src/test/setup.ts',
     clearMocks: true,
+    // DOM-heavy suites otherwise compete for CPU and time out on Windows hosts.
+    maxWorkers: 2,
   },
 })

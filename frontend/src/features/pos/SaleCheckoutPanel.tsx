@@ -25,7 +25,7 @@ export function SaleCheckoutPanel({ draft, canStartPayment = true }: { draft: Dr
     <h2 id="checkout-title" className="sr-only">Cobro</h2>
     <div className="pos-section-body">
       {checkout.error != null && <ApiErrorState error={checkout.error} title="Revisa el resultado antes de cobrar de nuevo" />}
-      {checkout.notice && <p role="status">{checkout.notice}</p>}
+      {!ticketChanged && checkout.notice && <p role="status">{checkout.notice}</p>}
       {draft.checkoutPending && <Notice tone="warning">Operación pendiente de reconciliar. No envíes otro cobro ni prepares otra venta para reemplazarla. Consulta este mismo registro.</Notice>}
       {!terminal && <>
         {canStartPayment && <Button pending={draft.preparing} disabled={!draft.canPrepare || checkout.busy || checkout.denied}
@@ -38,7 +38,7 @@ export function SaleCheckoutPanel({ draft, canStartPayment = true }: { draft: Dr
       {(draft.checkoutPending || checkout.error != null || ticketChanged) && <Button variant="secondary" pending={checkout.busy} disabled={draft.phase === 'loading'} onClick={() => void checkout.consult()}>Consultar resultado de venta</Button>}
       {draft.checkoutPending && paymentFormActive && !opened && !terminal && <Button data-recovery-focus variant="secondary" disabled={checkout.busy} onClick={() => setOpened(true)}>Revisar cobro pendiente sin reenviar</Button>}
       {terminal && <>
-        <p role="status">{draft.server?.status === 'confirmed' ? 'VENTA REALIZADA. Pagos y stock verificados en el servidor.' : 'Venta anulada. No está disponible para otro cobro.'}</p>
+        {!ticketChanged && <p role="status">{draft.server?.status === 'confirmed' ? 'VENTA REALIZADA. Pagos y stock verificados en el servidor.' : 'Venta anulada. No está disponible para otro cobro.'}</p>}
         {checkout.ticket.isPending && <p role="status">Consultando ticket interno…</p>}
         {checkout.ticket.isError && <ApiErrorState error={checkout.ticket.error} title="El ticket no pudo recuperarse; esto no autoriza repetir el cobro" />}
         <Button variant="quiet" disabled={checkout.ticket.isFetching} onClick={() => void checkout.ticket.refetch()}>Consultar ticket</Button>

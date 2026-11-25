@@ -73,6 +73,10 @@ it('only invalidates the catalog when paging observes newly imported rows', asyn
   fake.management.jobs[0] = { ...fake.management.jobs[0]!, importedRows: 1 }
   fireEvent.click(screen.getByRole('button', { name: 'Actualizar mismo trabajo' }))
   await waitFor(() => expect(readCatalog).toHaveBeenCalledTimes(3))
+  fake.management.jobs[0] = { ...fake.management.jobs[0]!, importedRows: 0 }
+  fireEvent.click(screen.getByRole('button', { name: 'Actualizar mismo trabajo' }))
+  await screen.findByText('Fila 20')
+  expect(readCatalog).toHaveBeenCalledTimes(3)
   expect(fake.writes()).toHaveLength(0)
 })
 it('shows a terminal legacy job for consultation but its URL cannot settle the original import', async () => {

@@ -38,7 +38,7 @@ function mount(decision: number | 'network' | 'empty-404' = 200, code = 'access.
 }
 afterEach(() => focusManager.setFocused(undefined))
 it('routes an approved Google session to its separate layout with one admission and one logout', async () => {
-  const fetcher = mount()
+  const fetcher = await act(async () => mount())
   await screen.findByRole('heading', { name: 'Consola autorizada de prueba' })
   expect(screen.getByTestId('path')).toHaveTextContent('/plataforma')
   expect(fetcher.mock.calls.filter(([path]) => path === '/platform/session')).toHaveLength(1)

@@ -119,20 +119,23 @@ La validación y generación fiscal debe derivarse de los requisitos reales vige
 - Implementar `IElectronicDocumentProvider.SubmitAsync(document, token)` y `QueryAsync(document, token)` en Infraestructura. `IElectronicAuthorityEvidenceVerifier.VerifyAsync(document, evidence, token)` debe vincular el XML/CDR verificable al emisor, documento y ambiente elegidos. `QueryAsync` todavía carece de consumidor operativo. Ante timeout queda `uncertain`; recuperar primero por clave y alcance si el proveedor lo garantiza. Un HTTP 200 puede significar solo recibido, y una simulación es evidencia de prueba.
 - Punto de composición futuro: registro de CPE en `MediPOS.Infrastructure/DependencyInjection.cs`. La composición normal conserva los tres servicios `Disabled*`. El worker técnico y la solicitud fiscal requieren habilitación explícita y separada del checkout. Apagado: detener nuevas solicitudes y claims, drenar envíos en curso y preservar leases, estados y evidencia para reconciliar. El ticket interno queda disponible.
 
-Plantilla propuesta para el futuro registro tipado de Infraestructura. Los perfiles y referencias son configuración privada de operaciones.
+Configuración privada de preparación validada por `ElectronicDeliveryPreparation` al componer Infraestructura. Con sección ausente el registro queda vacío. `Enabled=true` o un perfil inválido detienen el arranque con un error sin valores de configuración. Una coincidencia de perfil permite validación local y mantiene desactivados los servicios de entrega.
 
 ```json
 {
   "ElectronicDelivery": {
     "Enabled": false,
+    "ApprovedEndpoints": { "sandbox": { "provider-test": "https://provider.example.test/cpe" } },
     "IssuerProfiles": []
   }
 }
 ```
 
-Cada perfil tendrá `TenantId`, `LegalEntityId`, `IssuerRuc`, `AdapterKey`, `Environment` (sandbox o live), `EndpointKey`, `TimeoutSeconds` y referencias `CredentialRef` / `CertificateRef` si aplican. Resolver la URL por clave en una allowlist HTTPS de operaciones. Validar duplicados, alcance exacto, destino, credenciales y límites. Rechazar redirecciones a destinos no aprobados. Mantener el presupuesto de red y verificación por debajo del lease. Una configuración ausente o inválida debe dejar al emisor deshabilitado y el secreto nunca debe llegar al navegador ni a logs.
+Cada perfil exige `TenantId`, `LegalEntityId`, `IssuerRuc`, `AdapterKey`, `Environment` (`sandbox` o `live`), `EndpointKey`, `TimeoutSeconds` (1–30) y al menos una referencia opaca `CredentialRef` o `CertificateRef`. La resolución exige coincidencia exacta por tenant, entidad, RUC y ambiente. La URL se busca en la allowlist de ese ambiente y debe ser HTTPS sin credenciales, query ni fragmento. Se rechazan duplicados aun si apuntan al mismo destino. El futuro adaptador deberá resolver referencias en el almacén privado, rechazar redirecciones fuera de la allowlist y respetar el presupuesto del lease. El registro actual no obtiene secretos, abre conexiones ni autoriza entrega.
 
 Si se permite más de un ambiente, cambio de adaptador o rotación de rutas con trabajo pendiente, aprobar antes una vinculación persistente e inmutable por `(tenant_id, document_id)` con FK de tenant al documento, entidad legal, clave de adaptador, ambiente y versión de perfil. Fijarla antes del primer despacho y reutilizarla en reintentos y consultas. Conservar referencias opacas de XML/CDR más hash, tipo, documento, emisor, ambiente y reglas de retención. El diseño requiere revisión de esquema y permisos, sin copiar documentos o secretos a auditoría ni alterar snapshots existentes.
+
+`FISCAL_PREPARATION_PENDING` continúa vigente. Para consumir `QueryAsync`, extender el lease existente a conciliaciones elegibles de `uncertain` o `received`. Consultar con la clave original y el perfil fijado antes de despachar. Persistir bajo el mismo lock y auditar solo si sigue vigente el token de propiedad. Aceptar evidencia oficial únicamente tras verificar documento, tenant, entidad, RUC, tipo, número y ambiente. Probar cambio de perfil con trabajo en curso, lease vencido, dos conciliadores, CDR de otro emisor o ambiente y timeout seguido de recuperación sin segundo envío. El vínculo y la custodia de evidencia requieren aprobación de almacenamiento. Las pruebas de firma, XML/CDR y homologación requieren proveedor seleccionado y sandbox autorizado.
 
 `preparation_v1` conserva emisor/receptor, fecha de confirmación, PEN, líneas, presentaciones e importes exactos de neto/tributo/total. Tipo/serie/correlativo se asignan en el documento persistido. Falta validar catálogos fiscales, dirección/fecha de emisión, descuentos, desglose de impuestos, redondeo, forma y representación requeridos por cada tipo/proveedor. Verificar duplicado, timeout con eventual consulta, evidencia equivocada, aislamiento por ambiente y emisor, caída externa y apagado; incluir notas/bajas/resúmenes, homologación y habilitación únicamente según alcance tributario revisado. El piloto fiscal exige esa conformidad y aprobación del operador.
 

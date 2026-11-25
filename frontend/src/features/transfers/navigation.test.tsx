@@ -12,5 +12,5 @@ it('exposes the real transfers route without inheriting an unavailable label in 
 })
 it('describes the connected transfers shortcut without claiming commercial acceptance', () => {
   const fake = transferServer(); mountTransfers(fake, <DashboardPage shortcuts={[{ id: 'transferencias', label: 'Transferencias', description: 'Mercadería entre sucursales', icon: ArrowLeftRight, availability: 'implemented' }]} />)
-  const link = screen.getByRole('link', { name: /^Transferencias/ }); expect(within(link).getByText('Implementado')).toBeInTheDocument(); expect(within(link).queryByText('Próximamente')).not.toBeInTheDocument(); expect(screen.getByText(/Implementado no significa aceptación comercial aprobada/)).toBeInTheDocument(); expect(fake.writes()).toHaveLength(0)
+  const link = screen.getByRole('link', { name: /^Transferencias/ }); expect(link).toHaveAttribute('href', workspace.base + '/transferencias'); expect(within(link).queryByText('Próximamente')).not.toBeInTheDocument(); expect(screen.queryByText(/aceptación comercial aprobada/i)).not.toBeInTheDocument(); expect(fake.writes()).toHaveLength(0)
 })

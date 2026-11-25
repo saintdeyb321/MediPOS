@@ -96,9 +96,9 @@ export function EmployeeInvitationsPanel({ createOpen, onCreateOpen, onCreateClo
     <Button variant="secondary" onClick={() => setDirectoryOpen(!directoryOpen)}>{directoryOpen ? 'Ocultar invitaciones' : 'Consultar invitaciones'}</Button>
     {createOpen === undefined && <Button variant="quiet" disabled={busy || pending || !http} onClick={() => { if (onCreateOpen) onCreateOpen(); else setOwnOpen(true) }}>Crear enlace de invitación</Button>}</div>
     <details className="inline-help"><summary>Invitación por enlace · 15 minutos</summary><p>La cuenta Google acepta y el propietario emisor verifica y aprueba. No enviamos correos automáticamente.</p></details>
-    {error != null && <ApiErrorState error={error} title="No pudimos completar la invitación" />}
-    {notice && <p role="status">{notice}</p>}
-    {pending && <Notice tone="warning">Hay una operación pendiente. No crees otra intención ni repitas la aprobación sin consultar la original. <Button variant="secondary" disabled={busy} onClick={() => void reconcile()}>Consultar invitación original</Button></Notice>}
+    {!opening && error != null && <ApiErrorState error={error} title="No pudimos completar la invitación" />}
+    {!opening && notice && <p role="status">{notice}</p>}
+    {!opening && pending && <Notice tone="warning">Hay una operación pendiente. No crees otra intención ni repitas la aprobación sin consultar la original. <Button variant="secondary" disabled={busy} onClick={() => void reconcile()}>Consultar invitación original</Button></Notice>}
     {requestId && !opening && <Button data-recovery-focus variant="secondary" disabled={busy} onClick={() => { if (onCreateOpen) onCreateOpen(); else setOwnOpen(true) }}>Revisar invitación pendiente sin reenviar</Button>}
     <Modal open={opening} title="Nuevo integrante por invitación" description="Crear enlace → aceptación con Google → revisión y aprobación. Compartir el enlace no concede permisos." dirty={reviewed || role !== 'cashier'} busy={busy} recovery={pending} onClose={closeCreate} onRecoveryClose={hideCreate}>
       <Steps labels={['Elegir rol', 'Compartir enlace', 'Revisar aceptación']} current={link ? 1 : 0} label="Incorporación por enlace" focusOnChange />
@@ -111,9 +111,9 @@ export function EmployeeInvitationsPanel({ createOpen, onCreateOpen, onCreateClo
       <label><input type="checkbox" checked={reviewed} disabled={busy || pending} onChange={event => setReviewed(event.target.checked)} /> Revisé el rol; verificaré por un canal independiente la cuenta que acepte antes de incorporarla.</label>
       <Button type="submit" disabled={!http || busy || pending || !reviewed}>Crear enlace temporal</Button>
     </form>
-    {link && <section className="invitation-link-panel"><Notice tone="warning">Copia el enlace ahora. Solo está disponible en esta sesión de la página y no puede recuperarse después.</Notice><TextField label="Enlace temporal para compartir" value={link} readOnly /><Button variant="secondary" onClick={() => { void navigator.clipboard.writeText(link).then(() => { if (mounted.current) setNotice('Enlace copiado.') }).catch(() => { if (mounted.current) setNotice('Selecciona y copia el enlace visible; no se enviará automáticamente.') }) }}>Copiar enlace</Button></section>}
+    {link && <section className="invitation-link-panel"><Notice tone="warning">Copia el enlace ahora. Solo está disponible en esta sesión de la página y no puede recuperarse después.</Notice><TextField label="Enlace temporal para compartir" value={link} readOnly /><Button variant="secondary" onClick={() => { void navigator.clipboard.writeText(link).then(() => { if (mounted.current) setNotice('Enlace copiado.') }).catch(() => { if (mounted.current) setNotice('Selecciona y copia el enlace visible; no se enviará automáticamente.') }) }}>Copiar enlace</Button><Button variant="quiet" onClick={() => setLink('')}>Ocultar enlace</Button></section>}
     </Modal>
-    {link && <section aria-label="Enlace temporal de invitación"><TextField label="Enlace temporal (solo se muestra ahora)" value={link} readOnly />
+    {!opening && link && <section aria-label="Enlace temporal de invitación"><TextField label="Enlace temporal (solo se muestra ahora)" value={link} readOnly />
       <p>Compártelo por un canal seguro. El trabajador debe iniciar Google y volver a abrir este enlace; poseerlo no concede permisos.</p>
       <Button variant="secondary" onClick={() => { void navigator.clipboard.writeText(link).then(() => { if (mounted.current) setNotice('Enlace copiado por solicitud del operador.') }).catch(() => { if (mounted.current) setNotice('No se pudo copiar. Selecciona el enlace visible; no se enviará automáticamente.') }) }}>Copiar enlace temporal</Button>
       <Button variant="quiet" onClick={() => setLink('')}>Ocultar enlace</Button></section>}

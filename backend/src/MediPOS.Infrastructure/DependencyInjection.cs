@@ -255,6 +255,7 @@ public static class DependencyInjection
         services.AddScoped<CreateSupplierHandler>();
         services.AddScoped<IElectronicDocumentStore, ElectronicDocumentStore>();
         services.AddScoped<IElectronicDeliveryWorkStore, ElectronicDeliveryWorkStore>();
+        services.AddSingleton(new ElectronicDeliveryPreparation(configuration));
         services.AddSingleton<IElectronicDocumentProvider, DisabledElectronicDocumentProvider>();
         services.AddSingleton<IElectronicDeliveryIdentity, DisabledElectronicDeliveryIdentity>();
         services.AddSingleton<IElectronicAuthorityEvidenceVerifier, DisabledElectronicEvidenceVerifier>();

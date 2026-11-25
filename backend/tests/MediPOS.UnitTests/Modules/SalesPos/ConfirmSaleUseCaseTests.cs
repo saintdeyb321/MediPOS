@@ -275,11 +275,22 @@ public sealed class ConfirmSaleUseCaseTests
         Assert.Equal(0, setup.Transaction.Begins);
     }
 
-    [Fact]
-    public async Task ProductReadAfterLotLocksRejectsDeactivatedProductWithoutPosting()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ProductReadAfterLotLocksRejectsDeactivationOrChangedTypeWithoutPosting(bool changeType)
     {
         var setup = new Setup();
-        setup.Scope.AfterLock = () => setup.Product.SetStatus(false);
+        setup.Scope.AfterLock = () =>
+        {
+            if (changeType)
+            {
+                // Simulate a persisted mismatch between the two catalog reads.
+                var otherType = setup.Product.ProductType == ProductType.Medicine ? ProductType.Retail : ProductType.Medicine;
+                typeof(BusinessProduct).GetProperty(nameof(BusinessProduct.ProductType))!.SetValue(setup.Product, otherType);
+            }
+            else setup.Product.SetStatus(false);
+        };
         var error = await Assert.ThrowsAsync<ApplicationErrorException>(() =>
             setup.Handler.HandleAsync(setup.Command(), TestContext.Current.CancellationToken));
         Assert.Equal(SalesPosErrors.ProductUnavailable, error.Error);

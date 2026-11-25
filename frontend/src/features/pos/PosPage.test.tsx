@@ -325,6 +325,8 @@ describe('POS local cart, cash and persisted draft', () => {
     fake.state.sale = { ...fake.state.sale!, status: 'voided', version: 4 }
     fireEvent.click(screen.getByRole('button', { name: 'Consultar ticket' }))
     await screen.findByText(/El estado del ticket cambió/)
+    expect(screen.queryByText(/VENTA REALIZADA/)).not.toBeInTheDocument()
+    expect(screen.queryByRole('article', { name: 'Ticket interno' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Anular esta venta' })).not.toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'Consultar resultado de venta' }))
     await screen.findByText('Ticket interno · ANULADA')
@@ -391,6 +393,47 @@ describe('POS local cart, cash and persisted draft', () => {
     expect(fake.fetcher.mock.calls.filter(([path]) => String(path).endsWith('/cash-sessions/current'))).toHaveLength(1)
     expect(screen.getByTestId('location').textContent).not.toContain('cashPending')
   })
+  it('cancels an older cash read before adopting an opening and still observes a later closure', async () => {
+    const fake = server()
+    fake.state.cash = null
+    const respond = fake.fetcher.getMockImplementation()!
+    let finishOpening: (() => void) | undefined
+    let finishOldRead: (() => void) | undefined
+    let oldReadSignal: AbortSignal | null | undefined
+    fake.fetcher.mockImplementation(async (path, request) => {
+      if (request?.method === 'POST' && String(path).endsWith('/cash-sessions')) {
+        await new Promise<void>(resolve => { finishOpening = resolve })
+      } else if (finishOpening && !oldReadSignal && String(path).endsWith('/cash-sessions/current')) {
+        oldReadSignal = request?.signal
+        await new Promise<void>(resolve => { finishOldRead = resolve })
+        return json({ session: null })
+      }
+      return respond(path, request)
+    })
+    const view = mount(fake)
+    const refocus = () => act(() => { focusManager.setFocused(false); focusManager.setFocused(true) })
+    try {
+      const button = await openCashForm()
+      fireEvent.change(screen.getByRole('textbox', { name: /Monto inicial/ }), { target: { value: '0' } })
+      fireEvent.click(button)
+      await waitFor(() => expect(finishOpening).toBeTypeOf('function'))
+      refocus()
+      await waitFor(() => expect(finishOldRead).toBeTypeOf('function'))
+      await act(async () => finishOpening!())
+      await screen.findByText('Caja abierta')
+      expect(oldReadSignal?.aborted).toBe(true)
+      await act(async () => finishOldRead!())
+      expect(screen.queryByRole('button', { name: 'Abrir caja' })).not.toBeInTheDocument()
+      fake.state.cash = null
+      refocus()
+      await screen.findByRole('button', { name: 'Abrir caja' })
+      expect(fake.writes()).toHaveLength(1)
+    } finally {
+      view.unmount()
+      focusManager.setFocused(undefined)
+    }
+  })
+
   it('rejects a cash-opening acknowledgement for another membership and keeps an unresolved operation blocked', async () => {
     const fake = server(); fake.state.cash = null
     const respond = fake.fetcher.getMockImplementation()!

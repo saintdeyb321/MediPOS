@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { expect, it, vi } from 'vitest'
 import { MemoryRouter, Route, Routes } from 'react-router'
 import { RuntimeProvider } from '../../app/providers/runtime'
@@ -22,15 +22,17 @@ function mount(role: 'owner' | 'cashier' = 'owner', pending = '', allowed = true
   return { ...base, fetcher }
 }
 it('allows an Owner without branches to read license and create the first entity and branch without a fake branch ID', async () => {
-  const fake = mount(); await screen.findByText('trial')
+  const fake = mount(); await screen.findByRole('heading', { name: 'Entidades legales' })
   expect(await screen.findByRole('heading', { name: /Synthetic branchless botica/ })).toBeInTheDocument()
   expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1)
+  const entity = await screen.findByRole('button', { name: 'Nueva entidad' }); await waitFor(() => expect(entity).toBeEnabled()); fireEvent.click(entity)
   fireEvent.change(screen.getByRole('textbox', { name: 'Razón social' }), { target: { value: 'Synthetic QA entity' } })
   fireEvent.change(screen.getByRole('textbox', { name: 'Identificador de la entidad' }), { target: { value: 'QA-NO-FISCAL' } })
   fireEvent.click(screen.getByRole('checkbox', { name: /Confirmo la creación persistente/ }))
   fireEvent.click(screen.getByRole('button', { name: 'Crear entidad legal' })); fireEvent.click(screen.getByRole('button', { name: 'Crear entidad legal' }))
   await screen.findByText(/Registro reconsultado: Synthetic QA entity/)
-  fireEvent.click(screen.getByRole('checkbox', { name: /Verifiqué inequívocamente/ })); fireEvent.click(screen.getByRole('button', { name: 'Continuar tras conciliación' }))
+  fireEvent.click(screen.getByRole('checkbox', { name: /Verifiqué inequívocamente/ })); fireEvent.click(within(await screen.findByRole('dialog', { name: 'Registrar entidad legal' })).getByRole('button', { name: 'Continuar tras conciliación' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Sucursales' })); const branch = screen.getByRole('button', { name: 'Nueva sucursal' }); await waitFor(() => expect(branch).toBeEnabled()); fireEvent.click(branch)
   fireEvent.change(screen.getByRole('textbox', { name: 'Nombre de la nueva sucursal' }), { target: { value: 'Synthetic QA first branch' } })
   fireEvent.change(screen.getByRole('combobox', { name: 'Entidad legal existente' }), { target: { value: id(540) } })
   fireEvent.click(screen.getByRole('checkbox', { name: /Confirmo crear Synthetic QA first branch/ }))
@@ -49,6 +51,7 @@ it.each(['cashier', 'restricted-license'] as const)('denies %s before any privat
 it('preserves an uncertain first-entity intent across reload without automatically sending another POST', async () => {
   const fake = mount('owner', '?settingsPending=legal')
   await screen.findByRole('heading', { name: 'Alta pendiente de conciliación' })
-  await waitFor(() => expect(screen.getByRole('button', { name: 'Crear entidad legal' })).toBeDisabled())
+  const section = screen.getByRole('button', { name: 'Entidades legales' }); fireEvent.click(section)
+  expect(screen.getByRole('button', { name: 'Nueva entidad' })).toBeDisabled()
   expect(fake.writes()).toHaveLength(0)
 })

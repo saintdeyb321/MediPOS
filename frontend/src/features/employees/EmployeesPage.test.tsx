@@ -7,13 +7,24 @@ import { EmployeesPage } from './EmployeesPage'
 import { employeeServer, id, json, mountEmployees, owner, worker, workspace } from './employees.test.support'
 
 async function employeeDetails(name = worker.displayName) {
-  fireEvent.click(await screen.findByRole('button', { name: 'Ver ' + name }))
+  const open = await waitFor(() => {
+    const button = screen.getByRole('button', { name: 'Ver ' + name })
+    expect(button).toBeEnabled()
+    return button
+  })
+  fireEvent.click(open)
   return within(await screen.findByRole('dialog', { name }))
 }
 async function manage(name = worker.displayName, task: 'branches' | 'schedule' | 'status' = 'branches') {
   const details = await employeeDetails(name)
   const [tab, edit] = { branches: ['Sucursales', 'Editar sucursales'], schedule: ['Horarios', 'Editar horario'], status: ['Estado', 'Revisar estado y desactivación'] }[task]
-  fireEvent.click(details.getByRole('button', { name: tab })); fireEvent.click(details.getByRole('button', { name: edit }))
+  fireEvent.click(details.getByRole('button', { name: tab }))
+  const action = await waitFor(() => {
+    const button = within(screen.getByRole('dialog', { name })).getByRole('button', { name: edit })
+    expect(button).toBeEnabled()
+    return button
+  })
+  fireEvent.click(action)
 }
 async function saveBranches() {
   const form = within(screen.getByRole('form', { name: 'Asignar sucursales' }))
@@ -21,7 +32,10 @@ async function saveBranches() {
   fireEvent.click(form.getByRole('checkbox', { name: /Revisé y autorizo reemplazar/ })); const save = form.getByRole('button', { name: 'Guardar sucursales' }); fireEvent.click(save); return save
 }
 async function expectSavedAccess(title: string) {
-  await waitFor(() => expect(screen.queryByRole('dialog', { name: title })).not.toBeInTheDocument())
+  await waitFor(() => {
+    expect(screen.queryByRole('dialog', { name: title })).not.toBeInTheDocument()
+    expect(screen.getByTestId('location')).not.toHaveTextContent('employeePending')
+  })
   expect(screen.getAllByRole('status').find(status => status.textContent?.includes('Cambio guardado y empleado consultado nuevamente'))).toBeInTheDocument()
 }
 function CacheProbe({ capture }: { capture: (client: QueryClient) => void }) { const client = useQueryClient(); useEffect(() => capture(client), [capture, client]); return null }
@@ -64,7 +78,7 @@ it('replaces the complete branch set using 204, checks review and rereads after 
   await expectSavedAccess('Asignar sucursales')
   expect(fake.writes()).toHaveLength(1); expect(fake.writes()[0]?.[1]?.body).toBe(`{"branchIds":["${id(5)}","${id(6)}"]}`)
   expect(fake.fetcher.mock.calls.filter(([path, init]) => init?.method === 'GET' && String(path).includes('/employees?')).length).toBeGreaterThanOrEqual(2)
-  await manage(); expect(within(screen.getByRole('form', { name: 'Asignar sucursales' })).getByRole('checkbox', { name: 'Otra sede unitaria' })).toBeChecked()
+  await manage(); expect(within(await screen.findByRole('form', { name: 'Asignar sucursales' })).getByRole('checkbox', { name: 'Otra sede unitaria' })).toBeChecked()
 })
 it('never erases an unconsultable assignment or invents branch names when lookup fails', async () => {
   const fake = employeeServer(); fake.state.employees[1]!.branchIds = [id(99)]

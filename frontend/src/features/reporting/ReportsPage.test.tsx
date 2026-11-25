@@ -5,7 +5,7 @@ import { reportLabels } from './filters'
 import type { ReportKind } from './contracts'
 import { reportingServer, mountTransfers, workspace, reports, id, n, json } from './reporting.test.support'
 
-async function choose(kind: ReportKind) { fireEvent.change(screen.getByRole('combobox', { name: 'Reporte' }), { target: { value: kind } }); const apply = screen.getByRole('button', { name: 'Aplicar filtros y consultar' }); await waitFor(() => expect(apply).toBeEnabled()); fireEvent.click(apply); await screen.findByRole('heading', { name: reportLabels[kind] + ' · consulta aplicada' }); await waitFor(() => expect(screen.queryByText('Consultando reporte…')).not.toBeInTheDocument()) }
+async function choose(kind: ReportKind) { fireEvent.change(screen.getByRole('combobox', { name: 'Reporte' }), { target: { value: kind } }); const apply = screen.getByRole('button', { name: 'Aplicar filtros' }); await waitFor(() => expect(apply).toBeEnabled()); fireEvent.click(apply); await screen.findByRole('heading', { name: reportLabels[kind] + ' · consulta aplicada' }); await waitFor(() => expect(screen.queryByText('Consultando reporte…')).not.toBeInTheDocument()) }
 it('loads overview first, preserves large exact metrics and applies dashboard with only named-period parameters', async () => {
   const fake = reportingServer(); mountTransfers(fake, <ReportsPage />)
   await screen.findByRole('table', { name: 'Resumen por sucursal · filas del servidor' }); expect(screen.getAllByText('S/ 9007199254740993.1234').length).toBeGreaterThan(0)
@@ -23,7 +23,7 @@ it('displays all report contracts and empty rows separately from failed queries 
   await screen.findByRole('table', { name: /Resumen por sucursal/ }); await choose('sales'); await screen.findByText(/No hay filas para los filtros/)
   for (const kind of ['stock-risk', 'expirations', 'inventory-capital', 'product-rotation', 'commissions'] as const) await choose(kind)
   expect(screen.getByText(/regla vigente no recalcula el historial/)).toBeInTheDocument()
-  fake.reportState.reject = 503; fireEvent.click(within(screen.getByRole('region', { name: 'Resultado del reporte aplicado' })).getByRole('button', { name: 'Actualizar consulta' })); await screen.findByText('No pudimos consultar el reporte')
+  fake.reportState.reject = 503; fireEvent.click(within(screen.getByRole('region', { name: 'Resultado del reporte aplicado' })).getByRole('button', { name: /Actualizar (reporte aplicado|consulta)/ })); await screen.findByText('No pudimos consultar el reporte')
   expect(screen.queryByText(/No hay filas para los filtros/)).not.toBeInTheDocument(); expect(fake.writes()).toHaveLength(0)
 })
 it('uses server totals for paging and keeps draft changes separate from the applied results', async () => {
@@ -38,13 +38,13 @@ it('uses server totals for paging and keeps draft changes separate from the appl
 it('validates bounded date ranges before sending, while exposing only actual directory options', async () => {
   const fake = reportingServer(); mountTransfers(fake, <ReportsPage />); await screen.findByRole('table', { name: /Resumen por sucursal/ })
   fireEvent.change(screen.getByLabelText('Desde (Lima)'), { target: { value: '2026-01-01' } }); fireEvent.change(screen.getByLabelText('Hasta (Lima)'), { target: { value: '2026-02-01' } })
-  expect(screen.getByRole('button', { name: 'Aplicar filtros y consultar' })).toBeDisabled(); expect(screen.getByRole('combobox', { name: 'Sucursal del reporte' })).toHaveTextContent(workspace.branch.name)
+  expect(screen.getByRole('button', { name: 'Aplicar filtros' })).toBeDisabled(); expect(screen.getByRole('combobox', { name: 'Sucursal del reporte' })).toHaveTextContent(workspace.branch.name)
   expect(screen.queryByRole('textbox', { name: /UUID|tenantId|membershipId/i })).not.toBeInTheDocument(); expect(fake.writes()).toHaveLength(0)
 })
 it('filters historical inactive products, real directory sellers and categories with the backend parameter names', async () => {
   const fake = reportingServer(); mountTransfers(fake, <ReportsPage />); await screen.findByRole('table', { name: /Resumen por sucursal/ }); await choose('sales')
   await screen.findByRole('option', { name: 'Producto inactivo unitario · inactivo' }); await waitFor(() => expect(screen.getByRole('combobox', { name: 'Empleado/vendedor opcional' })).toBeEnabled())
-  fireEvent.change(screen.getByRole('combobox', { name: 'Producto opcional del negocio' }), { target: { value: id(801) } }); fireEvent.change(screen.getByRole('combobox', { name: 'Empleado/vendedor opcional' }), { target: { value: workspace.access.membershipId } }); fireEvent.change(screen.getByRole('combobox', { name: 'Categoría opcional' }), { target: { value: id(8) } }); fireEvent.click(screen.getByRole('button', { name: 'Aplicar filtros y consultar' }))
+  fireEvent.change(screen.getByRole('combobox', { name: 'Producto opcional del negocio' }), { target: { value: id(801) } }); fireEvent.change(screen.getByRole('combobox', { name: 'Empleado/vendedor opcional' }), { target: { value: workspace.access.membershipId } }); fireEvent.change(screen.getByRole('combobox', { name: 'Categoría opcional' }), { target: { value: id(8) } }); fireEvent.click(screen.getByRole('button', { name: 'Aplicar filtros' }))
   await waitFor(() => expect(fake.fetcher.mock.calls.some(([path]) => String(path).includes('productId=' + id(801)) && String(path).includes('employeeMembershipId=' + workspace.access.membershipId) && String(path).includes('categoryId=' + id(8)))).toBe(true))
   await screen.findByText(/Importes de las líneas que coinciden/); expect(fake.writes()).toHaveLength(0)
 })
@@ -58,7 +58,7 @@ it('cancels old report reads on context change and never displays late old-branc
 })
 it('downloads only after explicit user action, using the applied filters, CSRF and binary transport once', async () => {
   const fake = reportingServer(); mountTransfers(fake, <ReportsPage />); await screen.findByRole('table', { name: /Resumen por sucursal/ }); expect(screen.queryByRole('button', { name: 'Descargar PDF' })).not.toBeInTheDocument()
-  await choose('sales'); const area = within(await screen.findByRole('region', { name: 'Exportar reporte' })); expect(area.getByRole('button', { name: 'Descargar Excel' })).toBeEnabled()
+  await choose('sales'); const area = within(await screen.findByRole('region', { name: 'Exportar reporte' })); fireEvent.click(area.getByText('Descargar consulta aplicada')); expect(area.getByRole('button', { name: 'Descargar Excel' })).toBeEnabled()
   const create = vi.fn(() => 'blob:synthetic-unit'); const revoke = vi.fn(); Object.defineProperty(URL, 'createObjectURL', { configurable: true, value: create }); Object.defineProperty(URL, 'revokeObjectURL', { configurable: true, value: revoke })
   // Undici Response.blob and jsdom Blob have different constructors; align the test environment only.
   const binaryBlob = (await new Response('synthetic').blob()).constructor

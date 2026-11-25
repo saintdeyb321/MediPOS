@@ -1,4 +1,4 @@
-import { fireEvent, screen, waitFor } from '@testing-library/react'
+import { fireEvent, screen, waitFor, within } from '@testing-library/react'
 import { StrictMode } from 'react'
 import { expect, it } from 'vitest'
 import { EmployeesPage } from './EmployeesPage'
@@ -27,31 +27,37 @@ function server() {
 }
 it('requires independent identity review and an explicit separate approval; double clicks send one versioned write', async () => {
   const fake = server(); mountEmployees(fake, <EmployeesPage />)
-  await screen.findByText(/Cuenta que aceptó: Cuenta aceptante unitaria/)
+  fireEvent.click(screen.getByRole('button', { name: 'Consultar invitaciones' }))
+  fireEvent.click(await screen.findByRole('button', { name: 'Revisar invitación' }))
+  await within(screen.getByRole('dialog', { name: /Invitación ·/ })).findByText(/Cuenta que aceptó: Cuenta aceptante unitaria/)
   const button = screen.getByRole('button', { name: 'Aprobar incorporación' }); expect(button).toBeDisabled()
   fireEvent.click(screen.getByRole('checkbox', { name: /Verifiqué de forma independiente/ })); fireEvent.click(button); fireEvent.click(button)
-  await screen.findByText(/Membresía creada por aprobación/)
+  await screen.findAllByText(/Membresía creada por aprobación/)
   expect(fake.writes()).toHaveLength(1); expect(fake.writes()[0]?.[1]?.body).toBe('{"expectedVersion":17,"confirmed":true}')
 })
 it('shows the protected link once in memory and sends no arbitrary account identifier', async () => {
   const fake = server(); mountEmployees(fake, <EmployeesPage />)
-  fireEvent.click(screen.getByRole('checkbox', { name: /Revisé el rol/ })); fireEvent.click(screen.getByRole('button', { name: 'Crear invitación' }))
-  const link = await screen.findByRole('textbox', { name: /Enlace temporal/ }); expect(link).toHaveValue('https://medipos.test/aceptar-invitacion#unit-protected-ticket')
+  fireEvent.click(screen.getByRole('button', { name: 'Invitar integrante' }))
+  const dialog = within(screen.getByRole('dialog', { name: 'Nuevo integrante por invitación' }))
+  fireEvent.click(dialog.getByRole('checkbox', { name: /Revisé el rol/ })); fireEvent.click(dialog.getByRole('button', { name: 'Crear enlace temporal' }))
+  const link = await dialog.findByRole('textbox', { name: /Enlace temporal/ }); expect(link).toHaveValue('https://medipos.test/aceptar-invitacion#unit-protected-ticket')
   expect(fake.writes()[0]?.[1]?.body).not.toMatch(/userId|email|subject/i)
-  fireEvent.click(screen.getByRole('button', { name: 'Ocultar enlace' })); expect(screen.queryByRole('textbox', { name: /Enlace temporal/ })).not.toBeInTheDocument()
+  fireEvent.click(dialog.getByRole('button', { name: 'Ocultar enlace' })); expect(screen.queryByRole('textbox', { name: /Enlace temporal/ })).not.toBeInTheDocument()
 })
 it('reconciles a lost creation through the original intention without issuing another secret or another POST', async () => {
   const fake = server(); fake.lose(); mountEmployees(fake, <EmployeesPage />)
-  fireEvent.click(screen.getByRole('checkbox', { name: /Revisé el rol/ })); fireEvent.click(screen.getByRole('button', { name: 'Crear invitación' }))
-  const read = await screen.findByRole('button', { name: 'Consultar invitación original' }); fireEvent.click(read)
-  await screen.findByText(/Intención original localizada/)
+  fireEvent.click(screen.getByRole('button', { name: 'Invitar integrante' }))
+  const dialog = within(screen.getByRole('dialog', { name: 'Nuevo integrante por invitación' }))
+  fireEvent.click(dialog.getByRole('checkbox', { name: /Revisé el rol/ })); fireEvent.click(dialog.getByRole('button', { name: 'Crear enlace temporal' }))
+  const read = await dialog.findByRole('button', { name: 'Consultar invitación original' }); fireEvent.click(read)
+  await dialog.findByText(/Intención original localizada/)
   expect(fake.writes()).toHaveLength(1); expect(screen.queryByRole('textbox', { name: /Enlace temporal/ })).not.toBeInTheDocument()
 })
 it('after reload reconciles another terminal transition without claiming its own approval won', async () => {
   const fake = server(); fake.row.status = 'revoked'; fake.row.canApprove = false; fake.row.revokedAt = time; fake.row.revocationReason = 'Unit concurrent revocation'
   mountEmployees(fake, <EmployeesPage />, `?invitationTarget=${id(80)}&invitationAction=approve`)
   fireEvent.click(await screen.findByRole('button', { name: 'Consultar invitación original' }))
-  await screen.findByText(/otro cambio concurrente/); expect(fake.writes()).toHaveLength(0)
+  await waitFor(() => expect(screen.getAllByRole('status').some(status => /otro cambio concurrente/.test(status.textContent ?? ''))).toBe(true)); expect(fake.writes()).toHaveLength(0)
 })
 it('removes the fragment in StrictMode and accepts only the current session after explicit consent', async () => {
   window.history.replaceState(null, '', '/aceptar-invitacion#unit-protected-ticket')

@@ -177,6 +177,24 @@ it.each([true, false])('reconciles lost confirmation only after observing confir
   }
   expect(fake.writes()).toHaveLength(1)
 })
+it('reconciles a confirmation response bearing another actor without resending it', async () => {
+  const fake = operationServer()
+  const normal = fake.fetcher.getMockImplementation()!
+  fake.fetcher.mockImplementation((path, init) => init?.method === 'POST' && String(path).endsWith('/confirm')
+    ? Promise.resolve(json({ ...purchase, status: 'confirmed', confirmedAt: time, confirmedByActorId: id(99) }))
+    : normal(path, init))
+  mountOperation(fake, <PurchasesPage />, loaded(fake))
+  const checkbox = await screen.findByRole('checkbox', { name: /recibí físicamente/ })
+  await waitFor(() => expect(checkbox).toBeEnabled())
+  fireEvent.click(checkbox)
+  fireEvent.click(screen.getByRole('button', { name: 'Confirmar recepción una vez' }))
+  await screen.findByText('No pudimos completar la operación de compra')
+  expect(screen.getByTestId('location')).toHaveTextContent('receiptPending=confirm')
+  expect(screen.queryByRole('heading', { name: 'MERCADERÍA REGISTRADA' })).not.toBeInTheDocument()
+  expect(screen.getByRole('button', { name: 'Confirmar recepción una vez' })).toBeDisabled()
+  expect(fake.writes()).toHaveLength(1)
+})
+
 it('blocks medicines without lots and new products without presentations, never calling units PUT', async () => {
   const fake = operationServer(); fake.state.detail.units = []; mountOperation(fake, <PurchasesPage />)
   await begin(fake); await pickProduct()

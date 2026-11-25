@@ -41,10 +41,11 @@ function ImportWorkspace() {
     if (!http) throw new ApiError(0, 'client.https_required')
     const result = await importApi(http).read(w, jobId, after, signal)
     const previous = lastObservedImport.current
-    if (!signal.aborted && (previous?.id !== result.importJobId || previous.importedRows !== result.importedRows)) {
+    if (!signal.aborted && (previous?.id !== result.importJobId || result.importedRows > previous.importedRows)) {
+      // Paging may return an older snapshot. Refresh only for a new job or progress.
+      const refresh = invalidate()
       lastObservedImport.current = { id: result.importJobId, importedRows: result.importedRows }
-      // Page navigation does not change the catalog. Keep refreshing when newly committed rows appear.
-      await invalidate()
+      await refresh
     }
     return result
   }, enabled: Boolean(http) && !awaitingReceipt && isUuid(jobId), retry: false, refetchOnWindowFocus: false })
