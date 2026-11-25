@@ -15,5 +15,5 @@ export const useAuthState = () => useContext(AuthContext)
 export function useSession() {
   const { service } = useRuntime()
   const { expired } = useAuthState()
-  return useQuery({ queryKey: ['session'], queryFn: ({ signal }) => service.session(signal), enabled: !expired, staleTime: 0, refetchInterval: 60_000 })
+  return useQuery({ queryKey: ['session'], queryFn: ({ signal }) => service.session(signal), enabled: !expired, staleTime: 0, refetchOnMount: false, refetchOnReconnect: 'always', refetchInterval: 60_000 })
 }

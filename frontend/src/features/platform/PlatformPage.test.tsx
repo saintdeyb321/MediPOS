@@ -1,3 +1,4 @@
+import { refocus } from '../../test/refocus'
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { expect, it, vi } from 'vitest'
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router'
@@ -13,12 +14,12 @@ const time = '2026-10-17T12:00:00Z'
 const json = (value: unknown, status = 200) => new Response(JSON.stringify(value), { status, headers: { 'Content-Type': 'application/json' } })
 type Invitation = { invitationId: string; email: string; status: 'pending' | 'claimed' | 'revoked'; createdAt: string; userId: string | null }
 function fixture() {
-  const state = { admission: 200, categoryFailure: 0, mismatchedCategory: false, lost: false, invisible: false, reject: 0, listFailure: 0, afterReceiptListFailure: 0, detailFailure: 0, ownerReadFailure: 0, nextTenant: null as string | null, receipt: false, owner: null as string | null, invitation: null as Invitation | null, status: 'trial', expiresAt: '2026-11-16T12:00:00Z', categories: [] as { id: string; name: string; isActive: boolean; createdAt: string }[] }
+  const state = { admission: 200, serverTime: undefined as string | undefined, categoryFailure: 0, mismatchedCategory: false, lost: false, invisible: false, reject: 0, listFailure: 0, afterReceiptListFailure: 0, detailFailure: 0, ownerReadFailure: 0, nextTenant: null as string | null, receipt: false, owner: null as string | null, invitation: null as Invitation | null, status: 'trial', expiresAt: '2026-11-16T12:00:00Z', categories: [] as { id: string; name: string; isActive: boolean; createdAt: string }[] }
   const license = () => ({ tenantId: id(2), licenseId: id(3), status: state.status, startsAt: time, expiresAt: state.expiresAt, maxBranches: 2 })
   const tenant = () => ({ tenantId: id(2), tradingName: 'Synthetic QA botica', createdAt: time, administration: { licenseStatus: state.status, expiresAt: license().expiresAt, maxBranches: 2, ownerStatus: state.invitation?.status ?? (state.owner ? 'active' : 'unassigned'), ownerEmail: state.invitation?.email ?? null, ownerName: null } })
   const fetcher = vi.fn<typeof fetch>().mockImplementation(async (path, init) => {
     const p = String(path).split('?')[0]; const method = init?.method ?? 'GET'
-    if (p === '/auth/me') return json({ userId: id(1) })
+    if (p === '/auth/me') return json({ userId: id(1), ...(state.serverTime ? { serverTimeUtc: state.serverTime, expiresAtUtc: null } : {}) })
     if (p === '/auth/csrf') return json({ requestToken: 'synthetic-csrf' })
     if (p === '/platform/session') return state.admission === 200 ? json({ allowed: true }) : json({ code: state.admission === 429 ? 'platform.busy' : 'access.platform_denied' }, state.admission)
     if (method === 'POST' && state.reject) return json({ code: 'unit.rejected' }, state.reject)
@@ -194,7 +195,7 @@ it('keeps a confirmed suspension visible when an explicit subsequent read fails'
   const drawer = within(await screen.findByRole('dialog', { name: 'Ficha de botica' }))
   expect(fake.reads('/platform/tenants/' + id(2) + '/details')).toHaveLength(1)
   expect(drawer.getByText('Suspendida')).toBeInTheDocument()
-  fireEvent.click(drawer.getByRole('button', { name: 'Reconsultar licencia y Owner' }))
+  await refocus(61_000)
   await drawer.findByRole('heading', { name: 'No pudimos cargar la información' })
   expect(drawer.getByText('Datos de la última lectura o del último cambio confirmado.')).toBeInTheDocument()
   expect(screen.getByTestId('location')).not.toHaveTextContent('platformPending')
@@ -244,6 +245,15 @@ it('keeps a lost category intent after an empty read and blocks ambiguous duplic
   await screen.findAllByText(/Hay categorías con el mismo nombre/)
   expect(screen.getByRole('button', { name: 'Continuar tras conciliar categoría' })).toBeDisabled(); expect(fake.writes()).toHaveLength(0)
 })
+it('shows an expired Trial against server time without replacing its stored status or sending writes', async () => {
+  const fake = fixture(); fake.state.serverTime = '2026-11-16T12:00:00Z'; mount(fake, '?area=licenses')
+  await screen.findByText('Prueba gratuita · vencimiento superado')
+  fireEvent.change(screen.getByRole('combobox', { name: 'Estado de licencia' }), { target: { value: 'trial' } })
+  expect(screen.getByRole('rowheader', { name: 'Synthetic QA botica' })).toBeInTheDocument()
+  expect(fake.state.status).toBe('trial')
+  expect(fake.writes()).toHaveLength(0)
+})
+
 it('navigates all six areas using one shared directory read and a scoped category read', async () => {
   const fake = fixture(); fake.state.invitation = pending(); mount(fake)
   await screen.findByRole('region', { name: 'Indicadores de la primera página' })
@@ -303,7 +313,7 @@ it('retains the last directory during refresh and labels a tenant-scope conflict
   mount(fake, '?area=businesses')
   await screen.findByRole('rowheader', { name: 'Synthetic QA botica' })
   fake.state.listFailure = 409
-  fireEvent.click(screen.getByRole('button', { name: 'Actualizar boticas' }))
+  await refocus(61_000)
   await waitFor(() => expect(release).toBeTypeOf('function'))
   expect(await screen.findByText('Actualizando boticas…')).toBeInTheDocument()
   expect(screen.getByRole('rowheader', { name: 'Synthetic QA botica' })).toBeInTheDocument()

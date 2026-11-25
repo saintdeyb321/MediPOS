@@ -120,9 +120,9 @@ export function EmployeeInvitationsPanel({ createOpen, onCreateOpen, onCreateClo
     {recovered && <p>Invitación consultada: {statusLabels[recovered.status]} · {roleLabels[recovered.role]}. El estado no sustituye la revisión de identidad.</p>}
     <div hidden={!directoryOpen && !pending && !recovered}>
     {list.isFetching && <p role="status">Consultando invitaciones…</p>}
-    {list.isError && <ApiErrorState error={list.error} title="No pudimos consultar invitaciones" />}
+    {list.isError && <ApiErrorState error={list.error} title="No pudimos consultar invitaciones" retry={() => void list.refetch()} />}
     {list.data && !list.isError && <>{!list.data.length && <p>No hay invitaciones en esta página.</p>}{list.data.map(value => <InvitationCard key={`${value.id}/${value.version}`} value={value} disabled={busy || pending || !http} busy={busy} pending={pending} error={error} notice={notice} reconcile={() => void reconcile()} transition={transition} />)}</>}
-    <PageControls offset={offset} count={list.data?.length} busy={busy || list.isFetching || pending} change={setOffset} refresh={() => void list.refetch()} />
+    <PageControls offset={offset} count={list.data?.length} busy={busy || list.isFetching || pending} change={setOffset} />
     </div>
   </div></Panel>
 }

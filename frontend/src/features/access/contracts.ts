@@ -20,7 +20,7 @@ export interface MediPosService {
   logout(signal?: AbortSignal): Promise<void>
   tenants(after?: string, signal?: AbortSignal): Promise<TenantPage>
   branches(tenantId: string, signal?: AbortSignal): Promise<Branch[]>
-  access(tenantId: string, branchId: string, signal?: AbortSignal): Promise<OperationalAccess>
+  access(tenantId: string, branchId: string | null, signal?: AbortSignal): Promise<OperationalAccess>
 }
 export const roleLabels: Record<TenantRole, string> = {
   owner: 'Propietario', pharmacist: 'Químico farmacéutico', cashier: 'Cajero',

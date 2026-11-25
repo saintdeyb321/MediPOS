@@ -7,6 +7,20 @@ import type { Runtime } from '../../features/access'
 function SessionBoundary({ runtime, children }: { runtime: Runtime; children: ReactNode }) {
   const queryClient = useQueryClient()
   const [expired, setExpired] = useState(runtime.initiallyExpired ?? false)
+  useEffect(() => {
+    const identity = (session: Session | null | undefined) => session ? session.userId + '/' + (session.expiresAtUtc ?? '') : null
+    let audience = identity(queryClient.getQueryData<Session | null>(['session']))
+    return queryClient.getQueryCache().subscribe(event => {
+      if (event.type !== 'updated' || event.query.queryKey[0] !== 'session' || event.action.type !== 'success') return
+      const next = identity(event.query.state.data as Session | null | undefined)
+      if (audience && audience !== next) {
+        const predicate = (query: { queryKey: readonly unknown[] }) => query.queryKey[0] !== 'session'
+        void queryClient.cancelQueries({ predicate })
+        queryClient.removeQueries({ predicate })
+      }
+      audience = next
+    })
+  }, [queryClient])
   useEffect(() => runtime.http?.subscribeUnauthorized(() => {
     if (queryClient.getQueryData<Session | null>(['session'])) {
       void queryClient.cancelQueries()

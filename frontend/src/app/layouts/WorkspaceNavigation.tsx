@@ -14,7 +14,7 @@ export function WorkspaceNavigation({ workspace: w, onNavigate }: { workspace: W
     <>
       <div className="sidebar-brand"><Link to={w.base} aria-label="MediPOS, inicio" onClick={onNavigate}><Brand /></Link></div>
       <div className="sidebar-tenant"><Store size={20} aria-hidden="true" /><div><strong>{w.tenantName}</strong></div></div>
-      <Link className="sidebar-branch" to={`/boticas/${w.tenantId}/sucursales`} onClick={onNavigate}><MapPin size={18} aria-hidden="true" /><span><small>Sede actual</small><strong>{w.branch.name}</strong></span><ChevronDown size={16} aria-hidden="true" /></Link>
+      <Link className="sidebar-branch" to={`/boticas/${w.tenantId}/sucursales?elegir=1`} aria-label="Cambiar sucursal" onClick={onNavigate}><MapPin size={18} aria-hidden="true" /><span><small>Sede actual</small><strong>{w.branch.name}</strong></span><ChevronDown size={16} aria-hidden="true" /></Link>
       <nav aria-label="Navegación principal" className="sidebar-links">
         {(['operation', 'management', 'more'] as const).map(section => {
           const items = links.filter(item => section === 'more' ? ['caja', 'sincronizacion'].includes(item.id) : item.section === section && !['caja', 'sincronizacion'].includes(item.id))
@@ -37,7 +37,7 @@ export function WorkspaceNavigation({ workspace: w, onNavigate }: { workspace: W
       </nav>
       <div className="sidebar-bottom">
         <details className="sidebar-account"><summary><UserRound size={20} aria-hidden="true" /><span>{roleLabels[w.access.role]}<small>Mi cuenta</small></span><ChevronDown size={16} aria-hidden="true" /></summary><div><p>Cuenta autenticada en esta botica.</p><details className="inline-help"><summary>Identificador para soporte</summary><code>{w.session.userId}</code></details></div></details>
-        <Link to="/seleccionar-botica" className="switch-tenant" onClick={onNavigate}><ArrowRightLeft size={18} aria-hidden="true" />Cambiar botica</Link>
+        <Link to="/seleccionar-botica?elegir=1" className="switch-tenant" onClick={onNavigate}><ArrowRightLeft size={18} aria-hidden="true" />Cambiar botica</Link>
         <LogoutButton />
       </div>
     </>

@@ -19,7 +19,7 @@ export function PlatformHome({ p, destination }: { p: PlatformConsoleState; dest
   const metrics = rows && [
     { label: 'Boticas', count: rows.length, icon: Building2 },
     { label: 'Propietarios pendientes', count: rows.filter(row => row.administration?.ownerStatus === 'pending').length, icon: UserRoundCheck },
-    { label: 'Licencias por vencer en 7 días', count: rows.filter(row => row.administration && expiresSoon(row.administration.expiresAt, p.list.dataUpdatedAt)).length, icon: KeyRound },
+    ...(p.serverTime ? [{ label: 'Licencias por vencer en 7 días', count: rows.filter(row => row.administration && expiresSoon(row.administration.expiresAt, Date.parse(p.serverTime!))).length, icon: KeyRound }] : []),
   ]
   return <>
     <PlatformReadError error={p.list.error} failedAt={p.list.errorUpdatedAt} fetching={p.list.isFetching} retry={p.admitted ? () => void p.list.refetch() : undefined} />
@@ -50,7 +50,6 @@ export function PlatformCategories({ p, create }: { p: PlatformConsoleState; cre
       <div className="platform-context">
         <TextField label="Buscar categoría" value={filter} onChange={event => setFilter(event.target.value)} />
         <div className="platform-account-actions">
-          {!p.categories.isError && p.admitted && <Button variant="secondary" disabled={p.busy || p.categories.isFetching || Boolean(p.categoryPending)} onClick={() => void p.categories.refetch()}>Actualizar categorías</Button>}
           <Button disabled={p.locked || !p.categoriesRead || !rows || rows.length >= 100} onClick={create}>Nueva categoría</Button>
         </div>
       </div>

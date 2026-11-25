@@ -1,7 +1,11 @@
 import { Button } from './Button'
 
-export function PageControls({ offset, count, busy, change, refresh, size = 20 }: { offset: number; count?: number; busy: boolean; change: (offset: number) => void; refresh: () => void; size?: number }) {
-  return <div className="operation-actions"><Button variant="quiet" disabled={busy} onClick={refresh}>Actualizar consulta</Button>
-    <Button variant="quiet" disabled={busy || offset === 0} onClick={() => change(Math.max(0, offset - size))}>Página anterior</Button><span>Página {offset / size + 1}</span>
-    <Button variant="quiet" disabled={busy || count !== size || offset + size > 10000} onClick={() => change(offset + size)}>Página siguiente</Button></div>
+export function PageControls({ offset, count, busy, change, size = 20 }: { offset: number; count?: number; busy: boolean; change: (offset: number) => void; size?: number }) {
+  const canAdvance = count === size && offset + size <= 10_000
+  if (offset === 0 && !canAdvance) return null
+  return <nav className="operation-actions page-controls" aria-label="Paginación">
+    {offset > 0 && <Button variant="quiet" disabled={busy} onClick={() => change(Math.max(0, offset - size))}>Página anterior</Button>}
+    <span aria-current="page">Página {offset / size + 1}</span>
+    {canAdvance && <Button variant="quiet" disabled={busy} onClick={() => change(offset + size)}>Página siguiente</Button>}
+  </nav>
 }

@@ -24,7 +24,7 @@ export function SuppliersPanel({ selected, select, disabled, onBusyChange, recei
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; controller.current?.abort() } }, [])
   const rows = useQuery({ queryKey: scopedKey(w, 'suppliers', w.session.userId, w.access.membershipId, offset),
     queryFn: ({ signal }) => { if (!http) throw new ApiError(0, 'client.https_required'); return purchasingApi(http).suppliers(w, offset, 20, signal) },
-    enabled: Boolean(http), retry: false, staleTime: 0, refetchOnWindowFocus: false })
+    enabled: Boolean(http && (directoryOpen || pending)), retry: false, staleTime: 0, refetchOnWindowFocus: true })
   function mark(value: boolean, requestId = '') { setParams(current => { const next = new URLSearchParams(current); if (value) next.set('supplierPending', requestId); else next.delete('supplierPending'); return next }, { replace: true }) }
   async function create() {
     if (!http || running.current || pending || disabled || denied || w.access.role !== 'owner' || !name.trim() || name.trim().length > 256) return
@@ -32,7 +32,7 @@ export function SuppliersPanel({ selected, select, disabled, onBusyChange, recei
     try {
       const result = await purchasingApi(http).createSupplier(w, { name: name.trim(), ruc: ruc.trim() || null, contact: contact.trim() || null }, controller.current.signal, { id: requestId, branchId: w.branchId })
       if (!mounted.current) return
-      setCreated(result); select(result); mark(false); setName(''); setRuc(''); setContact(''); await rows.refetch(); setDirty(false); setCreateOpen(false)
+      setCreated(result); select(result); mark(false); setName(''); setRuc(''); setContact(''); if (directoryOpen) void rows.refetch(); setDirty(false); setCreateOpen(false)
     } catch (failure) {
       if (!mounted.current) return
       setError(failure)
@@ -43,15 +43,15 @@ export function SuppliersPanel({ selected, select, disabled, onBusyChange, recei
     const requestId = params.get('supplierPending')
     if (!http || busy || !requestId) return
     setBusy(true); setError(null); const abort = new AbortController(); controller.current = abort
-    try { const original = await purchasingApi(http).recoverSupplier(w, requestId, abort.signal); if (mounted.current) { setCreated(original); select(original); mark(false); setDirty(false); setCreateOpen(false); await rows.refetch() } }
+    try { const original = await purchasingApi(http).recoverSupplier(w, requestId, abort.signal); if (mounted.current) { setCreated(original); select(original); mark(false); setDirty(false); setCreateOpen(false); if (directoryOpen) void rows.refetch() } }
     catch (failure) { if (mounted.current) setError(failure) }
     finally { if (mounted.current) setBusy(false) }
   }
   const directory = <>
     {rows.isPending && <p>Consultando proveedores…</p>}
-    {rows.isError && <ApiErrorState error={rows.error} title="No pudimos consultar proveedores" />}
+    {rows.isError && <ApiErrorState error={rows.error} title="No pudimos consultar proveedores" retry={() => void rows.refetch()} />}
     {rows.data && !rows.isError && <ul>{!rows.data.length && <li>No hay proveedores en esta página.</li>}{rows.data.map(row => <li key={row.id}>{row.name} · RUC {row.ruc ?? 'No informado'} · {row.contact ?? 'Sin contacto'} · {row.isActive ? 'Activo' : 'Inactivo'}{row.id === receiptSupplierId && <strong> · Proveedor de la recepción consultada</strong>} <Button variant="quiet" disabled={disabled || busy || !row.isActive} onClick={() => select(row)}>Elegir {row.name}</Button></li>)}</ul>}
-    <PageControls offset={offset} count={rows.isError ? undefined : rows.data?.length} busy={rows.isFetching} change={setOffset} refresh={() => void rows.refetch()} />
+    <PageControls offset={offset} count={rows.isError ? undefined : rows.data?.length} busy={rows.isFetching} change={setOffset} />
   </>
   return <Panel><div className="operation-body"><div className="operation-actions"><h2>Proveedores</h2><Button variant="secondary" onClick={() => setDirectoryOpen(!directoryOpen)}>{directoryOpen ? 'Ocultar directorio' : 'Elegir proveedor'}</Button>
     {w.access.role === 'owner' && <Button variant="secondary" disabled={disabled || busy || pending || denied} onClick={() => setCreateOpen(true)}>Nuevo proveedor</Button>}</div>

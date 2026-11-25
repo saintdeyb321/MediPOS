@@ -7,7 +7,6 @@ export function LoadingState({ label = 'Preparando tu espacio…' }: { label?: s
     <div className="state-block" role="status">
       <LoaderCircle className="spin" size={28} aria-hidden="true" />
       <h2>{label}</h2>
-      <p>Estamos recuperando la información disponible.</p>
     </div>
   )
 }

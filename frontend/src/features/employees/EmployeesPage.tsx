@@ -71,7 +71,7 @@ function EmployeesWorkspace() {
     <Panel><div className="operation-body"><h2>Equipo registrado</h2>
       <PageToolbar actions={<div className="segmented-control" role="group" aria-label="Vista de personal"><Button variant="quiet" aria-pressed={viewMode === 'cards'} onClick={() => setViewMode('cards')}><LayoutGrid size={18} aria-hidden="true" />Tarjetas</Button><Button variant="quiet" aria-pressed={viewMode === 'list'} onClick={() => setViewMode('list')}><List size={18} aria-hidden="true" />Lista</Button></div>}><SearchField label="Filtrar nombres de esta página" hint="No busca cuentas ni empleados fuera de esta página." value={filter} onChange={event => setFilter(event.target.value)} /></PageToolbar>
       {employees.isFetching && <p role="status">Consultando empleados…</p>}
-      {employees.isError && <ApiErrorState error={employees.error} title="No pudimos consultar empleados" />}
+      {employees.isError && <ApiErrorState error={employees.error} title="No pudimos consultar empleados" retry={() => void employees.refetch()} />}
       {visibleEmployees && !employees.isError && viewMode === 'cards' && <><div className="team-grid">{visibleEmployees.map(row => <article className="team-card" key={row.membershipId}>
         <div className="operation-actions"><span className="member-avatar"><UserRound size={24} aria-hidden="true" /></span><div><h3>{row.displayName}</h3><p className="data-caption">{roleLabels[row.role]}{sameId(row.membershipId, w.access.membershipId) ? ' · Tu membresía' : ''}</p></div><Badge tone={row.isActive ? 'success' : 'neutral'}>{row.isActive ? 'Activo' : 'Inactivo'}</Badge></div>
         <div className="member-assignment"><MapPin size={18} aria-hidden="true" /><div><strong>Sucursales asignadas</strong>{row.branchIds.length ? <div className="member-badges">{row.branchIds.map(id => <Badge key={id} tone="info">{branches.data?.find(branch => sameId(branch.id, id))?.name ?? 'No disponible en consulta'}</Badge>)}</div> : <p>Sin asignaciones registradas</p>}</div></div>
@@ -84,7 +84,7 @@ function EmployeesWorkspace() {
         <td>{row.schedule.length ? `${row.schedule.length} ventanas · ver detalle` : 'Sin horario configurado'}</td>
         <td><Button variant="quiet" disabled={write.busy || Boolean(write.pending && !sameId(row.membershipId, write.targetId))} onClick={() => select(row.membershipId)}>Ver {row.displayName}</Button></td>
       </tr>)}</tbody></table>{!employees.data.length && <p>No hay empleados en esta página. No se crearon identidades.</p>}</div>}
-      <PageControls offset={offset} count={employees.isError ? undefined : employees.data?.length} busy={employees.isFetching || write.busy || Boolean(write.pending)} change={page} refresh={() => { setReviewed(false); void employees.refetch() }} />
+      <PageControls offset={offset} count={employees.isError ? undefined : employees.data?.length} busy={employees.isFetching || write.busy || Boolean(write.pending)} change={page} />
     </div></Panel>
     <Drawer open={drawerOpen && Boolean(employee)} title={employee ? employee.displayName : 'Detalle del integrante'} onClose={() => setDrawerOpen(false)}>
     {employee && <div className="operation-body"><p>{roleLabels[employee.role]} · {employee.isActive ? 'Activo' : 'Inactivo'}</p>

@@ -35,9 +35,9 @@ type Task = 'create' | 'category' | 'owner' | 'license'
 export function PlatformPage() {
   const { admission, http, session } = usePlatformAdmission('cached')
   return http && session.data ? <PlatformConsole key={session.data.userId + (session.data.expiresAtUtc ?? '')} http={http}
-    userId={session.data.userId} expiresAt={session.data.expiresAtUtc ?? undefined} admitted={admission.isSuccess} /> : null
+    userId={session.data.userId} serverTime={session.data.serverTimeUtc} expiresAt={session.data.expiresAtUtc ?? undefined} admitted={admission.isSuccess} /> : null
 }
-function PlatformConsole({ http, userId, expiresAt, admitted }: { http: NonNullable<ReturnType<typeof usePlatformAdmission>['http']>; userId: string; expiresAt?: string; admitted: boolean }) {
+function PlatformConsole({ http, userId, expiresAt, serverTime, admitted }: { http: NonNullable<ReturnType<typeof usePlatformAdmission>['http']>; userId: string; expiresAt?: string; serverTime?: string; admitted: boolean }) {
   const [params] = useSearchParams()
   const area = params.get('area') ?? 'home'
   const current = sections[area as keyof typeof sections]
@@ -48,7 +48,7 @@ function PlatformConsole({ http, userId, expiresAt, admitted }: { http: NonNulla
   const [taskHidden, setTaskHidden] = useState(false)
   const open = task !== null && !taskHidden
   const detailOpen = drawer && inDirectory && Boolean(selected)
-  const p = usePlatformConsole(http, userId, expiresAt, area, admitted, detailOpen || open && (task === 'owner' || task === 'license'), detailOpen || open && task === 'owner')
+  const p = { ...usePlatformConsole(http, userId, expiresAt, area, admitted, detailOpen || open && (task === 'owner' || task === 'license'), detailOpen || open && task === 'owner'), serverTime }
   const [createDirty, setCreateDirty] = useState(false)
   const [createEpoch, setCreateEpoch] = useState(0)
   const [ownerEmail, setOwnerEmail] = useState('')
@@ -133,7 +133,7 @@ function PlatformConsole({ http, userId, expiresAt, admitted }: { http: NonNulla
         event.preventDefault()
         if (canChange) void p.change(action, action === 'renew' ? { expiresAt: expires } : action === 'reactivate' ? { status } : {}).then(saved => { if (saved) operationRecovered() })
       }}>
-        <div><h3>{p.data.tenant.tradingName}</h3><p>Licencia {licenseLabel(p.data.license.status)} · vence <DateText value={p.data.license.expiresAt} /></p></div>
+        <div><h3>{p.data.tenant.tradingName}</h3><p>Licencia {licenseLabel(p.data.license.status, p.data.license.expiresAt, serverTime)} · vence <DateText value={p.data.license.expiresAt} /></p></div>
         <label>Operación<select aria-label="Operación de licencia" value={action} disabled={p.locked} onChange={event => setAction(event.target.value as LicenseAction)}>
           <option value="renew" disabled={!actions.renew}>Renovar</option><option value="suspend" disabled={!actions.suspend}>Suspender</option><option value="reactivate" disabled={!actions.reactivate}>Reactivar</option>
         </select></label>

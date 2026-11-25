@@ -66,7 +66,7 @@ export function createMediPosService(http: HttpClient): MediPosService {
       return parseBranches(await http.request(`/api/tenants/${encodeURIComponent(tenantId)}/branches?limit=100&offset=0`, { signal }), tenantId)
     },
     async access(tenantId, branchId, signal) {
-      return parseAccess(await http.request(`/api/tenants/${encodeURIComponent(tenantId)}/access?branchId=${encodeURIComponent(branchId)}`, { signal }), tenantId, branchId)
+      return parseAccess(await http.request(`/api/tenants/${encodeURIComponent(tenantId)}/access${branchId ? '?branchId=' + encodeURIComponent(branchId) : ''}`, { signal }), tenantId, branchId)
     },
   }
 }

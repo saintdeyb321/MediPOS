@@ -79,16 +79,15 @@ export function CashManagement({ cash, embedded = false, blocked = false }: { ca
     </div></Panel>
     <Drawer open={managing} title="Gestionar mi caja" description={w.branch.name} onClose={() => setManaging(false)} busy={close.busy}>
       <div className="operation-body">{cash.session && <><p>Sesión de caja de tu membresía · inicial S/ {decimalLabel(cash.session.openingAmount, 2)}</p><CashAge openedAt={cash.session.openedAt} /><Button variant="primary" disabled={close.busy || close.pending || blocked} onClick={() => pick(cash.session!.cashSessionId)}>Cerrar y cuadrar caja</Button></>}
-        <Button variant="secondary" disabled={cash.pending || cash.query.isFetching} onClick={() => void cash.refresh()}>Actualizar estado</Button>
+        {cash.query.isError && <ApiErrorState error={cash.query.error} retry={() => void cash.refresh()} />}
         {!close.pending && <Link className="text-link" to={w.base + '/caja'}>Consultar arqueos y cajas autorizadas</Link>}
       </div>
     </Drawer>
     {!embedded && w.access.role === 'owner' && <Panel className="pos-cash"><div className="pos-section-body"><h2>Cajas activas en esta sucursal</h2>
       {active.isPending && <p>Consultando cajas activas…</p>}
-      {active.isError && <ApiErrorState error={active.error} title="No pudimos consultar las cajas activas" />}
+      {active.isError && <ApiErrorState error={active.error} title="No pudimos consultar las cajas activas" retry={() => void active.refetch()} />}
       {active.data && !active.isError && <>{!active.data.length && <p>No hay cajas en esta página.</p>}
         <ul>{active.data.map(row => <li key={row.cashSessionId}>{row.displayName} · Ventas acumuladas S/ {decimalLabel(row.accumulatedSales, 2)} <Button variant="quiet" disabled={close.busy || close.pending} onClick={() => pick(row.cashSessionId)}>Revisar caja de {row.displayName}</Button></li>)}</ul></>}
-      <Button variant="quiet" disabled={active.isFetching} onClick={() => void active.refetch()}>Actualizar cajas activas</Button>
       <Button variant="quiet" disabled={offset === 0 || active.isFetching} onClick={() => setOffset(offset - 50)}>Anterior</Button>
       <Button variant="quiet" disabled={active.isFetching || !active.data || active.data.length < 50 || offset >= 100000} onClick={() => setOffset(offset + 50)}>Siguiente</Button>
     </div></Panel>}

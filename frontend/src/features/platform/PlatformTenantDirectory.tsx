@@ -5,12 +5,12 @@ import { TextField } from '../../shared/ui/TextField'
 import { Badge } from '../../shared/ui/Badge'
 import { DateText } from '../../shared/ui/DateText'
 import { EmptyState } from '../../shared/ui/States'
-import { licenseLabel } from '../../shared/ui/licenseLabel'
+import { licenseExpired, licenseLabel } from '../../shared/ui/licenseLabel'
 import { PlatformReadError } from './PlatformAdmissionError'
 import type { usePlatformConsole } from './usePlatformConsole'
 import { expiresSoon, ownerLabel } from './presentation'
 
-export type PlatformConsoleState = ReturnType<typeof usePlatformConsole>
+export type PlatformConsoleState = ReturnType<typeof usePlatformConsole> & { serverTime?: string }
 
 export function PlatformTenantDirectory({ p, area, select }: { p: PlatformConsoleState; area: string; select: (id: string) => void }) {
   const [filter, setFilter] = useState('')
@@ -22,17 +22,16 @@ export function PlatformTenantDirectory({ p, area, select }: { p: PlatformConsol
     const admin = row.administration
     if (owners && admin?.ownerStatus !== 'pending') return false
     if (status && admin?.licenseStatus !== status) return false
-    if (soon && (!admin || !expiresSoon(admin.expiresAt, p.list.dataUpdatedAt))) return false
+    if (soon && (!admin || !expiresSoon(admin.expiresAt, Date.parse(p.serverTime ?? '')))) return false
     return [row.tradingName, owners ? admin?.ownerEmail ?? '' : ''].some(value => value.toLocaleLowerCase('es-PE').includes(filter.trim().toLocaleLowerCase('es-PE')))
   })
   return <Panel><div className="operation-body">
-    <div className="platform-context"><p className="platform-note">Filtros sobre esta página, hasta 20 boticas.{(p.list.isError || !p.admitted) && p.list.data && ' Datos de la última lectura.'}</p>
-      {!p.list.isError && p.admitted && <Button variant="secondary" disabled={p.busy || p.list.isFetching} onClick={() => void p.list.refetch()}>Actualizar boticas</Button>}</div>
+    <div className="platform-context"><p className="platform-note">Filtros sobre esta página, hasta 20 boticas.{(p.list.isError || !p.admitted) && p.list.data && ' Datos de la última lectura.'}</p></div>
     <div className="platform-filters">
       <TextField label="Filtrar esta página" placeholder={owners ? 'Botica o correo' : 'Nombre de la botica'} value={filter} onChange={event => setFilter(event.target.value)} />
       {licenses && <><label>Estado de licencia<select value={status} onChange={event => setStatus(event.target.value)}><option value="">Todos</option>
         {['trial', 'active', 'grace', 'suspended', 'cancelled', 'purge_pending', 'purged'].map(value => <option key={value} value={value}>{licenseLabel(value)}</option>)}</select></label>
-      <label><input type="checkbox" checked={soon} onChange={event => setSoon(event.target.checked)} /> Vence en 7 días</label></>}
+      {p.serverTime && <label><input type="checkbox" checked={soon} onChange={event => setSoon(event.target.checked)} /> Vence en 7 días</label>}</>}
     </div>
     {p.list.isFetching && <p role="status">{p.list.data ? 'Actualizando boticas…' : 'Consultando negocios…'}</p>}
     <PlatformReadError error={p.list.error} failedAt={p.list.errorUpdatedAt} fetching={p.list.isFetching} retry={p.admitted ? () => void p.list.refetch() : undefined} />
@@ -45,7 +44,7 @@ export function PlatformTenantDirectory({ p, area, select }: { p: PlatformConsol
             return <tr key={row.tenantId}><th scope="row">{row.tradingName}</th>
               {!licenses && <td>{admin ? <><Badge tone={admin.ownerStatus === 'pending' ? 'warning' : 'neutral'}>{ownerLabel(admin.ownerStatus)}</Badge><br />{admin.ownerName ?? admin.ownerEmail ?? 'Sin destinatario registrado'}</> : 'Sin información administrativa'}</td>}
               {owners ? <td>{admin?.ownerAssignedAt ? <DateText value={admin.ownerAssignedAt} /> : 'Sin fecha disponible'}</td> :
-                <td>{admin ? <><Badge tone={admin.licenseStatus === 'suspended' ? 'warning' : 'info'}>{licenseLabel(admin.licenseStatus)}</Badge>
+                <td>{admin ? <><Badge tone={admin.licenseStatus === 'suspended' || licenseExpired(admin.expiresAt, p.serverTime) ? 'warning' : 'info'}>{licenseLabel(admin.licenseStatus, admin.expiresAt, p.serverTime)}</Badge>
                   <div>{licenses && admin.startsAt && <>Inicio <DateText value={admin.startsAt} /> · </>}Vence <DateText value={admin.expiresAt} /></div>
                   <small>Hasta {admin.maxBranches} sucursales</small></> : 'Licencia no disponible'}</td>}
               <td><Button variant="secondary" disabled={p.locked || p.list.isError} onClick={() => select(row.tenantId)}>Gestionar {row.tradingName}</Button></td>

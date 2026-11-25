@@ -1,11 +1,13 @@
-.operations > * + * { margin-top: var(--space-6); }
+.operations > * + :not(dialog) { margin-top: var(--space-6); }
 .operation-body > * + *, .operation-body form > * + *, .operation-body fieldset > * + * { margin-top: var(--space-4); }
 .operation-body { padding: var(--space-6); }
 .operation-body fieldset { min-width: 0; padding: var(--space-4); border: 1px solid var(--border); border-radius: var(--radius-md); }
 .operation-body legend { padding-inline: var(--space-2); font-weight: 650; }
 .operation-actions { display: flex; flex-wrap: wrap; gap: var(--space-3); align-items: center; }
 .operations select { max-width: 100%; min-height: 2.75rem; background: var(--surface); color: var(--text); border: 1px solid var(--control-border); padding: var(--space-2); font: inherit; }
-.operation-table { overflow-x: auto; }
+.operation-table, .catalog-table { min-inline-size: 0; max-inline-size: 100%; overflow-x: auto; overscroll-behavior-inline: contain; }
+.page-controls { align-items: center; }
+.page-controls span { font-size: var(--text-sm); color: var(--text-muted); }
 .operation-table table { width: 100%; border-collapse: collapse; }
 .operation-table th, .operation-table td { padding: var(--space-4); border-bottom: 1px solid var(--border); text-align: left; vertical-align: middle; }
 .operation-table th { background: var(--surface-muted); font-size: var(--text-sm); color: var(--text-muted); font-weight: 650; }
@@ -55,7 +57,7 @@
 .report-type-grid .button[aria-pressed="true"] { color: var(--primary); background: var(--primary-soft); border-color: var(--primary); }
 .operations .chart-bars { padding-left: 0; }
 .lot-expiry { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
-.operations > * + * { margin-top: var(--space-4); }
+.operations > * + :not(dialog) { margin-top: var(--space-4); }
 .operation-body { padding: var(--space-4); }
 .operation-body > * + *, .operation-body form > * + *, .operation-body fieldset > * + * { margin-top: var(--space-3); }
 .operation-body fieldset { padding: var(--space-3); }

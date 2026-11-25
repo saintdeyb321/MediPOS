@@ -1,3 +1,4 @@
+import { refocus } from '../../test/refocus'
 import { act, fireEvent, screen, waitFor, within } from '@testing-library/react'
 import { expect, it } from 'vitest'
 import { useState } from 'react'
@@ -28,7 +29,7 @@ it('keeps the acknowledged read and reports a failed list or count refresh separ
   await waitFor(() => expect(screen.getByTestId('location')).not.toHaveTextContent('notificationRead'))
   expect(fake.writes()).toHaveLength(1)
 })
-it('reuses the fresh branch counter when opening the page and still refetches on manual refresh', async () => {
+it('reuses the fresh branch counter when opening the page and revalidates after focus when stale', async () => {
   const fake = managementServer()
   function Navigation() {
     const [open, setOpen] = useState(false)
@@ -39,7 +40,7 @@ it('reuses the fresh branch counter when opening the page and still refetches on
   await screen.findByLabelText('1 notificaciones no leídas en esta sucursal'); expect(countCalls()).toBe(1)
   fireEvent.click(screen.getByRole('button', { name: 'Abrir notificaciones' })); await screen.findByText('Total del filtro: 1')
   expect(countCalls()).toBe(1)
-  fireEvent.click(screen.getByRole('button', { name: 'Actualizar consulta' })); await waitFor(() => expect(countCalls()).toBe(2))
+  await refocus(61_000); await waitFor(() => expect(countCalls()).toBe(2))
 })
 it.each(['pharmacist', 'cashier'] as const)('sends authorized branch for %s, never asks for unfiltered notifications or branches', async role => {
   const fake = managementServer(); mountTransfers(fake, <NotificationsPage />, '', { ...workspace, access: { ...workspace.access, role } })
@@ -50,7 +51,7 @@ it('paginates and filters without treating a failed read as empty', async () => 
   const fake = managementServer(); fake.management.notifications = Array.from({ length: 21 }, (_, index) => ({ ...alert, notificationId: id(550 + index), title: 'Alerta ' + index })); fake.management.totalCount = n('21'); mountTransfers(fake, <NotificationsPage />)
   await screen.findByText('Alerta 0'); fireEvent.click(screen.getByRole('button', { name: 'Página siguiente' })); await screen.findByText('Alerta 20'); expect(screen.queryByText('Alerta 0')).not.toBeInTheDocument()
   fireEvent.click(screen.getByRole('checkbox', { name: 'Solo no leídas' })); await screen.findByText('Alerta 0')
-  fake.management.failGet = true; fireEvent.click(screen.getByRole('button', { name: 'Actualizar consulta' })); await screen.findAllByRole('alert'); expect(screen.queryByText('No hay notificaciones en esta página.')).not.toBeInTheDocument()
+  fake.management.failGet = true; await refocus(); await screen.findAllByRole('alert'); expect(screen.queryByText('No hay notificaciones en esta página.')).not.toBeInTheDocument()
 })
 it('keeps a lost read pending after reload, and reconciles only an observed read state', async () => {
   const fake = managementServer(); fake.management.notifications = [{ ...alert, isRead: true, readAt: alert.createdAt }]

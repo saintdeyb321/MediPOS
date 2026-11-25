@@ -53,7 +53,7 @@ it('requests, approves, allocates multiple origin lots and receives actual short
 })
 it('paginates and filters on the server, preserves details on reload and treats errors differently from empty results', async () => {
   const fake = transferServer(); fake.state.records = Array.from({ length: 21 }, (_, index) => ({ ...transfer, id: id(200 + index) })); const view = mountTransfers(fake, <TransfersPage />)
-  const next = screen.getByRole('button', { name: 'Página siguiente' }); await waitFor(() => expect(next).toBeEnabled()); fireEvent.click(next)
+  const next = await screen.findByRole('button', { name: 'Página siguiente' }); await waitFor(() => expect(next).toBeEnabled()); fireEvent.click(next)
   await waitFor(() => expect(screen.getAllByRole('button', { name: /Ver transferencia/ })).toHaveLength(1)); expect(fake.fetcher.mock.calls.some(([path]) => String(path).includes('offset=20&limit=20'))).toBe(true)
   fireEvent.change(screen.getByRole('combobox', { name: 'Estado de transferencia' }), { target: { value: 'received' } }); await screen.findByText('No hay transferencias en esta página y filtro.')
   view.unmount(); fake.state.records = [transfer]; const second = mountTransfers(fake, <TransfersPage />, '?goodsId=' + transfer.id)

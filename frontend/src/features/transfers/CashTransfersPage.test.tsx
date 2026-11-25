@@ -103,7 +103,7 @@ it('keeps an early in-transit read pending after lost receipt, then reconciles r
 })
 it('uses hasMore pagination, distinguishes empty and failed pending queries, and never invents history endpoints', async () => {
   const fake = cashServer(); fake.cash.records = Array.from({ length: 21 }, (_, index) => ({ ...sentCash, id: id(400 + index) })); const view = mountTransfers(fake, <CashTransfersPage />)
-  const next = screen.getAllByRole('button', { name: 'Página siguiente' })[0]!; await waitFor(() => expect(next).toBeEnabled()); fireEvent.click(next)
+  const next = await screen.findByRole('button', { name: 'Página siguiente' }); await waitFor(() => expect(next).toBeEnabled()); fireEvent.click(next)
   await waitFor(() => expect(screen.getAllByRole('button', { name: /Consultar sencillo de/ })).toHaveLength(1)); expect(fake.fetcher.mock.calls.some(([path]) => String(path).includes('/cash-transfers/pending?offset=20'))).toBe(true)
   view.unmount(); fake.cash.records = []; const empty = mountTransfers(fake, <CashTransfersPage />); await screen.findByText(/No hay sencillo pendiente/); empty.unmount(); fake.cash.fail = true; mountTransfers(fake, <CashTransfersPage />)
   await screen.findByText('No pudimos consultar sencillo pendiente'); expect(screen.queryByText(/No hay sencillo pendiente/)).not.toBeInTheDocument(); expect(fake.writes()).toHaveLength(0)

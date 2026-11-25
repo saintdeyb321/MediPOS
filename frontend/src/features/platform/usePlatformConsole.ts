@@ -11,7 +11,8 @@ import type { LicenseAction, TrialInput } from './api'
 
 type Page = Awaited<ReturnType<ReturnType<typeof platformApi>['tenants']>>
 type Administration = NonNullable<Page['items'][number]['administration']>
-const queryOptions = { retry: false, refetchOnWindowFocus: false, refetchOnReconnect: false, retryOnMount: false, staleTime: 60_000 } as const
+const canRevalidate = (query: { state: { status: string } }) => query.state.status === 'success'
+const queryOptions = { retry: false, refetchOnWindowFocus: canRevalidate, refetchOnReconnect: canRevalidate, retryOnMount: false, staleTime: 60_000 } as const
 const conflictCodes = new Set(['license.state_conflict', 'license.concurrent_change', 'platform.owner_invitation_conflict'])
 const isDenied = (error: unknown) => error instanceof ApiError && [401, 403].includes(error.status)
 export const categoryNameKey = (name: string) => name.trim().toLocaleLowerCase('es-PE')

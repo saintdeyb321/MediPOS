@@ -20,11 +20,15 @@ export function settingsApi(http: HttpClient) {
     async branches(w: TenantSettingsScope, offset: number, signal?: AbortSignal) { const rows = array(branch)(await http.request(root(w) + '/branches' + page(offset), { signal, exactNumbers: true })); if (rows.length > 20) throw new ApiError(0, 'client.unexpected_response'); return rows.map(row => scoped(row, w)) },
     async createLegal(w: TenantSettingsScope, input: LegalInput, signal?: AbortSignal) {
       const data = await http.request(root(w) + '/legal-entities', { method: 'POST', body: input, signal, exactNumbers: true })
-      try { return scoped(legal(data), w) } catch { throw new ApiError(0, 'client.outcome_unknown', undefined, true) }
+      try {
+        const result = scoped(legal(data), w)
+        if (result.legalName !== input.legalName.trim() || result.ruc !== input.ruc.trim()) throw new Error('legal entity response mismatch')
+        return result
+      } catch { throw new ApiError(0, 'client.outcome_unknown', undefined, true) }
     },
     async createBranch(w: TenantSettingsScope, input: BranchInput, signal?: AbortSignal) {
       const data = await http.request(root(w) + '/branches', { method: 'POST', body: { ...input, legalEntityId: uuid(input.legalEntityId) }, signal, exactNumbers: true })
-      try { const result = scoped(branch(data), w); if (result.legalEntityId !== input.legalEntityId) throw new Error('entity'); return result } catch { throw new ApiError(0, 'client.outcome_unknown', undefined, true) }
+      try { const result = scoped(branch(data), w); if (result.legalEntityId !== input.legalEntityId || result.name !== input.name.trim()) throw new Error('entity'); return result } catch { throw new ApiError(0, 'client.outcome_unknown', undefined, true) }
     },
   }
 }

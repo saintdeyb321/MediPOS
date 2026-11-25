@@ -1,5 +1,6 @@
+import { focusManager, useQueryClient } from '@tanstack/react-query'
 import { describe, expect, it, vi } from 'vitest'
-import { act, render, screen, waitFor, within } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router'
 import { AppRoutes } from './routes'
@@ -9,7 +10,7 @@ import { createPreviewService } from '../../development/fixtures'
 import type { Scenario } from '../../types/development'
 import { HttpClient } from '../../shared/api/http'
 import { ApiError } from '../../shared/api/http'
-import { createMediPosService } from '../../features/access'
+import { createMediPosService, useSession } from '../../features/access'
 import { offlineStorage } from '../../features/offline'
 
 const tenantId = '019a0162-0000-7000-8000-000000000002'
@@ -29,7 +30,7 @@ describe('F1 navigation and access boundaries', () => {
       const service = createPreviewService('owner'); const logout = vi.spyOn(service, 'logout'); const user = userEvent.setup()
       mount('owner', workspace, { service }); await screen.findByRole('heading', { name: 'Inicio' })
       await user.click(screen.getByRole('button', { name: 'Cerrar sesión' }))
-      await screen.findByRole('heading', { name: 'Un buen día empieza aquí.' })
+      await screen.findByRole('heading', { name: 'Ingresa a MediPOS' })
       expect(logout).toHaveBeenCalledTimes(1); expect(blocked).toHaveBeenCalledTimes(1)
     } finally { blocked.mockRestore() }
   })
@@ -40,12 +41,11 @@ describe('F1 navigation and access boundaries', () => {
   it.each(['configuracion', 'auditoria', 'importacion'])('guards block 08 Owner route %s for an ordinary cashier', async path => {
     mount('cashier', workspace + '/' + path)
     expect(await screen.findByRole('heading', { name: 'Esta sección requiere otro acceso' })).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: /Crear entidad legal|Crear sucursal|Importar productos/ })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /Registrar datos del negocio|Crear sucursal|Importar productos/ })).not.toBeInTheDocument()
   })
   // Several async screens plus native user interactions; retain a bounded budget under build load.
   it('walks botica → branch → dashboard → POS shell → logout without creating a sale', async () => {
     const user = userEvent.setup(); mount()
-    await user.click(await screen.findByRole('button', { name: /seleccionar botica/i }))
     await user.click(await screen.findByRole('link', { name: /sucursal principal/i }))
     expect(await screen.findByRole('heading', { name: 'Inicio' })).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'Reportes' })).toBeInTheDocument()
@@ -56,7 +56,7 @@ describe('F1 navigation and access boundaries', () => {
     expect(screen.getByRole('searchbox')).toHaveAccessibleDescription(/Requiere conexión HTTPS/)
     expect(screen.queryByRole('button', { name: /Confirmar venta/ })).not.toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'Cerrar sesión' }))
-    expect(await screen.findByRole('heading', { name: 'Un buen día empieza aquí.' })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'Ingresa a MediPOS' })).toBeInTheDocument()
   }, 15_000)
   it('does not use the descriptive Owner role in the directory to grant cashier menus', async () => {
     const service = createPreviewService('cashier'); const original = service.tenants
@@ -129,12 +129,13 @@ describe('F1 navigation and access boundaries', () => {
   })
   it('handles empty memberships, empty branches and a recoverable list error', async () => {
     mount('noTenants', '/seleccionar-botica')
-    expect(await screen.findByRole('heading', { name: 'Aún no tienes boticas asignadas' })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'Aún no tienes una botica asignada' })).toBeInTheDocument()
   })
   it('shows an empty authorized branch list without inventing a branch', async () => {
-    mount('noBranches', `/boticas/${tenantId}/sucursales`)
-    expect(await screen.findByRole('heading', { name: 'No hay sucursales disponibles' })).toBeInTheDocument()
-    expect(screen.queryByRole('link', { name: /sucursal principal/i })).not.toBeInTheDocument()
+    const service = createPreviewService('cashier'); service.branches = async () => []
+    mount('cashier', `/boticas/${tenantId}/sucursales`, { service })
+    expect(await screen.findByRole('heading', { name: 'Todavía no tienes una sucursal asignada' })).toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: /sucursal principal|configurar primera sucursal|gestionar negocio/i })).not.toBeInTheDocument()
   })
   it('offers a real retry after the tenant request fails', async () => {
     const service = createPreviewService('tenantError'); const tenants = vi.spyOn(service, 'tenants')
@@ -150,20 +151,91 @@ describe('F1 navigation and access boundaries', () => {
     mount('noTenants', '/seleccionar-botica', { service })
     expect(await screen.findByRole('status')).toHaveTextContent(/Verificando tu sesión|Buscando tus boticas/)
     await screen.findByText('Buscando tus boticas…')
-    expect(screen.queryByText('Aún no tienes boticas asignadas')).not.toBeInTheDocument()
+    expect(screen.queryByText('Aún no tienes una botica asignada')).not.toBeInTheDocument()
     await act(async () => complete({ items: [], nextAfterTenantId: null }))
-    expect(await screen.findByRole('heading', { name: 'Aún no tienes boticas asignadas' })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'Aún no tienes una botica asignada' })).toBeInTheDocument()
   })
   it('selects a tenant with the keyboard and announces the next step', async () => {
-    mount()
-    const selection = await screen.findByRole('button', { name: /seleccionar botica/i })
+    mount('owner', '/seleccionar-botica?elegir=1')
+    const selection = await screen.findByRole('link', { name: /\bEntrar\b/i })
     const user = userEvent.setup()
     for (let i = 0; i < 6 && document.activeElement !== selection; i++) await user.tab()
     expect(selection).toHaveFocus()
     await user.keyboard('{Enter}')
-    expect(await screen.findByRole('heading', { name: 'Selecciona una sucursal' })).toBeInTheDocument()
-    expect(screen.getByText('Sucursal', { selector: '[aria-current="step"]' })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'Mis sucursales' })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: /sucursal principal/i })).toBeInTheDocument()
+    expect(document.querySelector('[aria-current="step"]')).toBeNull()
   })
+  it('enters the unique authorized branch without selections and rechecks when opening the workspace', async () => {
+    const service = createPreviewService('cashier')
+    const access = vi.spyOn(service, 'access')
+    const branches = vi.spyOn(service, 'branches')
+    const tenants = vi.spyOn(service, 'tenants')
+    const session = vi.spyOn(service, 'session')
+    mount('cashier', '/seleccionar-botica', { service })
+    await screen.findByRole('heading', { name: 'Inicio' })
+    expect([session.mock.calls.length, tenants.mock.calls.length, branches.mock.calls.length, access.mock.calls.length]).toEqual([1, 1, 1, 2])
+    expect(access.mock.calls.map(args => args.slice(0, 2))).toEqual([[tenantId, branchId], [tenantId, branchId]])
+    fireEvent.click(screen.getByRole('link', { name: 'Cambiar sucursal' }))
+    await screen.findByRole('heading', { name: 'Selecciona una sucursal' })
+    expect(screen.queryByRole('heading', { name: 'Inicio' })).not.toBeInTheDocument()
+    fireEvent.click(await screen.findByRole('link', { name: /sucursal principal/i }))
+    await screen.findByRole('heading', { name: 'Inicio' })
+    fireEvent.click(screen.getByRole('link', { name: 'Cambiar botica' }))
+    await screen.findByRole('link', { name: /\bEntrar\b/i })
+    expect(screen.queryByRole('heading', { name: 'Inicio' })).not.toBeInTheDocument()
+  })
+
+  it('keeps the chooser when the first tenant page has one row and a cursor', async () => {
+    const service = createPreviewService('cashier')
+    const original = service.tenants
+    service.tenants = async (cursor, signal) => {
+      const page = await original(cursor, signal)
+      return cursor ? { items: [{ ...page.items[0]!, tenantId: branchId, tradingName: 'Segunda botica' }], nextAfterTenantId: null } : { ...page, nextAfterTenantId: tenantId }
+    }
+    const branches = vi.spyOn(service, 'branches')
+    mount('cashier', '/seleccionar-botica', { service })
+    fireEvent.click(await screen.findByRole('button', { name: 'Cargar más boticas' }))
+    await screen.findByRole('link', { name: /Segunda botica/i })
+    expect(screen.getAllByRole('link', { name: /\bEntrar\b/ })).toHaveLength(2)
+    expect(branches).not.toHaveBeenCalled()
+  })
+
+  it('does not auto-enter a unique branch when its server access is outside schedule', async () => {
+    const service = createPreviewService('scheduleDenied')
+    const original = service.branches
+    service.branches = async (...args) => (await original(...args)).slice(0, 1)
+    const access = vi.spyOn(service, 'access')
+    mount('scheduleDenied', '/seleccionar-botica', { service })
+    expect(await screen.findByText(/fuera de tu horario/)).toBeInTheDocument()
+    expect(screen.queryByRole('navigation', { name: 'Navegación principal' })).not.toBeInTheDocument()
+    expect(access).toHaveBeenCalledTimes(1)
+  })
+
+  it('revalidates the session on focus and drops the previous account cache in the same browser', async () => {
+    const service = createPreviewService('owner')
+    const session = vi.spyOn(service, 'session')
+    const privateKey = ['tenant', tenantId, branchId, 'unit-private']
+    const oldAccount = '019a0162-0000-7000-8000-000000000001'
+    const newAccount = '019a0162-0000-7000-8000-000000000007'
+    session.mockResolvedValue({ userId: oldAccount })
+    let cache: ReturnType<typeof useQueryClient> | undefined
+    function Probe() {
+      const current = useSession()
+      const client = useQueryClient()
+      return <button onClick={() => { cache = client; client.setQueryData(privateKey, 'old private result') }}>{current.data?.userId}</button>
+    }
+    try {
+      render(<RuntimeProvider runtime={{ service, preview: true }}><Probe /></RuntimeProvider>)
+      fireEvent.click(await screen.findByRole('button', { name: oldAccount }))
+      expect(cache?.getQueryData(privateKey)).toBe('old private result')
+      session.mockResolvedValue({ userId: newAccount })
+      await act(async () => { focusManager.setFocused(false); focusManager.setFocused(true) })
+      await screen.findByRole('button', { name: newAccount })
+      expect(cache?.getQueryState(privateKey)).toBeUndefined()
+    } finally { focusManager.setFocused(undefined) }
+  })
+
   it('describes the connected reports navigation without an unavailable label', async () => {
     mount('owner', workspace)
     const reports = await screen.findByRole('link', { name: 'Reportes' })

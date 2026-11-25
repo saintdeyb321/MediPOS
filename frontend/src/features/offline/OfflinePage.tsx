@@ -84,11 +84,11 @@ function Conflicts() {
     finally { inFlight.current = false; if (!abort.signal.aborted) setWriting(false) }
   }
   return <Panel><div className="operation-body"><h2>Conflictos del servidor</h2><label>Estado<select value={status} disabled={busy} onChange={event => { setStatus(event.target.value as 'open' | 'resolved'); setOffset(0) }}><option value="open">Abiertos</option><option value="resolved">Resueltos</option></select></label>{busy && <p role="status">Consultando…</p>}{error != null && <ApiErrorState error={error} title="No pudimos completar la revisión de conflictos" />}{notice && <p role="status">{notice}</p>}
-    {query.isError && <ApiErrorState error={query.error} title="No pudimos consultar conflictos" />}
+    {query.isError && <ApiErrorState error={query.error} title="No pudimos consultar conflictos" retry={() => void query.refetch()} />}
     <Button variant="quiet" disabled={busy} onClick={() => { void query.refetch().then(result => { if (result.isSuccess) setUncertain(false) }) }}>Consultar conflictos originales</Button>
     {!busy && !error && items && !items.length && <p>No hay conflictos en esta página.</p>}
     {!error && items?.map(value => <ConflictRow key={value.id + '/' + value.status} value={value} allow={w.access.role === 'owner' && !busy && !uncertain} resolve={resolve} />)}
-    <PageControls offset={offset} count={more ? 20 : 0} busy={busy} change={setOffset} refresh={() => void query.refetch()} />
+    <PageControls offset={offset} count={more ? 20 : 0} busy={busy} change={setOffset} />
   </div></Panel>
 }
 function ConflictRow({ value, allow, resolve }: { value: SyncConflict; allow: boolean; resolve: (v: SyncConflict, code: 'cancelled' | 'reviewed_no_posting', note: string) => Promise<void> }) {

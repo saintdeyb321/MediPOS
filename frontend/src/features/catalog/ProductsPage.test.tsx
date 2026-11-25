@@ -6,6 +6,7 @@ import { WorkspaceContext } from '../access'
 import type { Workspace } from '../access'
 import { createPreviewService } from '../../development/fixtures'
 import { HttpClient } from '../../shared/api/http'
+import { refocus } from '../../test/refocus'
 import { JsonNumber, parseExactJson, stringifyExactJson } from '../../shared/api/exactJson'
 import { ProductsPage } from './ProductsPage'
 import type { BusinessProduct, GlobalProduct, LocalProductInput, PricesInput, ProductUnit, UnitChange } from './api'
@@ -164,9 +165,12 @@ it('shows an empty global catalog honestly and associates a selected reference w
   const fake = server(); mount(fake)
   fireEvent.click(screen.getByRole('button', { name: 'Referencias del catálogo global' }))
   await screen.findByText('No hay productos globales en esta página.')
+  const businessReads = () => fake.fetcher.mock.calls.filter(([path]) => String(path).includes('/products?')).length
+  const before = businessReads()
   fake.state.globals = [{ ...record, id: id('90'), name: 'Referencia unitaria' }]
-  fireEvent.click(screen.getAllByRole('button', { name: 'Actualizar lista' })[0]!)
+  await refocus()
   fireEvent.click(await screen.findByRole('button', { name: 'Añadir Referencia unitaria a mi botica' }))
+  expect(businessReads()).toBe(before)
   const form = within(screen.getByRole('form', { name: 'Asociar producto global' }))
   fireEvent.change(form.getByRole('textbox', { name: 'Código interno' }), { target: { value: 'GLOBAL-UNIT' } })
   fillPrice(form, '2.00')

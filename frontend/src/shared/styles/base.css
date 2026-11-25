@@ -11,7 +11,7 @@
   }
   * { box-sizing: border-box; }
   html { scrollbar-gutter: stable; }
-  body { margin: 0; min-width: 320px; }
+  body { margin: 0; min-inline-size: 0; }
   body:has(dialog[open]) { overflow: hidden; }
   button, input, select, textarea { font: inherit; }
   button, a, summary, select { -webkit-tap-highlight-color: transparent; }
@@ -25,7 +25,8 @@
   h2 { font-size: var(--text-lg); }
   h3 { font-size: var(--text-base); }
   small { font-size: var(--text-sm); }
-  textarea { max-width: 100%; }
+  fieldset { min-inline-size: 0; }
+  select, textarea { max-inline-size: 100%; }
   [hidden] { display: none !important; }
   svg { flex-shrink: 0; }
   ::selection { background: var(--primary-soft); color: var(--primary-hover); }

@@ -51,7 +51,7 @@ it('routes an approved Google session to its separate layout with one admission 
 })
 it('routes an ordinary Owner/employee to selection only after an explicit platform denial', async () => {
   const fetcher = mount(403)
-  await screen.findByText('Aún no tienes boticas asignadas')
+  await screen.findByText('Aún no tienes una botica asignada')
   expect(screen.getByTestId('path')).toHaveTextContent('/seleccionar-botica')
   expect(screen.queryByRole('link', { name: 'Cambiar a Plataforma' })).not.toBeInTheDocument()
   expect(screen.queryByText('Mi identidad para asignar propietario')).not.toBeInTheDocument()
@@ -87,7 +87,7 @@ it.each([404, 'empty-404'] as const)('requires an explicit commercial-context ch
   expect(screen.getAllByRole('alert').length).toBeGreaterThan(0)
   expect(fetcher.mock.calls.some(([path]) => String(path).startsWith('/api/me/tenants'))).toBe(false)
   fireEvent.click(proceed)
-  await screen.findByText('Aún no tienes boticas asignadas')
+  await screen.findByText('Aún no tienes una botica asignada')
   expect(screen.queryByRole('link', { name: 'Cambiar a Plataforma' })).not.toBeInTheDocument()
   expect(screen.queryByRole('navigation', { name: 'Navegación de plataforma' })).not.toBeInTheDocument()
   expect(fetcher.mock.calls.filter(([path]) => path === '/platform/session')).toHaveLength(1)

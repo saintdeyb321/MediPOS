@@ -31,6 +31,13 @@ const messages: Record<string, string> = {
   'client.precision_unsupported': 'Este navegador no puede conservar los decimales del servidor. Usa una versión actualizada.',
   'client.network_error': 'No pudimos conectar con MediPOS. Comprueba tu conexión y vuelve a intentarlo.',
   'client.unexpected_response': 'El servidor no devolvió una respuesta de MediPOS válida. Revisa la conexión y la configuración del sitio.',
+  'client.structure_recovery_unavailable': 'El navegador debe permitir el almacenamiento de este sitio y la coordinación entre pestañas para conservar estas altas.',
+  'client.structure_busy': 'Hay un alta de estructura en curso en otra pestaña. Espera y consulta el resultado.',
+  'client.structure_pending': 'Primero verifica el resultado de la solicitud original.',
+  'client.structure_result_mismatch': 'Los datos del registro no corresponden a la solicitud original. Verifica la operación y conserva la recuperación.',
+  'client.structure_changed': 'La estructura cambió desde la última consulta. Revisa las entidades y sucursales disponibles.',
+  'branch.limit_reached': 'La botica ya alcanzó el cupo de sucursales de su licencia.',
+  'access.branch_required': 'El acceso a esta botica se comprueba al elegir una sucursal asignada.',
   'client.purchase_recovery_storage_unavailable': 'Habilita el almacenamiento de este sitio en el navegador para poder recuperar el alta si se pierde la respuesta.',
   'client.transfer_recovery_storage_unavailable': 'Habilita el almacenamiento de este sitio en el navegador para poder recuperar la solicitud si se pierde la respuesta.',
   'client.invalid_sale_id': 'El identificador del borrador no es válido. Usa su dirección guardada o recupera el identificador correcto.',
@@ -60,7 +67,7 @@ const messages: Record<string, string> = {
   'auth.session_required': 'Tu sesión terminó. Vuelve a ingresar con Google para continuar.',
   'auth.csrf_invalid': 'No se pudo verificar esta solicitud. Actualiza la página e inténtalo de nuevo.',
   'auth.origin_denied': 'Este sitio no está autorizado para conectar con MediPOS. Contacta al administrador.',
-  'access.license_denied': 'La licencia de esta botica no permite operar. Comunícate con el propietario.',
+  'access.license_denied': 'La licencia de esta botica no permite operar. Solicita revisar su vigencia en MediPOS.',
   'operation.in_progress': 'La intención original sigue en curso. Consulta su constancia; no crees otra operación.',
   'operation.not_observed': 'Aún no se observa una constancia confirmada. Esto no demuestra que la escritura haya fallado. Conserva la operación y vuelve a consultar.',
   'operation.intention_conflict': 'La clave pertenece a otra solicitud original. Conserva esa intención y concilia su resultado antes de continuar.',
@@ -87,4 +94,7 @@ export function errorMessage(error: unknown) {
     429: 'Has realizado varias solicitudes. Espera un momento antes de continuar.',
   }[error.status] ?? (error.status >= 500 ? 'El servicio no está disponible. Consulta el estado antes de repetir una operación.' : 'No pudimos completar la solicitud.')) : 'Ocurrió un problema inesperado. Vuelve a intentarlo.'
 }
-export const accessMessage = (code: string) => messages[code] ?? 'No tienes acceso operacional en este momento. Consulta al propietario.'
+export const accessMessage = (code: string, role?: string) => {
+  if (code === 'access.license_denied' && role === 'owner') return 'La licencia de tu botica no permite operar. Solicita su revisión en MediPOS.'
+  return messages[code] ?? 'El servidor no autorizó el acceso en este momento. Revisa tu acceso e inténtalo de nuevo.'
+}

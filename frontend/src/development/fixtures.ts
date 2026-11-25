@@ -35,7 +35,7 @@ export function createPreviewService(scenario: Scenario): MediPosService {
     async access(id, branchId, signal) {
       await wait(signal)
       const assigned = id === tenantId && branches.some(b => b.id === branchId) && (role !== 'cashier' || branchId === branches[0]?.id)
-      const code = !assigned ? 'access.branch_unassigned' : scenario === 'scheduleDenied' ? 'access.schedule_denied' : scenario === 'licenseDenied' ? 'access.license_denied' : 'access.allowed'
+      const code = branchId === null && id === tenantId ? scenario === 'licenseDenied' ? 'access.license_denied' : role === 'owner' ? 'access.allowed' : 'access.branch_required' : !assigned ? 'access.branch_unassigned' : scenario === 'scheduleDenied' ? 'access.schedule_denied' : scenario === 'licenseDenied' ? 'access.license_denied' : 'access.allowed'
       return { isAllowed: code === 'access.allowed', code, context: {
         userId, tenantId: id, branchId, membershipId, role, membershipIsActive: true, branchAssigned: assigned,
         licenseStatus: scenario === 'licenseDenied' ? 'suspended' : 'active', licenseStartsAt: '2026-01-01T00:00:00Z', licenseExpiresAt: '2027-01-01T00:00:00Z',

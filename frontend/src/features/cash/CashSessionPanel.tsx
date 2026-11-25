@@ -22,13 +22,13 @@ export function CashSessionPanel({ cash, compact = false, blocked = false }: { c
       {!cash.connected && <p>La caja requiere una conexión real con MediPOS.</p>}
       {cash.query.isError && <ApiErrorState error={cash.query.error} title="No pudimos consultar la caja" />}
       {cash.error != null && <ApiErrorState error={cash.error} title="Revisa el resultado de apertura" />}
-      {cash.session && cash.uncertain && <Notice tone="warning">Se encontró una caja abierta. Pulsa Consultar caja para reconciliar la apertura pendiente antes de crear un borrador.</Notice>}
+      {cash.session && cash.uncertain && <Notice tone="warning">Se encontró una caja abierta. Consulta el resultado de la apertura pendiente antes de crear un borrador.</Notice>}
       {cash.session ? !compact && <p>Monto inicial registrado: S/ {decimalLabel(cash.session.openingAmount, 2)}. Tu caja está abierta en esta sucursal.</p> :
         cash.uncertain ? <Notice tone="warning">La apertura tiene un resultado pendiente. Consulta la caja; no se enviará otra apertura automáticamente.</Notice> :
           !cash.query.isPending && !cash.query.isError && cash.connected && <Button disabled={cash.pending || blocked} onClick={() => setOpening(true)}>Abrir caja</Button>}
       {!compact && cash.session && <CashAge key={cash.session.cashSessionId} openedAt={cash.session.openedAt} />}
       {!compact && !cash.session && !cash.query.isPending && !cash.query.isError && !cash.uncertain && <p className="data-caption">Caja cerrada: ábrela para cobrar.</p>}
-      {(!compact || cash.uncertain || cash.query.isError) && <Button variant="quiet" onClick={() => void cash.refresh()} disabled={cash.pending || cash.query.isFetching || !cash.connected}>Consultar caja</Button>}
+      {cash.query.isError && <Button variant="quiet" onClick={() => void cash.refresh()} disabled={cash.pending || cash.query.isFetching || !cash.connected}>Reintentar lectura de caja</Button>}
       {cash.uncertain && !opening && <Button data-recovery-focus variant="secondary" disabled={cash.pending} onClick={() => setOpening(true)}>Revisar apertura pendiente sin reenviar</Button>}
     </div>
     <Modal open={opening && (!cash.session || cash.uncertain)} title="Abrir caja en esta sucursal" onClose={() => { setOpening(false); setAmount('') }} onRecoveryClose={() => setOpening(false)} dirty={Boolean(amount)} busy={cash.pending} recovery={cash.uncertain}>

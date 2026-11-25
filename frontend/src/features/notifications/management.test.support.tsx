@@ -26,6 +26,8 @@ export function managementServer() {
       return management.delay ?? json({ rows: rows.slice(offset, offset + 20), totalCount: management.totalCount })
     }
     if (p.includes('/notifications/') && p.endsWith('/read')) { const id = p.split('/').at(-2); const row = management.notifications.find(row => row.notificationId === id)!; management.notifications = management.notifications.map(r => r === row ? { ...r, isRead: true, readAt: time } : r); if (management.lose === 'read') throw new TypeError('Synthetic lost response'); return json({ notificationId: id, readAt: time }) }
+    if (p.endsWith('/access') && !url.searchParams.has('branchId'))
+      return json({ isAllowed: true, code: 'access.allowed', context: { ...workspace.access, branchId: null } })
     if (p.endsWith('/license')) return json(management.license)
     if (p.endsWith('/legal-entities') || p.endsWith('/branches')) {
       const isLegal = p.endsWith('/legal-entities'); if (method === 'GET') return management.delay ?? json((isLegal ? management.legal : management.branches).slice(offset, offset + Number(url.searchParams.get('limit') ?? 20)))

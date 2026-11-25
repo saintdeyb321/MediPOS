@@ -1,3 +1,4 @@
+import { refocus } from '../../test/refocus'
 import { fireEvent, screen, waitFor, within } from '@testing-library/react'
 import { expect, it } from 'vitest'
 import { AuditPage } from './AuditPage'
@@ -31,7 +32,7 @@ it('uses server paging, empty and error states, without hiding failed data as em
   const first = await auditDetail(); expect(first.getByText('unit-page-0')).toBeInTheDocument(); fireEvent.click(first.getByRole('button', { name: /Cerrar/ }))
   fireEvent.click(screen.getByRole('button', { name: 'Página siguiente' })); const next = await auditDetail()
   expect(next.getByText('unit-page-20')).toBeInTheDocument(); fireEvent.click(next.getByRole('button', { name: /Cerrar/ }))
-  fake.management.failGet = true; fireEvent.click(screen.getByRole('button', { name: 'Actualizar consulta' })); await screen.findByRole('alert'); expect(screen.queryByText('No hay registros en esta página.')).not.toBeInTheDocument()
+  fake.management.failGet = true; await refocus(); await screen.findByRole('alert'); expect(screen.queryByText('No hay registros en esta página.')).not.toBeInTheDocument()
 })
 it('withdraws private audit metadata when an Owner loses their role', async () => {
   const fake = managementServer(); const view = mountTransfers(fake, <AuditPage />); const detail = await auditDetail(); expect(detail.getByText('unit-correlation')).toBeInTheDocument(); const count = fake.fetcher.mock.calls.length

@@ -20,7 +20,7 @@ export function PlatformRecovery({ p, kind, recovered }: { p: PlatformConsoleSta
     <Button disabled={p.busy || p.cooldown > 0 || p.denied || !p.admitted} onClick={() => { setConfirmed(false); void p.refresh() }}>{p.pendingLicense ? 'Reconsultar licencia' : 'Reconsultar licencia y propietario'}</Button>
     {p.reconciliationRead && p.data && <div className="platform-recovery-result">
       <p><strong>{p.data.tenant.tradingName}</strong></p>
-      <p>Licencia consultada: {licenseLabel(p.data.license.status)} · vence <DateText value={p.data.license.expiresAt} />.</p>
+      <p>Licencia consultada: {licenseLabel(p.data.license.status, p.data.license.expiresAt, p.serverTime)} · vence <DateText value={p.data.license.expiresAt} />.</p>
       {!p.pendingLicense && <p>{p.initialOwner.data ? <>{ownerLabel(p.initialOwner.data.status)} · {p.initialOwner.data.email}</> : 'Sin designación por Gmail.'}</p>}
     </div>}
     <label><input type="checkbox" disabled={p.busy || !p.reconciliationRead} checked={confirmed} onChange={event => setConfirmed(event.target.checked)} /> Verifiqué el resultado original y que no hay solicitud en curso.</label>

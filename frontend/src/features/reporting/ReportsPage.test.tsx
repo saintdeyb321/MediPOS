@@ -1,6 +1,7 @@
 import { act, fireEvent, screen, waitFor, within } from '@testing-library/react'
 import { expect, it, vi } from 'vitest'
 import { ReportsPage } from './ReportsPage'
+import { refocus } from '../../test/refocus'
 import { reportLabels } from './filters'
 import type { ReportKind } from './contracts'
 import { reportingServer, mountTransfers, workspace, reports, id, n, json } from './reporting.test.support'
@@ -28,7 +29,9 @@ it('displays all report contracts and empty rows separately from failed queries 
   await screen.findByRole('table', { name: /Resumen por sucursal/ }); await choose('sales'); await screen.findByText(/No hay filas para los filtros/)
   for (const kind of ['stock-risk', 'expirations', 'inventory-capital', 'product-rotation', 'commissions'] as const) await choose(kind)
   expect(screen.getByText(/regla vigente no recalcula el historial/)).toBeInTheDocument()
-  fake.reportState.reject = 503; fireEvent.click(within(screen.getByRole('region', { name: 'Resultado del reporte aplicado' })).getByRole('button', { name: /Actualizar (reporte aplicado|consulta)/ })); await screen.findByText('No pudimos consultar el reporte')
+  fake.reportState.reject = 503
+  await refocus(31_000)
+  await screen.findByText('No pudimos consultar el reporte')
   expect(screen.queryByText(/No hay filas para los filtros/)).not.toBeInTheDocument(); expect(fake.writes()).toHaveLength(0)
 })
 it('uses server totals for paging and keeps draft changes separate from the applied results', async () => {

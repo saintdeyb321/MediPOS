@@ -210,7 +210,9 @@ it('blocks medicines without lots and new products without presentations, never 
 it('creates suppliers with optional RUC/contact only for Owner and paginates suppliers on the server', async () => {
   const fake = operationServer(); fake.state.suppliers = Array.from({ length: 21 }, (_, index) => ({ id: id(100 + index), name: 'Proveedor ' + index, ruc: null, contact: null, isActive: true, createdAt: time }))
   mountOperation(fake, <PurchasesPage />)
-  fireEvent.click(screen.getByRole('button', { name: 'Nueva recepción' })); fireEvent.click(screen.getByRole('button', { name: 'Elegir proveedor' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Nueva recepción' }))
+  expect(fake.fetcher.mock.calls.some(([path]) => String(path).includes('/suppliers?'))).toBe(false)
+  fireEvent.click(screen.getByRole('button', { name: 'Elegir proveedor' }))
   const next = await screen.findByRole('button', { name: 'Página siguiente' }); await waitFor(() => expect(next).toBeEnabled()); fireEvent.click(next); await screen.findByRole('button', { name: 'Elegir Proveedor 20' })
   fireEvent.click(screen.getByRole('button', { name: 'Nuevo proveedor' }))
   const form = within(screen.getByRole('form', { name: 'Crear proveedor' }))

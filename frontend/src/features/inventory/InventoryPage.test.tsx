@@ -1,3 +1,4 @@
+import { refocus } from '../../test/refocus'
 import { act, fireEvent, screen, waitFor, within } from '@testing-library/react'
 import { expect, it } from 'vitest'
 import { id, json, lot, mountOperation, n, operationServer, time, workspace } from '../../test/operations'
@@ -62,7 +63,7 @@ it('keeps an uncertain adjustment blocked after refreshing unchanged or changed 
   const fake = operationServer(); fake.state.loseAdjustment = true; const view = mountOperation(fake, <InventoryPage />); const form = await openAdjustment()
   fireEvent.change(form.getByRole('textbox', { name: /Variación en unidades base/ }), { target: { value: '1' } }); fireEvent.change(form.getByRole('textbox', { name: 'Motivo del ajuste' }), { target: { value: 'Motivo' } }); fireEvent.click(form.getByRole('button', { name: 'Registrar ajuste una vez' }))
   await waitFor(() => expect(screen.getByTestId('location').textContent).toContain('inventoryPending=adjustment'))
-  fireEvent.click(screen.getByRole('button', { name: 'Actualizar consulta' })); await waitFor(() => expect(screen.getByRole('cell', { name: '21' })).toBeInTheDocument())
+  await refocus(); await waitFor(() => expect(screen.getByRole('cell', { name: '21' })).toBeInTheDocument())
   expect(screen.getByRole('button', { name: 'Ajustar lote BATCH-UNIT' })).toBeDisabled(); expect(fake.writes()).toHaveLength(1)
   view.unmount(); mountOperation(fake, <InventoryPage />, '?inventoryPending=adjustment'); fireEvent.click(screen.getByRole('button', { name: 'Lotes' }))
   expect(await screen.findByRole('button', { name: 'Ajustar lote BATCH-UNIT' })).toBeDisabled(); expect(fake.writes()).toHaveLength(1)

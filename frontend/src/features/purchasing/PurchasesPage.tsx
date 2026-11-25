@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useEffectEvent, useState } from 'react'
 import { useSearchParams } from 'react-router'
 import { ClipboardList, PackageCheck } from 'lucide-react'
 import { ApiErrorState, useWorkspace } from '../access'
@@ -35,12 +35,20 @@ function PurchasesWorkspace() {
   const [starting, setStarting] = useState(false)
   const [newRequested, setNewRequested] = useState(false)
   const view = receipt.server
+  const revisit = useEffectEvent(() => {
+    if (receipt.id && receipt.error == null && !receipt.busy && !receipt.pending && !edit && view?.lines.length) void receipt.consult()
+  })
+  useEffect(() => {
+    const onVisible = () => { if (document.visibilityState === 'visible') revisit() }
+    document.addEventListener('visibilitychange', onVisible)
+    return () => document.removeEventListener('visibilitychange', onVisible)
+  }, [])
   const step = view?.purchase.status === 'confirmed' ? 3 : view && view.lines.length > 0 && !edit ? 2 : receipt.id ? 1 : 0
   function startNew() { receipt.startNew(); setStarting(true); setEdit(false); setReconciled(false); setReference(''); setNewRequested(false) }
   return <div className="operations"><PageHeader icon={ClipboardList} eyebrow="Abastecimiento · recepción guiada" title="Compras" description={`Recepción de mercadería · ${w.branch.name}`} action={<Button disabled={receipt.locked || supplierBusy} onClick={() => { if (starting || receipt.id) setNewRequested(true); else startNew() }}>Nueva recepción</Button>} />
     <ConfirmDialog open={newRequested} title="Preparar otra recepción" confirmLabel="Continuar con otra recepción" disabled={receipt.locked || supplierBusy} onClose={() => setNewRequested(false)} onConfirm={startNew}><p>Las líneas que aún no guardaste se descartarán. La recepción ya persistida conserva su estado y no se elimina ni se confirma.</p></ConfirmDialog>
     {(starting || receipt.id || receipt.pending) && <Steps labels={['Proveedor y referencia', 'Productos y lotes', 'Recepción física', 'Recepción confirmada']} current={step} label="Progreso de la recepción" focusOnChange />}
-    {receipt.error != null && <ApiErrorState error={receipt.error} title="No pudimos completar la operación de compra" />}
+    {receipt.error != null && <ApiErrorState error={receipt.error} title="No pudimos completar la operación de compra" retry={receipt.id && !receipt.pending && !edit ? () => void receipt.consult() : undefined} />}
     {receipt.notice && <p role="status">{receipt.notice}</p>}
     {receipt.creationPending && <Panel><div className="operation-body"><h2>Recepción pendiente de conciliación</h2>
       <p>Consulta la constancia para recuperar el borrador original. Si todavía no aparece, reconsulta más tarde.</p>
@@ -53,7 +61,6 @@ function PurchasesWorkspace() {
       {receipt.pending === 'confirm' && <p>Si todavía aparece borrador, la confirmación puede seguir en curso. Solo una lectura confirmada libera este bloqueo; no se vuelve a enviar el POST.</p>}
     </div></Panel>}
     {(edit || view?.lines.length === 0) && <p role="status">El editor conserva sus líneas locales. Guarda y revisa antes de actualizar o buscar otra recepción; «Nueva recepción» permite descartar con confirmación.</p>}
-    {receipt.id && !receipt.creationPending && <Button variant="quiet" disabled={receipt.busy || edit || Boolean(view && view.lines.length === 0)} onClick={() => { setReconciled(false); void receipt.consult() }}>Actualizar recepción</Button>}
     {!receipt.creationPending && <Panel><div className="operation-body"><details open={!starting && !receipt.id}><summary>Buscar una recepción guardada</summary><PurchaseLookup busy={receipt.busy || edit || Boolean(view && view.lines.length === 0)} fixedId={receipt.pending ? receipt.id : ''} consult={id => { setEdit(false); setReconciled(false); void receipt.consult(id) }} /></details></div></Panel>}
     <div className="guided-layout" hidden={!starting && !receipt.id && !receipt.pending && !parameters.has('supplierPending')}><div className="guided-main"><SuppliersPanel selected={supplier} select={setSupplier} disabled={receipt.locked || Boolean(receipt.id)} onBusyChange={setSupplierBusy} receiptSupplierId={view?.purchase.supplierId} />
     {starting && !receipt.id && !receipt.pending && <Panel><form className="operation-body" aria-label="Nueva recepción" onSubmit={event => { event.preventDefault(); setEdit(false); void receipt.create(supplier?.id ?? null, reference.trim() || null) }}><h2>1. Proveedor y referencia</h2>

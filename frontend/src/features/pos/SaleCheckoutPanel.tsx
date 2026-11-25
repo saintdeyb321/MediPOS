@@ -40,8 +40,7 @@ export function SaleCheckoutPanel({ draft, canStartPayment = true }: { draft: Dr
       {terminal && <>
         {!ticketChanged && <p role="status">{draft.server?.status === 'confirmed' ? 'VENTA REALIZADA. Pagos y stock verificados en el servidor.' : 'Venta anulada. No está disponible para otro cobro.'}</p>}
         {checkout.ticket.isPending && <p role="status">Consultando ticket interno…</p>}
-        {checkout.ticket.isError && <ApiErrorState error={checkout.ticket.error} title="El ticket no pudo recuperarse; esto no autoriza repetir el cobro" />}
-        <Button variant="quiet" disabled={checkout.ticket.isFetching} onClick={() => void checkout.ticket.refetch()}>Consultar ticket</Button>
+        {checkout.ticket.isError && <ApiErrorState error={checkout.ticket.error} title="El ticket no pudo recuperarse" retry={() => void checkout.ticket.refetch()} />}
         {checkout.ticket.data && !checkout.ticket.isError && checkout.ticket.data.status === draft.server?.status && <InternalTicketPanel ticket={checkout.ticket.data} />}
         {!draft.checkoutPending && <Button variant="secondary" className="no-print" disabled={checkout.busy} onClick={() => {
           if (draft.nextSale()) { setOpened(false); setPaymentFormActive(false); checkout.clearResult() }

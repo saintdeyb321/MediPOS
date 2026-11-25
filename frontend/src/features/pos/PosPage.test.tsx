@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
+import { refocus } from '../../test/refocus'
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { focusManager } from '@tanstack/react-query'
 import userEvent from '@testing-library/user-event'
@@ -301,7 +302,7 @@ describe('POS local cart, cash and persisted draft', () => {
     await screen.findByText(/El ticket no pudo recuperarse/)
     expect(screen.queryByRole('button', { name: 'Confirmar venta y registrar pagos' })).not.toBeInTheDocument()
     fake.state.failTicket = false
-    fireEvent.click(screen.getByRole('button', { name: 'Consultar ticket' }))
+    fireEvent.click(within(screen.getByText('El ticket no pudo recuperarse').closest('[role=alert]')!).getByRole('button', { name: 'Volver a intentar' }))
     await screen.findByRole('article', { name: 'Ticket interno' })
     expect(fake.writes()).toHaveLength(1)
   })
@@ -320,7 +321,7 @@ describe('POS local cart, cash and persisted draft', () => {
     await screen.findByRole('article', { name: 'Ticket interno' })
     await waitFor(() => expect(screen.queryByRole('button', { name: 'Consultar resultado de venta' })).not.toBeInTheDocument())
     fake.state.sale = { ...fake.state.sale!, status: 'voided', version: 4 }
-    fireEvent.click(screen.getByRole('button', { name: 'Consultar ticket' }))
+    await refocus()
     await screen.findByText(/El estado del ticket cambió/)
     expect(screen.queryByText(/VENTA REALIZADA/)).not.toBeInTheDocument()
     expect(screen.queryByRole('article', { name: 'Ticket interno' })).not.toBeInTheDocument()

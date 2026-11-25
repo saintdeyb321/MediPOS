@@ -11,7 +11,7 @@ export function PageHeader({ eyebrow = 'MediPOS · espacio de trabajo', title, d
         <h1>{title}</h1>
         {description && <p>{description}</p>}
       </div>
-      {action}
+      {action && <div className="page-heading-action">{action}</div>}
     </div>
   )
 }

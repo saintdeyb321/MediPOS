@@ -47,7 +47,8 @@ function ImportWorkspace() {
       await refresh
     }
     return result
-  }, enabled: Boolean(http) && !awaitingReceipt && isUuid(jobId), retry: false, refetchOnWindowFocus: false })
+  }, enabled: Boolean(http) && !awaitingReceipt && isUuid(jobId), retry: false, refetchOnWindowFocus: query => !busy && !pending && query.state.status === 'success',
+    refetchInterval: query => !busy && !pending && query.state.status === 'success' && query.state.data?.status === 'processing' ? 30_000 : false })
   const job = !awaitingReceipt && query.isSuccess && !query.isFetching ? query.data : null
   const canRecoverInterrupted = job?.status === 'processing' && job.canRecoverInterrupted && !legacyPending && !query.isError
   const locked = busy || pending || denied || !http
@@ -121,6 +122,6 @@ function ImportWorkspace() {
       {canRecoverInterrupted && <fieldset disabled={busy || denied}><legend>Recuperar importación interrumpida</legend>
         <Button type="button" variant="danger" disabled={!canRecoverInterrupted || busy || denied} onClick={() => void recoverInterrupted()}>Cerrar trabajo interrumpido</Button>
       </fieldset>}
-      {jobId && !awaitingReceipt && <Button disabled={busy || query.isFetching} onClick={() => void query.refetch()}>Actualizar mismo trabajo</Button>}
+      {jobId && pending && !awaitingReceipt && !query.isError && <Button disabled={busy || query.isFetching} onClick={() => void query.refetch()}>Consultar resultado del trabajo original</Button>}
     </div></Panel></div>
 }

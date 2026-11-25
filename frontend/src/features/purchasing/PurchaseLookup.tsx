@@ -21,9 +21,9 @@ export function PurchaseLookup({ consult, busy, fixedId }: { consult: (id: strin
       <Button type="submit" disabled={!http || !text.trim() || result.isFetching}>Buscar referencia</Button>
     </form>
     {result.isFetching && <p>Consultando recepciones…</p>}
-    {result.isError && <ApiErrorState error={result.error} title="No pudimos consultar recepciones" />}
+    {result.isError && <ApiErrorState error={result.error} title="No pudimos consultar recepciones" retry={() => void result.refetch()} />}
     {reference && result.data && !result.isError && <><ul>{!result.data.length && <li>No hay coincidencias en esta página. Esto no demuestra que una creación pendiente haya fallado.</li>}{result.data.map(row => <li key={row.id}>{row.documentReference ?? 'Sin referencia'} · {row.createdAt} · {row.status === 'confirmed' ? 'Confirmada' : 'Borrador'} <Button variant="quiet" disabled={busy || Boolean(fixedId && fixedId.toLowerCase() !== row.id.toLowerCase())} onClick={() => consult(row.id)}>Consultar recepción de {row.createdAt}</Button></li>)}</ul>
-      <PageControls offset={offset} count={result.data.length} busy={result.isFetching} change={setOffset} refresh={() => void result.refetch()} /></>}
+      <PageControls offset={offset} count={result.data.length} busy={result.isFetching} change={setOffset} /></>}
     <details><summary>Recuperación excepcional con identificador conocido</summary><form onSubmit={event => { event.preventDefault(); consult(id.trim()) }}>
       <TextField label="Identificador de la recepción original" value={id} onChange={event => setId(event.target.value)} />
       <Button type="submit" disabled={busy || !isUuid(id.trim()) || Boolean(fixedId && fixedId.toLowerCase() !== id.trim().toLowerCase())}>Consultar identificador original</Button>
