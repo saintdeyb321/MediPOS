@@ -64,6 +64,9 @@ internal sealed class OfflineSaleTestSetup
         internal CommissionConfigurationSnapshot Configuration { get; set; } = new(false, []);
         public Task<BusinessProduct?> FindAsync(Guid tenantId, Guid productId, CancellationToken token) => Task.FromResult<BusinessProduct?>(
             !MissingProduct && setup.Product.TenantId == tenantId && setup.Product.Id == productId ? setup.Product : null);
+        public Task<IReadOnlyDictionary<Guid, BusinessProduct>> ReadByIdsAsync(Guid tenantId, Guid[] productIds, CancellationToken token) =>
+            Task.FromResult<IReadOnlyDictionary<Guid, BusinessProduct>>(!MissingProduct && setup.Product.TenantId == tenantId && productIds.Contains(setup.Product.Id)
+                ? new Dictionary<Guid, BusinessProduct> { [setup.Product.Id] = setup.Product } : new Dictionary<Guid, BusinessProduct>());
         Task<IReadOnlyList<ProductUnit>> IProductUnitStore.FindAsync(Guid tenantId, Guid productId, CancellationToken token) => Task.FromResult<IReadOnlyList<ProductUnit>>([setup.Unit]);
         public Task<bool> InternalCodeExistsAsync(Guid tenantId, string code, CancellationToken token) => throw new NotSupportedException();
         public Task AddAsync(BusinessProduct product, AuditLog audit, CancellationToken token) => throw new NotSupportedException();

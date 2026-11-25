@@ -206,6 +206,8 @@ public sealed partial class TenantHttpTestState
             return method switch
             {
                 "FindAsync" => Task.FromResult(Products.SingleOrDefault(value => value.Id == (Guid)a[1]!)),
+                "ReadByIdsAsync" => Task.FromResult<IReadOnlyDictionary<Guid, BusinessProduct>>(Products
+                    .Where(value => value.TenantId == (Guid)a[0]! && ((Guid[])a[1]!).Contains(value.Id)).ToDictionary(value => value.Id)),
                 "InternalCodeExistsAsync" => Task.FromResult(Products.Any(value => value.InternalCode == (string)a[1]!)),
                 "AddAsync" => Save(() => { Products.Add((BusinessProduct)a[0]!); Audits.Add((AuditLog)a[1]!); }),
                 "SaveAsync" => Save(() => Audits.Add((AuditLog)a[1]!)),

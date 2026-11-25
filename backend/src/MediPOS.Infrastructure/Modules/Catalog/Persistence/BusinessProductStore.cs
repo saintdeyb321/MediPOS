@@ -34,6 +34,15 @@ internal sealed class BusinessProductStore(MediPosDbContext context) : IBusiness
         return context.BusinessProducts.AnyAsync(value => value.TenantId == tenantId && value.InternalCode == internalCode, cancellationToken);
     }
 
+    public async Task<IReadOnlyDictionary<Guid, BusinessProduct>> ReadByIdsAsync(Guid tenantId, Guid[] productIds, CancellationToken cancellationToken)
+    {
+        context.SelectTenant(tenantId);
+        if (productIds.Length == 0) return new Dictionary<Guid, BusinessProduct>();
+        return await context.BusinessProducts.AsNoTracking()
+            .Where(product => product.TenantId == tenantId && productIds.Contains(product.Id))
+            .ToDictionaryAsync(product => product.Id, cancellationToken).ConfigureAwait(false);
+    }
+
     public async Task AddAsync(BusinessProduct product, AuditLog audit, CancellationToken cancellationToken)
     {
         RequireTransaction();

@@ -1,14 +1,16 @@
 import { useEffect, useRef, useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useSearchParams } from 'react-router'
 import { useRuntime, useWorkspace } from '../access'
 import { scopedKey } from '../../shared/api/contracts'
 import { ApiError } from '../../shared/api/http'
 import { decimalInput, maximumMoney } from '../../shared/api/decimal'
 import { cashApi } from './api'
+import type { OpenCashSession } from './api'
 
 export function useCashSession() {
   const { http } = useRuntime(); const { tenantId, branchId, access, session: identity } = useWorkspace()
+  const client = useQueryClient()
   const [parameters, setParameters] = useSearchParams()
   const parametersRef = useRef(parameters)
   useEffect(() => { parametersRef.current = parameters }, [parameters])
@@ -16,11 +18,13 @@ export function useCashSession() {
   const busy = useRef(false); const controller = useRef<AbortController | null>(null)
   useEffect(() => () => controller.current?.abort(), [])
   const uncertain = parameters.has('cashPending')
-  const query = useQuery({ queryKey: scopedKey({ tenantId, branchId }, 'current-cash', identity.userId, access.membershipId),
+  const queryKey = scopedKey({ tenantId, branchId }, 'current-cash', identity.userId, access.membershipId)
+  const belongsToSession = (session: OpenCashSession) => session.membershipId === access.membershipId && session.openedByActorId === identity.userId
+  const query = useQuery({ queryKey,
     queryFn: async ({ signal }) => {
       if (!http) throw new ApiError(0, 'client.https_required')
       const result = await cashApi(http).current({ tenantId, branchId }, signal)
-      if (result.session && (result.session.membershipId !== access.membershipId || result.session.openedByActorId !== identity.userId)) throw new ApiError(0, 'client.unexpected_response')
+      if (result.session && !belongsToSession(result.session)) throw new ApiError(0, 'client.unexpected_response')
       return result
     }, enabled: Boolean(http), retry: false, staleTime: 0, refetchInterval: 30_000,
   })
@@ -42,9 +46,14 @@ export function useCashSession() {
     controller.current = new AbortController()
     cashMarker(true)
     try {
-      await cashApi(http).open({ tenantId, branchId }, amount, controller.current.signal)
+      const opened = await cashApi(http).open({ tenantId, branchId }, amount, controller.current.signal)
       if (controller.current.signal.aborted) return
-      await refresh()
+      if (!belongsToSession(opened)) throw new ApiError(0, 'client.outcome_unknown', undefined, true)
+      // A read begun before the POST committed could replace this acknowledged session with null.
+      await client.cancelQueries({ queryKey, exact: true })
+      if (controller.current.signal.aborted) return
+      client.setQueryData(queryKey, { session: opened })
+      cashMarker(false)
     } catch (failure) {
       if (controller.current.signal.aborted) return
       setError(failure)

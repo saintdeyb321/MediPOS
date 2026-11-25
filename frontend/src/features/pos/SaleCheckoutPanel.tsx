@@ -20,6 +20,7 @@ export function SaleCheckoutPanel({ draft, canStartPayment = true }: { draft: Dr
   const mounted = useRef(true)
   useEffect(() => { mounted.current = true; return () => { mounted.current = false } }, [])
   const terminal = draft.server && draft.server.status !== 'draft'
+  const ticketChanged = terminal && checkout.ticket.data && checkout.ticket.data.status !== draft.server?.status
   return <Panel className="checkout-panel" aria-labelledby="checkout-title">
     <h2 id="checkout-title" className="sr-only">Cobro</h2>
     <div className="pos-section-body">
@@ -33,7 +34,8 @@ export function SaleCheckoutPanel({ draft, canStartPayment = true }: { draft: Dr
         {!draft.seller && <Notice tone="warning">Esta venta pertenece a otra membresía. No puedes editarla ni cobrarla.</Notice>}
         {draft.notice && draft.phase === 'idle' && <p role="status">{draft.notice}</p>}
       </>}
-      {(draft.checkoutPending || checkout.error != null || terminal) && <Button variant="secondary" pending={checkout.busy} disabled={draft.phase === 'loading'} onClick={() => void checkout.consult()}>Consultar resultado de venta</Button>}
+      {ticketChanged && <Notice tone="warning">El estado del ticket cambió. Consulta la venta para actualizar el resultado.</Notice>}
+      {(draft.checkoutPending || checkout.error != null || ticketChanged) && <Button variant="secondary" pending={checkout.busy} disabled={draft.phase === 'loading'} onClick={() => void checkout.consult()}>Consultar resultado de venta</Button>}
       {draft.checkoutPending && paymentFormActive && !opened && !terminal && <Button data-recovery-focus variant="secondary" disabled={checkout.busy} onClick={() => setOpened(true)}>Revisar cobro pendiente sin reenviar</Button>}
       {terminal && <>
         <p role="status">{draft.server?.status === 'confirmed' ? 'VENTA REALIZADA. Pagos y stock verificados en el servidor.' : 'Venta anulada. No está disponible para otro cobro.'}</p>
@@ -44,7 +46,7 @@ export function SaleCheckoutPanel({ draft, canStartPayment = true }: { draft: Dr
         {!draft.checkoutPending && <Button variant="secondary" className="no-print" disabled={checkout.busy} onClick={() => {
           if (draft.nextSale()) { setOpened(false); setPaymentFormActive(false); checkout.clearResult() }
         }}>Seguir vendiendo sin imprimir</Button>}
-        {draft.server?.status === 'confirmed' && <VoidSaleForm draft={draft} checkout={checkout} />}
+        {draft.server?.status === 'confirmed' && !ticketChanged && <VoidSaleForm draft={draft} checkout={checkout} />}
       </>}
     </div>
     <Modal open={opened && !terminal} title="Revisar y cobrar venta" description="Confirma únicamente los importes que realmente recibiste." onClose={() => { setOpened(false); setPaymentFormActive(false); setDirty(false) }} onRecoveryClose={() => setOpened(false)} dirty={dirty} busy={checkout.busy} recovery={draft.checkoutPending}>

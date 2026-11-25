@@ -313,6 +313,7 @@ public sealed class SaleDraftUseCaseTests
     }
     private sealed class Products(BusinessProduct product) : IBusinessProductStore
     {
+        public Task<IReadOnlyDictionary<Guid, BusinessProduct>> ReadByIdsAsync(Guid tenantId, Guid[] productIds, CancellationToken cancellationToken) => throw new NotSupportedException();
         public int Mutations { get; private set; }
         public Task<BusinessProduct?> FindAsync(Guid tenantId, Guid productId, CancellationToken cancellationToken) => Task.FromResult<BusinessProduct?>(product);
         public Task<bool> InternalCodeExistsAsync(Guid tenantId, string code, CancellationToken cancellationToken) => throw new NotSupportedException();

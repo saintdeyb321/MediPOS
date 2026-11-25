@@ -1,6 +1,8 @@
 import { act, fireEvent, screen, waitFor } from '@testing-library/react'
 import { expect, it, vi } from 'vitest'
+import { useQuery } from '@tanstack/react-query'
 import { HttpClient } from '../../shared/api/http'
+import { scopedKey } from '../../shared/api/contracts'
 import { ImportPage } from './ImportPage'
 import { excelType, importApi, validFile } from './api'
 import { id, importJob, json, managementServer, mountTransfers, workspace } from '../notifications/management.test.support'
@@ -51,6 +53,27 @@ it('preserves an import 403 as uncertain because authorization can be revoked af
 it('recovers known job after reload and pages server row cursors without rerunning import', async () => {
   const fake = managementServer(); fake.management.jobs[0] = { ...importJob, rows: Array.from({ length: 21 }, (_, i) => ({ rowNumber: i + 4, status: 'invalid', businessProductId: null, errorCode: 'unit.invalid', errorMessage: 'Fila ' + i })), totalRows: 21, validRows: 0, invalidRows: 21, importedRows: 0 }
   mountTransfers(fake, <ImportPage />, '?importJob=' + importJob.importJobId + '&importPending=1&importAck=1'); await screen.findByText('Fila 0'); fireEvent.click(screen.getByRole('button', { name: 'Resultados siguientes' })); await screen.findByText('Fila 20'); expect(screen.queryByText('Fila 0')).not.toBeInTheDocument(); expect(fake.fetcher.mock.calls.some(([path]) => String(path).includes('afterRowNumber=23&limit=20'))).toBe(true); expect(fake.writes()).toHaveLength(0)
+})
+it('only invalidates the catalog when paging observes newly imported rows', async () => {
+  const fake = managementServer()
+  fake.management.jobs[0] = { ...importJob, rows: Array.from({ length: 21 }, (_, i) => ({
+    rowNumber: i + 4, status: 'invalid', businessProductId: null, errorCode: 'unit.invalid', errorMessage: 'Fila ' + i,
+  })), totalRows: 22, importedRows: 0, status: 'processing', completedAt: null }
+  const readCatalog = vi.fn(async () => [])
+  function CatalogProbe() {
+    useQuery({ queryKey: scopedKey(workspace, 'catalog-products'), queryFn: readCatalog, staleTime: Infinity })
+    return null
+  }
+  mountTransfers(fake, <><CatalogProbe /><ImportPage /></>, '?importJob=' + importJob.importJobId)
+  await screen.findByText('Fila 0')
+  await waitFor(() => expect(readCatalog).toHaveBeenCalledTimes(2))
+  fireEvent.click(screen.getByRole('button', { name: 'Resultados siguientes' }))
+  await screen.findByText('Fila 20')
+  expect(readCatalog).toHaveBeenCalledTimes(2)
+  fake.management.jobs[0] = { ...fake.management.jobs[0]!, importedRows: 1 }
+  fireEvent.click(screen.getByRole('button', { name: 'Actualizar mismo trabajo' }))
+  await waitFor(() => expect(readCatalog).toHaveBeenCalledTimes(3))
+  expect(fake.writes()).toHaveLength(0)
 })
 it('shows a terminal legacy job for consultation but its URL cannot settle the original import', async () => {
   const fake = managementServer()

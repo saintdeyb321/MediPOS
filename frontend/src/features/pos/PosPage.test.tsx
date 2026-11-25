@@ -317,6 +317,19 @@ describe('POS local cart, cash and persisted draft', () => {
     expect(screen.getByRole('textbox', { name: /Cantidad en carrito/ })).toHaveValue('2')
     expect(fake.writes()).toHaveLength(1)
   })
+  it('offers sale reconciliation if a later ticket shows a void from another session', async () => {
+    const fake = server(); await preparePayment(fake)
+    fireEvent.click(screen.getByRole('button', { name: 'Confirmar venta y registrar pagos' }))
+    await screen.findByRole('article', { name: 'Ticket interno' })
+    await waitFor(() => expect(screen.queryByRole('button', { name: 'Consultar resultado de venta' })).not.toBeInTheDocument())
+    fake.state.sale = { ...fake.state.sale!, status: 'voided', version: 4 }
+    fireEvent.click(screen.getByRole('button', { name: 'Consultar ticket' }))
+    await screen.findByText(/El estado del ticket cambió/)
+    expect(screen.queryByRole('button', { name: 'Anular esta venta' })).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Consultar resultado de venta' }))
+    await screen.findByText('Ticket interno · ANULADA')
+    expect(fake.writes()).toHaveLength(1)
+  })
   it('aborts an in-flight confirmation on leaving context and ignores its late response', async () => {
     const fake = server(); const view = await preparePayment(fake)
     const original = fake.fetcher.getMockImplementation()!
@@ -364,7 +377,7 @@ describe('POS local cart, cash and persisted draft', () => {
     expect(screen.getByRole('button', { name: 'Cobrar' })).toBeDisabled()
     expect(fake.writes()).toHaveLength(0)
   })
-  it('opens cash only on explicit submission, exactly serializes the amount, prevents double click and rereads current cash', async () => {
+  it('opens cash once and uses the scoped acknowledgement without rereading current cash', async () => {
     const fake = server(); fake.state.cash = null; mount(fake); await select()
     expect(screen.queryByRole('button', { name: 'Cobrar' })).not.toBeInTheDocument()
     const button = await openCashForm()
@@ -375,7 +388,23 @@ describe('POS local cart, cash and persisted draft', () => {
     expect(fake.writes()).toHaveLength(1)
     expect(fake.writes()[0]?.[1]?.body).toBe('{"openingAmount":0.10}')
     expect(new Headers(fake.writes()[0]?.[1]?.headers).get('X-CSRF-TOKEN')).toBe('unit-test-csrf')
-    expect(fake.fetcher.mock.calls.filter(([path]) => String(path).endsWith('/cash-sessions/current')).length).toBeGreaterThan(1)
+    expect(fake.fetcher.mock.calls.filter(([path]) => String(path).endsWith('/cash-sessions/current'))).toHaveLength(1)
+    expect(screen.getByTestId('location').textContent).not.toContain('cashPending')
+  })
+  it('rejects a cash-opening acknowledgement for another membership and keeps an unresolved operation blocked', async () => {
+    const fake = server(); fake.state.cash = null
+    const respond = fake.fetcher.getMockImplementation()!
+    fake.fetcher.mockImplementation((path, request) => request?.method === 'POST' && String(path).endsWith('/cash-sessions')
+      ? Promise.resolve(json({ ...cash, membershipId: id('99') }, 201))
+      : respond(path, request))
+    mount(fake)
+    const button = await openCashForm()
+    fireEvent.change(screen.getByRole('textbox', { name: /Monto inicial/ }), { target: { value: '0' } })
+    fireEvent.click(button)
+    await waitFor(() => expect(fake.fetcher.mock.calls.filter(([path]) => String(path).endsWith('/cash-sessions/current'))).toHaveLength(2))
+    expect(screen.queryByText('Caja abierta')).not.toBeInTheDocument()
+    expect(screen.getByTestId('location')).toHaveTextContent('cashPending')
+    expect(fake.writes()).toHaveLength(1)
   })
   it('reconciles a lost cash-opening response by reads, without a second opening', async () => {
     const fake = server(); fake.state.cash = null; fake.state.loseOpen = true; mount(fake)

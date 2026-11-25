@@ -40,7 +40,7 @@ async function addMedicineLine() {
 }
 function loaded(fake: ReturnType<typeof operationServer>) { fake.state.purchases = [{ ...purchase }]; fake.state.lines = [{ ...storedLine }]; return `?purchase=${id(20)}` }
 function CacheProbe({ capture }: { capture: (client: QueryClient) => void }) { const client = useQueryClient(); useEffect(() => capture(client), [capture, client]); return null }
-it('prepares an explicit branch receipt, saves exact medicine lines, reviews and confirms only once then re-reads', async () => {
+it('prepares an explicit branch receipt, saves exact medicine lines and shows the confirmation without a redundant detail read', async () => {
   const fake = operationServer(); mountOperation(fake, <PurchasesPage />)
   expect(fake.writes()).toHaveLength(0)
   await begin(fake); await addMedicineLine()
@@ -51,7 +51,8 @@ it('prepares an explicit branch receipt, saves exact medicine lines, reviews and
   fireEvent.click(review.getByRole('checkbox', { name: /recibí físicamente/ })); fireEvent.click(confirm); fireEvent.click(confirm)
   expect(await screen.findByRole('heading', { name: 'MERCADERÍA REGISTRADA' })).toBeInTheDocument()
   expect(fake.writes().map(([path]) => String(path).split('/').pop())).toEqual(['purchases', 'lines', 'confirm'])
-  expect(fake.fetcher.mock.calls.filter(([path, init]) => init?.method === 'GET' && String(path).endsWith('/' + id(20))).length).toBeGreaterThanOrEqual(3)
+  expect(fake.fetcher.mock.calls.filter(([path, init]) => init?.method === 'GET' && String(path).endsWith('/' + id(20)))).toHaveLength(2)
+  await waitFor(() => expect(screen.getByTestId('location').textContent).not.toContain('receiptPending'))
   expect(screen.queryByRole('button', { name: 'Confirmar recepción una vez' })).not.toBeInTheDocument()
 })
 it('restores the addressed receipt after reload without any automatic write', async () => {
@@ -59,6 +60,19 @@ it('restores the addressed receipt after reload without any automatic write', as
   const review = within(await screen.findByRole('region', { name: 'Recepción persistida' }))
   expect(await review.findByText(/Producto sintético unitario/)).toBeInTheDocument()
   expect(review.getByText('BATCH-UNIT / 2027-12-31')).toBeInTheDocument(); expect(fake.writes()).toHaveLength(0)
+})
+it('keeps an acknowledgement without a terminal state pending after an early draft read', async () => {
+  const fake = operationServer(); const original = fake.fetcher.getMockImplementation()!
+  fake.fetcher.mockImplementation((path, request) => request?.method === 'POST' && String(path).endsWith('/confirm')
+    ? Promise.resolve(json(purchase))
+    : original(path, request))
+  mountOperation(fake, <PurchasesPage />, loaded(fake))
+  const reviewed = await screen.findByRole('checkbox', { name: /recibí físicamente/ })
+  fireEvent.click(reviewed); fireEvent.click(screen.getByRole('button', { name: 'Confirmar recepción una vez' }))
+  await screen.findByText('No pudimos completar la operación de compra')
+  expect(screen.getByTestId('location')).toHaveTextContent('receiptPending=confirm')
+  expect(screen.getByRole('button', { name: 'Confirmar recepción una vez' })).toBeDisabled()
+  expect(fake.writes()).toHaveLength(1)
 })
 it('rejects confirmation under the server precondition if lines changed after review, without retry', async () => {
   const fake = operationServer(); mountOperation(fake, <PurchasesPage />, loaded(fake))

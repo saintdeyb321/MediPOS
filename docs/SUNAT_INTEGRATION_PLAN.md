@@ -111,6 +111,31 @@ Respuesta tipificada + evidencia + conciliación + auditoría
 
 La validación y generación fiscal debe derivarse de los requisitos reales vigentes, **no** del perfil provisional `preparation_v1` de B7.2 ni de la importación de facturas de proveedores.
 
+### 6.1 Frontera de conexión E4
+
+**Estado `FISCAL_PREPARATION_PENDING`.** El contrato interno y el apagado están preparados. La selección efectiva de proveedor por emisor y ambiente, el almacenamiento de evidencia externa y la conciliación persistida requieren un adaptador seleccionado y una decisión de operación.
+
+- `ElectronicDeliveryWorkStore` confirma claim y corte de despacho en transacciones breves, en el orden licencia → documento → venta. `RunElectronicDocumentDelivery` comprueba tenant, entidad legal y RUC del snapshot antes de invocar al proveedor. `ElectronicProviderDocument` lleva tenant, entidad, RUC, documento, tipo, número, clave y snapshot; el token del lease queda en la cola.
+- Implementar `IElectronicDocumentProvider.SubmitAsync(document, token)` y `QueryAsync(document, token)` en Infraestructura. `IElectronicAuthorityEvidenceVerifier.VerifyAsync(document, evidence, token)` debe vincular el XML/CDR verificable al emisor, documento y ambiente elegidos. `QueryAsync` todavía carece de consumidor operativo. Ante timeout queda `uncertain`; recuperar primero por clave y alcance si el proveedor lo garantiza. Un HTTP 200 puede significar solo recibido, y una simulación es evidencia de prueba.
+- Punto de composición futuro: registro de CPE en `MediPOS.Infrastructure/DependencyInjection.cs`. La composición normal conserva los tres servicios `Disabled*`. El worker técnico y la solicitud fiscal requieren habilitación explícita y separada del checkout. Apagado: detener nuevas solicitudes y claims, drenar envíos en curso y preservar leases, estados y evidencia para reconciliar. El ticket interno queda disponible.
+
+Plantilla propuesta para el futuro registro tipado de Infraestructura. Los perfiles y referencias son configuración privada de operaciones.
+
+```json
+{
+  "ElectronicDelivery": {
+    "Enabled": false,
+    "IssuerProfiles": []
+  }
+}
+```
+
+Cada perfil tendrá `TenantId`, `LegalEntityId`, `IssuerRuc`, `AdapterKey`, `Environment` (sandbox o live), `EndpointKey`, `TimeoutSeconds` y referencias `CredentialRef` / `CertificateRef` si aplican. Resolver la URL por clave en una allowlist HTTPS de operaciones. Validar duplicados, alcance exacto, destino, credenciales y límites. Rechazar redirecciones a destinos no aprobados. Mantener el presupuesto de red y verificación por debajo del lease. Una configuración ausente o inválida debe dejar al emisor deshabilitado y el secreto nunca debe llegar al navegador ni a logs.
+
+Si se permite más de un ambiente, cambio de adaptador o rotación de rutas con trabajo pendiente, aprobar antes una vinculación persistente e inmutable por `(tenant_id, document_id)` con FK de tenant al documento, entidad legal, clave de adaptador, ambiente y versión de perfil. Fijarla antes del primer despacho y reutilizarla en reintentos y consultas. Conservar referencias opacas de XML/CDR más hash, tipo, documento, emisor, ambiente y reglas de retención. El diseño requiere revisión de esquema y permisos, sin copiar documentos o secretos a auditoría ni alterar snapshots existentes.
+
+`preparation_v1` conserva emisor/receptor, fecha de confirmación, PEN, líneas, presentaciones e importes exactos de neto/tributo/total. Tipo/serie/correlativo se asignan en el documento persistido. Falta validar catálogos fiscales, dirección/fecha de emisión, descuentos, desglose de impuestos, redondeo, forma y representación requeridos por cada tipo/proveedor. Verificar duplicado, timeout con eventual consulta, evidencia equivocada, aislamiento por ambiente y emisor, caída externa y apagado; incluir notas/bajas/resúmenes, homologación y habilitación únicamente según alcance tributario revisado. El piloto fiscal exige esa conformidad y aprobación del operador.
+
 ## 7. Secuencia futura de implementación
 
 ### Etapa A — Contrato y decisión

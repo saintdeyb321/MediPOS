@@ -20,6 +20,34 @@ public sealed class PurchasingWorkflowTests
 {
     private static readonly DateTimeOffset Now = new(2026, 10, 6, 14, 0, 0, TimeSpan.Zero);
 
+    [Theory]
+    [InlineData(1)]
+    [InlineData(10)]
+    [InlineData(40)]
+    public async Task ConfirmationReadsDistinctProductsOnceAndReceivesEveryLine(int lineCount)
+    {
+        var setup = new Setup();
+        var lines = new List<PurchaseLine> { setup.Store.Lines[0] };
+        for (var i = 1; i < lineCount; i++)
+        {
+            var product = setup.Product;
+            var unit = setup.Unit;
+            if (i % 2 != 0)
+            {
+                product = BusinessProduct.CreateLocal(product.TenantId, $"Batch-{i}", ProductType.Retail,
+                    $"Product {i}", product.CategoryId, "Synthetic", null, null, 1m, null, Now);
+                unit = ProductUnit.Create(product.TenantId, product.Id, product.TenantId, "Unidad", 1m, true);
+                setup.Products.Additional.Add(product);
+            }
+            lines.Add(PurchaseLine.Create(setup.Purchase, product, unit, 1m, 1m, null, null));
+        }
+        setup.Store.Lines = lines;
+        await setup.Confirm.HandleAsync(setup.Command, TestContext.Current.CancellationToken);
+        Assert.Equal(lines.Select(line => line.BusinessProductId).Distinct(), Assert.Single(setup.Products.Batches));
+        Assert.Equal(lineCount, setup.Receipts.Movements.Count);
+        Assert.True(setup.Licensing.Scope!.Committed);
+    }
+
     [Fact]
     public async Task ConfirmationStagesOneReceiptPerLineAndMinimalAuditBeforeOneCommit()
     {
@@ -218,6 +246,14 @@ public sealed class PurchasingWorkflowTests
     private sealed class Products(BusinessProduct product) : IBusinessProductStore
     {
         public bool Exists { get; set; } = true;
+        public List<BusinessProduct> Additional { get; } = [];
+        public List<Guid[]> Batches { get; } = [];
+        public Task<IReadOnlyDictionary<Guid, BusinessProduct>> ReadByIdsAsync(Guid tenantId, Guid[] productIds, CancellationToken cancellationToken)
+        {
+            Batches.Add(productIds);
+            return Task.FromResult<IReadOnlyDictionary<Guid, BusinessProduct>>(Additional.Prepend(product)
+                .Where(item => Exists && item.TenantId == tenantId && productIds.Contains(item.Id)).ToDictionary(item => item.Id));
+        }
         public Task<BusinessProduct?> FindAsync(Guid tenantId, Guid productId, CancellationToken cancellationToken) => Task.FromResult(Exists ? product : null);
         public Task<bool> InternalCodeExistsAsync(Guid tenantId, string code, CancellationToken cancellationToken) => throw new NotSupportedException();
         public Task AddAsync(BusinessProduct value, AuditLog audit, CancellationToken cancellationToken) => throw new NotSupportedException();

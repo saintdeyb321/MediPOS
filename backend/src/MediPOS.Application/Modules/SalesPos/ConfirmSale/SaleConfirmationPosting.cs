@@ -52,15 +52,18 @@ public sealed class SaleConfirmationPosting(ResolveAccessContextHandler resolver
             }
 
         var today = LocalDate(clock.GetUtcNow());
+        var groups = sale.Lines.GroupBy(line => line.BusinessProductId).OrderBy(group => group.Key).ToArray();
+        var productIds = groups.Select(group => group.Key).ToArray();
+        using var preflightRead = Activities.StartActivity("sale.product-preflight");
+        var catalog = await products.ReadByIdsAsync(sale.TenantId, productIds, cancellationToken).ConfigureAwait(false);
+        preflightRead?.Stop();
         var selections = new List<(Guid ProductId, ProductType ProductType, IReadOnlyList<InventoryLot> Lots)>();
-        foreach (var group in sale.Lines.GroupBy(line => line.BusinessProductId).OrderBy(group => group.Key))
+        foreach (var group in groups)
         {
-            using var productRead = Activities.StartActivity("sale.product-preflight");
-            var product = await RequireProductAsync(sale.TenantId, group.Key, cancellationToken).ConfigureAwait(false);
+            var product = RequireProduct(catalog, sale.TenantId, group.Key);
             decimal required;
             try { required = SaleStockAllocation.RequiredQuantity(group); }
             catch (ArithmeticException) { throw new ApplicationErrorException(SalesPosErrors.InconsistentDraft); }
-            productRead?.Stop();
             using var lotsRead = Activities.StartActivity("sale.lot-locks");
             IReadOnlyList<InventoryLot> lots;
             try { lots = await scope.LockLotsAsync(product.Id, product.ProductType, required, today, cancellationToken).ConfigureAwait(false); }
@@ -69,10 +72,12 @@ public sealed class SaleConfirmationPosting(ResolveAccessContextHandler resolver
             selections.Add((product.Id, product.ProductType, lots));
         }
         // Re-evaluate after potentially long lock waits; never commit with an expired license/schedule/date policy.
+        using var recheckRead = Activities.StartActivity("sale.product-recheck");
+        var currentCatalog = await products.ReadByIdsAsync(sale.TenantId, productIds, cancellationToken).ConfigureAwait(false);
+        recheckRead?.Stop();
         foreach (var selection in selections)
         {
-            using var productRead = Activities.StartActivity("sale.product-recheck");
-            var product = await RequireProductAsync(sale.TenantId, selection.ProductId, cancellationToken).ConfigureAwait(false);
+            var product = RequireProduct(currentCatalog, sale.TenantId, selection.ProductId);
             if (product.ProductType != selection.ProductType) throw new ApplicationErrorException(SalesPosErrors.ProductUnavailable);
         }
         if (revalidateSnapshots is not null) await revalidateSnapshots(cancellationToken).ConfigureAwait(false);
@@ -164,10 +169,10 @@ public sealed class SaleConfirmationPosting(ResolveAccessContextHandler resolver
         { throw new ApplicationErrorException(SalesPosErrors.InconsistentDraft); }
     }
 
-    private async Task<BusinessProduct> RequireProductAsync(Guid tenantId, Guid productId, CancellationToken cancellationToken)
+    private static BusinessProduct RequireProduct(IReadOnlyDictionary<Guid, BusinessProduct> catalog, Guid tenantId, Guid productId)
     {
-        var product = await products.FindAsync(tenantId, productId, cancellationToken).ConfigureAwait(false);
-        if (product is null || product.Id != productId || product.TenantId != tenantId || !product.IsActive || !Enum.IsDefined(product.ProductType))
+        if (!catalog.TryGetValue(productId, out var product) || product.Id != productId || product.TenantId != tenantId ||
+            !product.IsActive || !Enum.IsDefined(product.ProductType))
             throw new ApplicationErrorException(SalesPosErrors.ProductUnavailable);
         return product;
     }

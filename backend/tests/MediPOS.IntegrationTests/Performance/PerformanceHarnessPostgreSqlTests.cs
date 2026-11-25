@@ -1,4 +1,5 @@
 using MediPOS.Application.Errors;
+using MediPOS.Application.Modules.Catalog;
 using MediPOS.Application.Modules.Catalog.SearchProducts;
 using MediPOS.Application.Modules.SalesPos.ConfirmSale;
 using MediPOS.Domain.Modules.SalesPos;
@@ -99,6 +100,19 @@ public sealed class PerformanceHarnessPostgreSqlTests(PostgreSqlFixture fixture)
             SELECT has_table_privilege(current_user, 'public.initial_owner_invitations', 'SELECT') AS "Value"
             """).SingleAsync(Token));
         Assert.Equal(128, await context.BusinessProducts.CountAsync(Token));
+        var first = harness.Dataset.Tenants[0];
+        var localIds = first.Products.Take(2).Select(product => product.Id).ToArray();
+        var foreignId = harness.Dataset.Tenants[1].Products[0].Id;
+        var trace = harness.Observation.Begin(first.Id);
+        try
+        {
+            var batch = await scope.ServiceProvider.GetRequiredService<IBusinessProductStore>()
+                .ReadByIdsAsync(first.Id, [.. localIds, localIds[0], foreignId, Guid.CreateVersion7()], Token);
+            Assert.Equal(localIds.Order(), batch.Keys.Order());
+            Assert.All(batch.Values, product => Assert.Equal(first.Id, product.TenantId));
+            Assert.Equal(1, trace.SqlCommands);
+        }
+        finally { harness.Observation.End(); }
     }
 
     private async Task<Harness> CreateAsync()

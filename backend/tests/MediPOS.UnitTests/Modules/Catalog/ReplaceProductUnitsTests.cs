@@ -128,6 +128,7 @@ public sealed class ReplaceProductUnitsTests
 
     private sealed class ProductsStore(BusinessProduct product) : IBusinessProductStore
     {
+        public Task<IReadOnlyDictionary<Guid, BusinessProduct>> ReadByIdsAsync(Guid tenantId, Guid[] productIds, CancellationToken cancellationToken) => throw new NotSupportedException();
         public BusinessProduct Product { get; set; } = product;
         public bool ReturnProduct { get; set; } = true;
         public Task<BusinessProduct?> FindAsync(Guid tenantId, Guid productId, CancellationToken cancellationToken) =>

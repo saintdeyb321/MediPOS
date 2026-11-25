@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { MemoryRouter } from 'react-router'
 import { RuntimeProvider } from '../../app/providers/runtime'
 import { WorkspaceContext } from '../access'
@@ -33,13 +33,24 @@ function workspace(branch = branchId): Workspace {
       membershipIsActive: true, branchAssigned: true, withinSchedule: true, licenseStatus: 'trial', licenseStartsAt: null, licenseExpiresAt: null, evaluatedAtUtc: '2026-10-15T00:00:00Z' } }
 }
 function mount(fetcher: typeof fetch) {
-  const runtime = { service: createPreviewService('owner'), http: new HttpClient(fetcher), preview: false }
+  const transport: typeof fetch = (input, init) => {
+    if (/\/operational-(products|categories)\?/.test(String(input))) {
+      expect(init?.method).toBe('GET')
+      return Promise.resolve(new Response('[]', { headers: { 'Content-Type': 'application/json' } }))
+    }
+    return fetcher(input, init)
+  }
+  const runtime = { service: createPreviewService('owner'), http: new HttpClient(transport), preview: false }
   const selected = vi.fn()
   const tree = (branch = branchId) => <RuntimeProvider runtime={runtime}><MemoryRouter><WorkspaceContext.Provider value={workspace(branch)}><ProductSearchPanel key={branch} onSelect={selected} /></WorkspaceContext.Provider></MemoryRouter></RuntimeProvider>
   const view = render(tree())
   return { ...view, selected, changeBranch: () => view.rerender(tree(otherBranchId)) }
 }
-const search = (text: string) => fireEvent.change(screen.getByRole('searchbox', { name: 'Buscar un producto' }), { target: { value: text } })
+const search = (text: string) => fireEvent.change(screen.getByRole('searchbox', { name: 'Buscar producto' }), { target: { value: text } })
+async function presentation() {
+  fireEvent.click(await screen.findByRole('button', { name: 'Elegir presentación' }))
+  return within(screen.getByRole('dialog', { name: 'Agregar al ticket' }))
+}
 afterEach(() => vi.useRealTimers())
 
 describe('real-client POS search component', () => {
@@ -62,7 +73,7 @@ describe('real-client POS search component', () => {
   it('shows the actual empty result after loading and never inserts example products', async () => {
     const fetcher = vi.fn<typeof fetch>().mockImplementation(async () => json(result()))
     mount(fetcher)
-    expect(screen.getByRole('heading', { name: 'Busca productos de tu botica' })).toBeInTheDocument()
+    expect(screen.getByRole('region', { name: 'Explorar catálogo por categoría' })).toBeInTheDocument()
     search('sin coincidencia')
     expect(screen.getByRole('status')).toHaveTextContent('Buscando productos')
     expect(await screen.findByRole('heading', { name: 'Sin coincidencias en esta sucursal' })).toBeInTheDocument()
@@ -71,16 +82,18 @@ describe('real-client POS search component', () => {
   it('emits an exact selection without writes; subsequent searching does not clear it', async () => {
     const fetcher = vi.fn<typeof fetch>().mockImplementation(async () => json(result([product])))
     const view = mount(fetcher); search('TEST')
-    const select = await screen.findByRole('button', { name: `Seleccionar ${product.name}` })
-    expect(screen.getByText('S/ 99999999999999.9999')).toBeInTheDocument()
-    expect(screen.getByText('5', { selector: 'dd' })).toBeInTheDocument()
-    expect(screen.queryByText('5.0000')).not.toBeInTheDocument()
-    fireEvent.change(screen.getByRole('combobox', { name: /Presentación de/ }), { target: { value: product.units[1]!.id } })
+    const choice = await presentation()
+    const select = choice.getByRole('button', { name: `Seleccionar ${product.name}` })
+    expect(choice.getByText('S/ 99999999999999.9999')).toBeInTheDocument()
+    expect(choice.getByText('5', { selector: 'dd' })).toBeInTheDocument()
+    expect(choice.queryByText('5.0000')).not.toBeInTheDocument()
+    const units = choice.getByRole('combobox', { name: /Presentación de/ })
+    fireEvent.change(units, { target: { value: product.units[1]!.id } })
     expect(select).toBeDisabled()
     expect(select).toHaveAccessibleDescription(/No hay stock vendible suficiente/)
-    fireEvent.change(screen.getByRole('combobox'), { target: { value: product.units[0]!.id } })
+    fireEvent.change(units, { target: { value: product.units[0]!.id } })
     fireEvent.click(select)
-    expect(view.selected).toHaveBeenCalledExactlyOnceWith({ product, unit: product.units[0], quantity: new JsonNumber('1') })
+    expect(view.selected).toHaveBeenCalledExactlyOnceWith({ product, unit: product.units[0], quantity: new JsonNumber('1'), priceKind: 'retail' })
     expect(fetcher.mock.calls.every(([, init]) => init?.method === 'GET')).toBe(true)
     search('otra consulta')
     expect(view.selected).toHaveBeenCalledOnce()
@@ -88,10 +101,11 @@ describe('real-client POS search component', () => {
   it('does not offer zero-stock or inactive presentations as available', async () => {
     const fetcher = vi.fn<typeof fetch>().mockImplementation(async () => json(result([{ ...product, quantityAvailableBase: new JsonNumber('0'), units: product.units.map(unit => ({ ...unit, isActive: false })) }])))
     mount(fetcher); search('TEST')
-    expect(await screen.findByRole('button', { name: `Seleccionar ${product.name}` })).toBeDisabled()
-    expect(screen.getByText('Sin presentación vendible')).toBeInTheDocument()
-    expect(screen.queryByText('Stock disponible')).not.toBeInTheDocument()
-    expect(screen.getByRole('combobox')).toBeDisabled()
+    const choice = await presentation()
+    expect(choice.getByRole('button', { name: `Seleccionar ${product.name}` })).toBeDisabled()
+    expect(choice.getByText('Sin presentación vendible')).toBeInTheDocument()
+    expect(choice.queryByText('Stock disponible')).not.toBeInTheDocument()
+    expect(choice.getByRole('combobox', { name: /Presentación de/ })).toBeDisabled()
   })
   it('shows sanitized denial, without an empty-success state or automatic retries', async () => {
     const fetcher = vi.fn<typeof fetch>().mockImplementation(async () => new Response(JSON.stringify({ code: 'access.license_denied', detail: 'PRIVATE detail' }), { status: 403, headers: { 'Content-Type': 'application/problem+json' } }))
@@ -134,8 +148,8 @@ describe('real-client POS search component', () => {
     await waitFor(() => expect(fetcher).toHaveBeenCalledOnce())
     search('nueva')
     await waitFor(() => expect(firstSignal?.aborted).toBe(true))
-    expect(await screen.findByRole('button', { name: 'Seleccionar Resultado nuevo' })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'Resultado nuevo' })).toBeInTheDocument()
     await act(async () => finish(json(result([product]))))
-    expect(screen.queryByRole('button', { name: `Seleccionar ${product.name}` })).not.toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: product.name })).not.toBeInTheDocument()
   })
 })

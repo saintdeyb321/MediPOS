@@ -16,6 +16,8 @@ public interface IGlobalCatalogStore
 public interface IBusinessProductStore
 {
     Task<BusinessProduct?> FindAsync(Guid tenantId, Guid productId, CancellationToken cancellationToken);
+    // Read-only snapshot of the requested products. Call again after waits that require fresh validation.
+    Task<IReadOnlyDictionary<Guid, BusinessProduct>> ReadByIdsAsync(Guid tenantId, Guid[] productIds, CancellationToken cancellationToken);
     Task<BusinessProduct?> FindForUpdateAsync(Guid tenantId, Guid productId, CancellationToken cancellationToken) => FindAsync(tenantId, productId, cancellationToken);
     uint ReadLockedVersion(BusinessProduct product) => throw new NotSupportedException("This store does not support versioned local corrections.");
     Task<bool> InternalCodeExistsAsync(Guid tenantId, string internalCode, CancellationToken cancellationToken);

@@ -6,9 +6,9 @@ namespace MediPOS.Infrastructure.Modules.ElectronicDocuments;
 internal sealed class DisabledElectronicDocumentProvider : IElectronicDocumentProvider
 {
     public ProviderCapabilities Capabilities { get; } = new(false, false, false);
-    public Task<ElectronicProviderResult> SubmitAsync(ElectronicDeliveryClaim claim, CancellationToken token)
+    public Task<ElectronicProviderResult> SubmitAsync(ElectronicProviderDocument document, CancellationToken token)
     { token.ThrowIfCancellationRequested(); return Task.FromResult(new ElectronicProviderResult(DeliveryOutcome.TemporaryNotReceived, "provider_not_configured")); }
-    public Task<ElectronicProviderResult> QueryAsync(string idempotencyKey, CancellationToken token)
+    public Task<ElectronicProviderResult> QueryAsync(ElectronicProviderDocument document, CancellationToken token)
     { token.ThrowIfCancellationRequested(); return Task.FromResult(ElectronicProviderContract.Unknown("provider_query_unavailable")); }
 }
 internal sealed class DisabledElectronicDeliveryIdentity : IElectronicDeliveryIdentity
@@ -18,6 +18,6 @@ internal sealed class DisabledElectronicDeliveryIdentity : IElectronicDeliveryId
 }
 internal sealed class DisabledElectronicEvidenceVerifier : IElectronicAuthorityEvidenceVerifier
 {
-    public Task<bool> VerifyAsync(AuthorityEvidence evidence, CancellationToken token)
+    public Task<bool> VerifyAsync(ElectronicProviderDocument document, AuthorityEvidence evidence, CancellationToken token)
     { token.ThrowIfCancellationRequested(); return Task.FromResult(false); }
 }

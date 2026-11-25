@@ -64,19 +64,27 @@ export function usePurchaseReceipt() {
     }).catch(failure => { if (active && !readController.signal.aborted) setError(failure) })
     return () => { active = false; readController.abort() }
   }, [initialId, http, tenantId, branchId])
-  async function run(kind: Exclude<WriteKind, 'create'>, write: (signal: AbortSignal) => Promise<string>) {
-    if (!http || running.current || latest.current.has('receiptPending') || denied || !['owner', 'pharmacist'].includes(w.access.role)) return
+  async function run(kind: Exclude<WriteKind, 'create'>, write: (signal: AbortSignal) => Promise<Purchase | void>) {
+    if (!http || !server || running.current || latest.current.has('receiptPending') || denied || !['owner', 'pharmacist'].includes(w.access.role)) return
     initialRead.current?.abort()
     running.current = true; setBusy(true); setError(null); setNotice(''); mark(kind)
-    controller.current = new AbortController(); let acknowledged = false; let target = id
+    controller.current = new AbortController(); let acknowledged = false
+    const target = server.purchase.id
     try {
-      target = await write(controller.current.signal); acknowledged = true
+      const confirmed = await write(controller.current.signal); acknowledged = true
       if (!mounted.current) return
+      if (confirmed) {
+        // The POST validates this exact reviewed revision inside the confirmation transaction.
+        // Confirmation keeps its reviewed lines and is terminal.
+        setServer({ ...server, purchase: confirmed })
+        mark(null, target); invalidateStock(); setNotice('Recepción confirmada por el servidor.')
+        return true
+      }
       setExpectedId(target); mark(kind, target)
       const result = await read(target, controller.current.signal)
       if (!mounted.current) return
-      if (result && (kind !== 'confirm' || result.purchase.status === 'confirmed')) {
-        mark(null, target); setNotice(kind === 'confirm' ? 'MERCADERÍA REGISTRADA · recepción confirmada y consultada en el servidor.' : 'Recepción guardada y consultada en el servidor. Aún no ingresa mercadería.')
+      if (result) {
+        mark(null, target); setNotice('Recepción guardada y consultada en el servidor. Aún no ingresa mercadería.')
         return true
       }
     } catch (failure) {
@@ -155,10 +163,9 @@ export function usePurchaseReceipt() {
   useNavigationProtection({ busy, pending: Boolean(pending) })
   return { id, pending, creationPending, recoverCreation, server, busy, error, notice, consult, acknowledge, startNew, locked: busy || Boolean(pending) || denied || !http,
     create,
-    save: (lines: PurchaseLineInput[]) => { if (server?.purchase.status === 'draft') return run('lines', async signal => { await purchasingApi(http!).lines(w, server.purchase.id, lines, server.revision, signal); return server.purchase.id }) },
-    confirm: () => { if (server?.purchase.status === 'draft' && server.lines.length) return run('confirm', async signal => {
-      return (await purchasingApi(http!).confirm(w, server.purchase.id, server.revision, signal)).id
-    }) },
+    save: (lines: PurchaseLineInput[]) => { if (server?.purchase.status === 'draft') return run('lines', async signal => { await purchasingApi(http!).lines(w, server.purchase.id, lines, server.revision, signal) }) },
+    confirm: () => { if (server?.purchase.status === 'draft' && server.lines.length) return run('confirm',
+      signal => purchasingApi(http!).confirm(w, server.purchase.id, server.revision, signal)) },
   }
 }
 export type ReceiptController = ReturnType<typeof usePurchaseReceipt>

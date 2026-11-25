@@ -46,7 +46,11 @@ export function purchasingApi(http: HttpClient) {
     lines: (scope: BranchScope, id: string, lines: PurchaseLineInput[], expectedRevision: string, signal?: AbortSignal) =>
       write(http, `${root(scope)}/purchases/${uuid(id)}/lines`, 'PUT', { lines, expectedRevision }, array(line), signal),
     confirm: (scope: BranchScope, id: string, expectedRevision: string, signal?: AbortSignal) =>
-      write(http, `${root(scope)}/purchases/${uuid(id)}/confirm`, 'POST', { expectedRevision }, data => scoped(data, scope, id), signal),
+      write(http, `${root(scope)}/purchases/${uuid(id)}/confirm`, 'POST', { expectedRevision }, data => {
+        const result = scoped(data, scope, id)
+        if (result.status !== 'confirmed' || !result.confirmedAt || !result.confirmedByActorId) throw new ApiError(0, 'client.unexpected_response')
+        return result
+      }, signal),
     async search(scope: BranchScope, reference: string, offset = 0, limit = 20, signal?: AbortSignal) {
       const query = purchasePage(offset, limit); query.set('reference', reference)
       return array(purchase)(await http.request(`${branchPath(scope)}/purchases/search?${query}`, { signal, exactNumbers: true })).map(row => scoped(row, scope))

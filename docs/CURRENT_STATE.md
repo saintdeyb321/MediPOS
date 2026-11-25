@@ -1,6 +1,6 @@
 # Estado actual de MediPOS
 
-Revisión del 23 de noviembre de 2026. Rama `ci/postgres-diagnostics-8bc6b4c`, HEAD publicado y verificado `e865625ca1108569420ec24f3804604486e5898d`. El ajuste mecánico de E0-FINAL está en el árbol local, sin commit. [SPEC](SPEC.md), [ARCHITECTURE](ARCHITECTURE.md) y [ADR](ADR.md) definen el producto y sus límites.
+Revisión del 24 de noviembre de 2026. Rama `ci/postgres-diagnostics-8bc6b4c`, base y HEAD local `4523902c848a53f7f1d9eb89de3e2d8a7a03ae11`. E1–E5 están en el árbol local, sin commit. [SPEC](SPEC.md), [ARCHITECTURE](ARCHITECTURE.md) y [ADR](ADR.md) definen el producto y sus límites.
 
 - **CODE_READY** indica que el flujo existe en código y puede pasar a verificación.
 - **Probado** exige evidencia de una comprobación concreta con SHA, alcance y entorno registrados.
@@ -112,7 +112,42 @@ Publicar el candidato según el procedimiento de revisión y ejecutar en GitHub 
 
 **Evidencia de E0-FINAL.** Con SDK 10.0.401 y las mismas opciones offline, los 22 scripts EF/Recovery y los cinco literales SQL de 38/39 coincidieron byte por byte y por SHA-256. Se verificaron seis planes de `RecoveryWorkflow.MigrationPlan` y sus `PlanHash`. En 34→40 ambos producen `8EC172A6173E63EAC745C10FBF5D0A9795940902BE14C593B554593D7411284A`. Los tres descensos que cruzan 37 siguen rechazados por la misma guarda. La evidencia anterior/posterior y el manifiesto de hashes se conservaron fuera del repositorio. Builds focalizados PASS con 0 advertencias y 0 errores. `RecoveryMigrationIntegrityTests` 27 PASS, 0 FAIL, 0 SKIP. `git diff --check` PASS.
 
-**GO para publicar el candidato y repetir el workflow manual.** El gate integral permanece pendiente. El CI debe revalidar los 9 fallos unitarios y los 38 PostgreSQL del run de referencia, con especial atención a 34→37, permisos del runtime, sencillo, recuperación XLSX repetida y revocación, y aislamiento de anulación. DEV, S4, RLS y configuración fiscal quedan intactos.
+**E0 PASS_PG.** En el SHA `4523902c848a53f7f1d9eb89de3e2d8a7a03ae11`, el [run 45325845075](https://github.com/saintdeyb321/MediPOS/actions/runs/45325845075) aprobó restore, build, NuGet Audit, formato, 2 664 unitarias, 8 de arquitectura y 904 PostgreSQL 18.7. Total 3 576 PASS, 0 FAIL, 0 SKIP. Los 9 y 38 fallos arriba pertenecen al run anterior. Esta evidencia abarca E0 y ese SHA.
+
+### A360-LEAN · E1–E5
+
+| Fase | Checkpoint del candidato local |
+|---|---|
+| E1 | **IMPLEMENTADO · PENDIENTE_BENCHMARK.** Compras pasa de N consultas de producto a una lectura por IDs distintos. POS usa dos lotes frente a 2N consultas de producto, uno antes de los candados y otro después. El repositorio usa una consulta acotada al tenant, sin tracking. El orden de candados, FEFO, revisión, autorización, constancias y commits se conservan. 116 pruebas focalizadas de compra/POS/offline PASS. El caso PG del harness comprueba una sentencia y exclusión de IDs ajenos/ausentes. Caja, reportes, búsqueda y las validaciones de efectos POS conservan sus consultas hasta medir planes y snapshots. |
+| E2 | **IMPLEMENTADO.** Confirmar compra con acuse terminal verificado elimina un GET de detalle, conservando líneas de la revisión aceptada. Un GET temprano en borrador sigue sin liberar incertidumbre. Recuperar constancias y reconciliar escrituras realmente inciertas siguen siendo pasos separados. Se conservaron los rechecks de acceso y la lógica decimal y de ledger donde verifican fronteras distintas. |
+| E3 | **IMPLEMENTADO · PENDIENTE_ACEPTACION.** Apertura de caja usa el acuse de la membresía autenticada y evita un GET. POS muestra recuperación cuando el ticket discrepa o existe una operación pendiente. Compras evita un aviso duplicado. El editor de presentaciones conserva su versión frente a una lectura posterior sin sincronizar estado por efecto. Excel mantiene carga/revisión y solo invalida el catálogo al observar otro trabajo o progreso en sus filas. Transferencias, licencias, personal y PWA mantienen sus pasos de custodia y acuses de identidad. |
+| E4 | **FISCAL_PREPARATION_PENDING.** El proveedor y el verificador reciben un documento con emisor, tenant e identidad documental validados. El lease queda en persistencia. DI mantiene proveedor, identidad y evidencia deshabilitados. Query carece de consumidor operativo. El [plan SUNAT](SUNAT_INTEGRATION_PLAN.md#61-frontera-de-conexión-e4) detalla perfil, ambiente, evidencia, conciliación, registro y apagado. Quedan pendientes el adaptador elegido y su certificación. |
+| E5 | **BLOQUEADO para publicar candidato.** Build en ambos stacks, ESLint, EF offline y verificación focalizada PASS. La suite completa de frontend sigue en FAIL con 54 casos que también fallan en la base. Quedan pendientes CI exacto, rendimiento medido, aceptación Chrome, recuperación operativa y aprobación comercial/fiscal. S4 conserva su decisión independiente. |
+
+**Gate local backend.** SDK 10.0.401. Build de la solución con 0 errores y 0 advertencias. 233 unitarias focalizadas, 60 HTTP con Kestrel y dobles, y 8 arquitectura PASS, 0 FAIL, 0 SKIP. EF offline sin cambios de modelo. Formato de las rutas editadas y `git diff --check` PASS. Formato completo local devolvió código 2 con 4 400 `ENDOFLINE` del checkout Windows y cero diagnósticos de reglas de código. Inventario descubierto 2 672 unitarias, 8 arquitectura y 904 PostgreSQL (3 584 total). La diferencia con E0 son ocho regresiones unitarias de compra, POS y CPE. PostgreSQL del candidato sigue sin ejecutarse.
+
+**Gate local frontend.** Node 24.18.1. Build y ESLint PASS, con advertencia Vite de tamaño del bundle. Primera ejecución paralela: 521 PASS, 68 FAIL, 0 SKIP. Ejecución final en serie: **535 PASS, 54 FAIL, 0 SKIP**, con **138 PASS** en compra/POS/búsqueda/caja/Excel/editor de presentaciones/offline. Los 54 fallos finales se reprodujeron por nombre y archivo en el SHA base (65 FAIL de 107 casos en 11 archivos examinados con las fuentes de Git). Las diez pruebas recuperadas de búsqueda usan el selector y diálogo actuales. La prueba de sucursales de Personal pasó en la corrida final y falló en las otras ejecuciones. Quedan bloqueos de navegación, catálogo, comisiones, invitaciones, Inicio/reportes y configuración/alta inicial. Conservar los reportes JSON externos. Alinear esas regresiones a los flujos vigentes y repetir la suite antes de solicitar publicación. Cero emisiones fiscales reales y cero modificaciones a bases existentes.
+
+**Comparación B8.2, pendiente de infraestructura autorizada.** Usar el mismo runner, SDK 10.0.402, digest PostgreSQL 18, hardware, parámetros y semilla para la base `4523902` y el SHA del candidato. Ejecutar desde `backend/` en cada checkout revisado. El operador inyecta por separado las credenciales protegidas de [B8.2](BACKEND_PLAN.md#b82--performanceload-targets), con un run ID único por variante y una base sintética nueva asociada. Conservar JSON y EXPLAIN fuera del repositorio.
+
+```powershell
+$env:MEDIPOS_ENVIRONMENT = 'Performance'
+$env:MEDIPOS_PERF_OPT_IN = 'CREATE_DISPOSABLE_DATABASE'
+$runId = Read-Host 'Run ID aprobado de 32 hexadecimales que coincide con la base runtime'
+$evidence = Read-Host 'Directorio protegido absoluto de la variante, fuera del repositorio'
+$hardware = Read-Host 'CPU, RAM, almacenamiento y red del host de referencia'
+dotnet run -c Release --project tests/MediPOS.Performance -- --run-id $runId --environment isolated-lab --server-hardware $hardware --products 2000 --stocked-products 128 --lots 3 --branches 3 --operators 2 --tenants 2 --concurrency 1,2,4,8 --samples 1000 --warmup 100 --seed 6282 --output $evidence --explain true
+if ($LASTEXITCODE -ne 0) { throw 'Benchmark incompleto o fallido' }
+$report = Get-Content -Raw -LiteralPath (Join-Path $evidence ($runId + '.json')) | ConvertFrom-Json
+if (-not $report.Completed -or ($report.Results | Where-Object Errors -gt 0)) { throw 'Resultados sin gate de integridad' }
+$report.Results | Select-Object Name,Concurrency,Successful,ExpectedConflicts,Errors,SuccessfulPerSecond,SqlCommands,PeakObservedConnections,SuccessLatency,Phases,TargetResult
+```
+
+Comparar p50/p95/p99, consultas por intento, fases de espera/posting y throughput bajo datos equivalentes. Registrar CPU, memoria y pool con la telemetría del runner y servidor en la misma ventana. El harness mide handlers y no incluye benchmark de compras/cierre ni HTTP/navegador. Medir esos recorridos en un entorno aprobado antes de cambiar agregación de caja, locks o índices. Metas B8.2: búsqueda p95 <500 ms, confirmación p95 <1 s. Los objetivos 200 ms/500 ms/2 s de E1 siguen orientativos.
+
+**Aceptación y recuperación pendientes.** En una instalación aislada de API/React del mismo SHA con esquema 40, A crea Trial/designa, B y C reclaman por Google en perfiles separados y verifican denegación cruzada y revocación. B recibe compra con lote y vencimiento, abre caja, cobra con pago mixto, imprime ticket interno y cierra/arquea. Verificar última unidad, transferencias de ambas clases, personal y Excel. En dos pestañas probar pérdida de acuse y cambio de identidad en POS/PWA, sin duplicar ventas, stock, constancias o eventos. Medir pedidos, clics, tiempo y errores en desktop y móvil, incluyendo teclado y recuperación.
+
+**Gate del piloto.** Ejecutar el workflow manual existente sobre el SHA exacto y `npm run build`, `npm run lint`, `npm run test` para frontend. Ensayar backup, restauración aislada y rollback con el [runbook B8.3](BACKUP_RECOVERY_RUNBOOK.md#restauración-y-migraciones), comparar huellas y medir pérdida/tiempo frente a RPO/RTO aprobados. Instalar API y React compatibles juntos. Mantener `ProductImportRecovery__EnabledAfterWriterDrain=false` hasta drenar versiones anteriores. Tras el primer evento `catalog.product_import_interrupted`, conservar esquema 40 y lectores compatibles. Antes del piloto, el operador debe verificar HTTPS/proxy, secretos externos, runtime restringido y RLS, readiness, latencia/errores/pool/colas, copias/retención, alertas, soporte y responsables de incidente. El responsable tributario valida elegibilidad del cliente y alcance del ticket interno antes de autorizar el piloto.
 
 ## CI y primer candidato
 

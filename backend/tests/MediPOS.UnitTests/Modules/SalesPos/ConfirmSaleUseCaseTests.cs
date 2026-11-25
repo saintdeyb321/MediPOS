@@ -275,6 +275,21 @@ public sealed class ConfirmSaleUseCaseTests
         Assert.Equal(0, setup.Transaction.Begins);
     }
 
+    [Fact]
+    public async Task ProductReadAfterLotLocksRejectsDeactivatedProductWithoutPosting()
+    {
+        var setup = new Setup();
+        setup.Scope.AfterLock = () => setup.Product.SetStatus(false);
+        var error = await Assert.ThrowsAsync<ApplicationErrorException>(() =>
+            setup.Handler.HandleAsync(setup.Command(), TestContext.Current.CancellationToken));
+        Assert.Equal(SalesPosErrors.ProductUnavailable, error.Error);
+        Assert.Equal(2, setup.Catalog.BatchReads);
+        Assert.Equal(1, setup.Scope.LotLocks);
+        Assert.Equal(SaleStatus.Draft, setup.Sale.Status);
+        Assert.Equal(0, setup.Scope.Completions);
+        Assert.True(setup.Scope.Disposed);
+    }
+
     private sealed class Setup
     {
         public Setup(TenantRole role = TenantRole.Cashier)
@@ -290,8 +305,9 @@ public sealed class ConfirmSaleUseCaseTests
                 true, true, [WorkSchedule.Create(Sale.TenantId, Membership.Id, Sale.TenantId, DayOfWeek.Tuesday, new(9, 0), new(18, 0))]));
             Scope = new(cash, Sale, [SaleConfirmationDomainTests.Lot(Sale, Product, 2m, new(2026, 10, 6), Now)]);
             Transaction = new(Scope);
+            Catalog = new Products(Product);
             Handler = new(new ResolveAccessContextHandler(Session, Access, new TenantDataContext()), new Drafts(Sale),
-                new CashReader(cash), Transaction, new Products(Product), Clock);
+                new CashReader(cash), Transaction, Catalog, Clock);
         }
         public Sale Sale { get; }
         public BusinessProduct Product { get; }
@@ -302,6 +318,7 @@ public sealed class ConfirmSaleUseCaseTests
         public Scope Scope { get; }
         public Transaction Transaction { get; }
         public ConfirmSaleHandler Handler { get; }
+        public Products Catalog { get; }
         public ConfirmSaleCommand Command(params SalePaymentInput[] payments) => new(Sale.TenantId, Sale.BranchId, Sale.Id, 1,
             payments.Length == 0 ? [new(PaymentMethod.Cash, 4m)] : payments);
     }
@@ -326,7 +343,15 @@ public sealed class ConfirmSaleUseCaseTests
     }
     private sealed class Products(BusinessProduct product) : IBusinessProductStore
     {
-        public Task<BusinessProduct?> FindAsync(Guid tenantId, Guid productId, CancellationToken cancellationToken) => Task.FromResult<BusinessProduct?>(product);
+        public int BatchReads { get; private set; }
+        public Task<BusinessProduct?> FindAsync(Guid tenantId, Guid productId, CancellationToken cancellationToken) => throw new NotSupportedException();
+        public Task<IReadOnlyDictionary<Guid, BusinessProduct>> ReadByIdsAsync(Guid tenantId, Guid[] productIds, CancellationToken cancellationToken)
+        {
+            BatchReads++;
+            Assert.Equal(product.TenantId, tenantId);
+            Assert.Equal(product.Id, Assert.Single(productIds));
+            return Task.FromResult<IReadOnlyDictionary<Guid, BusinessProduct>>(new Dictionary<Guid, BusinessProduct> { [product.Id] = product });
+        }
         public Task<bool> InternalCodeExistsAsync(Guid tenantId, string code, CancellationToken cancellationToken) => throw new NotSupportedException();
         public Task AddAsync(BusinessProduct value, AuditLog audit, CancellationToken cancellationToken) => throw new NotSupportedException();
         public Task SaveAsync(BusinessProduct value, AuditLog audit, CancellationToken cancellationToken) => throw new NotSupportedException();

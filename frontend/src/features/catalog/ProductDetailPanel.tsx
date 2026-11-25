@@ -68,7 +68,7 @@ export function UnitEditor({ detail, write, onDirty }: { detail: ProductDetail; 
     enabled: Boolean(http), retry: false, staleTime: 0, refetchOnWindowFocus: false })
   // A recovery GET must not replace the user's original intent or its optimistic version.
   // The parent remounts this editor only after confirmed save/reconciliation.
-  useEffect(() => { if (!baseline && configuration.data) setBaseline(configuration.data) }, [baseline, configuration.data])
+  if (!baseline && configuration.data) setBaseline(configuration.data)
   return <section aria-label="Configuración versionada de presentaciones"><h3>Editar presentaciones</h3>
     <p>Las unidades existentes conservan su identidad y factor. Para otro factor agrega una presentación; para retirarla de nuevas operaciones desactívala.</p>
     {configuration.isPending && <p role="status">Consultando configuración vigente…</p>}

@@ -13,6 +13,48 @@ namespace MediPOS.UnitTests.Modules.ElectronicDocuments;
 public sealed class ElectronicDeliveryContractTests
 {
     private static CancellationToken Token => TestContext.Current.CancellationToken;
+
+    [Fact]
+    public async Task AdapterReceivesTheImmutableIssuerAndDocumentScope()
+    {
+        var setup = new Setup(new(DeliveryOutcome.Received, "received", "R"), simulation: false);
+        await setup.Run.HandleAsync(setup.Data.Tenant, 1, Token);
+        var scope = Assert.IsType<ElectronicProviderDocument>(setup.Provider.LastDocument);
+        Assert.Equal(setup.Data.Tenant, scope.TenantId);
+        Assert.Equal(setup.Data.Legal.Id, scope.LegalEntityId);
+        Assert.Equal(setup.Data.Legal.Ruc, scope.IssuerRuc);
+        Assert.Equal(setup.Document.Id, scope.DocumentId);
+        Assert.Equal(setup.Document.SnapshotJson, scope.SnapshotJson);
+        Assert.Equal(setup.Document.IdempotencyKey, scope.IdempotencyKey);
+        Assert.Equal(setup.Document.DocumentNumber, scope.DocumentNumber);
+    }
+
+    [Theory]
+    [InlineData("issuer")]
+    [InlineData("snapshot")]
+    public async Task InvalidIssuerContextCannotReachTheAdapterOrRetry(string defect)
+    {
+        var setup = new Setup(new(DeliveryOutcome.Received, "received", "R"), simulation: false);
+        setup.Work.AlterClaim = claim => defect == "issuer"
+            ? claim with { LegalEntityId = Guid.CreateVersion7() }
+            : claim with { SnapshotJson = "[]" };
+        await setup.Run.HandleAsync(setup.Data.Tenant, 2, Token);
+        Assert.Equal(0, setup.Provider.Calls);
+        Assert.Equal(ElectronicDocumentStates.Uncertain, setup.Document.Status);
+        Assert.Equal("delivery_issuer_scope_invalid", setup.Document.LastErrorCode);
+        Assert.Null(setup.Document.NextAttemptAtUtc);
+    }
+
+    [Fact]
+    public async Task ForeignClaimCannotCrossTheTechnicalTenantBoundary()
+    {
+        var setup = new Setup(new(DeliveryOutcome.Received, "received", "R"), simulation: false);
+        setup.Work.AlterClaim = claim => claim with { TenantId = Guid.CreateVersion7() };
+        var error = await Assert.ThrowsAsync<ApplicationErrorException>(() => setup.Run.HandleAsync(setup.Data.Tenant, 1, Token));
+        Assert.Equal("cpe.technical_scope_invalid", error.Error.Code);
+        Assert.Equal(0, setup.Provider.Calls);
+        Assert.Equal(ElectronicDocumentStates.Reserved, setup.Document.Status);
+    }
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
@@ -225,6 +267,7 @@ public sealed class ElectronicDeliveryContractTests
         internal List<ElectronicDocumentAttempt> Events { get; } = [];
         internal bool SaleConfirmed { get; set; } = true;
         internal bool FenceCompletion { get; set; }
+        internal Func<ElectronicDeliveryClaim, ElectronicDeliveryClaim>? AlterClaim { get; set; }
         internal CancellationTokenSource? CancelAfterCompletion { get; set; }
         public Task<int> RecoverExpiredAsync(ElectronicDeliveryIdentity identity, DateTimeOffset now, int limit, CancellationToken token)
         {
@@ -236,7 +279,9 @@ public sealed class ElectronicDeliveryContractTests
         {
             if (document.Status is not (ElectronicDocumentStates.Pending or ElectronicDocumentStates.Retry) || document.NextAttemptAtUtc > now) return Task.FromResult<ElectronicDeliveryClaim?>(null);
             var claim = document.Claim(now, lease); Events.Add(ElectronicDocumentAttempt.Record(document, false, now));
-            return Task.FromResult<ElectronicDeliveryClaim?>(new(document.TenantId, document.Id, claim, document.IdempotencyKey, document.SnapshotJson, document.DocumentNumber));
+            var scoped = new ElectronicDeliveryClaim(document.TenantId, document.LegalEntityId, document.Id, claim,
+                document.IdempotencyKey, document.SnapshotJson, document.DocumentType, document.DocumentNumber);
+            return Task.FromResult<ElectronicDeliveryClaim?>(AlterClaim?.Invoke(scoped) ?? scoped);
         }
         public Task<bool> BeginDispatchAsync(ElectronicDeliveryIdentity identity, ElectronicDeliveryClaim claim, DateTimeOffset now, CancellationToken token)
         {

@@ -8,7 +8,6 @@ using MediPOS.Application.Modules.Inventory;
 using MediPOS.Application.Modules.Purchasing.ReplacePurchaseLines;
 using MediPOS.Application.Modules.TenancyLicensing;
 using MediPOS.Domain.Modules.AuditSupport;
-using MediPOS.Domain.Modules.Catalog;
 using MediPOS.Domain.Modules.Inventory;
 
 namespace MediPOS.Application.Modules.Purchasing.ConfirmPurchase;
@@ -36,13 +35,10 @@ public sealed class ConfirmPurchaseHandler(IPurchasingStore store, IBranchesStor
         await PurchasingValidation.ReferencesAsync(command.TenantId, purchase.BranchId, purchase.SupplierId, branches, store, cancellationToken).ConfigureAwait(false);
         var lines = await store.FindLinesAsync(command.TenantId, purchase.Id, cancellationToken).ConfigureAwait(false);
         PurchaseRevision.Require(purchase.Id, lines.Select(PurchaseLineDetails.From), command.ExpectedRevision);
-        var catalog = new Dictionary<Guid, BusinessProduct>();
-        foreach (var productId in lines.Select(value => value.BusinessProductId).Distinct())
-        {
-            var product = await products.FindAsync(command.TenantId, productId, cancellationToken).ConfigureAwait(false)
-                ?? throw new ApplicationErrorException(CatalogErrors.BusinessProductNotFound);
-            catalog.Add(productId, product);
-        }
+        var productIds = lines.Select(value => value.BusinessProductId).Distinct().ToArray();
+        var catalog = await products.ReadByIdsAsync(command.TenantId, productIds, cancellationToken).ConfigureAwait(false);
+        if (productIds.Any(id => !catalog.TryGetValue(id, out var product) || product.Id != id || product.TenantId != command.TenantId))
+            throw new ApplicationErrorException(CatalogErrors.BusinessProductNotFound);
         try { purchase.ValidateConfirmation(lines, catalog); }
         catch (ArgumentException) { throw new ApplicationErrorException(ApplicationErrors.InvalidRequest); }
         // Read time after row-lock waits, and check the license at the actual operation time.

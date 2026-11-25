@@ -286,6 +286,7 @@ public sealed class CatalogApplicationTests
 
     private sealed class BusinessStore : IBusinessProductStore
     {
+        public Task<IReadOnlyDictionary<Guid, BusinessProduct>> ReadByIdsAsync(Guid tenantId, Guid[] productIds, CancellationToken cancellationToken) => throw new NotSupportedException();
         public List<BusinessProduct> Products { get; } = [];
         public List<AuditLog> Audits { get; } = [];
         public bool FailWrites { get; set; }

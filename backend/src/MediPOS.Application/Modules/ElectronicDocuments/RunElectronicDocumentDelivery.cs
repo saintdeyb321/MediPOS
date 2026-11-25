@@ -32,19 +32,23 @@ public sealed class RunElectronicDocumentDelivery(IElectronicDeliveryWorkStore q
             token.ThrowIfCancellationRequested();
             var claim = await queue.ClaimAsync(identity, clock.GetUtcNow(), TimeSpan.FromMinutes(1), token).ConfigureAwait(false);
             if (claim is null) break;
+            if (claim.TenantId != identity.TenantId) throw ElectronicDocumentErrors.Error("technical_scope_invalid", MediPOS.Application.Errors.ErrorCategory.Forbidden);
+            var document = ElectronicProviderContract.FromClaim(claim);
             if (!await queue.BeginDispatchAsync(identity, claim, clock.GetUtcNow(), token).ConfigureAwait(false)) continue;
             MediPOS.SharedKernel.OperationalTelemetry.ElectronicDispatch();
             ElectronicProviderResult result;
             var verified = false;
             try
             {
-                result = await provider.SubmitAsync(claim, token).ConfigureAwait(false);
-                verified = !provider.Capabilities.Simulation && result?.Outcome == DeliveryOutcome.AuthorityAccepted && result.Evidence is not null &&
-                    await evidenceVerifier.VerifyAsync(result.Evidence, token).ConfigureAwait(false);
+                result = document is null ? ElectronicProviderContract.Unknown("delivery_issuer_scope_invalid") :
+                    await provider.SubmitAsync(document, token).ConfigureAwait(false);
+                verified = document is not null && !provider.Capabilities.Simulation &&
+                    result?.Outcome == DeliveryOutcome.AuthorityAccepted && result.Evidence is not null &&
+                    await evidenceVerifier.VerifyAsync(document, result.Evidence, token).ConfigureAwait(false);
             }
             catch (Exception error) when (error is HttpRequestException or IOException or TimeoutException or OperationCanceledException)
             { result = ElectronicProviderContract.Unknown("delivery_transport_unknown"); }
-            result = ElectronicProviderContract.Normalize(result, provider.Capabilities.Simulation, verified);
+            result = ElectronicProviderContract.Normalize(result, document is not null && provider.Capabilities.Simulation, verified);
             // A cancelled caller cannot erase a committed dispatch intent. Late responses are fenced by the queue.
             using var diagnostic = new CancellationTokenSource(TimeSpan.FromSeconds(5));
             var retained = await queue.CompleteAsync(identity, claim, result, clock.GetUtcNow(), diagnostic.Token).ConfigureAwait(false);

@@ -48,11 +48,12 @@ internal sealed class ElectronicDocumentTestData
     internal sealed class Provider(ElectronicProviderResult result, bool simulation = true) : IElectronicDocumentProvider
     {
         internal int Calls { get; private set; }
+        internal ElectronicProviderDocument? LastDocument { get; private set; }
         internal Exception? Failure { get; set; }
         public ProviderCapabilities Capabilities { get; } = new(true, simulation, false);
-        public Task<ElectronicProviderResult> SubmitAsync(ElectronicDeliveryClaim claim, CancellationToken token)
-        { Calls++; return Failure is null ? Task.FromResult(result) : Task.FromException<ElectronicProviderResult>(Failure); }
-        public Task<ElectronicProviderResult> QueryAsync(string idempotencyKey, CancellationToken token) => Task.FromResult(ElectronicProviderContract.Unknown("query_not_supported"));
+        public Task<ElectronicProviderResult> SubmitAsync(ElectronicProviderDocument document, CancellationToken token)
+        { Calls++; LastDocument = document; return Failure is null ? Task.FromResult(result) : Task.FromException<ElectronicProviderResult>(Failure); }
+        public Task<ElectronicProviderResult> QueryAsync(ElectronicProviderDocument document, CancellationToken token) => Task.FromResult(ElectronicProviderContract.Unknown("query_not_supported"));
     }
     internal sealed class Identity(Guid tenant) : IElectronicDeliveryIdentity
     {
@@ -60,5 +61,5 @@ internal sealed class ElectronicDocumentTestData
         public Task<ElectronicDeliveryIdentity?> AuthorizeAsync(Guid tenantId, CancellationToken token) => Task.FromResult<ElectronicDeliveryIdentity?>(tenantId == Principal.TenantId ? Principal : null);
     }
     internal sealed class EvidenceVerifier : IElectronicAuthorityEvidenceVerifier
-    { public Task<bool> VerifyAsync(AuthorityEvidence evidence, CancellationToken token) => Task.FromResult(false); }
+    { public Task<bool> VerifyAsync(ElectronicProviderDocument document, AuthorityEvidence evidence, CancellationToken token) => Task.FromResult(false); }
 }

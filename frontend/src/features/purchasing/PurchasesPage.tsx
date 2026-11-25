@@ -47,7 +47,6 @@ function PurchasesWorkspace() {
       <Button variant="secondary" disabled={receipt.busy} onClick={() => void receipt.recoverCreation()}>Consultar constancia del alta</Button>
     </div></Panel>}
     {receipt.pending && !receipt.creationPending && <Panel><div className="operation-body"><h2>Recepción pendiente de conciliación</h2><p>No repitas la creación, el guardado ni la confirmación. Consulta la misma recepción. Si falta el ID, busca la referencia original y verifica proveedor, fecha y líneas; una coincidencia no demuestra por sí sola idempotencia ni una lectura temprana demuestra rollback.</p>
-      {(edit || view?.lines.length === 0) && <p role="status">El editor conserva sus líneas locales. Guarda y revisa antes de actualizar o buscar otra recepción; «Nueva recepción» permite descartar con confirmación.</p>}
     {receipt.id && <Button variant="secondary" disabled={receipt.busy} onClick={() => { setReconciled(false); void receipt.consult() }}>Consultar estado de la misma recepción</Button>}
       {view && receipt.pending !== 'confirm' && <><label><input type="checkbox" checked={reconciled} onChange={event => setReconciled(event.target.checked)} /> Verifiqué el registro original, todas sus líneas y la finalización de la solicitud; no queda otra escritura en curso.</label>
         <Button variant="secondary" disabled={!reconciled || receipt.busy} onClick={() => { receipt.acknowledge(); setReconciled(false) }}>Continuar tras conciliación verificada</Button></>}

@@ -1,3 +1,4 @@
+using System.Text.Json;
 using MediPOS.Domain.Modules.ElectronicDocuments;
 
 namespace MediPOS.Application.Modules.ElectronicDocuments;
@@ -5,20 +6,24 @@ namespace MediPOS.Application.Modules.ElectronicDocuments;
 public sealed record ProviderCapabilities(bool Operational, bool Simulation, bool CanQueryByIdempotencyKey);
 public sealed record AuthorityEvidence(string Authority, string EvidenceSha256, string VerificationReference);
 public sealed record ElectronicProviderResult(DeliveryOutcome Outcome, string Code, string? Reference = null, AuthorityEvidence? Evidence = null);
-public sealed record ElectronicDeliveryClaim(Guid TenantId, Guid DocumentId, Guid Token, string IdempotencyKey, string SnapshotJson, string DocumentNumber);
+public sealed record ElectronicDeliveryClaim(Guid TenantId, Guid LegalEntityId, Guid DocumentId, Guid Token, string IdempotencyKey,
+    string SnapshotJson, string DocumentType, string DocumentNumber);
+// Local lease/proof of ownership stays in the work store. An adapter routes from this issuer scope.
+public sealed record ElectronicProviderDocument(Guid TenantId, Guid LegalEntityId, string IssuerRuc, Guid DocumentId,
+    string DocumentType, string DocumentNumber, string IdempotencyKey, string SnapshotJson);
 public sealed record ElectronicDeliveryIdentity(Guid TenantId, Guid PrincipalId);
 
 public interface IElectronicDocumentProvider
 {
     ProviderCapabilities Capabilities { get; }
-    Task<ElectronicProviderResult> SubmitAsync(ElectronicDeliveryClaim claim, CancellationToken token);
-    Task<ElectronicProviderResult> QueryAsync(string idempotencyKey, CancellationToken token);
+    Task<ElectronicProviderResult> SubmitAsync(ElectronicProviderDocument document, CancellationToken token);
+    Task<ElectronicProviderResult> QueryAsync(ElectronicProviderDocument document, CancellationToken token);
 }
 // Production activation must supply a trusted technical principal and evidence verifier; neither is a client input.
 public interface IElectronicDeliveryIdentity
 { Task<ElectronicDeliveryIdentity?> AuthorizeAsync(Guid tenantId, CancellationToken token); }
 public interface IElectronicAuthorityEvidenceVerifier
-{ Task<bool> VerifyAsync(AuthorityEvidence evidence, CancellationToken token); }
+{ Task<bool> VerifyAsync(ElectronicProviderDocument document, AuthorityEvidence evidence, CancellationToken token); }
 public interface IElectronicDeliveryWorkStore
 {
     Task<int> RecoverExpiredAsync(ElectronicDeliveryIdentity identity, DateTimeOffset now, int limit, CancellationToken token);
@@ -29,6 +34,27 @@ public interface IElectronicDeliveryWorkStore
 
 public static class ElectronicProviderContract
 {
+    internal static ElectronicProviderDocument? FromClaim(ElectronicDeliveryClaim claim)
+    {
+        if (claim.TenantId == Guid.Empty || claim.LegalEntityId == Guid.Empty || claim.DocumentId == Guid.Empty) return null;
+        try
+        {
+            using var snapshot = JsonDocument.Parse(claim.SnapshotJson);
+            var root = snapshot.RootElement;
+            if (root.ValueKind != JsonValueKind.Object ||
+                !root.TryGetProperty("profile", out var profile) || profile.ValueKind != JsonValueKind.String ||
+                profile.GetString() != ElectronicDocumentRules.Profile ||
+                !root.TryGetProperty("issuer", out var issuer) || issuer.ValueKind != JsonValueKind.Object ||
+                !issuer.TryGetProperty("Id", out var id) || id.ValueKind != JsonValueKind.String ||
+                !id.TryGetGuid(out var legalId) || legalId != claim.LegalEntityId ||
+                !issuer.TryGetProperty("Ruc", out var ruc) || ruc.ValueKind != JsonValueKind.String ||
+                ruc.GetString() is not { Length: 11 } issuerRuc || !issuerRuc.All(char.IsAsciiDigit))
+                return null;
+            return new(claim.TenantId, legalId, issuerRuc, claim.DocumentId, claim.DocumentType, claim.DocumentNumber, claim.IdempotencyKey, claim.SnapshotJson);
+        }
+        catch (JsonException) { return null; }
+    }
+
     public static ElectronicProviderResult Normalize(ElectronicProviderResult? result, bool simulation, bool verifiedEvidence)
     {
         if (result is null || !Enum.IsDefined(result.Outcome)) result = Unknown("provider_result_invalid");

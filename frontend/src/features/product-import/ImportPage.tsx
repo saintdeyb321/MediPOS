@@ -33,10 +33,21 @@ function ImportWorkspace() {
   const [cursors, setCursors] = useState([0]); const after = cursors.at(-1)!; const [busy, setBusy] = useState(false); const running = useRef(false); const abort = useRef<AbortController | null>(null)
   const [error, setError] = useState<unknown>(null); const [notice, setNotice] = useState(''); const [denied, setDenied] = useState(false)
   const [recoveryReview, setRecoveryReview] = useState('')
+  const lastObservedImport = useRef<{ id: string; importedRows: number } | null>(null)
   useEffect(() => () => abort.current?.abort(), [])
   function mark(id: string, blocked: boolean, requestId = latest.current.get('importPending') ?? '') { const next = new URLSearchParams(latest.current); for (const key of ['importJob', 'importPending', 'importAck']) next.delete(key); if (id) next.set('importJob', id); if (blocked) next.set('importPending', requestId); latest.current = next; setParams(next, { replace: true }) }
   const invalidate = () => client.invalidateQueries({ predicate: q => q.queryKey[0] === 'tenant' && q.queryKey[1] === w.tenantId && ['catalog-products', 'catalog-detail', 'product-search'].includes(String(q.queryKey[3])) })
-  const query = useQuery({ queryKey: scopedKey(w, 'product-import', w.session.userId, w.access.membershipId, jobId, after), queryFn: async ({ signal }) => { if (!http) throw new ApiError(0, 'client.https_required'); const result = await importApi(http).read(w, jobId, after, signal); await invalidate(); return result }, enabled: Boolean(http) && !awaitingReceipt && isUuid(jobId), retry: false, refetchOnWindowFocus: false })
+  const query = useQuery({ queryKey: scopedKey(w, 'product-import', w.session.userId, w.access.membershipId, jobId, after), queryFn: async ({ signal }) => {
+    if (!http) throw new ApiError(0, 'client.https_required')
+    const result = await importApi(http).read(w, jobId, after, signal)
+    const previous = lastObservedImport.current
+    if (!signal.aborted && (previous?.id !== result.importJobId || previous.importedRows !== result.importedRows)) {
+      lastObservedImport.current = { id: result.importJobId, importedRows: result.importedRows }
+      // Page navigation does not change the catalog. Keep refreshing when newly committed rows appear.
+      await invalidate()
+    }
+    return result
+  }, enabled: Boolean(http) && !awaitingReceipt && isUuid(jobId), retry: false, refetchOnWindowFocus: false })
   const job = !awaitingReceipt && query.isSuccess && !query.isFetching ? query.data : null
   const canRecoverInterrupted = job?.status === 'processing' && job.canRecoverInterrupted && !legacyPending && !query.isError
   const locked = busy || pending || denied || !http

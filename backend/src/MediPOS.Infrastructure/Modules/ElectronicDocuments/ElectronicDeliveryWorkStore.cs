@@ -35,7 +35,8 @@ internal sealed class ElectronicDeliveryWorkStore(MediPosDbContext context, IEle
             if (document is null) { await tx.CommitAsync(token).ConfigureAwait(false); return null; }
             var claim = document.Claim(now, lease); context.ElectronicDocumentAttempts.Add(ElectronicDocumentAttempt.Record(document, false, now));
             await SaveAsync(identity, document, "claimed", token).ConfigureAwait(false); await tx.CommitAsync(token).ConfigureAwait(false);
-            return new(identity.TenantId, document.Id, claim, document.IdempotencyKey, document.SnapshotJson, document.DocumentNumber);
+            return new(identity.TenantId, document.LegalEntityId, document.Id, claim, document.IdempotencyKey,
+                document.SnapshotJson, document.DocumentType, document.DocumentNumber);
         }
         catch { context.ChangeTracker.Clear(); throw; }
     }
