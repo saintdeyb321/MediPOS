@@ -111,7 +111,7 @@ function EmployeesWorkspace() {
           {sameId(taskEmployee.userId, w.session.userId) && <Notice>Modificar tu propia membresía obliga a volver a verificar el acceso.</Notice>}
           {task === 'branches' && <EmployeeBranchesForm employee={taskEmployee} branches={branches.data ?? []} complete={complete} write={write} onDirty={setDirty} onSaved={closeTask} />}
           {task === 'schedule' && <EmployeeScheduleForm employee={taskEmployee} write={write} onDirty={setDirty} onSaved={closeTask} />}
-          {task === 'status' && <EmployeeDeactivation employee={taskEmployee} write={write} onDirty={setDirty} onSaved={closeTask} />}
+          {task === 'status' && <EmployeeDeactivation employee={taskEmployee} write={write} onSaved={closeTask} />}
         </div>}
       </div>
     </Modal>

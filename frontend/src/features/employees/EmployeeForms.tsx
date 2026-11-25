@@ -10,53 +10,51 @@ import type { Weekday, WorkWindow } from './schedule'
 import type { EmployeeWrite } from './useEmployeeWrite'
 
 export function EmployeeBranchesForm({ employee, branches, complete, write, onDirty, onSaved }: { employee: Employee; branches: readonly Branch[]; complete: boolean; write: EmployeeWrite; onDirty?: (dirty: boolean) => void; onSaved?: () => void }) {
-  const [ids, setIds] = useState([...employee.branchIds]); const [reviewed, setReviewed] = useState(false)
+  const [ids, setIds] = useState([...employee.branchIds])
   const unresolved = employee.branchIds.some(id => !branches.some(branch => sameId(branch.id, id)))
-  useEffect(() => { onDirty?.([...ids].map(id => id.toLowerCase()).sort().join('/') !== [...employee.branchIds].map(id => id.toLowerCase()).sort().join('/')) }, [ids, employee.branchIds, onDirty])
-  return <form aria-label="Asignar sucursales" onSubmit={event => { event.preventDefault(); if (complete && !unresolved && reviewed) void write.branches(employee, ids, branches.map(row => row.id)).then(saved => { if (saved) onSaved?.() }) }}>
+  const changed = ids.length !== employee.branchIds.length || ids.some(id => !employee.branchIds.some(previous => sameId(id, previous)))
+  useEffect(() => { onDirty?.(changed) }, [changed, onDirty])
+  return <form aria-label="Asignar sucursales" onSubmit={event => { event.preventDefault(); if (complete && !unresolved && changed && !write.locked) void write.branches(employee, ids, branches.map(row => row.id)).then(saved => { if (saved) onSaved?.() }) }}>
     <h3>Sucursales asignadas</h3><p>Guardar reemplaza el conjunto completo. Una asignación vacía no habilita todas las sucursales. Owner conserva el alcance definido por su rol; no depende de estas asignaciones para administrar.</p>
     {(!complete || unresolved) && <p role="alert">Falta consultar todas las sucursales o resolver una asignación existente. No se enviará una lista incompleta ni se eliminarán asignaciones ocultas.</p>}
     <fieldset disabled={write.locked || !employee.isActive || !complete || unresolved}><legend>Sucursales consultables de esta botica</legend>
       {!branches.length && <p>No hay sucursales consultables.</p>}
-      {branches.map(branch => <label key={branch.id}><input type="checkbox" checked={ids.some(id => sameId(id, branch.id))} onChange={event => { setIds(current => event.target.checked ? [...current, branch.id] : current.filter(id => !sameId(id, branch.id))); setReviewed(false) }} /> {branch.name}</label>)}
-      <label><input type="checkbox" checked={reviewed} onChange={event => setReviewed(event.target.checked)} /> Revisé y autorizo reemplazar todas las asignaciones de este empleado.</label>
-      <FormFooter><Button type="submit" disabled={!reviewed} pending={write.busy}>Guardar sucursales</Button></FormFooter>
+      {branches.map(branch => <label key={branch.id}><input type="checkbox" checked={ids.some(id => sameId(id, branch.id))} onChange={event => { setIds(current => event.target.checked ? [...current, branch.id] : current.filter(id => !sameId(id, branch.id))) }} /> {branch.name}</label>)}
+      <p>{employee.displayName} · {ids.length} {ids.length === 1 ? 'sucursal seleccionada' : 'sucursales seleccionadas'}.{!ids.length && employee.role !== 'owner' ? ' Sin asignación, el trabajador perderá el acceso a estas sucursales.' : ''}</p>
+      <FormFooter><Button type="submit" disabled={!changed} pending={write.busy}>Guardar sucursales</Button></FormFooter>
     </fieldset>
   </form>
 }
 export function EmployeeScheduleForm({ employee, write, onDirty, onSaved }: { employee: Employee; write: EmployeeWrite; onDirty?: (dirty: boolean) => void; onSaved?: () => void }) {
   const [windows, setWindows] = useState<WorkWindow[]>(employee.schedule.map(row => ({ ...row })))
-  const [day, setDay] = useState<Weekday>('monday'); const [start, setStart] = useState(''); const [end, setEnd] = useState(''); const [reviewed, setReviewed] = useState(false)
+  const [day, setDay] = useState<Weekday>('monday'); const [start, setStart] = useState(''); const [end, setEnd] = useState('')
   const id = useId(); const from = timeInput(start); const to = timeInput(end)
   const candidate: WorkWindow | null = from && to ? { dayOfWeek: day!, startTime: from, endTime: to } : null
   const canAdd = candidate && validSchedule([...windows, candidate])
-  useEffect(() => {
-    const key = (rows: readonly WorkWindow[]) => rows.map(row => `${row.dayOfWeek}/${row.startTime}/${row.endTime}`).sort().join('|')
-    onDirty?.(Boolean(start || end) || key(windows) !== key(employee.schedule))
-  }, [windows, start, end, employee.schedule, onDirty])
-  return <form aria-label="Configurar horario" onSubmit={event => { event.preventDefault(); if (reviewed && validSchedule(windows)) void write.schedule(employee, windows).then(saved => { if (saved) onSaved?.() }) }}>
+  const key = (rows: readonly WorkWindow[]) => rows.map(row => `${row.dayOfWeek}/${row.startTime}/${row.endTime}`).sort().join('|')
+  const editing = Boolean(start.trim() || end.trim())
+  const changed = key(windows) !== key(employee.schedule)
+  const canSave = changed && !editing && validSchedule(windows) && !write.locked
+  useEffect(() => { onDirty?.(editing || changed) }, [editing, changed, onDirty])
+  return <form aria-label="Configurar horario" onSubmit={event => { event.preventDefault(); if (canSave) void write.schedule(employee, windows).then(saved => { if (saved) onSaved?.() }) }}>
     <h3>Horario operacional · Lima</h3><p>Guardar reemplaza todas las ventanas. Para Pharmacist/Cashier, el horario vacío deniega la operación; el inicio se incluye y el fin se excluye. Owner tiene la excepción de horario definida por el backend.</p>
     <fieldset disabled={write.locked || !employee.isActive}><legend>Ventanas de trabajo</legend>
       <label htmlFor={id}>Día de la semana</label><select id={id} value={day} onChange={event => setDay(weekday(event.target.value))}>{days.map(value => <option key={value} value={value}>{dayLabels[value]}</option>)}</select>
       <TextField label="Hora de inicio" value={start} placeholder="09:00" onChange={event => setStart(event.target.value)} hint="HH:mm o HH:mm:ss, opcionalmente hasta seis decimales de segundo." />
       <TextField label="Hora de fin" value={end} placeholder="18:00" onChange={event => setEnd(event.target.value)} />
       <p>No se permiten ventanas duplicadas, inicio igual o posterior al fin ni cruces de medianoche. No se redondea la precisión horaria.</p>
-      <Button variant="secondary" disabled={!canAdd} onClick={() => { if (candidate && canAdd) { setWindows(current => [...current, candidate]); setStart(''); setEnd(''); setReviewed(false) } }}>Agregar ventana al horario</Button>
-      {windows.length ? <ul>{windows.map((window, index) => <li key={`${window.dayOfWeek}/${window.startTime}/${window.endTime}`}>{windowLabel(window)} <Button variant="quiet" onClick={() => { setWindows(current => current.filter((_, position) => position !== index)); setReviewed(false) }}>Quitar ventana {windowLabel(window)}</Button></li>)}</ul> : <p>Horario preparado vacío: no es acceso permanente para trabajadores.</p>}
-      <label><input type="checkbox" checked={reviewed} onChange={event => setReviewed(event.target.checked)} /> Revisé y autorizo reemplazar el horario completo{windows.length ? '' : ' por un conjunto vacío'}.</label>
-      <FormFooter><Button type="submit" disabled={!reviewed || !validSchedule(windows) || Boolean(start.trim() || end.trim())} pending={write.busy}>Guardar horario</Button></FormFooter>
+      <Button variant="secondary" disabled={!canAdd} onClick={() => { if (candidate && canAdd) { setWindows(current => [...current, candidate]); setStart(''); setEnd('') } }}>Agregar ventana al horario</Button>
+      {windows.length ? <ul>{windows.map((window, index) => <li key={`${window.dayOfWeek}/${window.startTime}/${window.endTime}`}>{windowLabel(window)} <Button variant="quiet" onClick={() => { setWindows(current => current.filter((_, position) => position !== index)) }}>Quitar ventana {windowLabel(window)}</Button></li>)}</ul> : <p>Horario preparado vacío: no es acceso permanente para trabajadores.</p>}
+      <FormFooter><Button type="submit" disabled={!canSave} pending={write.busy}>Guardar horario</Button></FormFooter>
       {(start.trim() || end.trim()) && <p>Agrega la ventana en edición o vacía sus campos antes de guardar; no se descarta silenciosamente.</p>}
     </fieldset>
   </form>
 }
-export function EmployeeDeactivation({ employee, write, onDirty, onSaved }: { employee: Employee; write: EmployeeWrite; onDirty?: (dirty: boolean) => void; onSaved?: () => void }) {
-  const [reviewed, setReviewed] = useState(false)
-  useEffect(() => { onDirty?.(reviewed) }, [reviewed, onDirty])
+export function EmployeeDeactivation({ employee, write, onSaved }: { employee: Employee; write: EmployeeWrite; onSaved?: () => void }) {
   if (employee.role === 'owner') return <section aria-label="Desactivación de Owner bloqueada"><h3>Desactivación Owner: BLOCKED</h3><p>El servidor incorpora la protección del último Owner, pero su validación crítica de concurrencia PostgreSQL sigue pendiente. Se mantiene bloqueada toda desactivación de Owner, incluida la propia; contar una página de empleados no demuestra que sea segura.</p><Button disabled>Desactivar Owner · bloqueado</Button></section>
   if (!employee.isActive) return <p>Esta membresía está inactiva. Se conserva su historial; no hay endpoint de reactivación de esta membresía.</p>
-  return <form aria-label="Desactivar empleado" onSubmit={event => { event.preventDefault(); if (reviewed && canDeactivate(employee)) void write.deactivate(employee).then(saved => { if (saved) onSaved?.() }) }}><h3>Desactivación segura de trabajador</h3>
+  return <form aria-label="Desactivar empleado" onSubmit={event => { event.preventDefault(); if (!write.locked && canDeactivate(employee)) void write.deactivate(employee).then(saved => { if (saved) onSaved?.() }) }}><h3>Desactivación segura de trabajador</h3>
     <p>Empleado: {employee.displayName}. Desactivar impide nuevas operaciones autorizadas y conserva el historial. La aplicación del trabajador deberá volver a verificar su acceso; el backend lo valida en cada operación.</p>
-    <label><input type="checkbox" disabled={write.locked} checked={reviewed} onChange={event => setReviewed(event.target.checked)} /> Confirmo que deseo desactivar a {employee.displayName}.</label>
-    <FormFooter><Button type="submit" variant="danger" disabled={write.locked || !reviewed} pending={write.busy}>Desactivar empleado una vez</Button></FormFooter>
+    <FormFooter><Button type="submit" variant="danger" disabled={write.locked || !canDeactivate(employee)} pending={write.busy}>Desactivar empleado una vez</Button></FormFooter>
   </form>
 }

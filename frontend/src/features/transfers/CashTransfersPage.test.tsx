@@ -14,7 +14,7 @@ async function selectCash() {
 async function dispatch() {
   openDispatch()
   await selectCash(); fireEvent.change(screen.getByRole('combobox', { name: 'Sucursal destino de sencillo' }), { target: { value: other.id } }); fireEvent.change(screen.getByRole('textbox', { name: 'Importe de sencillo PEN' }), { target: { value: '1.0001' } })
-  fireEvent.click(screen.getByRole('checkbox', { name: /Revisé caja origen/ })); const button = screen.getByRole('button', { name: 'Confirmar despacho de sencillo' }); fireEvent.click(button); fireEvent.click(button)
+  expect(screen.getByText(/Entrega S\/ 1\.0001/)).toBeInTheDocument(); const button = screen.getByRole('button', { name: 'Confirmar despacho de sencillo' }); fireEvent.click(button); fireEvent.click(button)
 }
 it('dispatches once from a selected open cash with exact amount and rereads without changing ledger locally', async () => {
   const fake = cashServer(); mountTransfers(fake, <CashTransfersPage />); await dispatch()
@@ -27,7 +27,7 @@ it('dispatches once from a selected open cash with exact amount and rereads with
 it('receives the entire pending amount once into another open destination session and verifies terminal state', async () => {
   const fake = cashServer(); fake.cash.records = [sentCash]; mountTransfers(fake, <CashTransfersPage />); fireEvent.click(await screen.findByRole('button', { name: 'Consultar sencillo de ' + other.name }))
   await screen.findByRole('heading', { name: 'Sencillo: EN TRÁNSITO' }); expect(screen.getByRole('button', { name: 'Confirmar recepción de sencillo' })).toBeDisabled(); await selectCash()
-  fireEvent.click(screen.getByRole('checkbox', { name: /Comprobé el efectivo recibido/ })); const button = screen.getByRole('button', { name: 'Confirmar recepción de sencillo' }); fireEvent.click(button); fireEvent.click(button)
+  const button = screen.getByRole('button', { name: 'Confirmar recepción de sencillo' }); fireEvent.click(button); fireEvent.click(button)
   await screen.findByRole('heading', { name: 'Sencillo: RECIBIDO' }); expect(fake.writes()).toHaveLength(1); expect(fake.writes()[0]?.[1]?.body).toBe(`{"destinationCashSessionId":"${id(302)}"}`)
   expect(screen.queryByRole('textbox', { name: /cantidad recibida/i })).not.toBeInTheDocument()
 })
@@ -42,14 +42,15 @@ it('does not open cash automatically and blocks zero, excessive, out-of-range an
   openDispatch()
   await screen.findByRole('link', { name: /Ir a Caja/ }); expect(screen.getByRole('button', { name: 'Confirmar despacho de sencillo' })).toBeDisabled(); expect(fake.writes()).toHaveLength(0)
   view.unmount(); fake.cash.open = true; mountTransfers(fake, <CashTransfersPage />); openDispatch(); await selectCash(); fireEvent.change(screen.getByRole('combobox', { name: 'Sucursal destino de sencillo' }), { target: { value: other.id } })
-  for (const value of ['0', '10.0001', '0.00001', '100000000000000']) { fireEvent.change(screen.getByRole('textbox', { name: 'Importe de sencillo PEN' }), { target: { value } }); fireEvent.click(screen.getByRole('checkbox', { name: /Revisé caja origen/ })); expect(screen.getByRole('button', { name: 'Confirmar despacho de sencillo' })).toBeDisabled() }
+  for (const value of ['0', '10.0001', '0.00001', '100000000000000']) { fireEvent.change(screen.getByRole('textbox', { name: 'Importe de sencillo PEN' }), { target: { value } }); expect(screen.getByRole('button', { name: 'Confirmar despacho de sencillo' })).toBeDisabled() }
   expect(fake.writes()).toHaveLength(0)
 })
-it('requires a new review after changing the cash session and rejects a foreign-membership cashier session', async () => {
+it('shows the current commitment after changing the cash session and rejects a foreign-membership cashier session', async () => {
   const fake = cashServer(); fake.cash.sessions.push(id(303)); const view = mountTransfers(fake, <CashTransfersPage />); openDispatch(); await selectCash()
-  fireEvent.change(screen.getByRole('combobox', { name: 'Sucursal destino de sencillo' }), { target: { value: other.id } }); fireEvent.change(screen.getByRole('textbox', { name: 'Importe de sencillo PEN' }), { target: { value: '1' } }); fireEvent.click(screen.getByRole('checkbox', { name: /Revisé caja origen/ }))
+  fireEvent.change(screen.getByRole('combobox', { name: 'Sucursal destino de sencillo' }), { target: { value: other.id } }); fireEvent.change(screen.getByRole('textbox', { name: 'Importe de sencillo PEN' }), { target: { value: '1' } })
   expect(screen.getByRole('button', { name: 'Confirmar despacho de sencillo' })).toBeEnabled(); fireEvent.change(screen.getByRole('combobox', { name: 'Caja para sencillo' }), { target: { value: id(303) } })
-  await waitFor(() => expect(screen.getByRole('checkbox', { name: /Revisé caja origen/ })).not.toBeChecked()); expect(fake.writes()).toHaveLength(0)
+  await waitFor(() => expect(screen.getByRole('button', { name: 'Confirmar despacho de sencillo' })).toBeEnabled())
+  expect(screen.getByRole('combobox', { name: 'Caja para sencillo' })).toHaveValue(id(303)); expect(fake.writes()).toHaveLength(0)
   view.unmount(); fake.cash.membershipId = id(999); mountTransfers(fake, <CashTransfersPage />, '', { ...workspace, access: { ...workspace.access, role: 'cashier' } })
   openDispatch()
   await screen.findByText('No pudimos consultar cajas'); expect(screen.getByRole('button', { name: 'Confirmar despacho de sencillo' })).toBeDisabled()
@@ -94,7 +95,7 @@ it('recovers a lost dispatch after reload with the original source receipt and n
 it('keeps an early in-transit read pending after lost receipt, then reconciles received without another POST', async () => {
   const fake = cashServer(); fake.cash.records = [sentCash]; fake.cash.lose = 'receive'; fake.cash.hold = true
   mountTransfers(fake, <CashTransfersPage />, '?cashTransferId=' + sentCash.id); await screen.findByRole('heading', { name: 'Sencillo: EN TRÁNSITO' }); await selectCash()
-  fireEvent.click(screen.getByRole('checkbox', { name: /Comprobé el efectivo recibido/ })); fireEvent.click(screen.getByRole('button', { name: 'Confirmar recepción de sencillo' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Confirmar recepción de sencillo' }))
   const consult = await screen.findByRole('button', { name: 'Consultar la misma transferencia' }); await waitFor(() => expect(consult).toBeEnabled())
   expect(screen.getByTestId('location')).toHaveTextContent('cashTransferPending=receive'); expect(screen.getByRole('button', { name: 'Confirmar recepción de sencillo' })).toBeDisabled()
   fake.cash.records = [{ ...sentCash, status: 'received', destinationCashSessionId: id(302), receivedAt: sentCash.dispatchedAt, receivedByActorId: workspace.session.userId }]; fireEvent.click(consult)

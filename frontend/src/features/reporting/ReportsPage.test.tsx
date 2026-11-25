@@ -9,7 +9,12 @@ async function choose(kind: ReportKind) { fireEvent.change(screen.getByRole('com
 it('loads overview first, preserves large exact metrics and applies dashboard with only named-period parameters', async () => {
   const fake = reportingServer(); mountTransfers(fake, <ReportsPage />)
   await screen.findByRole('table', { name: 'Resumen por sucursal · filas del servidor' }); expect(screen.getAllByText('S/ 9007199254740993.1234').length).toBeGreaterThan(0)
-  expect(fake.fetcher.mock.calls.some(([path]) => String(path).includes('/reports/overview?'))).toBe(true)
+  const overview = () => fake.fetcher.mock.calls.filter(([path]) => String(path).includes('/reports/overview?'))
+  expect(overview()).toHaveLength(1)
+  const apply = screen.getByRole('button', { name: 'Aplicar filtros' })
+  expect(apply).toBeDisabled()
+  fireEvent.click(apply)
+  expect(overview()).toHaveLength(1)
   await choose('dashboard'); await screen.findByText(/promedio y redondeo son del servidor/)
   expect(fake.fetcher.mock.calls.some(([path]) => String(path).includes('/reports/dashboard?branchId=') && String(path).endsWith('&period=day'))).toBe(true)
   expect(screen.getByText('S/ 1.0001')).toBeInTheDocument(); expect(fake.writes()).toHaveLength(0)

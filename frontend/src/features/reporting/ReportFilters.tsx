@@ -10,7 +10,7 @@ import { ReportSelectors } from './ReportSelectors'
 const periodLabels = { day: 'Hoy', week: 'Semana actual (lunes–domingo)', month: 'Mes actual', year: 'Año actual', custom: 'Rango personalizado' }
 const dimensionLabels = { branch: 'Sucursal', employee: 'Empleado', product: 'Producto', category: 'Categoría' }
 const sortLabels = { sales_amount_desc: 'Importe: mayor a menor', sales_amount_asc: 'Importe: menor a mayor', sale_count_desc: 'Ventas: mayor a menor', sale_count_asc: 'Ventas: menor a mayor', product_name_asc: 'Nombre de producto', employee_name_asc: 'Nombre de empleado', branch_name_asc: 'Nombre de sucursal' }
-export function ReportFilters({ value: f, branches, complete, disabled, change, apply }: { value: Filters; branches: readonly Branch[]; complete: boolean; disabled: boolean; change: (value: Partial<Filters>) => void; apply: () => void }) {
+export function ReportFilters({ value: f, branches, complete, disabled, changed, change, apply }: { value: Filters; branches: readonly Branch[]; complete: boolean; disabled: boolean; changed: boolean; change: (value: Partial<Filters>) => void; apply: () => void }) {
   return <section aria-label="Filtros de reportes"><fieldset disabled={disabled}><legend>Consulta y alcance</legend>
     <div className="report-filter-fields"><div className="form-field"><label htmlFor="report-kind">Reporte</label><select id="report-kind" value={f.kind} onChange={event => change({ kind: event.target.value as ReportKind, offset: 0 })}>{Object.entries(reportLabels).map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select></div><div className="form-field">
     <label htmlFor="report-branch">Sucursal del reporte</label><select id="report-branch" value={f.branchId} onChange={event => change({ branchId: event.target.value })}><option value="">Todas las sucursales autorizadas</option>{branches.map(branch => <option key={branch.id} value={branch.id}>{branch.name}</option>)}</select>
@@ -24,6 +24,6 @@ export function ReportFilters({ value: f, branches, complete, disabled, change, 
     <ReportSelectors filters={f} change={change} />
     </div></details>
     {!validFilters(f) && <p role="alert">Revisa el rango de fechas y los filtros admitidos. No se envió una consulta inválida.</p>}{!complete && <p>Directorio de sucursales no disponible o incompleto; no se aplica un alcance sin verificar.</p>}
-    <Button disabled={!validFilters(f) || !complete || Boolean(f.branchId && !branches.some(branch => branch.id === f.branchId))} onClick={apply}>Aplicar filtros</Button>
+    <Button disabled={!changed || !validFilters(f) || !complete || Boolean(f.branchId && !branches.some(branch => branch.id === f.branchId))} onClick={apply}>Aplicar filtros</Button>
   </fieldset></section>
 }

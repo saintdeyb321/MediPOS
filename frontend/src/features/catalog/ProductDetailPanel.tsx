@@ -40,23 +40,21 @@ export function ProductDetailPanel({ detail, write, onEdit }: { detail: ProductD
 export function EditPrices({ detail, write, onDirty }: { detail: ProductDetail; write: CatalogWrite; onDirty?: (dirty: boolean) => void }) {
   const w = useWorkspace(); const { http } = useRuntime(); const p = detail.product
   const [value, setValue] = useState({ retail: decimalLabel(p.retailPrice), wholesale: p.wholesalePrice ? decimalLabel(p.wholesalePrice) : '' })
-  const [reviewed, setReviewed] = useState(false); const input = prices(value)
+  const input = prices(value)
   useEffect(() => { onDirty?.(value.retail !== decimalLabel(p.retailPrice) || value.wholesale !== (p.wholesalePrice ? decimalLabel(p.wholesalePrice) : '')) }, [value, p, onDirty])
-  return <form aria-label="Actualizar precios" onSubmit={event => { event.preventDefault(); if (http && input && reviewed) void write.run('prices', p.id, async signal => (await catalogApi(http).prices(w, p.id, input, signal)).id) }}>
+  return <form aria-label="Actualizar precios" onSubmit={event => { event.preventDefault(); if (http && input && !write.locked) void write.run('prices', p.id, async signal => (await catalogApi(http).prices(w, p.id, input, signal)).id) }}>
     <h3>Precios base del negocio</h3>
-    <PriceInputs value={value} change={next => { setValue(next); setReviewed(false) }} disabled={write.locked} />
-    <label><input type="checkbox" checked={reviewed} disabled={write.locked} onChange={event => setReviewed(event.target.checked)} /> Confirmo los nuevos precios base.</label>
-    <FormFooter><Button type="submit" disabled={write.locked || !input || !reviewed}>Guardar precios</Button></FormFooter>
+    <PriceInputs value={value} change={setValue} disabled={write.locked} />
+    <p>Precio minorista vigente: S/ {decimalLabel(p.retailPrice)} · mayorista: {p.wholesalePrice ? `S/ ${decimalLabel(p.wholesalePrice)}` : 'Sin configurar'}. Los nuevos precios aplican a operaciones futuras.</p>
+    <FormFooter><Button type="submit" disabled={write.locked || !input}>Guardar precios</Button></FormFooter>
   </form>
 }
-export function EditStatus({ detail, write, onDirty }: { detail: ProductDetail; write: CatalogWrite; onDirty?: (dirty: boolean) => void }) {
+export function EditStatus({ detail, write }: { detail: ProductDetail; write: CatalogWrite }) {
   const w = useWorkspace(); const { http } = useRuntime(); const p = detail.product
-  const [reviewed, setReviewed] = useState(false)
-  useEffect(() => { onDirty?.(reviewed) }, [reviewed, onDirty])
-  return <form aria-label="Cambiar estado" onSubmit={event => { event.preventDefault(); if (http && reviewed) void write.run('status', p.id, async signal => (await catalogApi(http).status(w, p.id, !p.isActive, signal)).id) }}>
+  return <form aria-label="Cambiar estado" onSubmit={event => { event.preventDefault(); if (http && !write.locked) void write.run('status', p.id, async signal => (await catalogApi(http).status(w, p.id, !p.isActive, signal)).id) }}>
     <p>Desactivar retira el producto de nuevas operaciones; no elimina su historial.</p>
-    <label><input type="checkbox" checked={reviewed} disabled={write.locked} onChange={event => setReviewed(event.target.checked)} /> Confirmo {p.isActive ? 'desactivar' : 'activar'} este producto.</label>
-    <FormFooter><Button type="submit" variant={p.isActive ? 'danger' : 'primary'} disabled={write.locked || !reviewed}>{p.isActive ? 'Desactivar producto' : 'Activar producto'}</Button></FormFooter>
+    <p>{p.name} · {p.isActive ? 'Actualmente activo' : 'Actualmente inactivo'}</p>
+    <FormFooter><Button type="submit" variant={p.isActive ? 'danger' : 'primary'} disabled={write.locked}>{p.isActive ? 'Desactivar producto' : 'Activar producto'}</Button></FormFooter>
   </form>
 }
 export function UnitEditor({ detail, write, onDirty }: { detail: ProductDetail; write: CatalogWrite; onDirty?: (dirty: boolean) => void }) {
@@ -79,23 +77,22 @@ export function UnitEditor({ detail, write, onDirty }: { detail: ProductDetail; 
   </section>
 }
 function UnitConfigurationForm({ productId, configuration, write, onDirty }: { productId: string; configuration: UnitConfiguration; write: CatalogWrite; onDirty?: (dirty: boolean) => void }) {
-  const w = useWorkspace(); const { http } = useRuntime(); const [reviewed, setReviewed] = useState(false)
+  const w = useWorkspace(); const { http } = useRuntime()
   const [rows, setRows] = useState<UnitFields[]>(() => configuration.units.length ? configuration.units.map(unit => ({ id: unit.id, name: unit.name, conversion: decimalLabel(unit.conversionToBase), base: unit.isBaseUnit, active: unit.isActive })) : [{ name: '', conversion: '1', base: true, active: true }])
   const [baseline] = useState(() => JSON.stringify(rows))
   useEffect(() => { onDirty?.(JSON.stringify(rows) !== baseline) }, [rows, baseline, onDirty])
   const input = unitInputs(rows)
-  function change(index: number, patch: Partial<UnitFields>) { setReviewed(false); setRows(rows.map((row, position) => position === index ? { ...row, ...patch } : patch.base ? { ...row, base: false } : row)) }
-  return <form aria-label="Guardar configuración de presentaciones" onSubmit={event => { event.preventDefault(); if (http && input && reviewed) void write.run('units', productId, async signal => { await catalogApi(http).configureUnits(w, productId, configuration.version, input.map((unit, index) => ({ ...unit, id: rows[index]?.id ?? null })), signal); return productId }) }}>
-    <Notice tone="info">Se guarda el conjunto completo con la versión consultada. Un conflicto requiere recargar y revisar; nunca se reenvía automáticamente.</Notice>
+  function change(index: number, patch: Partial<UnitFields>) { setRows(rows.map((row, position) => position === index ? { ...row, ...patch } : patch.base ? { ...row, base: false } : row)) }
+  return <form aria-label="Guardar configuración de presentaciones" onSubmit={event => { event.preventDefault(); if (http && input && !write.locked) void write.run('units', productId, async signal => { await catalogApi(http).configureUnits(w, productId, configuration.version, input.map((unit, index) => ({ ...unit, id: rows[index]?.id ?? null })), signal); return productId }) }}>
+    <Notice tone="info">Se guarda el conjunto completo revisado en la versión {configuration.version}. Un conflicto requiere recargar y revisar; nunca se reenvía automáticamente.</Notice>
     <fieldset disabled={write.locked}>{rows.map((row, index) => <div key={index}>
       <TextField label={`Nombre de presentación ${index + 1}`} value={row.name} required maxLength={128} onChange={event => change(index, { name: event.target.value })} />
       <TextField label={`Conversión a base ${index + 1}`} value={row.conversion} inputMode="decimal" required maxLength={40} disabled={Boolean(row.id) || row.base} onChange={event => change(index, { conversion: event.target.value })} />
       <label><input type="radio" name="base-unit" checked={row.base} disabled={configuration.units.length > 0} onChange={() => change(index, { base: true, conversion: '1' })} /> Unidad base {index + 1}</label>
       <label><input type="checkbox" checked={row.active} onChange={event => change(index, { active: event.target.checked })} /> Presentación activa {index + 1}</label>
-      <Button variant="quiet" disabled={Boolean(row.id) || row.base} onClick={() => { setReviewed(false); setRows(rows.filter((_, position) => position !== index)) }}>Quitar presentación nueva {index + 1}</Button>
-    </div>)}<Button variant="secondary" disabled={rows.length >= 100} onClick={() => { setReviewed(false); setRows([...rows, { name: '', conversion: '', base: false, active: true }]) }}>Agregar presentación</Button></fieldset>
+      <Button variant="quiet" disabled={Boolean(row.id) || row.base} onClick={() => { setRows(rows.filter((_, position) => position !== index)) }}>Quitar presentación nueva {index + 1}</Button>
+    </div>)}<Button variant="secondary" disabled={rows.length >= 100} onClick={() => { setRows([...rows, { name: '', conversion: '', base: false, active: true }]) }}>Agregar presentación</Button></fieldset>
     {!input && <p role="status">Revisa nombres únicos, exactamente una base con factor uno y conversiones positivas de hasta doce decimales.</p>}
-    <label><input type="checkbox" checked={reviewed} disabled={write.locked} onChange={event => setReviewed(event.target.checked)} /> Revisé nombres, actividad y el conjunto completo; los factores existentes se conservan.</label>
-    <FormFooter><Button type="submit" disabled={write.locked || !input || !reviewed}>Guardar presentaciones</Button></FormFooter>
+    <FormFooter><Button type="submit" disabled={write.locked || !input}>Guardar presentaciones</Button></FormFooter>
   </form>
 }

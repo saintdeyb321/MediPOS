@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { focusManager } from '@tanstack/react-query'
+import userEvent from '@testing-library/user-event'
 import { MemoryRouter, useLocation } from 'react-router'
 import { RuntimeProvider } from '../../app/providers/runtime'
 import { AppRoutes } from '../../app/router/routes'
@@ -147,7 +148,6 @@ async function preparePayment(fake: ReturnType<typeof server>) {
   await screen.findByRole('form', { name: 'Pagos de la venta' })
   fireEvent.change(screen.getByRole('textbox', { name: 'Efectivo (S/)' }), { target: { value: '0.10' } })
   fireEvent.change(screen.getByRole('textbox', { name: 'Yape (S/)' }), { target: { value: '0.10' } })
-  fireEvent.click(screen.getByRole('checkbox', { name: /Revisé los importes/ }))
   return view
 }
 async function prepareVoid(fake: ReturnType<typeof server>) {
@@ -157,7 +157,6 @@ async function prepareVoid(fake: ReturnType<typeof server>) {
   await waitFor(() => expect(screen.getByRole('button', { name: 'Seguir vendiendo sin imprimir' })).toBeEnabled())
   fireEvent.click(screen.getByRole('button', { name: 'Anular esta venta' }))
   fireEvent.change(screen.getByRole('textbox', { name: 'Motivo de anulación' }), { target: { value: ' Motivo unitario ' } })
-  fireEvent.click(screen.getByRole('checkbox', { name: /Revisé la devolución/ }))
   return view
 }
 
@@ -225,16 +224,15 @@ describe('POS local cart, cash and persisted draft', () => {
     expect(screen.getByTestId('location').textContent).toBe('')
     expect(fake.writes()).toHaveLength(1)
   })
-  it('requires a saved cart, exact payment sum and explicit review before confirmation', async () => {
+  it('requires a saved cart, exact payment and deliberate activation before confirmation', async () => {
     const fake = server(); await preparePayment(fake)
     const confirm = screen.getByRole('button', { name: 'Confirmar venta y registrar pagos' })
     fireEvent.change(screen.getByRole('textbox', { name: 'Yape (S/)' }), { target: { value: '0.11' } })
-    fireEvent.click(screen.getByRole('checkbox', { name: /Revisé los importes/ }))
     expect(confirm).toBeDisabled()
     fireEvent.change(screen.getByRole('textbox', { name: 'Yape (S/)' }), { target: { value: '0.10' } })
-    expect(confirm).toBeDisabled()
-    fireEvent.click(screen.getByRole('checkbox', { name: /Revisé los importes/ }))
     expect(confirm).toBeEnabled()
+    fireEvent.submit(screen.getByRole('form', { name: 'Pagos de la venta' }))
+    expect(fake.writes()).toHaveLength(0)
     fireEvent.change(screen.getByRole('textbox', { name: /Cantidad en carrito/ }), { target: { value: '3' } })
     expect(confirm).toBeDisabled()
     expect(fake.writes()).toHaveLength(0)
@@ -312,7 +310,6 @@ describe('POS local cart, cash and persisted draft', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Confirmar venta y registrar pagos' }))
     await screen.findByText('Total consultado en el servidor: S/ 0.30')
     expect(screen.getByRole('textbox', { name: 'Efectivo (S/)' })).toHaveValue('')
-    expect(screen.getByRole('checkbox', { name: /Revisé los importes/ })).not.toBeChecked()
     expect(screen.getByRole('button', { name: 'Confirmar venta y registrar pagos' })).toBeDisabled()
     expect(screen.getByRole('textbox', { name: /Cantidad en carrito/ })).toHaveValue('2')
     expect(fake.writes()).toHaveLength(1)
@@ -355,6 +352,27 @@ describe('POS local cart, cash and persisted draft', () => {
     expect(fake.writes()).toHaveLength(1)
     expect(fresh.writes()).toHaveLength(0)
   })
+  it('focuses a unique scanned code for local selection without sending a write', async () => {
+    const fake = server()
+    const original = fake.fetcher.getMockImplementation()!
+    fake.fetcher.mockImplementation((path, init) => String(path).includes('/products/search?')
+      ? Promise.resolve(json({ directMatches: [{ ...product, barcode: '7500000000010' }], equivalentInBranch: [], otherBranchAvailability: [] }))
+      : original(path, init))
+    mount(fake)
+    const search = screen.getByRole('searchbox')
+    search.focus()
+    fireEvent.change(search, { target: { value: '7500000000010' } })
+    const operator = userEvent.setup()
+    await operator.keyboard('{Enter}')
+    const choose = await screen.findByRole('button', { name: 'Elegir presentación' })
+    await waitFor(() => expect(choose).toHaveFocus())
+    expect(screen.queryByRole('dialog', { name: 'Agregar al ticket' })).not.toBeInTheDocument()
+    await operator.keyboard('{Enter}')
+    expect(await screen.findByRole('dialog', { name: 'Agregar al ticket' })).toBeInTheDocument()
+    expect(fake.fetcher.mock.calls.filter(([path]) => String(path).includes('/products/search?'))).toHaveLength(1)
+    expect(fake.writes()).toHaveLength(0)
+  })
+
   it('retains multiple presentations across searches, edits/removes quantities, and never writes on selection', async () => {
     const fake = server(); mount(fake); await select()
     await select('1', product.units[1]!.id)

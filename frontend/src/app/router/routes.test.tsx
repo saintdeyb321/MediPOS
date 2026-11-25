@@ -40,7 +40,7 @@ describe('F1 navigation and access boundaries', () => {
   it.each(['configuracion', 'auditoria', 'importacion'])('guards block 08 Owner route %s for an ordinary cashier', async path => {
     mount('cashier', workspace + '/' + path)
     expect(await screen.findByRole('heading', { name: 'Esta sección requiere otro acceso' })).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: /Crear entidad legal|Crear sucursal|Importar archivo confirmado/ })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /Crear entidad legal|Crear sucursal|Importar productos/ })).not.toBeInTheDocument()
   })
   // Several async screens plus native user interactions; retain a bounded budget under build load.
   it('walks botica → branch → dashboard → POS shell → logout without creating a sale', async () => {

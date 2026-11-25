@@ -29,7 +29,7 @@ async function manage(name = worker.displayName, task: 'branches' | 'schedule' |
 async function saveBranches() {
   const form = within(screen.getByRole('form', { name: 'Asignar sucursales' }))
   const second = form.getByRole('checkbox', { name: 'Otra sede unitaria' }); await waitFor(() => expect(second).toBeEnabled()); fireEvent.click(second)
-  fireEvent.click(form.getByRole('checkbox', { name: /Revisé y autorizo reemplazar/ })); const save = form.getByRole('button', { name: 'Guardar sucursales' }); fireEvent.click(save); return save
+  const save = form.getByRole('button', { name: 'Guardar sucursales' }); fireEvent.click(save); return save
 }
 async function expectSavedAccess(title: string) {
   await waitFor(() => {
@@ -50,7 +50,7 @@ it('lists names, roles, state, assigned branches, schedules and registration fro
   fireEvent.click(details.getByRole('button', { name: /Cerrar/ }))
   expect(screen.getByRole('heading', { name: 'Invitaciones por enlace' })).toBeInTheDocument()
   fireEvent.click(screen.getByRole('button', { name: 'Invitar integrante' }))
-  expect(screen.getByRole('button', { name: 'Crear enlace temporal' })).toBeDisabled()
+  expect(screen.getByRole('button', { name: 'Crear enlace temporal' })).toBeEnabled()
   expect(screen.queryByRole('textbox', { name: /correo|UUID|UserId/i })).not.toBeInTheDocument()
   expect(fake.writes()).toHaveLength(0)
 })
@@ -104,16 +104,16 @@ it('edits multiple time windows with named day and exact microseconds, rejecting
   fireEvent.change(form.getByRole('textbox', { name: 'Hora de inicio' }), { target: { value: '23:00' } }); fireEvent.change(form.getByRole('textbox', { name: 'Hora de fin' }), { target: { value: '01:00' } })
   expect(form.getByRole('button', { name: 'Agregar ventana al horario' })).toBeDisabled()
   fireEvent.change(form.getByRole('textbox', { name: 'Hora de inicio' }), { target: { value: '' } }); fireEvent.change(form.getByRole('textbox', { name: 'Hora de fin' }), { target: { value: '' } })
-  fireEvent.click(form.getByRole('checkbox', { name: /Revisé y autorizo reemplazar el horario/ })); fireEvent.click(form.getByRole('button', { name: 'Guardar horario' }))
+  fireEvent.click(form.getByRole('button', { name: 'Guardar horario' }))
   await expectSavedAccess('Configurar horario')
   expect(fake.writes()).toHaveLength(1); expect(fake.writes()[0]?.[1]?.body).toContain('"dayOfWeek":"tuesday","startTime":"09:00:00.000001","endTime":"12:00:00"')
 })
-it('requires explicit review for an empty schedule and never labels it as permanent access', async () => {
+it('requires an explicit save for an empty schedule and never labels it as permanent access', async () => {
   const fake = employeeServer(); mountEmployees(fake, <EmployeesPage />); await manage(worker.displayName, 'schedule')
   const form = within(screen.getByRole('form', { name: 'Configurar horario' }))
   fireEvent.click(form.getByRole('button', { name: 'Quitar ventana Lunes 09:00:00–18:00:00' }))
-  expect(form.getByText(/Horario preparado vacío: no es acceso permanente/)).toBeInTheDocument(); expect(form.getByRole('button', { name: 'Guardar horario' })).toBeDisabled()
-  fireEvent.click(form.getByRole('checkbox', { name: /por un conjunto vacío/ })); fireEvent.click(form.getByRole('button', { name: 'Guardar horario' }))
+  expect(form.getByText(/Horario preparado vacío: no es acceso permanente/)).toBeInTheDocument(); expect(fake.writes()).toHaveLength(0)
+  fireEvent.click(form.getByRole('button', { name: 'Guardar horario' }))
   await expectSavedAccess('Configurar horario'); expect(fake.writes()[0]?.[1]?.body).toBe('{"windows":[]}')
 })
 it.each([1, 2])('blocks deactivating any Owner even with %s Owners visible, without trusting a paginated count', async count => {
@@ -121,10 +121,10 @@ it.each([1, 2])('blocks deactivating any Owner even with %s Owners visible, with
   mountEmployees(fake, <EmployeesPage />); await manage(owner.displayName, 'status')
   expect(screen.getByRole('button', { name: 'Desactivar Owner · bloqueado' })).toBeDisabled(); expect(screen.queryByRole('button', { name: 'Desactivar empleado una vez' })).not.toBeInTheDocument(); expect(fake.writes()).toHaveLength(0)
 })
-it('deactivates an active non-Owner only after explicit review, then rereads without deleting history', async () => {
+it('deactivates an active non-Owner only after explicit activation, then rereads without deleting history', async () => {
   const fake = employeeServer(); mountEmployees(fake, <EmployeesPage />); await manage(worker.displayName, 'status')
-  const form = within(screen.getByRole('form', { name: 'Desactivar empleado' })); const button = form.getByRole('button', { name: 'Desactivar empleado una vez' }); expect(button).toBeDisabled()
-  fireEvent.click(form.getByRole('checkbox')); fireEvent.click(button); fireEvent.click(button)
+  const form = within(screen.getByRole('form', { name: 'Desactivar empleado' })); const button = form.getByRole('button', { name: 'Desactivar empleado una vez' }); expect(fake.writes()).toHaveLength(0)
+  fireEvent.click(button); fireEvent.click(button)
   await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Estado del integrante' })).not.toBeInTheDocument())
   await within(screen.getByRole('row', { name: /Trabajador unitario/ })).findByText('Inactivo'); expect(fake.writes()).toHaveLength(1); expect(fake.state.employees).toHaveLength(2)
   expect(screen.queryByRole('form', { name: 'Desactivar empleado' })).not.toBeInTheDocument()
@@ -142,7 +142,9 @@ it('keeps lost branch writes blocked even if the read matches, including reload 
 })
 it('requires verified reconciliation to unlock an uncertain schedule rather than retrying it', async () => {
   const fake = employeeServer(); fake.state.loseSchedule = true; mountEmployees(fake, <EmployeesPage />); await manage(worker.displayName, 'schedule')
-  const form = within(screen.getByRole('form', { name: 'Configurar horario' })); fireEvent.click(form.getByRole('checkbox')); fireEvent.click(form.getByRole('button', { name: 'Guardar horario' }))
+  const form = within(screen.getByRole('form', { name: 'Configurar horario' }));
+  fireEvent.click(form.getByRole('button', { name: 'Quitar ventana Lunes 09:00:00–18:00:00' }))
+  fireEvent.click(form.getByRole('button', { name: 'Guardar horario' }))
   await screen.findByRole('heading', { name: 'Cambio pendiente de conciliación' })
   fireEvent.click(await screen.findByRole('button', { name: 'Volver a la página' }))
   const acknowledge = await screen.findByRole('button', { name: 'Continuar tras conciliación verificada' }); expect(acknowledge).toBeDisabled()
@@ -152,7 +154,7 @@ it('requires verified reconciliation to unlock an uncertain schedule rather than
 })
 it.each([true, false])('reconciles a lost deactivation only when the same membership is inactive (active=%s)', async active => {
   const fake = employeeServer(); fake.state.loseDeactivate = true; fake.state.remainActive = active; mountEmployees(fake, <EmployeesPage />); await manage(worker.displayName, 'status')
-  const form = within(screen.getByRole('form', { name: 'Desactivar empleado' })); fireEvent.click(form.getByRole('checkbox')); fireEvent.click(form.getByRole('button', { name: 'Desactivar empleado una vez' }))
+  const form = within(screen.getByRole('form', { name: 'Desactivar empleado' })); fireEvent.click(form.getByRole('button', { name: 'Desactivar empleado una vez' }))
   if (active) {
     await screen.findByRole('heading', { name: 'Cambio pendiente de conciliación' }); await waitFor(() => expect(screen.getByRole('button', { name: 'Consultar empleado de la operación' })).toBeEnabled()); fireEvent.click(screen.getByRole('button', { name: 'Consultar empleado de la operación' }))
     await waitFor(() => expect(screen.getByRole('button', { name: 'Consultar empleado de la operación' })).toBeEnabled()); expect(screen.getByRole('button', { name: 'Desactivar empleado una vez' })).toBeDisabled()

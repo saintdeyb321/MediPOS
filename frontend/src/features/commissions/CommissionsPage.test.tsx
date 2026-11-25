@@ -3,12 +3,12 @@ import { expect, it } from 'vitest'
 import { CommissionsPage } from './CommissionsPage'
 import { commissionServer, detail, id, mountTransfers, rule, workspace } from './commissions.test.support'
 
-async function enable() { const toggle = await screen.findByRole('button', { name: 'Cambiar habilitación' }); await waitFor(() => expect(toggle).toBeEnabled()); fireEvent.click(toggle); const check = await screen.findByRole('checkbox', { name: /autorizo habilitar/ }); await waitFor(() => expect(check).toBeEnabled()); const button = screen.getByRole('button', { name: 'Confirmar habilitación de comisiones' }); expect(button).toBeDisabled(); fireEvent.click(check); fireEvent.click(button); fireEvent.click(button) }
+async function enable() { const toggle = await screen.findByRole('button', { name: 'Cambiar habilitación' }); await waitFor(() => expect(toggle).toBeEnabled()); fireEvent.click(toggle); const button = await screen.findByRole('button', { name: 'Confirmar habilitación de comisiones' }); await waitFor(() => expect(button).toBeEnabled()); fireEvent.click(button); fireEvent.click(button) }
 async function saveRule() {
   fireEvent.click(screen.getByRole('button', { name: 'Nueva regla' }))
   const area = within(screen.getByRole('region', { name: 'Nueva regla de comisión' })); fireEvent.change(area.getByRole('textbox', { name: /Buscar producto/ }), { target: { value: 'sintético' } }); fireEvent.click(area.getByRole('button', { name: 'Buscar productos' }))
   fireEvent.click(await area.findByRole('button', { name: 'Consultar ' + detail.product.name })); fireEvent.click(await area.findByRole('button', { name: 'Usar producto consultado' }))
-  fireEvent.change(area.getByRole('textbox', { name: 'Comisión fija PEN por unidad base' }), { target: { value: '1.0001' } }); fireEvent.click(area.getAllByText('Entrada UTC avanzada y precisión exacta')[0]!); fireEvent.change(area.getByRole('textbox', { name: 'Vigente desde: instante UTC exacto' }), { target: { value: rule.validFrom } }); fireEvent.click(area.getByRole('checkbox', { name: /Revisé producto, valor/ }))
+  fireEvent.change(area.getByRole('textbox', { name: 'Comisión fija PEN por unidad base' }), { target: { value: '1.0001' } }); fireEvent.click(area.getAllByText('Entrada UTC avanzada y precisión exacta')[0]!); fireEvent.change(area.getByRole('textbox', { name: 'Vigente desde: instante UTC exacto' }), { target: { value: rule.validFrom } })
   const button = area.getByRole('button', { name: 'Confirmar nueva regla de comisión' }); fireEvent.click(button); fireEvent.click(button)
 }
 it('does not create settings on read, then enables once after explicit review and reconsults', async () => {
@@ -43,7 +43,7 @@ it('keeps an unidentified rule replacement blocked instead of selecting a newer 
 it('deactivates the same rule once and verifies inactive history after a lost response', async () => {
   const fake = commissionServer(); fake.commissionState.rules = [rule]; fake.commissionState.lose = 'deactivate'; mountTransfers(fake, <CommissionsPage />)
   fireEvent.click(await screen.findByRole('button', { name: 'Desactivar revisión' }))
-  const check = await screen.findByRole('checkbox', { name: /Confirmo desactivar esta revisión/ }); fireEvent.click(check); fireEvent.click(screen.getByRole('button', { name: 'Desactivar esta regla' }))
+  const deactivate = await screen.findByRole('button', { name: 'Desactivar esta regla' }); fireEvent.click(deactivate)
   await screen.findAllByText(/Operación reconocida y estado actual reconsultado/); expect(fake.commissionState.rules[0]?.isActive).toBe(false); expect(fake.writes()).toHaveLength(1)
 })
 it.each([403, 409, 429, 503])('does not retry configuration on HTTP %i', async status => {

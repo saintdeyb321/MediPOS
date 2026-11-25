@@ -1,4 +1,4 @@
-import { useEffect, useId, useState } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 import { Pill, Package, Plus } from 'lucide-react'
 import type { ProductMatch } from '../catalog'
 import { ApiErrorState } from '../access'
@@ -54,23 +54,41 @@ function ProductChoice({ product, onSelect, disabled }: { product: ProductMatch;
   )
 }
 
+function focusBarcodeResult(products: readonly ProductMatch[], barcode: string, searchId: string) {
+  const exact = products.filter(product => product.barcode === barcode)
+  if (exact.length === 1) document.getElementById(`${searchId}-${exact[0]!.businessProductId}`)?.focus()
+}
+
 export function ProductSearchPanel({ onSelect, disabled }: { onSelect: (selection: ProductSelection) => void; disabled?: boolean }) {
   const [input, setInput] = useState('')
   const searchId = useId()
+  const focusAfterScan = useRef('')
   useEffect(() => {
     const frame = window.requestAnimationFrame(() => {
       const field = document.getElementById(searchId)
-      if (field && !field.matches(':disabled') && !document.querySelector('dialog[open]')) field.focus({ preventScroll: true })
+      if (field && document.activeElement === document.body && !field.matches(':disabled') && !document.querySelector('dialog[open]')) field.focus({ preventScroll: true })
     })
     return () => window.cancelAnimationFrame(frame)
   }, [searchId])
   const [choice, setChoice] = useState<ProductMatch | null>(null)
-  const { query, ready, text, connected } = useProductSearch(input)
+  const { query, ready, text, connected, searchNow } = useProductSearch(input)
   const matches = query.data?.directMatches ?? []
+  useEffect(() => {
+    if (!ready || query.isFetching || !query.isSuccess || focusAfterScan.current !== text) return
+    focusAfterScan.current = ''
+    if (document.activeElement?.id !== searchId || document.querySelector('dialog[open]')) return
+    focusBarcodeResult(query.data.directMatches, text, searchId)
+  }, [query.data, query.isFetching, query.isSuccess, ready, searchId, text])
   return (
     <Panel className="product-workspace" aria-label="Búsqueda y resultados">
       <div className="pos-search"><SearchField id={searchId} label="Buscar producto" placeholder="Nombre, principio activo o código de barras" maxLength={128} value={input}
-        disabled={!connected || disabled} onChange={event => setInput(event.target.value)}
+        disabled={!connected || disabled} onChange={event => { focusAfterScan.current = ''; setInput(event.target.value) }}
+        onKeyDown={event => {
+          if (event.key !== 'Enter' || event.nativeEvent.isComposing || !text || disabled) return
+          event.preventDefault()
+          if (ready && query.isSuccess && !query.isFetching) focusBarcodeResult(matches, text, searchId)
+          else { focusAfterScan.current = text; searchNow() }
+        }}
         hint={!connected ? 'Requiere conexión HTTPS.' : undefined} /></div>
       <div className="product-results" aria-busy={Boolean(text) && (!ready || query.isFetching)}>
         {!text ? <PosCatalogBrowser search={setInput} disabled={disabled} /> :
@@ -81,7 +99,7 @@ export function ProductSearchPanel({ onSelect, disabled }: { onSelect: (selectio
             <ul className="product-list">{matches.map(product => <li key={product.businessProductId} className="product-tile">
               <span className="product-placeholder">{product.productType === 'medicine' ? <Pill size={22} aria-hidden="true" /> : <Package size={22} aria-hidden="true" />}</span><h3>{product.name}</h3><small>{product.brandOrLaboratory}</small>
               <strong>S/ {decimalLabel(product.retailPrice, 2)} <small>/ base</small></strong><span className="data-caption">Stock vendible: {decimalLabel(product.quantityAvailableBase)} base</span>
-              <Button variant="secondary" disabled={disabled} onClick={() => setChoice(product)}>Elegir presentación</Button>
+              <Button id={`${searchId}-${product.businessProductId}`} variant="secondary" disabled={disabled} onClick={() => setChoice(product)}>Elegir presentación</Button>
             </li>)}</ul></>}
       </div>
       {query.isSuccess && !query.isFetching && text && query.data.equivalentInBranch.length > 0 && <section aria-label="Coincidencias estructuradas en esta sucursal"><h3>Coincidencias estructuradas · misma sucursal</h3><p>No son recomendaciones médicas ni sustitución terapéutica automática. Revisa composición, forma y concentración documentadas.</p><ul>{query.data.equivalentInBranch.map(row => <li key={row.product.businessProductId}><strong>{row.product.name}</strong><p>{row.description} · Stock vendible base: {decimalLabel(row.product.quantityAvailableBase)}</p><Button disabled={disabled} onClick={() => setChoice(row.product)}>Elegir presentación de {row.product.name}</Button></li>)}</ul></section>}

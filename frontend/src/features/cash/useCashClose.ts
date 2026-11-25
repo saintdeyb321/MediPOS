@@ -5,12 +5,12 @@ import { useSearchParams } from 'react-router'
 import { isUuid, useRuntime, useWorkspace } from '../access'
 import { ApiError } from '../../shared/api/http'
 import { scopedKey } from '../../shared/api/contracts'
-import { decimalInput, maximumMoney } from '../../shared/api/decimal'
+import { compare, decimalInput, maximumMoney } from '../../shared/api/decimal'
 import { cashApi } from './api'
 import type { CashReconciliation, CashSessionStatus } from './api'
 
 export function useCashClose() {
-  const { http } = useRuntime(); const { tenantId, branchId } = useWorkspace()
+  const { http } = useRuntime(); const { tenantId, branchId, session } = useWorkspace()
   const client = useQueryClient(); const [parameters, setParameters] = useSearchParams()
   const latest = useRef(parameters); useEffect(() => { latest.current = parameters }, [parameters])
   const [status, setStatus] = useState<CashSessionStatus | null>(null)
@@ -38,10 +38,13 @@ export function useCashClose() {
     setStatus(current)
     if (current.status !== 'closed') return
     // A closed status is sufficient to prevent another close; receipt failure is a separate read error.
+    markClosed(selected)
+    await readReconciliation(selected, signal)
+  }
+  function markClosed(selected: string) {
     mark(selected, false)
     void client.invalidateQueries({ queryKey: scopedKey({ tenantId, branchId }, 'current-cash') })
     void client.invalidateQueries({ queryKey: scopedKey({ tenantId, branchId }, 'active-cash') })
-    await readReconciliation(selected, signal)
   }
   async function consult(selected = id) {
     const unresolved = latest.current.has('closingCash')
@@ -66,7 +69,15 @@ export function useCashClose() {
     const signal = controller.current.signal
     try {
       try {
-        await cashApi(http).close({ tenantId, branchId }, selected, counted, signal)
+        const result = await cashApi(http).close({ tenantId, branchId }, selected, counted, signal)
+        if (!mounted.current || signal.aborted) return
+        if (result.closedByActorId.toLowerCase() !== session.userId.toLowerCase() ||
+            result.employeeBranch.membershipId.toLowerCase() !== status.membershipId.toLowerCase() ||
+            compare(result.countedCashAmount, counted) !== 0) throw new ApiError(0, 'client.outcome_unknown', undefined, true)
+        setStatus({ ...status, status: 'closed', closedAt: result.closedAt, expectedCashAmount: result.expectedCashAmount })
+        setReceipt(result)
+        markClosed(selected)
+        return
       } catch (failure) {
         if (!mounted.current || signal.aborted) return
         setError(failure)

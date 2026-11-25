@@ -53,7 +53,7 @@ it('opening and reverting presentation edits are clean; confirmed save closes wi
   fireEvent.change(input, { target: { value: 'Edición sintética' } }); expect(screen.getByTestId('dirty')).toHaveTextContent('true')
   fireEvent.change(input, { target: { value: unit.name } }); expect(screen.getByTestId('dirty')).toHaveTextContent('false')
   fireEvent.change(input, { target: { value: 'Edición confirmada' } })
-  fireEvent.click(screen.getByRole('checkbox', { name: /Revisé nombres/ })); fireEvent.click(screen.getByRole('button', { name: 'Guardar presentaciones' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Guardar presentaciones' }))
   await waitFor(() => expect(screen.getByTestId('pending')).toHaveTextContent('false'))
   await waitFor(() => expect(screen.getByTestId('dirty')).toHaveTextContent('false'))
   expect(await screen.findByDisplayValue('Edición confirmada')).toBeInTheDocument()
@@ -64,7 +64,7 @@ it('opening and reverting presentation edits are clean; confirmed save closes wi
 it('a recovery read preserves original edits and blocks resubmission while allowing a safe exit', async () => {
   const { fetcher } = mount(true)
   fireEvent.change(await screen.findByLabelText('Nombre de presentación 1'), { target: { value: 'Intención original' } })
-  fireEvent.click(screen.getByRole('checkbox', { name: /Revisé nombres/ })); fireEvent.click(screen.getByRole('button', { name: 'Guardar presentaciones' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Guardar presentaciones' }))
   await waitFor(() => expect(fetcher.mock.calls.filter(([path]) => String(path).endsWith('/unit-configuration')).length).toBeGreaterThanOrEqual(3))
   await waitFor(() => expect(screen.getByRole('button', { name: 'Volver a la página' })).toBeEnabled())
   expect(screen.getByDisplayValue('Intención original')).toBeInTheDocument(); expect(screen.getByTestId('pending')).toHaveTextContent('true')
@@ -76,7 +76,7 @@ it('a recovery read preserves original edits and blocks resubmission while allow
 it('clears reconciliation evidence when the new versioned configuration GET fails after product detail succeeds', async () => {
   const { fetcher, failConfiguration } = mount(true)
   fireEvent.change(await screen.findByLabelText('Nombre de presentación 1'), { target: { value: 'Intención original' } })
-  fireEvent.click(screen.getByRole('checkbox', { name: /Revisé nombres/ })); fireEvent.click(screen.getByRole('button', { name: 'Guardar presentaciones' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Guardar presentaciones' }))
   await waitFor(() => expect(screen.getByTestId('can-reconcile')).toHaveTextContent('true'))
   const consult = screen.getByRole('button', { name: 'Reconsultar para conciliar' })
   await waitFor(() => expect(consult).toBeEnabled()); failConfiguration(); fireEvent.click(consult)

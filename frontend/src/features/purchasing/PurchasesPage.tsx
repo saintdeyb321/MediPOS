@@ -32,14 +32,14 @@ function PurchasesWorkspace() {
   const [supplier, setSupplier] = useState<Supplier | null>(null); const [reference, setReference] = useState('')
   const [supplierBusy, setSupplierBusy] = useState(false)
   const [edit, setEdit] = useState(false); const [reconciled, setReconciled] = useState(false)
-  const [starting, setStarting] = useState(false); const [lineStep, setLineStep] = useState<1 | 2>(1)
+  const [starting, setStarting] = useState(false)
   const [newRequested, setNewRequested] = useState(false)
   const view = receipt.server
-  const step = view?.purchase.status === 'confirmed' ? 4 : view && view.lines.length > 0 && !edit ? 3 : receipt.id ? lineStep : 0
-  function startNew() { receipt.startNew(); setStarting(true); setLineStep(1); setEdit(false); setReconciled(false); setReference(''); setNewRequested(false) }
+  const step = view?.purchase.status === 'confirmed' ? 3 : view && view.lines.length > 0 && !edit ? 2 : receipt.id ? 1 : 0
+  function startNew() { receipt.startNew(); setStarting(true); setEdit(false); setReconciled(false); setReference(''); setNewRequested(false) }
   return <div className="operations"><PageHeader icon={ClipboardList} eyebrow="Abastecimiento · recepción guiada" title="Compras" description={`Recepción de mercadería · ${w.branch.name}`} action={<Button disabled={receipt.locked || supplierBusy} onClick={() => { if (starting || receipt.id) setNewRequested(true); else startNew() }}>Nueva recepción</Button>} />
     <ConfirmDialog open={newRequested} title="Preparar otra recepción" confirmLabel="Continuar con otra recepción" disabled={receipt.locked || supplierBusy} onClose={() => setNewRequested(false)} onConfirm={startNew}><p>Las líneas que aún no guardaste se descartarán. La recepción ya persistida conserva su estado y no se elimina ni se confirma.</p></ConfirmDialog>
-    {(starting || receipt.id || receipt.pending) && <Steps labels={['Proveedor y referencia', 'Productos', 'Lotes y costos', 'Revisión', 'Recepción confirmada']} current={step} label="Progreso de la recepción" focusOnChange />}
+    {(starting || receipt.id || receipt.pending) && <Steps labels={['Proveedor y referencia', 'Productos y lotes', 'Recepción física', 'Recepción confirmada']} current={step} label="Progreso de la recepción" focusOnChange />}
     {receipt.error != null && <ApiErrorState error={receipt.error} title="No pudimos completar la operación de compra" />}
     {receipt.notice && <p role="status">{receipt.notice}</p>}
     {receipt.creationPending && <Panel><div className="operation-body"><h2>Recepción pendiente de conciliación</h2>
@@ -61,9 +61,9 @@ function PurchasesWorkspace() {
       <p>Proveedor: {supplier?.name ?? 'Sin proveedor'}. Continuar crea un borrador interno; aún no modifica stock.</p>
       <Button type="submit" disabled={receipt.locked || supplierBusy}>Continuar con productos y lotes</Button>
     </form></Panel>}
-    {view && <Panel><div className="operation-body"><div hidden={view.purchase.status === 'draft' && (edit || !view.lines.length)}><PurchaseReview key={JSON.stringify(view)} view={view} disabled={receipt.locked || edit} confirm={() => void receipt.confirm()} /></div>
-      {view.purchase.status === 'draft' && view.lines.length > 0 && !edit && <Button variant="secondary" disabled={receipt.locked} onClick={() => { setEdit(true); setLineStep(1) }}>Editar conjunto de líneas del borrador</Button>}
-      {view.purchase.status === 'draft' && (view.lines.length === 0 || edit) && <ReceiptEditor key={view.purchase.id} disabled={receipt.locked} stage={lineStep} onStageChange={setLineStep} replacing={view.lines.length > 0} save={lines => { void receipt.save(lines)?.then(saved => { if (saved) setEdit(false) }) }} />}
+    {view && <Panel><div className="operation-body"><div hidden={view.purchase.status === 'draft' && (edit || !view.lines.length)}><PurchaseReview key={view.purchase.id} view={view} disabled={receipt.locked || edit} confirm={() => void receipt.confirm()} /></div>
+      {view.purchase.status === 'draft' && view.lines.length > 0 && !edit && <Button variant="secondary" disabled={receipt.locked} onClick={() => setEdit(true)}>Editar conjunto de líneas del borrador</Button>}
+      {view.purchase.status === 'draft' && (view.lines.length === 0 || edit) && <ReceiptEditor key={view.purchase.id} disabled={receipt.locked} replacing={view.lines.length > 0} save={lines => { void receipt.save(lines)?.then(saved => { if (saved) setEdit(false) }) }} />}
     </div></Panel>}
     </div><aside className="guided-summary"><Panel><div className="operation-body"><span className="module-icon"><PackageCheck size={24} aria-hidden="true" /></span><h2>Resumen de recepción</h2><Badge tone={receipt.pending ? 'warning' : view?.purchase.status === 'confirmed' ? 'success' : 'info'}>{receipt.pending ? 'Por conciliar' : view?.purchase.status === 'confirmed' ? 'Confirmada' : receipt.id ? 'Borrador persistido' : 'Sin guardar'}</Badge>
       <dl className="summary-grid"><div><dt>Sucursal destino</dt><dd>{w.branch.name}</dd></div><div><dt>Referencia</dt><dd>{view?.purchase.documentReference ?? (reference || 'Sin referencia')}</dd></div><div><dt>Líneas persistidas</dt><dd>{view ? view.lines.length : '—'}</dd></div><div><dt>Importe de líneas guardadas</dt><dd>{view ? `S/ ${decimalLabel(receiptTotal(view.lines), 2)}` : '—'}</dd></div></dl>

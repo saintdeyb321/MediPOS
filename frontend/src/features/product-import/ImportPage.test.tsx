@@ -8,7 +8,7 @@ import { excelType, importApi, validFile } from './api'
 import { id, importJob, json, managementServer, mountTransfers, workspace } from '../notifications/management.test.support'
 
 const file = () => new File(['SYNTHETIC-IMPORT-UNIT'], 'unit.xlsx', { type: excelType })
-async function selectFile() { fireEvent.change(screen.getByLabelText('Archivo Excel .xlsx'), { target: { files: [file()] } }); fireEvent.click(screen.getByRole('checkbox', { name: /Confirmo crear los productos/ })) }
+async function selectFile() { fireEvent.change(screen.getByLabelText('Archivo Excel .xlsx'), { target: { files: [file()] } }) }
 it.each(['pharmacist', 'cashier'] as const)('denies product import to %s before HTTP access', role => {
   const fake = managementServer(); mountTransfers(fake, <ImportPage />, '', { ...workspace, access: { ...workspace.access, role } }); expect(screen.getByText('Importar productos requiere Owner.')).toBeInTheDocument(); expect(fake.fetcher).not.toHaveBeenCalled()
 })
@@ -18,14 +18,14 @@ it('validates XLSX extension, MIME, name, nonempty bytes and 5 MiB before any up
   const fake = managementServer(); const api = importApi(new HttpClient(fake.fetcher)); for (const value of invalid) { expect(validFile(value)).toBe(false); await expect(api.create(workspace, value)).rejects.toMatchObject({ code: 'client.invalid_file' }) }; expect(fake.fetcher).not.toHaveBeenCalled()
 })
 it('requires explicit confirmation, preserves jobId, rereads results and uses raw bytes exactly once', async () => {
-  const fake = managementServer(); mountTransfers(fake, <ImportPage />); const button = screen.getByRole('button', { name: 'Importar archivo confirmado' }); expect(button).toBeDisabled(); await selectFile(); fireEvent.click(button); fireEvent.click(button)
+  const fake = managementServer(); mountTransfers(fake, <ImportPage />); const button = screen.getByRole('button', { name: 'Importar productos' }); expect(button).toBeDisabled(); await selectFile(); fireEvent.click(button); fireEvent.click(button)
   await screen.findByRole('heading', { name: 'Resultado: Completado' }); expect(screen.getByText('Fila sintética inválida')).toBeInTheDocument(); expect(screen.getByText('import.unit_invalid')).toBeInTheDocument(); expect(fake.writes()).toHaveLength(1)
   const init = fake.writes()[0]![1]!; expect(init.body).toBeInstanceOf(File); expect(new Headers(init.headers).get('Content-Type')).toBe(excelType); expect(new Headers(init.headers).get('X-CSRF-TOKEN')).toBe('management-unit-csrf'); expect(screen.getByTestId('location')).toHaveTextContent('importJob=' + importJob.importJobId); expect(button).toBeDisabled()
-  fireEvent.click(screen.getByRole('checkbox', { name: /Verifiqué que es el trabajo/ })); fireEvent.click(screen.getByRole('button', { name: 'Finalizar revisión de importación' })); await waitFor(() => expect(screen.getByTestId('location')).not.toHaveTextContent('importPending')); expect(fake.writes()).toHaveLength(1)
+  fireEvent.click(screen.getByRole('button', { name: 'Finalizar revisión de importación' })); await waitFor(() => expect(screen.getByTestId('location')).not.toHaveTextContent('importPending')); expect(fake.writes()).toHaveLength(1)
 })
 it('keeps unknown import blocked through reload without inferring idempotency from a filename', async () => {
-  const fake = managementServer(); fake.management.lose = 'import'; const view = mountTransfers(fake, <ImportPage />); await selectFile(); fireEvent.click(screen.getByRole('button', { name: 'Importar archivo confirmado' })); await screen.findByText(/La respuesta no identificó el trabajo/); expect(screen.getByRole('button', { name: 'Importar archivo confirmado' })).toBeDisabled(); expect(fake.writes()).toHaveLength(1)
-  view.unmount(); mountTransfers(fake, <ImportPage />, '?importPending=1'); expect(screen.getByRole('button', { name: 'Importar archivo confirmado' })).toBeDisabled(); expect(screen.queryByRole('button', { name: 'Finalizar revisión de importación' })).not.toBeInTheDocument(); expect(fake.writes()).toHaveLength(1)
+  const fake = managementServer(); fake.management.lose = 'import'; const view = mountTransfers(fake, <ImportPage />); await selectFile(); fireEvent.click(screen.getByRole('button', { name: 'Importar productos' })); await screen.findByText(/La respuesta no identificó el trabajo/); expect(screen.getByRole('button', { name: 'Importar productos' })).toBeDisabled(); expect(fake.writes()).toHaveLength(1)
+  view.unmount(); mountTransfers(fake, <ImportPage />, '?importPending=1'); expect(screen.getByRole('button', { name: 'Importar productos' })).toBeDisabled(); expect(screen.queryByRole('button', { name: 'Finalizar revisión de importación' })).not.toBeInTheDocument(); expect(fake.writes()).toHaveLength(1)
 })
 it('cannot review an unrelated terminal job as the original keyed import after reload', async () => {
   const fake = managementServer(); const requestId = id(600); const other = { ...importJob, importJobId: id(601), fileName: 'otro.xlsx' }
@@ -38,7 +38,7 @@ it('cannot review an unrelated terminal job as the original keyed import after r
   const recover = screen.getByRole('button', { name: 'Localizar trabajo por su intención original' })
   expect(screen.queryByRole('textbox', { name: 'Identificador del trabajo original' })).not.toBeInTheDocument()
   fireEvent.click(recover); await screen.findByText(/Aún no se observa una constancia confirmada/)
-  expect(screen.getByRole('button', { name: 'Importar archivo confirmado' })).toBeDisabled()
+  expect(screen.getByRole('button', { name: 'Importar productos' })).toBeDisabled()
   expect(screen.queryByRole('button', { name: 'Finalizar revisión de importación' })).not.toBeInTheDocument()
   expect(fake.fetcher.mock.calls.some(([path]) => String(path).includes(other.importJobId))).toBe(false)
   showReceipt = true; fireEvent.click(recover); await screen.findByRole('heading', { name: 'Resultado: Completado' })
@@ -46,7 +46,7 @@ it('cannot review an unrelated terminal job as the original keyed import after r
   expect(fake.writes()).toHaveLength(0)
 })
 it('preserves an import 403 as uncertain because authorization can be revoked after committed rows', async () => {
-  const fake = managementServer(); fake.management.reject = 403; mountTransfers(fake, <ImportPage />); await selectFile(); fireEvent.click(screen.getByRole('button', { name: 'Importar archivo confirmado' })); await screen.findByText(/La respuesta no identificó el trabajo/); expect(fake.writes()).toHaveLength(1)
+  const fake = managementServer(); fake.management.reject = 403; mountTransfers(fake, <ImportPage />); await selectFile(); fireEvent.click(screen.getByRole('button', { name: 'Importar productos' })); await screen.findByText(/La respuesta no identificó el trabajo/); expect(fake.writes()).toHaveLength(1)
   const requestId = new Headers(fake.writes()[0]![1]?.headers).get('Idempotency-Key')
   expect(requestId).toMatch(/^[a-f\d-]{36}$/); expect(screen.getByTestId('location')).toHaveTextContent('importPending=' + requestId)
 })
@@ -85,7 +85,7 @@ it('shows a terminal legacy job for consultation but its URL cannot settle the o
   const view = mountTransfers(fake, <ImportPage />, legacy)
   await screen.findByRole('heading', { name: 'Resultado: Completado' })
   expect(screen.queryByRole('button', { name: 'Finalizar revisión de importación' })).not.toBeInTheDocument()
-  expect(screen.getByRole('button', { name: 'Importar archivo confirmado' })).toBeDisabled()
+  expect(screen.getByRole('button', { name: 'Importar productos' })).toBeDisabled()
   const address = screen.getByTestId('location').textContent ?? ''
   view.unmount(); mountTransfers(fake, <ImportPage />, address)
   await screen.findByRole('heading', { name: 'Resultado: Completado' })
@@ -114,8 +114,8 @@ it.each([false, true])('confirms an interrupted job with one scoped POST and res
     return base(path, request)
   })
   mountTransfers(fake, <ImportPage />, `?importJob=${importJob.importJobId}`)
-  const close = await screen.findByRole('button', { name: 'Cerrar trabajo interrumpido' }); expect(close).toBeDisabled()
-  fireEvent.click(screen.getByRole('checkbox', { name: /Confirmo cerrar este trabajo/ })); fireEvent.click(close); fireEvent.click(close)
+  const close = await screen.findByRole('button', { name: 'Cerrar trabajo interrumpido' }); expect(fake.writes()).toHaveLength(0)
+  fireEvent.click(close); fireEvent.click(close)
   await screen.findByRole('heading', { name: 'Resultado: Fallido' })
   await screen.findByText(/Estado terminal confirmado/)
   expect(screen.queryByRole('button', { name: 'Cerrar trabajo interrumpido' })).not.toBeInTheDocument()

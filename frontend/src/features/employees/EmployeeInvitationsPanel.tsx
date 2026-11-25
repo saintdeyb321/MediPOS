@@ -21,14 +21,14 @@ import type { EmployeeInvitation } from './invitations.api'
 const statusLabels = { pending_acceptance: 'Esperando aceptación', accepted_pending_approval: 'Cuenta aceptante pendiente de aprobación', approved: 'Membresía creada', revoked: 'Revocada', expired: 'Vencida' }
 export function EmployeeInvitationsPanel({ createOpen, onCreateOpen, onCreateClose }: { createOpen?: boolean; onCreateOpen?: () => void; onCreateClose?: () => void } = {}) {
   const w = useWorkspace(); const { http } = useRuntime(); const client = useQueryClient(); const [params, setParams] = useSearchParams()
-  const [offset, setOffset] = useState(0); const [role, setRole] = useState<TenantRole>('cashier'); const [reviewed, setReviewed] = useState(false)
+  const [offset, setOffset] = useState(0); const [role, setRole] = useState<TenantRole>('cashier')
   const [busy, setBusy] = useState(false); const running = useRef(false); const [error, setError] = useState<unknown>(null)
   const [notice, setNotice] = useState(''); const [link, setLink] = useState(''); const [recovered, setRecovered] = useState<EmployeeInvitation | null>(null)
   const controller = useRef<AbortController | null>(null); const mounted = useRef(true)
   const [ownOpen, setOwnOpen] = useState(false); const [directoryOpen, setDirectoryOpen] = useState(false)
   const opening = createOpen ?? ownOpen
   function hideCreate() { setOwnOpen(false); onCreateClose?.() }
-  function closeCreate() { hideCreate(); setRole('cashier'); setReviewed(false) }
+  function closeCreate() { hideCreate(); setRole('cashier') }
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; controller.current?.abort() } }, [])
   const requestId = params.get('invitationRequest'); const actionId = params.get('invitationTarget'); const pending = Boolean(requestId || actionId)
   useNavigationProtection({ busy, pending })
@@ -48,7 +48,7 @@ export function EmployeeInvitationsPanel({ createOpen, onCreateOpen, onCreateClo
     await client.invalidateQueries({ queryKey: scopedKey(w, 'employees') })
   }
   async function create() {
-    if (!reviewed || busy || running.current || pending || !http || w.access.role !== 'owner') return
+    if (busy || running.current || pending || !http || w.access.role !== 'owner') return
     const intention = crypto.randomUUID()
     running.current = true; setBusy(true); setError(null); setNotice(''); setLink(''); setRecovered(null); marker('create', intention)
     controller.current = new AbortController()
@@ -57,7 +57,7 @@ export function EmployeeInvitationsPanel({ createOpen, onCreateOpen, onCreateClo
       if (!mounted.current) return
       setLink(result.ticket ? `${window.location.origin}/aceptar-invitacion#${result.ticket}` : '')
       setNotice(result.ticket ? 'Invitación creada. Copia el enlace ahora; no se conserva ni se puede recuperar después.' : 'Intención recuperada sin reemitir el secreto. Si perdiste el enlace, revoca la invitación antes de emitir otra.')
-      marker(null); setReviewed(false); await refresh()
+      marker(null); await refresh()
     } catch (failure) {
       if (!mounted.current) return
       setError(failure)
@@ -100,16 +100,16 @@ export function EmployeeInvitationsPanel({ createOpen, onCreateOpen, onCreateClo
     {!opening && notice && <p role="status">{notice}</p>}
     {!opening && pending && <Notice tone="warning">Hay una operación pendiente. No crees otra intención ni repitas la aprobación sin consultar la original. <Button variant="secondary" disabled={busy} onClick={() => void reconcile()}>Consultar invitación original</Button></Notice>}
     {requestId && !opening && <Button data-recovery-focus variant="secondary" disabled={busy} onClick={() => { if (onCreateOpen) onCreateOpen(); else setOwnOpen(true) }}>Revisar invitación pendiente sin reenviar</Button>}
-    <Modal open={opening} title="Nuevo integrante por invitación" description="Crear enlace → aceptación con Google → revisión y aprobación. Compartir el enlace no concede permisos." dirty={reviewed || role !== 'cashier'} busy={busy} recovery={pending} onClose={closeCreate} onRecoveryClose={hideCreate}>
+    <Modal open={opening} title="Nuevo integrante por invitación" description="Crear enlace → aceptación con Google → revisión y aprobación. Compartir el enlace no concede permisos." dirty={role !== 'cashier'} busy={busy} recovery={pending} onClose={closeCreate} onRecoveryClose={hideCreate}>
       <Steps labels={['Elegir rol', 'Compartir enlace', 'Revisar aceptación']} current={link ? 1 : 0} label="Incorporación por enlace" focusOnChange />
       {error != null && <ApiErrorState error={error} title="No pudimos completar la invitación" />}
       {notice && <p role="status">{notice}</p>}
       {pending && <Notice tone="warning">Solicitud pendiente. No emitas otra intención.<Button disabled={busy} onClick={() => void reconcile()}>Consultar invitación original</Button></Notice>}
     <form className="operation-body" aria-label="Crear invitación de empleado" onSubmit={event => { event.preventDefault(); void create() }}>
       <div className="workflow-context"><strong>1. Define el rol · 2. Comparte el enlace · 3. Verifica y aprueba</strong><p>La cuenta destinataria ingresa con Google. La aceptación queda pendiente hasta tu aprobación independiente; después configura sucursales y horario.</p></div>
-      <label>Rol de la invitación<select aria-label="Rol de la invitación" value={role} disabled={busy || pending} onChange={event => { setRole(event.target.value as TenantRole); setReviewed(false) }}><option value="cashier">Cajero</option><option value="pharmacist">Químico farmacéutico</option><option value="owner">Propietario</option></select></label>
-      <label><input type="checkbox" checked={reviewed} disabled={busy || pending} onChange={event => setReviewed(event.target.checked)} /> Revisé el rol; verificaré por un canal independiente la cuenta que acepte antes de incorporarla.</label>
-      <Button type="submit" disabled={!http || busy || pending || !reviewed}>Crear enlace temporal</Button>
+      <label>Rol de la invitación<select aria-label="Rol de la invitación" value={role} disabled={busy || pending} onChange={event => { setRole(event.target.value as TenantRole) }}><option value="cashier">Cajero</option><option value="pharmacist">Químico farmacéutico</option><option value="owner">Propietario</option></select></label>
+      <p>Rol del enlace: {roleLabels[role]}. Antes de aprobar, verifica por un canal independiente la identidad de quien acepte.</p>
+      <Button type="submit" disabled={!http || busy || pending}>Crear enlace temporal</Button>
     </form>
     {link && <section className="invitation-link-panel"><Notice tone="warning">Copia el enlace ahora. Solo está disponible en esta sesión de la página y no puede recuperarse después.</Notice><TextField label="Enlace temporal para compartir" value={link} readOnly /><Button variant="secondary" onClick={() => { void navigator.clipboard.writeText(link).then(() => { if (mounted.current) setNotice('Enlace copiado.') }).catch(() => { if (mounted.current) setNotice('Selecciona y copia el enlace visible; no se enviará automáticamente.') }) }}>Copiar enlace</Button><Button variant="quiet" onClick={() => setLink('')}>Ocultar enlace</Button></section>}
     </Modal>

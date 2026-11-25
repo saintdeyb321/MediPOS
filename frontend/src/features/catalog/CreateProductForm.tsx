@@ -18,6 +18,8 @@ export function CreateProductForm({ categories, global, write, onDirty }: { cate
   const [price, setPrice] = useState({ retail: '', wholesale: '' }); const [active, setActive] = useState(true)
   const [medicine, setMedicine] = useState(emptyMedicine); const [reviewed, setReviewed] = useState(false)
   const [step, setStep] = useState(0)
+  const reviewStep = global ? 1 : 2
+  const requiresSourceReview = !global && type === 'medicine'
   const [submittedCode, setSubmittedCode] = useState('')
   const priceInput = prices(price); const clinical = medicineInput(medicine)
   const valid = required(code, 64) && priceInput && (global || type && required(name, 256) && required(brand, 200) && barcode.trim().length <= 128 &&
@@ -28,14 +30,14 @@ export function CreateProductForm({ categories, global, write, onDirty }: { cate
   const [baseline] = useState(() => JSON.stringify({ code, name, brand, barcode, categoryId, type, price, active, medicine }))
   useEffect(() => { onDirty?.(!saved && JSON.stringify({ code, name, brand, barcode, categoryId, type, price, active, medicine }) !== baseline) }, [code, name, brand, barcode, categoryId, type, price, active, medicine, baseline, saved, onDirty])
   return <form aria-label={global ? 'Asociar producto global' : 'Crear producto local'} onSubmit={event => {
-    event.preventDefault(); if (saved || write.locked || step !== 3 || !http || !valid || !reviewed || !priceInput) return
+    event.preventDefault(); if (saved || write.locked || step !== reviewStep || !http || !valid || (requiresSourceReview && !reviewed) || !priceInput) return
     setReviewed(false); setSubmittedCode(code.trim())
     const api = catalogApi(http)
     if (global) void write.run('global', undefined, async signal => (await api.fromGlobal(w, { globalProductId: global.id, internalCode: code.trim(), ...priceInput, isActive: active }, signal)).id, code.trim())
     else if (type) void write.run('create', undefined, async signal => (await api.create(w, { internalCode: code.trim(), name: name.trim(), productType: type, categoryId,
       brandOrLaboratory: brand.trim(), barcode: barcode.trim() || null, medicine: type === 'medicine' ? clinical : null, ...priceInput, isActive: active }, signal)).id, code.trim())
   }}>
-    <Steps labels={['Identificación', 'Datos del producto', 'Precios', 'Revisión']} current={step} label="Pasos para crear el producto" focusOnChange />
+    <Steps labels={global ? ['Código y precios', 'Revisión'] : ['Identificación', 'Datos y precios', 'Revisión']} current={step} label="Pasos para crear el producto" focusOnChange />
     <fieldset disabled={write.locked || saved} onChange={() => setReviewed(false)}><legend>{global ? `Asociar: ${global.name}` : 'Nuevo producto de tu botica'}</legend>
       <div hidden={step !== 0} className="form-section-fields">
       <TextField label="Código interno" value={code} maxLength={64} required onChange={event => setCode(event.target.value)} />
@@ -43,9 +45,9 @@ export function CreateProductForm({ categories, global, write, onDirty }: { cate
         <label>Tipo de producto <select aria-label="Tipo de producto" required value={type} onChange={event => setType(event.target.value === 'medicine' ? 'medicine' : event.target.value === 'retail' ? 'retail' : '')}><option value="">Selecciona</option><option value="medicine">Medicamento</option><option value="retail">Venta general</option></select></label>
         <TextField label="Nombre del producto" value={name} maxLength={256} required onChange={event => setName(event.target.value)} />
       </>}
-      {global && <p>{global.name}</p>}
+      {global && <><MedicineView value={global.medicine} /><p>Se copiarán los atributos publicados al negocio. Vincular no crea stock físico.</p></>}
       </div>
-      <div hidden={step !== 1} className="form-section-fields">
+      <div hidden={Boolean(global) || step !== 1} className="form-section-fields">
       {!global && <>
         <label>Categoría <select aria-label="Categoría" value={categoryId} required onChange={event => setCategory(event.target.value)}><option value="">Selecciona una categoría existente</option>{categories.filter(row => row.isActive).map(row => <option key={row.id} value={row.id}>{row.name}</option>)}</select></label>
         {!categories.length && <p>No hay categorías disponibles. Su creación requiere administración independiente; esta pantalla no concede ese permiso.</p>}
@@ -53,13 +55,12 @@ export function CreateProductForm({ categories, global, write, onDirty }: { cate
         <TextField label="Código de barras (opcional)" value={barcode} maxLength={128} onChange={event => setBarcode(event.target.value)} />
         {type === 'medicine' && <MedicineFieldsForm value={medicine} change={setMedicine} disabled={write.locked} />}
       </>}
-      {global && <><MedicineView value={global.medicine} /><p>Se copiarán los atributos del catálogo publicado al negocio. Vincular no crea stock físico.</p></>}
       </div>
-      <div hidden={step !== 2} className="form-section-fields">
+      <div hidden={step !== (global ? 0 : 1)} className="form-section-fields">
       <PriceInputs value={price} change={setPrice} disabled={write.locked} />
       <label><input type="checkbox" checked={active} onChange={event => setActive(event.target.checked)} /> Producto activo</label>
       </div>
-      <div hidden={step !== 3} className="form-section-fields">
+      <div hidden={step !== reviewStep} className="form-section-fields">
         <h3>{global?.name ?? name}</h3><p>Código interno: {code} · {active ? 'Activo' : 'Inactivo'}</p>
         <p>{global?.brandOrLaboratory ?? brand}</p>
         {priceInput && <p>Precio minorista por unidad base: S/ {decimalLabel(priceInput.retailPrice, 2)}. Mayorista: {priceInput.wholesalePrice ? `S/ ${decimalLabel(priceInput.wholesalePrice, 2)}` : 'Sin configurar'}.</p>}
@@ -67,13 +68,13 @@ export function CreateProductForm({ categories, global, write, onDirty }: { cate
         <p>Crear el producto no genera existencias. Después configura presentaciones y registra una recepción en Compras.</p>
       </div>
     </fieldset>
-    <div hidden={step !== 3}>
-    <label><input type="checkbox" checked={reviewed} disabled={write.locked || saved} onChange={event => setReviewed(event.target.checked)} /> Revisé la identidad, los atributos documentados y los precios de este producto.</label>
+    <div hidden={step !== reviewStep}>
+    {requiresSourceReview && <label><input type="checkbox" checked={reviewed} disabled={write.locked || saved} onChange={event => setReviewed(event.target.checked)} /> Verifiqué los atributos del medicamento contra su fuente.</label>}
     </div>
     <FormFooter>
       {step > 0 && <Button variant="secondary" disabled={write.locked} onClick={() => setStep(step - 1)}>Anterior</Button>}
-      {step < 3 ? <Button disabled={write.locked || (step === 0 ? !identificationValid : step === 1 ? !attributesValid : !priceInput)} onClick={() => setStep(step + 1)}>Continuar</Button>
-        : <Button type="submit" pending={write.busy} disabled={write.locked || saved || !valid || !reviewed}>{saved ? 'Producto guardado' : global ? 'Asociar al negocio' : 'Guardar producto'}</Button>}
+      {step < reviewStep ? <Button disabled={write.locked || (step === 0 && !global ? !identificationValid : !identificationValid || !attributesValid || !priceInput)} onClick={() => setStep(step + 1)}>Continuar</Button>
+        : <Button type="submit" pending={write.busy} disabled={write.locked || saved || !valid || (requiresSourceReview && !reviewed)}>{saved ? 'Producto guardado' : global ? 'Asociar al negocio' : 'Guardar producto'}</Button>}
     </FormFooter>
     {write.notice && <p role="status">{write.notice}</p>}
   </form>

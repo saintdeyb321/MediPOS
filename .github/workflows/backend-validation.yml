@@ -253,3 +253,98 @@ jobs:
           # Remove remaining Testcontainers containers plus anonymous volumes; never inspect their env.
           docker ps -aq --filter label=org.testcontainers=true | xargs --no-run-if-empty docker rm -f -v
           rm -rf -- "$RUNNER_TEMP/medipos-results"
+
+  frontend:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: bash
+        working-directory: frontend
+
+    steps:
+      - name: Read selected commit
+        id: checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Install pinned Node.js
+        id: node
+        uses: actions/setup-node@6044e13b5dc448c55e2357c09f80417699197238 # v6.2.0
+        with:
+          node-version: '24.18.1'
+          package-manager-cache: false
+
+      - name: Verify frontend execution identity
+        id: identity
+        run: |
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          node_version=$(node --version)
+          npm_version=$(npm --version)
+          test "$node_version" = 'v24.18.1'
+          printf '# Frontend validation\n\nTested commit: %s\n\nNode: %s\n\nnpm: %s\n\n' \
+            "$GITHUB_SHA" "$node_version" "$npm_version" | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - name: Install locked frontend dependencies
+        id: install
+        run: npm ci
+
+      - name: Build frontend
+        id: build
+        run: npm run build
+
+      - name: Lint frontend
+        id: lint
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        run: npm run lint
+
+      - name: Run all frontend tests
+        id: test
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        run: npm run test -- --reporter=json --outputFile="$RUNNER_TEMP/medipos-vitest.json"
+
+      - name: Publish frontend gate evidence
+        if: ${{ always() }}
+        env:
+          GATE_STEPS: ${{ toJSON(steps) }}
+        run: |
+          python3 - <<'PY'
+          import json, os
+          from pathlib import Path
+
+          steps = json.loads(os.environ['GATE_STEPS'])
+          lines = ['## Frontend gate', 'Selected commit: ' + os.environ['GITHUB_SHA']]
+          approved = True
+          for name in ('checkout', 'node', 'identity', 'install', 'build', 'lint', 'test'):
+              outcome = steps.get(name, {}).get('outcome', 'not_executed')
+              lines.append(f'{name}: {outcome}')
+              approved = approved and outcome == 'success'
+
+          try:
+              path = Path(os.environ['RUNNER_TEMP']) / 'medipos-vitest.json'
+              report = json.loads(path.read_text(encoding='utf-8'))
+              counts = [report[key] for key in ('numTotalTests', 'numPassedTests', 'numFailedTests',
+                                                 'numPendingTests', 'numTodoTests', 'numFailedTestSuites')]
+              if any(type(count) is not int or count < 0 for count in counts):
+                  raise ValueError('Invalid Vitest counters')
+              total, passed, failed, pending, todo, failed_suites = counts
+              statuses = [case['status'] for suite in report['testResults'] for case in suite['assertionResults']]
+              lines.append(f'Vitest: total={total}, PASS={passed}, FAIL={failed}, SKIP={pending + todo}, failed suites={failed_suites}')
+              approved = (approved and report['success'] is True and total > 0 and passed == total
+                          and failed == pending == todo == failed_suites == 0
+                          and len(statuses) == total and all(status == 'passed' for status in statuses))
+          except (OSError, ValueError, TypeError, KeyError):
+              lines.append('Vitest: NO_RESULT (missing or invalid report)')
+              approved = False
+
+          lines.append('Overall: ' + ('FRONTEND_GATE_PASSED' if approved else 'NOT_APPROVED'))
+          summary = '\n\n'.join(lines) + '\n'
+          print(summary)
+          with Path(os.environ['GITHUB_STEP_SUMMARY']).open('a', encoding='utf-8') as output:
+              output.write(summary)
+          if not approved:
+              raise SystemExit('Frontend gate incomplete or failed.')
+          PY

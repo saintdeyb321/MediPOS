@@ -33,13 +33,13 @@ function CashWorkspace() {
 export function CashManagement({ cash, embedded = false, blocked = false }: { cash: CashController; embedded?: boolean; blocked?: boolean }) {
   const w = useWorkspace(); const { http } = useRuntime()
   const close = useCashClose()
-  const [amount, setAmount] = useState(''); const [reviewed, setReviewed] = useState(false); const [offset, setOffset] = useState(0)
+  const [amount, setAmount] = useState(''); const [offset, setOffset] = useState(0)
   const [closing, setClosing] = useState(false)
   const [managing, setManaging] = useState(false)
   const active = useQuery({ queryKey: scopedKey(w, 'active-cash', w.session.userId, w.access.membershipId, offset),
     queryFn: ({ signal }) => cashApi(http!).active(w, offset, signal), enabled: Boolean(http && w.access.role === 'owner' && !embedded), retry: false, staleTime: 0,
   })
-  const pick = (id: string) => { setAmount(''); setReviewed(false); setManaging(false); setClosing(true); void close.consult(id) }
+  const pick = (id: string) => { setAmount(''); setManaging(false); setClosing(true); void close.consult(id) }
   const valid = decimalInput(amount, maximumMoney, 4, true)
   const canClose = !close.denied && close.status?.status === 'open' && (w.access.role === 'owner' || close.status.membershipId === w.access.membershipId)
   return <>
@@ -50,15 +50,15 @@ export function CashManagement({ cash, embedded = false, blocked = false }: { ca
       {embedded ? cash.session && <Button variant="quiet" disabled={close.busy || close.pending || blocked} onClick={() => setManaging(true)}>Gestionar caja</Button> : <Button variant="secondary" disabled={!cash.session || close.busy || close.pending || blocked} onClick={() => { if (cash.session) pick(cash.session.cashSessionId) }}>Preparar cierre de mi caja</Button>}
       {close.id && <Button data-recovery-focus variant="quiet" disabled={close.busy} onClick={() => { setClosing(true); void close.consult() }}>Consultar cierre guardado</Button>}
       {close.busy && <p role="status">Consultando caja…</p>}
-      <Modal open={closing} title="Cerrar y cuadrar caja" onClose={() => { setClosing(false); setAmount(''); setReviewed(false) }} onRecoveryClose={() => setClosing(false)} dirty={Boolean(canClose && (amount || reviewed))} busy={close.busy} recovery={close.pending}>
+      <Modal open={closing} title="Cerrar y cuadrar caja" onClose={() => { setClosing(false); setAmount('') }} onRecoveryClose={() => setClosing(false)} dirty={Boolean(canClose && amount)} busy={close.busy} recovery={close.pending}>
         <div className="pos-section-body">
         {close.error != null && <ApiErrorState error={close.error} title="Revisa el resultado del cierre" />}
         {close.pending && <><Notice tone="warning">Cierre pendiente de verificar. No se enviará otra solicitud.</Notice><Button disabled={close.busy} onClick={() => void close.consult()}>Consultar esta misma caja</Button></>}
-      {canClose && !close.pending && <form aria-label="Cierre de caja" onSubmit={event => { event.preventDefault(); if (reviewed && !blocked) void close.close(close.status!.cashSessionId, amount) }}>
+      {canClose && !close.pending && <form aria-label="Cierre de caja" onSubmit={event => event.preventDefault()}>
         <p className="data-caption">El efectivo esperado y la diferencia se obtienen del servidor al cerrar. Yape, Plin y tarjetas no son efectivo físico.</p>
-        <TextField label="Efectivo físico contado (S/)" value={amount} inputMode="decimal" maxLength={32} required disabled={close.busy || blocked} onChange={event => { setAmount(event.target.value); setReviewed(false) }} />
-        <label><input type="checkbox" checked={reviewed} disabled={close.busy} onChange={event => setReviewed(event.target.checked)} /> Revisé el conteo y autorizo cerrar esta caja.</label>
-        <FormFooter><Button type="submit" pending={close.busy} disabled={!valid || !reviewed || blocked}>Confirmar cierre de caja</Button></FormFooter>
+        <TextField label="Efectivo físico contado (S/)" value={amount} inputMode="decimal" maxLength={32} required disabled={close.busy || blocked} onChange={event => setAmount(event.target.value)} />
+        <p>Al cerrar esta caja de {w.branch.name}, la sesión termina. Guarda el conteo físico de esta sesión.</p>
+        <FormFooter><Button type="button" pending={close.busy} disabled={!valid || blocked} onClick={() => { if (canClose && valid && !blocked) void close.close(close.status!.cashSessionId, amount) }}>Confirmar cierre de caja</Button></FormFooter>
       </form>}
       {close.status?.status === 'closed' && <p role="status">Caja cerrada en el servidor. Consultar su arqueo no repite el cierre.</p>}
       {close.status?.status === 'open' && <CashAge key={close.status.cashSessionId} openedAt={close.status.openedAt} />}

@@ -25,5 +25,5 @@ export function useProductSearch(input: string) {
     staleTime: 0,
     retry: false,
   })
-  return { query, ready, text, connected: Boolean(http) }
+  return { query, ready, text, connected: Boolean(http), searchNow: () => setDebounced(text) }
 }

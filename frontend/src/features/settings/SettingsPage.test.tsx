@@ -15,7 +15,7 @@ it('loads actual license and entity/branch relationships and disables creation a
   expect(screen.queryByRole('button', { name: /Renovar|Activar|Editar|Eliminar/ })).not.toBeInTheDocument()
 })
 async function openLegal() { fireEvent.click(screen.getByRole('button', { name: 'Entidades legales' })); const open = await screen.findByRole('button', { name: 'Nueva entidad' }); await waitFor(() => expect(open).toBeEnabled()); fireEvent.click(open) }
-async function prepareLegal() { fireEvent.change(screen.getByRole('textbox', { name: 'Razón social' }), { target: { value: 'Nueva entidad unitaria' } }); fireEvent.change(screen.getByRole('textbox', { name: 'Identificador de la entidad' }), { target: { value: 'UNIT-LEGAL-ONLY' } }); fireEvent.click(screen.getByRole('checkbox', { name: /Confirmo la creación persistente/ })) }
+async function prepareLegal() { fireEvent.change(screen.getByRole('textbox', { name: 'Razón social' }), { target: { value: 'Nueva entidad unitaria' } }); fireEvent.change(screen.getByRole('textbox', { name: 'Identificador de la entidad' }), { target: { value: 'UNIT-LEGAL-ONLY' } }) }
 it('requires explicit confirmation, sends only backend fields and rereads directories without duplicating', async () => {
   const fake = managementServer(); mountTransfers(fake, <SettingsPage />); await screen.findByText('Prueba gratuita'); await openLegal(); const button = screen.getByRole('button', { name: 'Crear entidad legal' }); expect(button).toBeDisabled()
   await prepareLegal(); fireEvent.click(button); fireEvent.click(button)
@@ -26,7 +26,7 @@ it('requires explicit confirmation, sends only backend fields and rereads direct
 it('creates a branch only with an observed legal entity and permits no license changes', async () => {
   const fake = managementServer(); fake.management.license.maxBranches = 5; mountTransfers(fake, <SettingsPage />); await screen.findByText('Prueba gratuita')
   fireEvent.click(screen.getByRole('button', { name: 'Sucursales' })); const open = screen.getByRole('button', { name: 'Nueva sucursal' }); await waitFor(() => expect(open).toBeEnabled()); fireEvent.click(open)
-  fireEvent.change(screen.getByRole('textbox', { name: 'Nombre de la nueva sucursal' }), { target: { value: 'Sucursal unitaria nueva' } }); fireEvent.change(screen.getByRole('combobox', { name: 'Entidad legal existente' }), { target: { value: id(4) } }); fireEvent.click(screen.getByRole('checkbox', { name: /Confirmo crear Sucursal/ })); fireEvent.click(screen.getByRole('button', { name: 'Crear sucursal' }))
+  fireEvent.change(screen.getByRole('textbox', { name: 'Nombre de la nueva sucursal' }), { target: { value: 'Sucursal unitaria nueva' } }); fireEvent.change(screen.getByRole('combobox', { name: 'Entidad legal existente' }), { target: { value: id(4) } }); fireEvent.click(screen.getByRole('button', { name: 'Crear sucursal' }))
   await screen.findByText(/Registro reconsultado: Sucursal unitaria nueva/); expect(fake.writes()).toHaveLength(1); expect(String(fake.writes()[0]![0])).toMatch(/\/branches$/); expect(fake.management.branches).toHaveLength(3)
 })
 it('keeps unknown legal creation blocked, permits reread/reconciliation and never assumes name is idempotency', async () => {

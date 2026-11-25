@@ -22,7 +22,7 @@ const workspace: Workspace = { tenantId, branchId, tenantName: 'Prueba unitaria'
     licenseStatus: 'trial', licenseStartsAt: null, licenseExpiresAt: null, evaluatedAtUtc: timestamp } }
 function json(data: unknown, status = 200) { return new Response(stringifyExactJson(data), { status, headers: { 'Content-Type': 'application/json' } }) }
 function server() {
-  const state = { closed: false, loseClose: false, storeClose: true, denied: false, failReceipt: false, foreignReceipt: false, statusFailure: 0, counted: n('5.00') }
+  const state = { closed: false, loseClose: false, storeClose: true, denied: false, failReceipt: false, foreignReceipt: false, wrongAckActor: false, statusFailure: 0, counted: n('5.00') }
   const receipt = () => ({ cashSessionId: cashId, tenantId: state.foreignReceipt ? id('99') : tenantId,
     employeeBranch: { branchId, branchName: 'Sede unitaria', membershipId, userId, displayName: 'Empleado unitario' },
     openingAmount: n('0.0000'), paymentTotals: { cash: n('5.0000'), yape: n('7.0000'), plin: n('0'), card: n('0'), transfer: n('0') },
@@ -39,7 +39,7 @@ function server() {
       state.counted = object({ countedCashAmount: decimal })(parseExactJson(String(init?.body))).countedCashAmount
       if (state.storeClose) state.closed = true
       if (state.loseClose) throw new TypeError('Unit-test response loss')
-      return json(receipt())
+      return json({ ...receipt(), closedByActorId: state.wrongAckActor ? id('98') : userId })
     }
     if (path.endsWith('/reconciliation')) return state.failReceipt ? json({ code: 'server.unavailable' }, 503) : json(receipt())
     if (path.endsWith('/' + cashId)) return state.statusFailure
@@ -64,10 +64,11 @@ async function prepare(fake: ReturnType<typeof server>) {
   await screen.findByRole('form', { name: 'Cierre de caja' })
   expect(fake.posts()).toHaveLength(0)
   fireEvent.change(screen.getByRole('textbox', { name: 'Efectivo físico contado (S/)' }), { target: { value: '5.00' } })
-  fireEvent.click(screen.getByRole('checkbox', { name: /Revisé el conteo/ }))
+  fireEvent.submit(screen.getByRole('form', { name: 'Cierre de caja' }))
+  expect(fake.posts()).toHaveLength(0)
   return view
 }
-it('requires explicit reviewed counting, closes once with CSRF, and reads the saved reconciliation', async () => {
+it('closes only on explicit activation and uses the complete scoped reconciliation without a second read', async () => {
   const fake = server(); await prepare(fake)
   const button = screen.getByRole('button', { name: 'Confirmar cierre de caja' })
   fireEvent.click(button); fireEvent.click(button)
@@ -76,6 +77,8 @@ it('requires explicit reviewed counting, closes once with CSRF, and reads the sa
   expect(fake.posts()[0]?.[1]?.body).toBe('{"countedCashAmount":5.00}')
   expect(new Headers(fake.posts()[0]?.[1]?.headers).get('X-CSRF-TOKEN')).toBe('unit-csrf')
   expect(screen.getByText('Cuadre exacto')).toBeInTheDocument()
+  expect(fake.statusGets()).toHaveLength(1)
+  expect(fake.receiptGets()).toHaveLength(0)
   expect(screen.queryByRole('button', { name: 'Confirmar cierre de caja' })).not.toBeInTheDocument()
 })
 it('reconciles a lost close response without repeating the POST', async () => {
@@ -119,8 +122,8 @@ it('does not expose Owner active-cash queries to a cashier', async () => {
   expect(fake.fetcher.mock.calls.some(([path]) => String(path).includes('/active?'))).toBe(false)
   expect(fake.posts()).toHaveLength(0)
 })
-it.each([401, 403, 404, 429, 503])('keeps the same closure pending when status GET returns %i after an acknowledged POST', async status => {
-  const fake = server(); await prepare(fake); fake.state.statusFailure = status
+it.each([401, 403, 404, 429, 503])('keeps the same closure pending when status GET returns %i after an unverifiable POST response', async status => {
+  const fake = server(); await prepare(fake); fake.state.wrongAckActor = true; fake.state.statusFailure = status
   fireEvent.click(screen.getByRole('button', { name: 'Confirmar cierre de caja' }))
   await screen.findByText('Revisa el estado de la caja')
   expect(screen.getByTestId('location')).toHaveTextContent('cash=' + cashId + '&closingCash=1')
@@ -139,7 +142,7 @@ it.each([401, 403, 404, 429, 503])('keeps the same closure pending when status G
   expect(fake.posts()).toHaveLength(1)
 })
 it('keeps the verified closed status and retries only the failed reconciliation GET', async () => {
-  const fake = server(); fake.state.failReceipt = true; await prepare(fake)
+  const fake = server(); fake.state.failReceipt = true; fake.state.loseClose = true; await prepare(fake)
   fireEvent.click(screen.getByRole('button', { name: 'Confirmar cierre de caja' }))
   await screen.findByText('Revisa el estado de la caja')
   expect(screen.getByText(/Caja cerrada en el servidor/)).toBeInTheDocument()

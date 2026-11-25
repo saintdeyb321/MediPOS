@@ -29,10 +29,9 @@ function ImportWorkspace() {
   const legacyPending = pending && !isUuid(requestId)
   const acknowledged = pending && recognized?.requestId === requestId && recognized.jobId === jobId
   const awaitingReceipt = pending && !legacyPending && !acknowledged
-  const [inputId, setInputId] = useState(jobId); const [file, setFile] = useState<File | null>(null); const [confirmed, setConfirmed] = useState(false); const [reviewed, setReviewed] = useState(false)
+  const [inputId, setInputId] = useState(jobId); const [file, setFile] = useState<File | null>(null); const [reviewed, setReviewed] = useState(false)
   const [cursors, setCursors] = useState([0]); const after = cursors.at(-1)!; const [busy, setBusy] = useState(false); const running = useRef(false); const abort = useRef<AbortController | null>(null)
   const [error, setError] = useState<unknown>(null); const [notice, setNotice] = useState(''); const [denied, setDenied] = useState(false)
-  const [recoveryReview, setRecoveryReview] = useState('')
   const lastObservedImport = useRef<{ id: string; importedRows: number } | null>(null)
   useEffect(() => () => abort.current?.abort(), [])
   function mark(id: string, blocked: boolean, requestId = latest.current.get('importPending') ?? '') { const next = new URLSearchParams(latest.current); for (const key of ['importJob', 'importPending', 'importAck']) next.delete(key); if (id) next.set('importJob', id); if (blocked) next.set('importPending', requestId); latest.current = next; setParams(next, { replace: true }) }
@@ -53,8 +52,8 @@ function ImportWorkspace() {
   const canRecoverInterrupted = job?.status === 'processing' && job.canRecoverInterrupted && !legacyPending && !query.isError
   const locked = busy || pending || denied || !http
   async function upload() {
-    if (!http || running.current || latest.current.has('importPending') || denied || !file || !validFile(file) || !confirmed) return
-    running.current = true; setBusy(true); setError(null); setNotice(''); setConfirmed(false); const requestId = crypto.randomUUID(); mark('', true, requestId); const controller = new AbortController(); abort.current = controller
+    if (!http || running.current || latest.current.has('importPending') || denied || !file || !validFile(file)) return
+    running.current = true; setBusy(true); setError(null); setNotice(''); const requestId = crypto.randomUUID(); mark('', true, requestId); const controller = new AbortController(); abort.current = controller
     try {
       const result = await importApi(http).create(w, file, controller.signal, { id: requestId, branchId: w.branchId }); if (controller.signal.aborted) return
       setRecognized({ requestId, jobId: result.importJobId })
@@ -74,8 +73,8 @@ function ImportWorkspace() {
     finally { running.current = false; if (!controller.signal.aborted) setBusy(false) }
   }
   async function recoverInterrupted() {
-    if (!http || running.current || !canRecoverInterrupted || recoveryReview !== jobId || denied) return
-    running.current = true; setBusy(true); setRecoveryReview(''); setError(null); setNotice('')
+    if (!http || running.current || !canRecoverInterrupted || denied) return
+    running.current = true; setBusy(true); setError(null); setNotice('')
     const controller = new AbortController(); abort.current = controller
     try {
       await importApi(http).recoverInterrupted(w, jobId, controller.signal)
@@ -103,12 +102,12 @@ function ImportWorkspace() {
   }
   useNavigationProtection({ busy, pending })
   return <div className="operations"><PageHeader title="Importar productos desde Excel" description="Añade productos y su unidad base a tu botica. No ingresa stock ni publica en el catálogo global." />
-    <Steps labels={['Descargar plantilla', 'Seleccionar archivo', 'Confirmar carga', 'Revisar resultado']} current={jobId || pending ? 3 : confirmed ? 2 : file ? 1 : 0} label="Importación de productos" />
+    <Steps labels={['Seleccionar archivo', 'Revisar resultado']} current={jobId || pending ? 1 : 0} label="Importación de productos" />
     <Panel><div className="operation-body"><h2>Preparar archivo</h2><Button variant="secondary" disabled={busy || !http} onClick={() => void download()}>Descargar plantilla oficial XLSX</Button><InlineHelp title="Formato y límites de la plantilla">Plantilla v1: hoja Products, datos desde fila 4; máximo 5000 filas y {maximumFileBytes} bytes (5 MiB). Categorías activas y datos farmacéuticos documentados. La unidad base se crea con el producto; no ingresa stock.</InlineHelp>
-      <TextField label="Archivo Excel .xlsx" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" disabled={locked} onChange={e => { setFile(e.target.files?.[0] ?? null); setConfirmed(false) }} />
+      <TextField label="Archivo Excel .xlsx" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" disabled={locked} onChange={e => { setFile(e.target.files?.[0] ?? null) }} />
       {file && <p>{file.name} · {file.size} bytes{!validFile(file) ? ' · Archivo inválido: requiere XLSX, nombre sin rutas y entre 1 byte y 5 MiB.' : ''}</p>}
       <Notice tone="warning">Importar persiste productos y su unidad base. Las filas aceptadas se confirman individualmente; un trabajo fallido puede contener productos ya importados. No hay idempotencia por archivo, nombre o referencia. No repitas el envío ante pérdida de respuesta.</Notice>
-      <label><input type="checkbox" checked={confirmed} disabled={locked || !file || !validFile(file)} onChange={e => setConfirmed(e.target.checked)} /> Confirmo crear los productos comerciales válidos de este archivo en {w.tenantName}.</label><Button disabled={locked || !confirmed || !file || !validFile(file)} onClick={() => void upload()}>Importar archivo confirmado</Button>
+      <p>Se crearán los productos de las filas válidas en {w.tenantName}. Consulta el resultado antes de importar otro archivo.</p><Button disabled={locked || !file || !validFile(file)} onClick={() => void upload()}>Importar productos</Button>
       {busy && <p role="status">Procesando solicitud…</p>}{error != null && <ApiErrorState error={error} />}{notice && <p role="status">{notice}</p>}
       {pending && <Notice tone="warning">Importación pendiente de revisión; no se reenviará. {legacyPending ? 'Esta solicitud anterior carece de una clave recuperable. Puedes consultar trabajos existentes. Conserva el bloqueo y solicita a soporte que verifique la solicitud original.' : awaitingReceipt ? 'La respuesta no identificó el trabajo. Localízalo por su constancia antes de revisar las filas.' : 'Consulta el trabajo original y verifica su finalización.'}</Notice>}
     </div></Panel>
@@ -117,11 +116,10 @@ function ImportWorkspace() {
       {job && <><h3>Resultado: {job.status === 'processing' ? 'En proceso' : job.status === 'completed' ? 'Completado' : 'Fallido'}</h3><p>Archivo: {job.fileName} · Plantilla {job.templateVersion} · Creado UTC {job.createdAt} · Finalizado UTC {job.completedAt ?? 'Pendiente'}</p><dl className="summary-grid"><div><dt>Filas totales</dt><dd>{job.totalRows}</dd></div><div><dt>Válidas</dt><dd>{job.validRows}</dd></div><div><dt>Importadas</dt><dd>{job.importedRows}</dd></div><div><dt>Inválidas</dt><dd>{job.invalidRows}</dd></div></dl>
         <div className="operation-table"><table><caption>Resultados persistidos por fila</caption><thead><tr><th>Fila</th><th>Estado</th><th>Producto creado</th><th>Código</th><th>Error</th></tr></thead><tbody>{job.rows.map(row => <tr key={row.rowNumber}><td>{row.rowNumber}</td><td>{row.status}</td><td>{row.businessProductId ?? 'No creado'}</td><td>{row.errorCode ?? '—'}</td><td>{row.errorMessage ?? '—'}</td></tr>)}</tbody></table></div>{!job.rows.length && <p>No hay filas en esta página del trabajo.</p>}
         <Button disabled={busy || cursors.length < 2} onClick={() => setCursors(cursors.slice(0, -1))}>Resultados anteriores</Button><Button disabled={busy || job.nextAfterRowNumber === null} onClick={() => { if (job.nextAfterRowNumber !== null) setCursors([...cursors, job.nextAfterRowNumber]) }}>Resultados siguientes</Button>
-        {acknowledged && job.status !== 'processing' && job.completedAt && <><label><input type="checkbox" checked={reviewed} onChange={e => setReviewed(e.target.checked)} /> Verifiqué que es el trabajo de la solicitud original y que terminó; revisé sus productos importados, incluidos los parciales si falló.</label><Button disabled={!reviewed || busy} onClick={() => { mark(job.importJobId, false); setRecognized(null); setFile(null); setConfirmed(false); setReviewed(false); setError(null); setNotice('Trabajo original conciliado. No se repitió el envío. Puedes preparar otro archivo distinto.') }}>Finalizar revisión de importación</Button></>}
+        {acknowledged && job.status !== 'processing' && job.completedAt && <>{job.status === 'failed' && <label><input type="checkbox" checked={reviewed} onChange={e => setReviewed(e.target.checked)} /> Revisé el fallo y los productos parciales de la solicitud original.</label>}<Button disabled={busy || job.status === 'failed' && !reviewed} onClick={() => { mark(job.importJobId, false); setRecognized(null); setFile(null); setReviewed(false); setError(null); setNotice('Trabajo original conciliado. No se repitió el envío. Puedes preparar otro archivo distinto.') }}>Finalizar revisión de importación</Button></>}
       </>}
       {canRecoverInterrupted && <fieldset disabled={busy || denied}><legend>Recuperar importación interrumpida</legend>
-        <label><input type="checkbox" checked={recoveryReview === jobId} onChange={event => setRecoveryReview(event.target.checked ? jobId : '')} /> Confirmo cerrar este trabajo y conservar sus filas y productos registrados.</label>
-        <Button type="button" disabled={recoveryReview !== jobId} onClick={() => void recoverInterrupted()}>Cerrar trabajo interrumpido</Button>
+        <Button type="button" variant="danger" disabled={!canRecoverInterrupted || busy || denied} onClick={() => void recoverInterrupted()}>Cerrar trabajo interrumpido</Button>
       </fieldset>}
       {jobId && !awaitingReceipt && <Button disabled={busy || query.isFetching} onClick={() => void query.refetch()}>Actualizar mismo trabajo</Button>}
     </div></Panel></div>

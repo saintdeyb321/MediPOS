@@ -107,7 +107,7 @@ async function fillLocal(type: 'retail' | 'medicine' = 'retail') {
   nextStep(form)
   fireEvent.change(form.getByRole('combobox', { name: 'Categoría' }), { target: { value: id('8') } })
   fireEvent.change(form.getByRole('textbox', { name: 'Marca o laboratorio documentado' }), { target: { value: 'Marca documentada unitaria' } })
-  if (type === 'retail') { nextStep(form); fillPrice(form, '1.2345') }
+  if (type === 'retail') fillPrice(form, '1.2345')
   return form
 }
 it('lists real-shaped records without inventing stock and reads presentations/prices from the scoped detail', async () => {
@@ -136,8 +136,7 @@ it('paginates with backend offset/limit and preserves true empty pages', async (
 it('creates a local general product only after review, serializes exact prices and refreshes the selected product once', async () => {
   const fake = server(); mount(fake); const form = await fillLocal()
   const button = form.getByRole('button', { name: 'Guardar producto' })
-  expect(button).toBeDisabled(); expect(fake.writes()).toHaveLength(0)
-  fireEvent.click(form.getByRole('checkbox', { name: /Revisé la identidad/ }))
+  expect(button).toBeEnabled(); expect(fake.writes()).toHaveLength(0)
   fireEvent.click(button); fireEvent.click(button)
   await screen.findAllByText(/Operación guardada y producto consultado/)
   expect(fake.writes()).toHaveLength(1)
@@ -154,8 +153,9 @@ it('requires structured documented medicine fields and preserves microgram/spell
   fireEvent.change(form.getByRole('textbox', { name: 'Principio activo 1' }), { target: { value: 'Ingrediente sintético de prueba' } })
   fireEvent.change(form.getByRole('textbox', { name: 'Concentración documentada 1' }), { target: { value: '25 µg' } })
   fireEvent.change(form.getByRole('textbox', { name: 'Forma farmacéutica' }), { target: { value: 'Forma de prueba' } })
-  nextStep(form); fillPrice(form, '1.2345')
-  fireEvent.click(form.getByRole('checkbox', { name: /Revisé la identidad/ }))
+  fillPrice(form, '1.2345')
+  expect(form.getByRole('button', { name: 'Guardar producto' })).toBeDisabled()
+  fireEvent.click(form.getByRole('checkbox', { name: /Verifiqué los atributos del medicamento/ }))
   fireEvent.click(form.getByRole('button', { name: 'Guardar producto' }))
   await screen.findAllByText(/Operación guardada y producto consultado/)
   expect(fake.writes()[0]?.[1]?.body).toContain('"components":[{"ingredient":"Ingrediente sintético de prueba","strengthNormalized":"25 µg"}]')
@@ -169,8 +169,8 @@ it('shows an empty global catalog honestly and associates a selected reference w
   fireEvent.click(await screen.findByRole('button', { name: 'Añadir Referencia unitaria a mi botica' }))
   const form = within(screen.getByRole('form', { name: 'Asociar producto global' }))
   fireEvent.change(form.getByRole('textbox', { name: 'Código interno' }), { target: { value: 'GLOBAL-UNIT' } })
-  nextStep(form); nextStep(form); fillPrice(form, '2.00')
-  fireEvent.click(form.getByRole('checkbox', { name: /Revisé la identidad/ }))
+  fillPrice(form, '2.00')
+  expect(fake.writes()).toHaveLength(0)
   fireEvent.click(form.getByRole('button', { name: 'Asociar al negocio' }))
   await screen.findAllByText(/Operación guardada y producto consultado/)
   expect(fake.writes()).toHaveLength(1)
@@ -179,7 +179,6 @@ it('shows an empty global catalog honestly and associates a selected reference w
 })
 it('retains uncertain creation across reload and never resends it automatically', async () => {
   const fake = server(); fake.state.loseCreate = true; const view = mount(fake); const form = await fillLocal()
-  fireEvent.click(form.getByRole('checkbox', { name: /Revisé la identidad/ }))
   fireEvent.click(form.getByRole('button', { name: 'Guardar producto' }))
   await screen.findByText('No pudimos completar la operación de catálogo')
   const search = screen.getByTestId('location').textContent!
@@ -193,7 +192,6 @@ it('updates prices and status through their official endpoints, refetching actua
   const fake = server(); mount(fake); await openTask('prices')
   const form = within(screen.getByRole('form', { name: 'Actualizar precios' }))
   fireEvent.change(form.getByRole('textbox', { name: 'Precio minorista por unidad base (S/)' }), { target: { value: '2.1234' } })
-  fireEvent.click(form.getByRole('checkbox', { name: 'Confirmo los nuevos precios base.' }))
   fireEvent.click(form.getByRole('button', { name: 'Guardar precios' }))
   await screen.findAllByText(/Operación guardada y producto consultado/)
   const prices = screen.getByRole('dialog', { name: 'Editar precios' })
@@ -203,7 +201,6 @@ it('updates prices and status through their official endpoints, refetching actua
   if (discard) fireEvent.click(discard)
   await openTask('status')
   const status = within(screen.getByRole('dialog', { name: 'Cambiar estado del producto' }))
-  fireEvent.click(status.getByRole('checkbox', { name: 'Confirmo desactivar este producto.' }))
   fireEvent.click(status.getByRole('button', { name: 'Desactivar producto' }))
   await status.findByRole('button', { name: 'Activar producto' })
   expect(fake.writes()).toHaveLength(2)
@@ -213,7 +210,6 @@ it('updates prices and status through their official endpoints, refetching actua
 it('does not retry uncertain prices or unlock after an early read without operator review', async () => {
   const fake = server(); fake.state.losePrices = true; mount(fake); await openTask('prices')
   fireEvent.change(screen.getByRole('textbox', { name: 'Precio minorista por unidad base (S/)' }), { target: { value: '2.00' } })
-  fireEvent.click(screen.getByRole('checkbox', { name: 'Confirmo los nuevos precios base.' }))
   fireEvent.click(screen.getByRole('button', { name: 'Guardar precios' }))
   await screen.findAllByText(/Producto consultado: Producto unitario/)
   expect(screen.getByRole('button', { name: 'Guardar precios' })).toBeDisabled()
@@ -235,7 +231,6 @@ it('initializes units with the version observed from the server and generated id
   fireEvent.click(form.getByRole('button', { name: 'Agregar presentación' }))
   fireEvent.change(form.getByRole('textbox', { name: 'Nombre de presentación 2' }), { target: { value: 'Caja' } })
   fireEvent.change(form.getByRole('textbox', { name: 'Conversión a base 2' }), { target: { value: '10' } })
-  fireEvent.click(form.getByRole('checkbox', { name: /Revisé nombres, actividad/ }))
   expect(form.getByRole('button', { name: 'Guardar presentaciones' })).toBeEnabled()
   expect(form.getByRole('textbox', { name: 'Conversión a base 2' })).toHaveValue('10')
   fireEvent.click(form.getByRole('button', { name: 'Guardar presentaciones' }))
@@ -255,7 +250,6 @@ it('preserves the reviewed unit revision when a concurrent change rejects the wr
   fake.state.unitVersion = 18
   fake.state.units[1] = { ...box, name: 'Cambio concurrente' }
   expect(screen.getByRole('button', { name: 'Recargar presentaciones del servidor' })).toBeDisabled()
-  fireEvent.click(form.getByRole('checkbox', { name: /Revisé nombres, actividad/ }))
   fireEvent.click(form.getByRole('button', { name: 'Guardar presentaciones' }))
   await screen.findAllByRole('alert')
   expect(name).toHaveValue('Mi edición')
@@ -269,7 +263,6 @@ it('preserves ids on rename/deactivation and reconciles lost unit responses with
   const form = within(await screen.findByRole('form', { name: 'Guardar configuración de presentaciones' }))
   fireEvent.change(form.getByRole('textbox', { name: 'Nombre de presentación 2' }), { target: { value: 'Caja LAB' } })
   fireEvent.click(form.getByRole('checkbox', { name: 'Presentación activa 2' }))
-  fireEvent.click(form.getByRole('checkbox', { name: /Revisé nombres, actividad/ }))
   fireEvent.click(form.getByRole('button', { name: 'Guardar presentaciones' }))
   await screen.findByRole('heading', { name: 'Operación pendiente de conciliación' })
   await waitFor(() => expect(fake.state.units[1]?.name).toBe('Caja LAB'))
@@ -296,7 +289,6 @@ it('keeps missing categories distinct from a successful empty catalog and blocks
 })
 it('handles a definitive authorization rejection without changing status or retrying', async () => {
   const fake = server(); fake.state.rejectStatus = true; mount(fake); await openTask('status')
-  fireEvent.click(screen.getByRole('checkbox', { name: 'Confirmo desactivar este producto.' }))
   fireEvent.click(screen.getByRole('button', { name: 'Desactivar producto' }))
   await screen.findByText('No pudimos completar la operación de catálogo')
   expect(screen.getByRole('button', { name: 'Desactivar producto' })).toBeDisabled()

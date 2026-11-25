@@ -1,4 +1,3 @@
-import { useState } from 'react'
 import { useQueries } from '@tanstack/react-query'
 import { catalogApi } from '../catalog'
 import { ApiErrorState, useRuntime, useWorkspace } from '../access'
@@ -11,7 +10,7 @@ import type { PurchaseView } from './api'
 import { receiptTotal } from './receipt'
 
 export function PurchaseReview({ view, disabled, confirm }: { view: PurchaseView; disabled: boolean; confirm: () => void }) {
-  const w = useWorkspace(); const { http } = useRuntime(); const [reviewed, setReviewed] = useState(false)
+  const w = useWorkspace(); const { http } = useRuntime()
   const ids = [...new Set(view.lines.map(row => row.businessProductId))]
   const products = useQueries({ queries: ids.map(id => ({ queryKey: scopedKey(w, 'catalog-detail', w.session.userId, w.access.membershipId, id),
     queryFn: ({ signal }: { signal: AbortSignal }) => { if (!http) throw new ApiError(0, 'client.https_required'); return catalogApi(http).detail(w, id, signal) },
@@ -28,10 +27,9 @@ export function PurchaseReview({ view, disabled, confirm }: { view: PurchaseView
     <div className="operation-table"><table><caption>Líneas consultadas en el servidor</caption><thead><tr><th>Producto / presentación guardada</th><th>Cantidad / base</th><th>Costo por presentación</th><th>Lote / vencimiento</th></tr></thead><tbody>{view.lines.map(line => <tr key={line.id}><td>{products[ids.indexOf(line.businessProductId)]?.data?.product.name ?? 'Nombre no disponible'} · {line.unitNameSnapshot}</td><td>{decimalLabel(line.quantity)} / {decimalLabel(line.baseQuantity)}</td><td>S/ {decimalLabel(line.unitCost, 2)}</td><td>{line.batchNumber ?? 'No informado'} / {line.expirationDate ?? 'No informado'}</td></tr>)}</tbody></table></div>
     {!view.lines.length && <p>La recepción todavía no tiene líneas persistidas.</p>}
     <p>Importe documental calculado desde las líneas guardadas: S/ {decimalLabel(receiptTotal(view.lines), 2)}. La API no devuelve un total independiente.</p>
-    {view.purchase.status === 'draft' && <><p>Confirmar genera lotes y movimientos de stock de forma atómica en el servidor. Evita editar esta recepción desde otra pestaña u operador mientras la revisas; el backend vuelve a verificar permisos y productos.</p>
+    {view.purchase.status === 'draft' && <><p>Confirma solo la mercadería que recibiste físicamente en {w.branch.name}. Esta acción registra los lotes y el ingreso de stock.</p>
       {!ready && <p>Falta verificar productos activos o completar lote/vencimiento de medicamentos antes de confirmar.</p>}
-      <label><input type="checkbox" checked={reviewed} disabled={disabled || !ready} onChange={event => setReviewed(event.target.checked)} /> Revisé el estado persistido y recibí físicamente esta mercadería.</label>
-      <Button disabled={disabled || !ready || !reviewed} onClick={confirm}>Confirmar recepción una vez</Button>
+      <Button disabled={disabled || !ready} onClick={confirm}>Confirmar recepción de mercadería</Button>
     </>}
   </section>
 }

@@ -41,8 +41,8 @@ it.each(['1.000000000001', '-1.000000000001'])('records signed exact adjustment 
   const fake = operationServer(); mountOperation(fake, <InventoryPage />); const form = await openAdjustment()
   const button = form.getByRole('button', { name: 'Registrar ajuste una vez' }); expect(button).toBeDisabled()
   fireEvent.change(form.getByRole('textbox', { name: /Variación en unidades base/ }), { target: { value: quantity } })
-  fireEvent.click(form.getByRole('checkbox')); expect(button).toBeDisabled()
-  fireEvent.change(form.getByRole('textbox', { name: 'Motivo del ajuste' }), { target: { value: 'Motivo de prueba unitaria' } }); fireEvent.click(form.getByRole('checkbox')); fireEvent.click(button); fireEvent.click(button)
+  expect(button).toBeDisabled()
+  fireEvent.change(form.getByRole('textbox', { name: 'Motivo del ajuste' }), { target: { value: 'Motivo de prueba unitaria' } }); fireEvent.click(button); fireEvent.click(button)
   await screen.findByRole('heading', { name: 'Ajuste registrado por el servidor' })
   expect(fake.writes()).toHaveLength(1); expect(fake.writes()[0]?.[1]?.body).toContain('"quantityDeltaBase":' + quantity)
   await waitFor(() => expect(screen.getByRole('cell', { name: quantity.startsWith('-') ? '18.999999999999' : '21.000000000001' })).toBeInTheDocument())
@@ -54,13 +54,13 @@ it('rejects zero, insufficient negative quantity and missing reason before dispa
   fireEvent.change(form.getByRole('textbox', { name: 'Motivo del ajuste' }), { target: { value: 'Motivo unitario' } })
   for (const value of ['0', '-21', '0.00000000000000000000000000001']) {
     fireEvent.change(form.getByRole('textbox', { name: /Variación en unidades base/ }), { target: { value } })
-    fireEvent.click(form.getByRole('checkbox')); expect(form.getByRole('button', { name: 'Registrar ajuste una vez' })).toBeDisabled()
+    expect(form.getByRole('button', { name: 'Registrar ajuste una vez' })).toBeDisabled()
   }
   expect(fake.writes()).toHaveLength(0)
 })
 it('keeps an uncertain adjustment blocked after refreshing unchanged or changed balance and after reload', async () => {
   const fake = operationServer(); fake.state.loseAdjustment = true; const view = mountOperation(fake, <InventoryPage />); const form = await openAdjustment()
-  fireEvent.change(form.getByRole('textbox', { name: /Variación en unidades base/ }), { target: { value: '1' } }); fireEvent.change(form.getByRole('textbox', { name: 'Motivo del ajuste' }), { target: { value: 'Motivo' } }); fireEvent.click(form.getByRole('checkbox')); fireEvent.click(form.getByRole('button', { name: 'Registrar ajuste una vez' }))
+  fireEvent.change(form.getByRole('textbox', { name: /Variación en unidades base/ }), { target: { value: '1' } }); fireEvent.change(form.getByRole('textbox', { name: 'Motivo del ajuste' }), { target: { value: 'Motivo' } }); fireEvent.click(form.getByRole('button', { name: 'Registrar ajuste una vez' }))
   await waitFor(() => expect(screen.getByTestId('location').textContent).toContain('inventoryPending=adjustment'))
   fireEvent.click(screen.getByRole('button', { name: 'Actualizar consulta' })); await waitFor(() => expect(screen.getByRole('cell', { name: '21' })).toBeInTheDocument())
   expect(screen.getByRole('button', { name: 'Ajustar lote BATCH-UNIT' })).toBeDisabled(); expect(fake.writes()).toHaveLength(1)
@@ -70,7 +70,7 @@ it('keeps an uncertain adjustment blocked after refreshing unchanged or changed 
 it('sets exact minimum only as Owner, labels its absent GET truthfully, and filters with the selected product ID', async () => {
   const fake = operationServer(); mountOperation(fake, <InventoryPage />); const form = within(await pickProduct())
   expect(form.getByText(/La API no ofrece lectura del mínimo actual/)).toBeInTheDocument()
-  fireEvent.change(form.getByRole('textbox', { name: 'Mínimo de stock base' }), { target: { value: '1,000000000001' } }); fireEvent.click(form.getByRole('checkbox')); fireEvent.click(form.getByRole('button', { name: 'Guardar mínimo' }))
+  fireEvent.change(form.getByRole('textbox', { name: 'Mínimo de stock base' }), { target: { value: '1,000000000001' } }); fireEvent.click(form.getByRole('button', { name: 'Guardar mínimo' }))
   await screen.findByRole('heading', { name: 'Mínimo guardado por el servidor' })
   expect(fake.writes()[0]?.[1]?.body).toBe('{"minimumStockBase":1.000000000001}')
   expect(fake.fetcher.mock.calls.some(([path]) => String(path).includes('/inventory/stock?') && String(path).includes('productId=' + id(10)))).toBe(true)
@@ -78,7 +78,7 @@ it('sets exact minimum only as Owner, labels its absent GET truthfully, and filt
 })
 it('preserves unknown minimum outcome without retry and restores its blocking marker', async () => {
   const fake = operationServer(); fake.state.loseMinimum = true; mountOperation(fake, <InventoryPage />); const form = within(await pickProduct())
-  fireEvent.change(form.getByRole('textbox', { name: 'Mínimo de stock base' }), { target: { value: '0' } }); fireEvent.click(form.getByRole('checkbox')); fireEvent.click(form.getByRole('button', { name: 'Guardar mínimo' }))
+  fireEvent.change(form.getByRole('textbox', { name: 'Mínimo de stock base' }), { target: { value: '0' } }); fireEvent.click(form.getByRole('button', { name: 'Guardar mínimo' }))
   await waitFor(() => expect(screen.getByTestId('location').textContent).toContain('inventoryPending=minimum'))
   expect(form.getByRole('button', { name: 'Guardar mínimo' })).toBeDisabled(); expect(fake.writes()).toHaveLength(1)
 })
@@ -97,7 +97,7 @@ it('denies Cashier before querying inventory', () => {
 })
 it.each([403, 409, 429])('shows HTTP %s from an adjustment without retry or success', async status => {
   const fake = operationServer(); fake.state.reject = status; mountOperation(fake, <InventoryPage />); const form = await openAdjustment()
-  fireEvent.change(form.getByRole('textbox', { name: /Variación en unidades base/ }), { target: { value: '1' } }); fireEvent.change(form.getByRole('textbox', { name: 'Motivo del ajuste' }), { target: { value: 'Motivo' } }); fireEvent.click(form.getByRole('checkbox')); fireEvent.click(form.getByRole('button', { name: 'Registrar ajuste una vez' }))
+  fireEvent.change(form.getByRole('textbox', { name: /Variación en unidades base/ }), { target: { value: '1' } }); fireEvent.change(form.getByRole('textbox', { name: 'Motivo del ajuste' }), { target: { value: 'Motivo' } }); fireEvent.click(form.getByRole('button', { name: 'Registrar ajuste una vez' }))
   await screen.findByText('No pudimos completar la operación de inventario'); expect(fake.writes()).toHaveLength(1)
   expect(screen.queryByRole('heading', { name: 'Ajuste registrado por el servidor' })).not.toBeInTheDocument()
 })

@@ -135,7 +135,7 @@ function CatalogWorkspace() {
         {taskDetail && <>
           {task === 'metadata' && <EditLocalProduct key={editEpoch} detail={taskDetail} categories={categories.data ?? []} write={write} onDirty={setDirty} />}
           {task === 'prices' && <EditPrices key={editEpoch} detail={taskDetail} write={write} onDirty={setDirty} />}
-          {task === 'status' && <EditStatus key={editEpoch} detail={taskDetail} write={write} onDirty={setDirty} />}
+          {task === 'status' && <EditStatus key={editEpoch} detail={taskDetail} write={write} />}
           {task === 'units' && <UnitEditor key={editEpoch} detail={taskDetail} write={write} onDirty={setDirty} />}
         </>}
       </div>
