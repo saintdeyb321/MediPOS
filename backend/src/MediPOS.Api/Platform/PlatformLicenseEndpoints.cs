@@ -52,8 +52,7 @@ public static partial class PlatformLicenseEndpoints
         app.MapPost("/platform/catalog/categories", async (HttpContext context, MediPOS.Application.Modules.Catalog.CreateCategory.CreateCategoryHandler handler) =>
         {
             var actor = await PlatformAdministrationAccess.RequireAsync(context.RequestServices.GetRequiredService<IPlatformAdministration>(), null, context.RequestAborted);
-            using var lease = context.RequestServices.GetRequiredService<PlatformApiRateLimiter>().AttemptAcquire(actor);
-            if (!lease.IsAcquired) throw new HttpBoundaryException(429, "platform.rate_limited");
+            using var lease = context.RequestServices.GetRequiredService<PlatformApiRateLimiter>().Acquire(actor);
             await ValidateCsrf(context);
             var request = await Read<CategoryRequest>(context);
             return Results.Json(await handler.HandleAsync(new(request.Name), context.RequestAborted), statusCode: 201);
@@ -63,8 +62,7 @@ public static partial class PlatformLicenseEndpoints
     private static async Task<IResult> BootstrapOwner(HttpContext context, CreateMembershipHandler handler)
     {
         var actor = await PlatformAdministrationAccess.RequireAsync(context.RequestServices.GetRequiredService<IPlatformAdministration>(), null, context.RequestAborted);
-        using var lease = context.RequestServices.GetRequiredService<PlatformApiRateLimiter>().AttemptAcquire(actor);
-        if (!lease.IsAcquired) throw new HttpBoundaryException(429, "platform.rate_limited");
+        using var lease = context.RequestServices.GetRequiredService<PlatformApiRateLimiter>().Acquire(actor);
         await ValidateCsrf(context);
         var tenant = BootstrapIdentifier(context.Request.RouteValues["tenantId"] as string);
         var request = await Read<BootstrapOwnerRequest>(context);
@@ -85,8 +83,7 @@ public static partial class PlatformLicenseEndpoints
     private static async Task<IResult> CreateCore(HttpContext context, CreateTenantIdempotentlyHandler handler, bool requireOwner)
     {
         var actor = await PlatformAdministrationAccess.RequireAsync(context.RequestServices.GetRequiredService<IPlatformAdministration>(), null, context.RequestAborted);
-        using var lease = context.RequestServices.GetRequiredService<PlatformApiRateLimiter>().AttemptAcquire(actor);
-        if (!lease.IsAcquired) throw new HttpBoundaryException(429, "platform.rate_limited");
+        using var lease = context.RequestServices.GetRequiredService<PlatformApiRateLimiter>().Acquire(actor);
         await ValidateCsrf(context);
         var keys = context.Request.Headers["Idempotency-Key"];
         if (keys.Count != 1 || keys[0] is not { Length: 36 } keyText || !Guid.TryParseExact(keyText, "D", out var key) || key == Guid.Empty)
@@ -113,8 +110,7 @@ public static partial class PlatformLicenseEndpoints
     {
         var token = context.RequestAborted;
         var actor = await PlatformAdministrationAccess.RequireAsync(context.RequestServices.GetRequiredService<IPlatformAdministration>(), null, token);
-        using var lease = context.RequestServices.GetRequiredService<PlatformApiRateLimiter>().AttemptAcquire(actor);
-        if (!lease.IsAcquired) throw new HttpBoundaryException(429, "platform.rate_limited");
+        using var lease = context.RequestServices.GetRequiredService<PlatformApiRateLimiter>().Acquire(actor);
         await ValidateCsrf(context);
         if (!Guid.TryParseExact(context.Request.RouteValues["tenantId"] as string, "D", out var tenant) || tenant == Guid.Empty ||
             !Guid.TryParseExact(context.Request.RouteValues["licenseId"] as string, "D", out var license) || license == Guid.Empty)

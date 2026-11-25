@@ -5,8 +5,9 @@ export class ApiError extends Error {
   readonly code: string
   readonly traceId?: string
   readonly outcomeUnknown: boolean
-  constructor(status: number, code: string, traceId?: string, outcomeUnknown = false) {
-    super(code); this.name = 'ApiError'; this.status = status; this.code = code; this.traceId = traceId; this.outcomeUnknown = outcomeUnknown
+  readonly retryAfterSeconds?: number
+  constructor(status: number, code: string, traceId?: string, outcomeUnknown = false, retryAfterSeconds?: number) {
+    super(code); this.name = 'ApiError'; this.status = status; this.code = code; this.traceId = traceId; this.outcomeUnknown = outcomeUnknown; this.retryAfterSeconds = retryAfterSeconds
   }
 }
 export type UnauthorizedListener = () => void
@@ -14,10 +15,10 @@ export class HttpClient {
   private readonly listeners = new Set<UnauthorizedListener>()
   private readonly fetcher: typeof fetch
   private activeRequests = 0
-  private activePlatformRequests = 0
-  private readonly waiting: { platform: boolean; enter: () => void }[] = []
+  private activePlatformWrites = 0
+  private readonly waiting: { platformWrite: boolean; enter: () => void }[] = []
   constructor(fetcher: typeof fetch = (...args) => fetch(...args)) { this.fetcher = fetcher }
-  private admit(signal: AbortSignal, platform: boolean): Promise<() => void> {
+  private admit(signal: AbortSignal, platformWrite: boolean): Promise<() => void> {
     // Focus can refresh directory/access/cash/search together. Respect the existing
     // server budgets (4 tenant requests, 2 auth requests) without retrying anything.
     return new Promise((resolve, reject) => {
@@ -28,22 +29,22 @@ export class HttpClient {
       }
       const enter = () => {
         if (signal.aborted) { cancel(); return }
-        signal.removeEventListener('abort', cancel); this.activeRequests++; if (platform) this.activePlatformRequests++
+        signal.removeEventListener('abort', cancel); this.activeRequests++; if (platformWrite) this.activePlatformWrites++
         let released = false
         resolve(() => {
           if (released) return
-          released = true; this.activeRequests--; if (platform) this.activePlatformRequests--; this.dispatch()
+          released = true; this.activeRequests--; if (platformWrite) this.activePlatformWrites--; this.dispatch()
         })
       }
-      const entry = { platform, enter }
+      const entry = { platformWrite, enter }
       if (signal.aborted) { reject(signal.reason); return }
       this.waiting.push(entry); signal.addEventListener('abort', cancel, { once: true }); this.dispatch()
     })
   }
   private dispatch() {
-    // Platform keeps its stricter single-request budget; a queued platform request does not block tenant reads.
+    // Platform writes serialize within this tab. Reads use the shared request budget.
     while (this.activeRequests < 2) {
-      const index = this.waiting.findIndex(entry => !entry.platform || this.activePlatformRequests === 0)
+      const index = this.waiting.findIndex(entry => !entry.platformWrite || this.activePlatformWrites === 0)
       if (index < 0) return
       this.waiting.splice(index, 1)[0]!.enter()
     }
@@ -86,7 +87,7 @@ export class HttpClient {
       let response: Response
       // CSRF acquisition finishes before taking the mutation's slot, avoiding a
       // nested request deadlock. Cancellation while queued never marks a POST sent.
-      release = await this.admit(signal, url.pathname.startsWith('/platform/'))
+      release = await this.admit(signal, method !== 'GET' && url.pathname.startsWith('/platform/'))
       try {
         sent = true
         response = await this.fetcher(path, {
@@ -99,6 +100,8 @@ export class HttpClient {
       }
       if (response.status === 401) this.listeners.forEach(listener => listener())
       if (response.status === 204 && response.ok) return undefined
+      const delay = response.status === 429 ? response.headers.get('Retry-After') : null
+      const retryAfter = delay && /^\d{1,4}$/.test(delay) ? Number(delay) : undefined
       let data: unknown
       try {
         if (response.ok && options.responseType === 'blob') {
@@ -111,13 +114,13 @@ export class HttpClient {
       } catch (error) {
         if (signal.aborted || error instanceof DOMException && error.name === 'AbortError') throw error
         const uncertain = method !== 'GET' && (response.ok || response.status >= 500)
-        throw new ApiError(response.ok ? 0 : response.status, uncertain ? 'client.outcome_unknown' : response.status === 401 ? 'auth.session_required' : 'client.unexpected_response', undefined, uncertain)
+        throw new ApiError(response.ok ? 0 : response.status, uncertain ? 'client.outcome_unknown' : response.status === 401 ? 'auth.session_required' : 'client.unexpected_response', undefined, uncertain, retryAfter)
       }
       if (!response.ok) {
         const problem = data && typeof data === 'object' ? data as Record<string, unknown> : {}
         const code = typeof problem.code === 'string' && /^[a-z0-9_.]{1,100}$/.test(problem.code) ? problem.code : `http.${response.status}`
         const trace = typeof problem.traceId === 'string' && /^[a-zA-Z0-9_-]{1,100}$/.test(problem.traceId) ? problem.traceId : undefined
-        throw new ApiError(response.status, code, trace, method !== 'GET' && (response.status >= 500 || ['operation.in_progress', 'operation.intention_conflict'].includes(code)))
+        throw new ApiError(response.status, code, trace, method !== 'GET' && (response.status >= 500 || ['operation.in_progress', 'operation.intention_conflict'].includes(code)), retryAfter)
       }
       return data
     } catch (error) {

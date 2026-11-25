@@ -229,7 +229,7 @@ public sealed class PlatformBootstrapOwnerHttpTests
         try
         {
             await state.Entered.Task.WaitAsync(TimeSpan.FromSeconds(10), Token);
-            using var overlap = await Send(host, state, csrf); await Problem(overlap, HttpStatusCode.TooManyRequests, "platform.rate_limited");
+            using var overlap = await Send(host, state, csrf); await Problem(overlap, HttpStatusCode.TooManyRequests, "platform.busy");
         }
         finally { state.Release.TrySetResult(); }
         using var first = await firstTask; Assert.Equal(HttpStatusCode.Created, first.StatusCode);

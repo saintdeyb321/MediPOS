@@ -14,8 +14,32 @@
 .platform-kpis > div { padding: 20px; border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--surface); display: grid; gap: 8px; }
 .platform-kpis dt { font-size: .875rem; color: var(--text-muted); }
 .platform-kpis dd { margin: 0; font-size: 1.8rem; font-weight: 750; color: var(--text); }
+.platform-console { gap: clamp(14px, 2vw, 24px); }
+.platform-console h2, .platform-console h3, .platform-note { margin: 0; }
+.platform-note { font-size: .9rem; color: var(--text-muted); }
+.platform-kpis svg { color: var(--primary); }
+.platform-shortcuts, .platform-category-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 210px), 1fr)); gap: 12px; }
+.platform-shortcuts a { display: flex; align-items: center; gap: 10px; min-height: 48px; padding: 12px; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface); color: var(--text); text-decoration: none; }
+.platform-shortcuts a:hover { background: var(--primary-soft); }
+.platform-shortcuts a svg:last-child { margin-inline-start: auto; }
+.platform-categories { display: grid; gap: 16px; min-width: 0; }
+.platform-category-grid { list-style: none; padding: 0; margin: 0; grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.platform-category-grid > li { display: grid; min-width: 0; }
+.platform-category-card { display: grid; gap: 12px; padding: clamp(14px, 2vw, 20px); min-width: 0; height: 100%; grid-template-rows: auto 1fr auto; }
+.platform-category-card h2 { font-size: 1.1rem; overflow-wrap: anywhere; }
+.platform-category-card p { color: var(--text-muted); font-size: .85rem; margin: 0; }
+.platform-category-icon { width: 40px; height: 40px; display: inline-grid; place-items: center; border-radius: var(--radius-md); color: var(--primary); background: var(--primary-soft); }
+.platform-profile { max-width: 760px; }
+.platform-profile .platform-account-actions { align-items: center; }
+.platform-filters { display: flex; flex-wrap: wrap; align-items: end; gap: 12px 20px; }
+.platform-filters label:has(input[type='checkbox']) { display: flex; gap: 8px; align-items: center; align-self: center; }
+.platform-read-error { display: grid; justify-items: start; gap: 8px; }
+.platform-read-error p { margin: 0; }
+.platform-console td, .platform-console th { overflow-wrap: anywhere; }
 .platform-context { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between; }
 .platform-account-actions { display: flex; flex-wrap: wrap; gap: 12px; }
+@media (max-width: 1370px) { .platform-category-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (max-width: 1080px) { .platform-category-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 1000px) { .platform-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 760px) {
   .platform-shell { display: block; }
@@ -25,4 +49,5 @@
   .platform-brand { display: none; }
   .platform-account { margin-top: 0; }
 }
+@media (max-width: 500px) { .platform-category-grid { grid-template-columns: minmax(0, 1fr); } }
 @media (max-width: 420px) { .platform-kpis { gap: 10px; } .platform-kpis > div { padding: 14px; } }

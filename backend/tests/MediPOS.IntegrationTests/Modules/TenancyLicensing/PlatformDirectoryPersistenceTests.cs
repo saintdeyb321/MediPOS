@@ -1,14 +1,17 @@
+using System.Data.Common;
 using MediPOS.Application.Errors;
 using MediPOS.Application.Modules.Catalog;
 using MediPOS.Application.Modules.IdentityAccess.Authentication;
 using MediPOS.Application.Modules.IdentityAccess.CreateMembership;
 using MediPOS.Application.Modules.TenancyLicensing;
 using MediPOS.Application.Modules.TenancyLicensing.CreateTenant;
+using MediPOS.Application.Tenancy;
 using MediPOS.Domain.Modules.TenancyLicensing;
 using MediPOS.Infrastructure;
 using MediPOS.Infrastructure.Persistence;
 using MediPOS.IntegrationTests.Modules.IdentityAccess;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -69,21 +72,99 @@ public sealed class PlatformDirectoryPersistenceTests(PostgreSqlFixture fixture)
         }
     }
 
-    private static async Task<LicenseDetails> Create(ServiceProvider services, Guid actor, Guid key)
+    [Fact]
+    public async Task PageWithMultipleTenantsUsesIndependentScopesAndDoesNotCarryPlatformOrTenantAuthorityIntoTheDirectoryRoot()
+    {
+        await using var identityServices = IdentityAccessTestSetup.CreateServices(fixture, TimeProvider.System);
+        Guid actor; Guid owner;
+        await using (var identityScope = identityServices.CreateAsyncScope())
+        {
+            actor = (await IdentityAccessTestSetup.CreateUserAsync(identityScope.ServiceProvider)).Id;
+            owner = (await IdentityAccessTestSetup.CreateUserAsync(identityScope.ServiceProvider)).Id;
+        }
+        var meter = new DirectoryReads();
+        await using var services = Services(actor, meter);
+        const string email = "synthetic.directory-owner@example.invalid";
+        var pending = await Create(services, actor, Guid.NewGuid(), email);
+        var assigned = await Create(services, actor, Guid.NewGuid());
+        await using (var bootstrap = services.CreateAsyncScope())
+            await bootstrap.ServiceProvider.GetRequiredService<CreateMembershipHandler>().BootstrapOwnerAsync(assigned.TenantId, owner, actor, Token);
+        var expected = new HashSet<Guid> { pending.TenantId, assigned.TenantId };
+        for (var index = 0; index < 19; index++)
+            expected.Add((await Create(services, actor, Guid.NewGuid())).TenantId);
+
+        await using var pageScope = services.CreateAsyncScope();
+        var queries = pageScope.ServiceProvider.GetRequiredService<PlatformDirectoryQueries>();
+        var ctx = pageScope.ServiceProvider.GetRequiredService<MediPosDbContext>();
+        var smallest = expected.Min();
+        var lower = await ctx.Tenants.AsNoTracking().Where(tenant => tenant.Id.CompareTo(smallest) < 0)
+            .OrderByDescending(tenant => tenant.Id).Select(tenant => (Guid?)tenant.Id).FirstOrDefaultAsync(Token);
+        meter.Count = 0;
+        var first = await queries.TenantsAsync(lower, 20, Token);
+        AssertSelectBudget(first, meter.Count);
+        Assert.Equal(20, first.Items.Count);
+        Assert.Equal(first.Items[^1].TenantId, first.NextAfterTenantId);
+        meter.Count = 0;
+        var next = await queries.TenantsAsync(first.NextAfterTenantId, 20, Token);
+        AssertSelectBudget(next, meter.Count);
+        meter.Count = 0;
+        var single = await queries.TenantsAsync(lower, 1, Token);
+        AssertSelectBudget(single, meter.Count);
+        Assert.Equal(first.Items[0].TenantId, Assert.Single(single.Items).TenantId);
+        meter.Count = 0;
+        var empty = await queries.TenantsAsync(Guid.Parse("ffffffff-ffff-ffff-ffff-ffffffffffff"), 20, Token);
+        Assert.Empty(empty.Items);
+        AssertSelectBudget(empty, meter.Count);
+        var rows = first.Items.Concat(next.Items).Where(row => expected.Contains(row.TenantId)).ToList();
+        Assert.Equal(21, rows.Count);
+        var pendingRow = Assert.Single(rows, row => row.TenantId == pending.TenantId);
+        Assert.NotNull(pendingRow.Administration);
+        Assert.Equal("pending", pendingRow.Administration.OwnerStatus);
+        Assert.Equal(email, pendingRow.Administration.OwnerEmail);
+        Assert.NotNull(pendingRow.Administration.StartsAt);
+        Assert.NotNull(pendingRow.Administration.OwnerAssignedAt);
+        Assert.Equal("active", Assert.Single(rows, row => row.TenantId == assigned.TenantId).Administration?.OwnerStatus);
+        Assert.Null(pageScope.ServiceProvider.GetRequiredService<ITenantDataContext>().TenantId);
+        Assert.Empty(await ctx.Licenses.IgnoreQueryFilters().Where(license => expected.Contains(license.TenantId)).ToListAsync(Token));
+    }
+
+    private static async Task<LicenseDetails> Create(ServiceProvider services, Guid actor, Guid key, string? ownerEmail = null)
     {
         await using var scope = services.CreateAsyncScope(); var now = DateTimeOffset.UtcNow;
         return (await scope.ServiceProvider.GetRequiredService<CreateTenantIdempotentlyHandler>().HandleAsync(
-            new("Synthetic QA directory tenant", now, now.AddDays(30), 2, LicenseStatus.Trial, actor), key, Token)).License;
+            new("Synthetic QA directory tenant", now, now.AddDays(30), 2, LicenseStatus.Trial, actor, ownerEmail), key, Token)).License;
     }
 
-    private ServiceProvider Services(Guid actor)
+    private ServiceProvider Services(Guid actor, DirectoryReads? meter = null)
     {
         var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?> { ["ConnectionStrings:MediPosDatabase"] = fixture.ConnectionString }).Build();
         var services = new ServiceCollection(); services.AddSingleton(TimeProvider.System); services.AddInfrastructure(configuration);
+        if (meter is not null) services.ConfigureDbContext<MediPosDbContext>(options => options.AddInterceptors(meter));
         services.AddIdentityAuthentication<IdentityAccessTestSetup.TestGoogleIdentitySource, IdentityAccessTestSetup.TestServerSession>();
         services.AddScoped<IPlatformAdministration>(_ => new Approved(actor));
         return services.BuildServiceProvider(new ServiceProviderOptions { ValidateOnBuild = true, ValidateScopes = true });
     }
+    private static void AssertSelectBudget(PlatformTenantPage page, int count)
+    {
+        var withLicense = page.Items.Count(row => row.Administration is not null);
+        var withHistoricalOwner = page.Items.Count(row => row.Administration?.OwnerStatus is "active" or "inactive");
+        // Count EF SELECTs for the directory, license/Owner projection and invitation lookup.
+        // Session initialization, transaction commands and pool operations are outside this counter.
+        Assert.Equal(1 + page.Items.Count + withLicense - withHistoricalOwner, count);
+    }
+
+    private sealed class DirectoryReads : DbCommandInterceptor
+    {
+        internal int Count { get; set; }
+
+        public override ValueTask<InterceptionResult<DbDataReader>> ReaderExecutingAsync(DbCommand command,
+            CommandEventData eventData, InterceptionResult<DbDataReader> result, CancellationToken cancellationToken = default)
+        {
+            Count++;
+            return ValueTask.FromResult(result);
+        }
+    }
+
     private sealed class Approved(Guid actor) : IPlatformAdministration
     { public Task<Guid?> GetAuthorizedActorAsync(CancellationToken token) => Task.FromResult<Guid?>(actor); }
 }

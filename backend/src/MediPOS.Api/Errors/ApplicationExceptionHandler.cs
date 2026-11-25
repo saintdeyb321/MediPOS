@@ -38,6 +38,8 @@ public sealed class ApplicationExceptionHandler(IProblemDetailsService problemDe
         problem.Extensions["code"] = status == StatusCodes.Status500InternalServerError ? "server.unexpected" : boundary?.Code ?? failure!.Error.Code;
         problem.Extensions["traceId"] = traceId;
         httpContext.Response.StatusCode = status;
+        if (status == StatusCodes.Status429TooManyRequests && boundary?.RetryAfterSeconds is int seconds)
+            httpContext.Response.Headers.RetryAfter = seconds.ToString(System.Globalization.CultureInfo.InvariantCulture);
         if (!await problemDetails.TryWriteAsync(new ProblemDetailsContext { HttpContext = httpContext, ProblemDetails = problem }).ConfigureAwait(false))
             await httpContext.Response.WriteAsJsonAsync(problem, options: null, contentType: "application/problem+json", cancellationToken).ConfigureAwait(false);
         return true;

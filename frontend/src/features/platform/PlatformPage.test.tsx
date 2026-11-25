@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { expect, it, vi } from 'vitest'
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router'
 import { RuntimeProvider } from '../../app/providers/runtime'
@@ -13,14 +13,14 @@ const time = '2026-10-17T12:00:00Z'
 const json = (value: unknown, status = 200) => new Response(JSON.stringify(value), { status, headers: { 'Content-Type': 'application/json' } })
 type Invitation = { invitationId: string; email: string; status: 'pending' | 'claimed' | 'revoked'; createdAt: string; userId: string | null }
 function fixture() {
-  const state = { admission: 200, lost: false, invisible: false, duplicateCategory: false, reject: 0, listFailure: 0, afterReceiptListFailure: 0, detailFailure: 0, ownerReadFailure: 0, receipt: false, owner: null as string | null, invitation: null as Invitation | null, status: 'trial', expiresAt: '2026-11-16T12:00:00Z', categories: [] as { id: string; name: string; isActive: boolean; createdAt: string }[] }
+  const state = { admission: 200, categoryFailure: 0, mismatchedCategory: false, lost: false, invisible: false, reject: 0, listFailure: 0, afterReceiptListFailure: 0, detailFailure: 0, ownerReadFailure: 0, nextTenant: null as string | null, receipt: false, owner: null as string | null, invitation: null as Invitation | null, status: 'trial', expiresAt: '2026-11-16T12:00:00Z', categories: [] as { id: string; name: string; isActive: boolean; createdAt: string }[] }
   const license = () => ({ tenantId: id(2), licenseId: id(3), status: state.status, startsAt: time, expiresAt: state.expiresAt, maxBranches: 2 })
   const tenant = () => ({ tenantId: id(2), tradingName: 'Synthetic QA botica', createdAt: time, administration: { licenseStatus: state.status, expiresAt: license().expiresAt, maxBranches: 2, ownerStatus: state.invitation?.status ?? (state.owner ? 'active' : 'unassigned'), ownerEmail: state.invitation?.email ?? null, ownerName: null } })
   const fetcher = vi.fn<typeof fetch>().mockImplementation(async (path, init) => {
     const p = String(path).split('?')[0]; const method = init?.method ?? 'GET'
     if (p === '/auth/me') return json({ userId: id(1) })
     if (p === '/auth/csrf') return json({ requestToken: 'synthetic-csrf' })
-    if (p === '/platform/session') return state.admission === 200 ? json({ allowed: true }) : json({ code: 'access.platform_denied' }, state.admission)
+    if (p === '/platform/session') return state.admission === 200 ? json({ allowed: true }) : json({ code: state.admission === 429 ? 'platform.busy' : 'access.platform_denied' }, state.admission)
     if (method === 'POST' && state.reject) return json({ code: 'unit.rejected' }, state.reject)
     if (p === '/platform/tenants/with-owner' && method === 'POST') {
       const input = JSON.parse(String(init?.body)) as { ownerEmail: string }
@@ -35,11 +35,10 @@ function fixture() {
     if (p === '/platform/catalog/categories' && method === 'POST') {
       const name = (JSON.parse(String(init?.body)) as { name: string }).name
       const row = { id: id(9), name, isActive: true, createdAt: time }; state.categories.push(row)
-      if (state.duplicateCategory) state.categories.push({ ...row, id: id(10) })
-      if (state.lost) throw new TypeError('Synthetic lost response'); return json(row, 201)
+      if (state.lost) throw new TypeError('Synthetic lost response'); return json(state.mismatchedCategory ? { ...row, name: 'Otro nombre' } : row, 201)
     }
-    if (p === '/platform/catalog/categories') return json(state.invisible ? [] : state.categories)
-    if (p === '/platform/tenants') return state.listFailure ? json({ code: 'unit.read_failed' }, state.listFailure) : json({ items: [tenant()], nextAfterTenantId: null })
+    if (p === '/platform/catalog/categories') return state.categoryFailure ? json({ code: 'platform.rate_limited' }, state.categoryFailure) : json(state.invisible ? [] : state.categories)
+    if (p === '/platform/tenants') return state.listFailure ? json({ code: state.listFailure === 409 ? 'tenant.scope_conflict' : 'unit.read_failed' }, state.listFailure) : json({ items: [tenant()], nextAfterTenantId: String(path).includes('afterTenantId=') ? null : state.nextTenant })
     if (p?.endsWith('/details')) return state.detailFailure ? json({ code: 'access.platform_denied' }, state.detailFailure) : json({ tenant: tenant(), license: license(), initialOwnerUserId: state.owner })
     if (p?.endsWith('/initial-owner')) return state.ownerReadFailure ? json({ code: 'unit.read_failed' }, state.ownerReadFailure) : json({ invitation: state.invitation })
     if (p?.endsWith('/initial-owner/change') || p?.endsWith('/initial-owner/revoke')) {
@@ -55,7 +54,7 @@ function fixture() {
     }
     throw new Error('Unexpected or retired UI route: ' + p)
   })
-  return { state, fetcher, writes: () => fetcher.mock.calls.filter(([, init]) => init?.method === 'POST') }
+  return { state, fetcher, reads: (p: string) => fetcher.mock.calls.filter(([path, init]) => String(path).split('?')[0] === p && init?.method === 'GET'), writes: () => fetcher.mock.calls.filter(([, init]) => init?.method === 'POST') }
 }
 function Location() { return <output data-testid="location">{useLocation().search}</output> }
 function mount(fake: ReturnType<typeof fixture>, query = '') {
@@ -126,7 +125,8 @@ it.each(['create', 'recover'])('closes a receipt-confirmed %s even if the subseq
   const fake = fixture(); fake.state.afterReceiptListFailure = 503
   if (operation === 'recover') { fake.state.receipt = true; fake.state.invitation = pending(); mount(fake, '?creationKey=' + id(8) + '&platformPending=create'); fireEvent.click(await screen.findByRole('button', { name: 'Consultar constancia original sin repetir POST' })) }
   else { mount(fake); await create() }
-  await screen.findAllByText(/Alta confirmada por su constancia/)
+  await screen.findAllByText(/La constancia confirmó el alta|Resultado original recuperado/)
+  await screen.findByText(/No pudimos cargar la información/)
   await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Nueva botica' })).not.toBeInTheDocument())
   await waitFor(() => expect(screen.getByTestId('location')).not.toHaveTextContent('creationKey'))
   expect(screen.getByTestId('location')).not.toHaveTextContent('platformPending')
@@ -141,18 +141,25 @@ it.each([400, 403, 409, 429, 503])('does not retry a rejected or uncertain creat
   if ([409, 503].includes(status)) expect(screen.getByTestId('location')).toHaveTextContent('creationKey')
   else await waitFor(() => expect(screen.getByTestId('location')).not.toHaveTextContent('creationKey'))
 })
-it.each(['change', 'revoke'])('uses the original invitation identity for Owner %s and closes after a confirmed read', async action => {
+it.each(['change', 'revoke'])('uses the original invitation identity for Owner %s and uses the server acknowledgement', async action => {
   const fake = fixture(); fake.state.invitation = pending(); mount(fake, '?tenant=' + id(2))
   fireEvent.click(await screen.findByRole('button', { name: 'Corregir o revocar Gmail pendiente' }))
   if (action === 'change') fireEvent.change(screen.getByLabelText('Gmail del propietario pendiente'), { target: { value: 'corrected@example.invalid' } })
   fireEvent.click(screen.getByRole('button', { name: action === 'change' ? 'Guardar Gmail pendiente' : 'Revocar asignación pendiente' }))
+  if (action === 'revoke') {
+    expect(fake.writes()).toHaveLength(0)
+    expect(screen.getByText(/Revocarás el acceso pendiente de future.owner@example.invalid a Synthetic QA botica/)).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Confirmar revocación' }))
+  }
   await screen.findByRole('dialog', { name: 'Ficha de botica' }); expect(fake.writes()).toHaveLength(1)
+  expect(fake.reads('/platform/tenants/' + id(2) + '/initial-owner')).toHaveLength(1)
   expect(JSON.parse(String(fake.writes()[0]![1]!.body))).toMatchObject({ expectedInvitationId: id(6) })
   await waitFor(() => expect(screen.getByTestId('location')).not.toHaveTextContent('ownerExpected'))
 })
 it('shows an already claimed Owner without permitting an initial reassignment', async () => {
   const fake = fixture(); fake.state.owner = id(4); fake.state.invitation = { ...pending(), status: 'claimed', userId: id(4) }; mount(fake, '?tenant=' + id(2))
   await screen.findByText(/Propietario inicial registrado/)
+  expect(await screen.findByText(/Asignación reclamada/)).toBeInTheDocument()
   expect(screen.queryByRole('button', { name: 'Corregir o revocar Gmail pendiente' })).not.toBeInTheDocument(); expect(fake.writes()).toHaveLength(0)
 })
 it('reconciles an uncertain suspension without consulting the unavailable Owner or repeating POST', async () => {
@@ -166,12 +173,13 @@ it('reconciles an uncertain suspension without consulting the unavailable Owner 
   await waitFor(() => expect(read).toBeEnabled()); fireEvent.click(read)
   const confirm = within(dialog).getByRole('checkbox', { name: /Verifiqué el resultado original/ })
   await waitFor(() => expect(confirm).toBeEnabled()); fireEvent.click(confirm)
+  const readCallCount = fake.fetcher.mock.calls.length
   fireEvent.click(within(dialog).getByRole('button', { name: 'Continuar tras conciliación' }))
   await screen.findByRole('dialog', { name: 'Ficha de botica' }); expect(fake.writes()).toHaveLength(1)
   expect(screen.getByTestId('location')).not.toHaveTextContent('platformPending')
-  expect(fake.fetcher.mock.calls.filter(([path]) => String(path).endsWith('/initial-owner'))).toHaveLength(ownerReads)
+  expect(fake.fetcher.mock.calls.slice(0, readCallCount).filter(([path]) => String(path).endsWith('/initial-owner'))).toHaveLength(ownerReads)
 })
-it('identifies a confirmed suspension after a failed detail GET and distinguishes a later state', async () => {
+it('keeps a confirmed suspension visible when an explicit subsequent read fails', async () => {
   const fake = fixture(); const normal = fake.fetcher.getMockImplementation()!
   fake.fetcher.mockImplementation(async (path, init) => {
     const response = await normal(path, init)
@@ -182,17 +190,21 @@ it('identifies a confirmed suspension after a failed detail GET and distinguishe
   fireEvent.click(await screen.findByRole('button', { name: 'Gestionar licencia' }))
   fireEvent.change(screen.getByRole('combobox', { name: 'Operación de licencia' }), { target: { value: 'suspend' } })
   fireEvent.click(screen.getByRole('button', { name: 'Suspender licencia' }))
-  const dialog = within(screen.getByRole('dialog', { name: 'Gestionar licencia' }))
-  await dialog.findByText(/El servidor confirmó el cambio de licencia/)
-  const confirm = dialog.getByRole('checkbox', { name: /Verifiqué el resultado original/ })
-  expect(confirm).toBeDisabled()
-  expect(screen.getByTestId('location')).toHaveTextContent('platformPending=suspend')
-  fake.state.status = 'active'; fake.state.detailFailure = 0
-  fireEvent.click(await dialog.findByRole('button', { name: /Reconsultar licencia/ }))
-  await dialog.findByText(/La licencia consultada difiere del acuse/)
-  await waitFor(() => expect(confirm).toBeEnabled()); fireEvent.click(confirm)
-  fireEvent.click(dialog.getByRole('button', { name: 'Continuar tras conciliación' }))
-  await screen.findByRole('dialog', { name: 'Ficha de botica' }); expect(fake.writes()).toHaveLength(1)
+  await waitFor(() => expect(screen.getByTestId('location')).not.toHaveTextContent('platformPending'))
+  const drawer = within(await screen.findByRole('dialog', { name: 'Ficha de botica' }))
+  expect(fake.reads('/platform/tenants/' + id(2) + '/details')).toHaveLength(1)
+  expect(drawer.getByText('Suspendida')).toBeInTheDocument()
+  fireEvent.click(drawer.getByRole('button', { name: 'Reconsultar licencia y Owner' }))
+  await drawer.findByRole('heading', { name: 'No pudimos cargar la información' })
+  expect(drawer.getByText('Datos de la última lectura o del último cambio confirmado.')).toBeInTheDocument()
+  expect(screen.getByTestId('location')).not.toHaveTextContent('platformPending')
+  expect(fake.reads('/platform/tenants/' + id(2) + '/details')).toHaveLength(2)
+  fake.state.status = 'active'
+  fake.state.detailFailure = 0
+  fireEvent.click(drawer.getByRole('button', { name: 'Volver a intentar' }))
+  expect(await drawer.findByText('Activa')).toBeInTheDocument()
+  expect(fake.reads('/platform/tenants/' + id(2) + '/details')).toHaveLength(3)
+  expect(fake.writes()).toHaveLength(1)
 })
 it.each(['renew', 'reactivate'] as const)('closes a confirmed %s and keeps the server license identity', async action => {
   const fake = fixture(); if (action === 'reactivate') fake.state.status = 'suspended'; mount(fake, '?tenant=' + id(2))
@@ -209,12 +221,18 @@ it.each(['renew', 'reactivate'] as const)('closes a confirmed %s and keeps the s
 it('requires a category read, prevents duplicate creation and closes on confirmed persistence', async () => {
   const fake = fixture(); mount(fake, '?area=catalog')
   await screen.findByRole('heading', { name: 'Catálogo global' })
-  expect(screen.getByRole('button', { name: 'Nueva categoría' })).toBeDisabled()
-  fireEvent.click(screen.getByRole('button', { name: 'Consultar categorías globales' })); await screen.findByText('No hay categorías activas.')
+  await screen.findByText('No hay categorías activas.')
+  expect(fake.reads('/platform/catalog/categories')).toHaveLength(1)
   fireEvent.click(screen.getByRole('button', { name: 'Nueva categoría' })); fireEvent.change(screen.getByLabelText('Nombre de la categoría global'), { target: { value: 'Medicamentos' } })
-  fireEvent.click(screen.getByRole('button', { name: 'Crear categoría global una vez' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Crear categoría' }))
   await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Crear categoría global' })).not.toBeInTheDocument())
   expect(fake.writes()).toHaveLength(1); expect(new Headers(fake.writes()[0]![1]!.headers).has('Idempotency-Key')).toBe(false)
+  expect(fake.reads('/platform/catalog/categories')).toHaveLength(1)
+  expect(screen.getByRole('heading', { name: 'Medicamentos' })).toBeInTheDocument()
+  fireEvent.click(screen.getByRole('link', { name: 'Mi cuenta' }))
+  expect(screen.queryByText('Categoría creada.')).not.toBeInTheDocument()
+  expect(screen.queryByRole('button', { name: 'Nueva botica' })).not.toBeInTheDocument()
+  expect(fake.reads('/platform/tenants')).toHaveLength(0)
 })
 it('keeps a lost category intent after an empty read and blocks ambiguous duplicate names', async () => {
   const fake = fixture(); mount(fake, '?area=catalog&categoryPending=Medicamentos')
@@ -226,13 +244,122 @@ it('keeps a lost category intent after an empty read and blocks ambiguous duplic
   await screen.findAllByText(/Hay categorías con el mismo nombre/)
   expect(screen.getByRole('button', { name: 'Continuar tras conciliar categoría' })).toBeDisabled(); expect(fake.writes()).toHaveLength(0)
 })
+it('navigates all six areas using one shared directory read and a scoped category read', async () => {
+  const fake = fixture(); fake.state.invitation = pending(); mount(fake)
+  await screen.findByRole('region', { name: 'Indicadores de la primera página' })
+  const navigation = within(screen.getByRole('navigation', { name: 'Navegación de plataforma' }))
+  for (const area of ['Boticas', 'Propietarios pendientes', 'Licencias']) {
+    fireEvent.click(navigation.getByRole('link', { name: area }))
+    await screen.findByRole('rowheader', { name: 'Synthetic QA botica' })
+  }
+  expect(fake.reads('/platform/tenants')).toHaveLength(1)
+  expect(fake.reads('/platform/tenants/' + id(2) + '/details')).toHaveLength(0)
+  expect(fake.reads('/platform/tenants/' + id(2) + '/initial-owner')).toHaveLength(0)
+  fireEvent.click(screen.getByRole('button', { name: 'Gestionar Synthetic QA botica' }))
+  await within(await screen.findByRole('dialog', { name: 'Ficha de botica' })).findByText(pending().email, { exact: false })
+  expect(fake.reads('/platform/tenants/' + id(2) + '/details')).toHaveLength(1)
+  expect(fake.reads('/platform/tenants/' + id(2) + '/initial-owner')).toHaveLength(1)
+  fireEvent.click(screen.getByRole('button', { name: 'Cerrar Ficha de botica' }))
+  fireEvent.click(navigation.getByRole('link', { name: 'Catálogo global' }))
+  await screen.findByText('No hay categorías activas.')
+  fireEvent.click(navigation.getByRole('link', { name: 'Mi cuenta' }))
+  await screen.findByRole('heading', { name: 'Mi cuenta' })
+  expect(fake.reads('/platform/session')).toHaveLength(1)
+  expect(fake.reads('/platform/tenants')).toHaveLength(1)
+  expect(fake.reads('/platform/catalog/categories')).toHaveLength(1)
+  expect(fake.reads('/platform/tenants/' + id(2) + '/details')).toHaveLength(1)
+  expect(fake.reads('/platform/tenants/' + id(2) + '/initial-owner')).toHaveLength(1)
+  expect(fake.writes()).toHaveLength(0)
+}, 12000)
+
+it('keeps the cursor scoped to its directory and leaves the selected botica behind', async () => {
+  const fake = fixture(); fake.state.nextTenant = id(2); mount(fake, '?area=businesses')
+  fireEvent.click(await screen.findByRole('button', { name: 'Siguiente página' }))
+  await waitFor(() => expect(fake.reads('/platform/tenants')).toHaveLength(2))
+  expect(screen.getByTestId('location')).toHaveTextContent('after-businesses=')
+  fireEvent.click(await screen.findByRole('button', { name: 'Gestionar Synthetic QA botica' }))
+  await screen.findByRole('dialog', { name: 'Ficha de botica' })
+  fireEvent.click(screen.getByRole('button', { name: 'Cerrar Ficha de botica' }))
+  fireEvent.click(screen.getByRole('link', { name: 'Licencias' }))
+  await screen.findByRole('rowheader', { name: 'Synthetic QA botica' })
+  expect(screen.getByTestId('location')).not.toHaveTextContent('tenant=')
+  expect(screen.getByRole('button', { name: 'Primera página' })).toBeDisabled()
+  fireEvent.click(screen.getByRole('link', { name: 'Boticas' }))
+  expect(await screen.findByRole('button', { name: 'Primera página' })).toBeEnabled()
+  expect(fake.reads('/platform/tenants')).toHaveLength(2)
+  expect(fake.writes()).toHaveLength(0)
+}, 12000)
+
+it('retains the last directory during refresh and labels a tenant-scope conflict distinctly', async () => {
+  const fake = fixture()
+  const handle = fake.fetcher.getMockImplementation()!
+  let release: (() => void) | undefined
+  fake.fetcher.mockImplementation(async (path, init) => {
+    if (String(path).startsWith('/platform/tenants?') && fake.reads('/platform/tenants').length === 2) {
+      await new Promise<void>(resolve => { release = resolve })
+    }
+    return handle(path, init)
+  })
+  mount(fake, '?area=businesses')
+  await screen.findByRole('rowheader', { name: 'Synthetic QA botica' })
+  fake.state.listFailure = 409
+  fireEvent.click(screen.getByRole('button', { name: 'Actualizar boticas' }))
+  await waitFor(() => expect(release).toBeTypeOf('function'))
+  expect(await screen.findByText('Actualizando boticas…')).toBeInTheDocument()
+  expect(screen.getByRole('rowheader', { name: 'Synthetic QA botica' })).toBeInTheDocument()
+  await act(async () => { release?.() })
+  await screen.findByText(/La consulta no pudo mantenerse dentro de la botica solicitada/)
+  expect(screen.getByText(/Datos de la última lectura/)).toBeInTheDocument()
+  expect(fake.reads('/platform/tenants')).toHaveLength(2)
+  expect(fake.writes()).toHaveLength(0)
+}, 12000)
+
+it('cancels a directory read when leaving for an unrelated area', async () => {
+  const fake = fixture()
+  const handle = fake.fetcher.getMockImplementation()!
+  let signal: AbortSignal | null | undefined
+  fake.fetcher.mockImplementation(async (path, init) => {
+    if (!String(path).startsWith('/platform/tenants?')) return handle(path, init)
+    signal = init?.signal
+    return new Promise((_resolve, reject) => signal?.addEventListener('abort', () => reject(signal?.reason), { once: true }))
+  })
+  mount(fake, '?area=businesses')
+  await waitFor(() => expect(signal?.aborted).toBe(false))
+  fireEvent.click(screen.getByRole('link', { name: 'Mi cuenta' }))
+  await screen.findByRole('heading', { name: 'Mi cuenta' })
+  await waitFor(() => expect(signal?.aborted).toBe(true))
+  expect(fake.reads('/platform/tenants')).toHaveLength(1)
+  expect(fake.writes()).toHaveLength(0)
+}, 12000)
+
+it('keeps cached data and navigation after a transient admission limit while blocking writes', async () => {
+  vi.useFakeTimers({ shouldAdvanceTime: true })
+  try {
+    const fake = fixture(); mount(fake, '?area=businesses')
+    const action = await screen.findByRole('button', { name: 'Nueva botica' })
+    await screen.findByRole('rowheader', { name: 'Synthetic QA botica' })
+    expect(action).toBeEnabled()
+    fake.state.admission = 429
+    await act(async () => { await vi.advanceTimersByTimeAsync(60_000) })
+    await screen.findByText(/Puedes consultar datos de la última lectura/)
+    expect(screen.getByRole('rowheader', { name: 'Synthetic QA botica' })).toBeInTheDocument()
+    expect(action).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Reconsultar acceso' })).toBeDisabled()
+    fireEvent.click(screen.getByRole('link', { name: 'Mi cuenta' }))
+    await screen.findByRole('heading', { name: 'Mi cuenta' })
+    expect(fake.writes()).toHaveLength(0)
+    expect(fake.reads('/platform/session')).toHaveLength(2)
+  } finally { vi.useRealTimers() }
+}, 12000)
+
 it('keeps a mismatched post-create category response pending instead of reporting success', async () => {
-  const fake = fixture(); fake.state.duplicateCategory = true; mount(fake, '?area=catalog')
-  fireEvent.click(await screen.findByRole('button', { name: 'Consultar categorías globales' })); await screen.findByText('No hay categorías activas.')
+  const fake = fixture(); fake.state.mismatchedCategory = true; mount(fake, '?area=catalog')
+  await screen.findByText('No hay categorías activas.')
   fireEvent.click(screen.getByRole('button', { name: 'Nueva categoría' })); fireEvent.change(screen.getByLabelText('Nombre de la categoría global'), { target: { value: 'Medicamentos' } })
-  fireEvent.click(screen.getByRole('button', { name: 'Crear categoría global una vez' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Crear categoría' }))
   await waitFor(() => expect(screen.getByTestId('location')).toHaveTextContent('categoryPending'))
   const dialog = screen.getByRole('dialog', { name: 'Crear categoría global' })
-  await within(dialog).findByText(/Hay categorías con el mismo nombre/)
-  expect(fake.writes()).toHaveLength(1); expect(screen.queryByText(/Categoría creada mediante el contrato oficial/)).not.toBeInTheDocument()
+  await within(dialog).findByRole('heading', { name: 'No pudimos cargar la información' })
+  expect(within(dialog).getByRole('button', { name: 'Continuar tras conciliar categoría' })).toBeDisabled()
+  expect(fake.writes()).toHaveLength(1); expect(screen.queryByText('Categoría creada.')).not.toBeInTheDocument()
 })

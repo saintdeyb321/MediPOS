@@ -3,15 +3,38 @@ import { waitFor } from '@testing-library/react'
 import { HttpClient } from './http'
 
 const response = (body: unknown = {}) => new Response(JSON.stringify(body), { headers: { 'Content-Type': 'application/json' } })
-it('serializes platform requests within its stricter budget without blocking tenant reads', async () => {
+it('admits two platform GETs in parallel within the shared request budget', async () => {
   const finishes: (() => void)[] = []
   const fetcher = vi.fn<typeof fetch>().mockImplementation(() => new Promise(resolve => finishes.push(() => resolve(response()))))
   const http = new HttpClient(fetcher)
   const first = http.request('/platform/session'); const second = http.request('/platform/tenants'); const tenant = http.request('/api/me/tenants')
   await waitFor(() => expect(fetcher).toHaveBeenCalledTimes(2))
-  expect(fetcher.mock.calls.map(([path]) => path)).toEqual(['/platform/session', '/api/me/tenants'])
+  expect(fetcher.mock.calls.map(([path]) => path)).toEqual(['/platform/session', '/platform/tenants'])
   finishes.shift()!(); await waitFor(() => expect(fetcher).toHaveBeenCalledTimes(3))
   finishes.splice(0).forEach(finish => finish()); await Promise.all([first, second, tenant])
+})
+it('serializes platform mutations while a read can use the other slot', async () => {
+  const completes: (() => void)[] = []
+  const fetcher = vi.fn<typeof fetch>().mockImplementation(async path => path === '/auth/csrf'
+    ? response({ requestToken: 'unit-csrf' })
+    : new Promise(resolve => completes.push(() => resolve(response()))))
+  const http = new HttpClient(fetcher)
+  const first = http.request('/platform/one', { method: 'POST' })
+  const second = http.request('/platform/two', { method: 'POST' })
+  await waitFor(() => expect(completes).toHaveLength(1))
+  const read = http.request('/platform/session')
+  await waitFor(() => expect(completes).toHaveLength(2))
+  expect(fetcher.mock.calls.filter(([, init]) => init?.method === 'POST')).toHaveLength(1)
+  completes.shift()!()
+  await waitFor(() => expect(fetcher.mock.calls.filter(([, init]) => init?.method === 'POST')).toHaveLength(2))
+  completes.splice(0).forEach(complete => complete())
+  await Promise.all([first, second, read])
+})
+it('reports a safe Retry-After value without replaying a limited request', async () => {
+  const fetcher = vi.fn<typeof fetch>().mockImplementation(async () =>
+    new Response(JSON.stringify({ code: 'platform.rate_limited' }), { status: 429, headers: { 'Content-Type': 'application/problem+json', 'Retry-After': '15' } }))
+  await expect(new HttpClient(fetcher).request('/platform/tenants')).rejects.toMatchObject({ status: 429, code: 'platform.rate_limited', retryAfterSeconds: 15 })
+  expect(fetcher).toHaveBeenCalledTimes(1)
 })
 it('rejects malformed or misplaced idempotency headers before CSRF and any network request', async () => {
   const fetcher = vi.fn<typeof fetch>(); const http = new HttpClient(fetcher)

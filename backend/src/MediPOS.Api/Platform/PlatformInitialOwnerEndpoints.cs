@@ -20,8 +20,7 @@ public static partial class PlatformLicenseEndpoints
     private static async Task<IResult> ChangeInitialOwner(HttpContext context, InitialOwnerInvitations owners, bool revoke)
     {
         var actor = await PlatformAdministrationAccess.RequireAsync(context.RequestServices.GetRequiredService<IPlatformAdministration>(), null, context.RequestAborted);
-        using var lease = context.RequestServices.GetRequiredService<PlatformApiRateLimiter>().AttemptAcquire(actor);
-        if (!lease.IsAcquired) throw new HttpBoundaryException(429, "platform.rate_limited");
+        using var lease = context.RequestServices.GetRequiredService<PlatformApiRateLimiter>().Acquire(actor);
         await ValidateCsrf(context);
         var request = await Read<InitialOwnerRequest>(context);
         if (revoke && request.Email is not null || !revoke && string.IsNullOrWhiteSpace(request.Email)) throw new HttpBoundaryException(400, "platform.invalid_json");

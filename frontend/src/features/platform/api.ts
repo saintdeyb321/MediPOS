@@ -2,7 +2,8 @@ import { array, boolean, nullable, object, oneOf, text, uint, utc, uuid } from '
 import { ApiError, HttpClient } from '../../shared/api/http'
 
 const license = object({ tenantId: uuid, licenseId: uuid, status: oneOf('trial', 'active', 'grace', 'suspended', 'cancelled', 'purge_pending', 'purged'), startsAt: utc, expiresAt: utc, maxBranches: uint })
-const administration = object({ licenseStatus: text, expiresAt: utc, maxBranches: uint, ownerStatus: oneOf('active', 'inactive', 'pending', 'claimed', 'revoked', 'unassigned'), ownerEmail: nullable(text), ownerName: nullable(text) })
+const optionalDate = (value: unknown) => value === undefined ? null : nullable(utc)(value)
+const administration = object({ startsAt: optionalDate, ownerAssignedAt: optionalDate, licenseStatus: text, expiresAt: utc, maxBranches: uint, ownerStatus: oneOf('active', 'inactive', 'pending', 'claimed', 'revoked', 'unassigned'), ownerEmail: nullable(text), ownerName: nullable(text) })
 const summary = object({ tenantId: uuid, tradingName: text, createdAt: utc, administration: nullable(administration) })
 const details = object({ tenant: summary, license, initialOwnerUserId: nullable(uuid) })
 const category = object({ id: uuid, name: text, isActive: boolean, createdAt: utc })
@@ -27,7 +28,14 @@ export function platformApi(http: HttpClient) {
     }, signal),
     async admission(signal?: AbortSignal) { const result = object({ allowed: boolean })(await http.request('/platform/session', { signal })); if (!result.allowed) throw new ApiError(403, 'access.platform_denied'); return result },
     async initialOwner(tenantId: string, signal?: AbortSignal) { return object({ invitation: nullable(ownerInvitation) })(await http.request(`/platform/tenants/${uuid(tenantId)}/initial-owner`, { signal })).invitation },
-    changeOwner: (tenantId: string, expectedInvitationId: string, email: string | null, signal?: AbortSignal) => mutate(`/platform/tenants/${uuid(tenantId)}/initial-owner/${email === null ? 'revoke' : 'change'}`, { expectedInvitationId: uuid(expectedInvitationId), ...(email === null ? {} : { email }) }, ownerInvitation, signal),
+    changeOwner: (tenantId: string, expectedInvitationId: string, email: string | null, signal?: AbortSignal) => mutate(`/platform/tenants/${uuid(tenantId)}/initial-owner/${email === null ? 'revoke' : 'change'}`, { expectedInvitationId: uuid(expectedInvitationId), ...(email === null ? {} : { email }) }, value => {
+      const result = ownerInvitation(value)
+      const valid = email === null
+        ? result.invitationId === expectedInvitationId && result.status === 'revoked'
+        : result.status === 'pending' && result.email === email.trim().toLowerCase()
+      if (!valid || result.userId !== null) throw new Error('owner invitation response mismatch')
+      return result
+    }, signal),
     async tenants(after?: string, signal?: AbortSignal) {
       const result = object({ items: array(summary), nextAfterTenantId: nullable(uuid) })(await http.request('/platform/tenants?limit=20' + (after ? '&afterTenantId=' + uuid(after) : ''), { signal, exactNumbers: true }))
       if (result.items.length > 20) throw new ApiError(0, 'client.unexpected_response'); return result
@@ -41,7 +49,12 @@ export function platformApi(http: HttpClient) {
     async receipt(key: string, signal?: AbortSignal) { return validLicense(await http.request(`/platform/tenant-requests/${uuid(key)}`, { signal, exactNumbers: true })) },
     change: (tenant: PlatformTenant, action: LicenseAction, input: { expiresAt: string } | { status: 'trial' | 'active' | 'grace' } | Record<string, never>, signal?: AbortSignal) =>
       mutate(`/platform/tenants/${uuid(tenant.tenant.tenantId)}/licenses/${uuid(tenant.license.licenseId)}/${action}`, input, value => {
-        const result = validLicense(value); if (result.tenantId !== tenant.tenant.tenantId || result.licenseId !== tenant.license.licenseId) throw new Error('scope'); return result
+        const result = validLicense(value)
+        if (result.tenantId !== tenant.tenant.tenantId || result.licenseId !== tenant.license.licenseId ||
+          action === 'suspend' && result.status !== 'suspended' ||
+          action === 'reactivate' && (!('status' in input) || result.status !== input.status) ||
+          action === 'renew' && (!('expiresAt' in input) || Date.parse(result.expiresAt) !== Date.parse(input.expiresAt))) throw new Error('license response mismatch')
+        return result
       }, signal),
   }
 }

@@ -19,7 +19,7 @@ public static partial class PlatformLicenseEndpoints
             return Results.Json(await c.RequestServices.GetRequiredService<MediPOS.Application.Modules.Catalog.PlatformCategoryQueries>()
                 .ReadAsync(limit, c.RequestAborted));
         })).WithName("medipos.platform.categories.list");
-        MapRead(group, "/session", (HttpContext c) => ReadDirectory(c, [], () => Task.FromResult<IResult>(Results.Json(new { allowed = true }))))
+        MapRead(group, "/session", (HttpContext c) => ReadDirectory(c, [], () => Task.FromResult<IResult>(Results.Json(new { allowed = true })), PlatformRequestKind.Admission))
             .WithName("medipos.platform.session");
         MapRead(group, "/tenants", (HttpContext c) => ReadDirectory(c, ["afterTenantId", "limit"], async () =>
         {
@@ -49,12 +49,11 @@ public static partial class PlatformLicenseEndpoints
     private static RouteHandlerBuilder MapRead(RouteGroupBuilder group, string route, Func<HttpContext, Task<IResult>> handler) =>
         group.MapGet(route, (Delegate)handler);
 
-    private static async Task<IResult> ReadDirectory(HttpContext context, string[] allowedQuery, Func<Task<IResult>> execute)
+    private static async Task<IResult> ReadDirectory(HttpContext context, string[] allowedQuery, Func<Task<IResult>> execute, PlatformRequestKind kind = PlatformRequestKind.Read)
     {
         var authority = context.RequestServices.GetRequiredService<IPlatformAdministration>();
         var actor = await PlatformAdministrationAccess.RequireAsync(authority, null, context.RequestAborted);
-        using var lease = context.RequestServices.GetRequiredService<PlatformApiRateLimiter>().AttemptAcquire(actor);
-        if (!lease.IsAcquired) throw new HttpBoundaryException(429, "platform.rate_limited");
+        using var lease = context.RequestServices.GetRequiredService<PlatformApiRateLimiter>().Acquire(actor, kind);
         if (context.Request.Query.Any(q => !allowedQuery.Contains(q.Key, StringComparer.Ordinal) || q.Value.Count != 1))
             throw new HttpBoundaryException(400, "platform.invalid_query");
         var result = await execute();

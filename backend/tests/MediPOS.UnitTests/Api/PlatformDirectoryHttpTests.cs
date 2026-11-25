@@ -4,6 +4,7 @@ using MediPOS.Application.Errors;
 using MediPOS.Application.Modules.Catalog;
 using MediPOS.Application.Modules.IdentityAccess.Authentication;
 using MediPOS.Application.Modules.TenancyLicensing;
+using MediPOS.Application.Tenancy;
 using MediPOS.Domain.Modules.TenancyLicensing;
 using Microsoft.Extensions.DependencyInjection;
 using GoogleHost = MediPOS.UnitTests.Api.GoogleAuthenticationHttpTests.Host;
@@ -194,6 +195,108 @@ public sealed class PlatformDirectoryHttpTests
         Assert.Equal("access.platform_denied", denied.Error.Code);
     }
 
+    [Fact]
+    public async Task ThreeReadSlotsPermitNormalNavigationAndAdmissionWhileExcessReadsNeverReachPersistence()
+    {
+        var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var parallel = 0;
+        var reader = new Reader
+        {
+            BeforePage = async token =>
+            {
+                if (Interlocked.Increment(ref parallel) == 3) entered.TrySetResult();
+                await release.Task.WaitAsync(token);
+            }
+        };
+        await using var host = await Host(reader);
+        await PlatformLicenseHttpTests.Login(host);
+        var reads = Enumerable.Range(0, 3).Select(_ => Get(host, "/platform/tenants?limit=20")).ToArray();
+        try
+        {
+            await entered.Task.WaitAsync(TimeSpan.FromSeconds(10), Token);
+            using var admission = await Get(host, "/platform/session");
+            Assert.Equal(HttpStatusCode.OK, admission.StatusCode);
+            for (var index = 0; index < 35; index++)
+            {
+                using var excess = await Get(host, "/platform/tenants");
+                Assert.Equal(HttpStatusCode.TooManyRequests, excess.StatusCode);
+                Assert.Null(excess.Headers.RetryAfter);
+                await AssertCode(excess, "platform.busy");
+            }
+            Assert.Equal(3, reader.Calls);
+        }
+        finally
+        {
+            release.TrySetResult();
+            foreach (var read in reads)
+            {
+                using var response = await read;
+                Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+            }
+        }
+        // The concurrent rejections did not consume the next navigation's read budget.
+        using var next = await Get(host, $"/platform/tenants/{reader.Tenant:D}/details");
+        Assert.Equal(HttpStatusCode.OK, next.StatusCode);
+        Assert.Equal(4, reader.Calls);
+    }
+
+    [Fact]
+    public async Task ReadQuotaProvidesRetryAfterWithoutExhaustingAdmissionOrWriteBudgets()
+    {
+        var reader = new Reader();
+        await using var host = await Host(reader);
+        await PlatformLicenseHttpTests.Login(host);
+        for (var index = 0; index < 30; index++)
+        {
+            using var read = await Get(host, "/platform/tenants");
+            Assert.Equal(HttpStatusCode.OK, read.StatusCode);
+        }
+        using var limited = await Get(host, "/platform/tenants");
+        Assert.Equal(HttpStatusCode.TooManyRequests, limited.StatusCode);
+        Assert.InRange(limited.Headers.RetryAfter?.Delta?.TotalSeconds ?? 0, 1, 60);
+        await AssertCode(limited, "platform.rate_limited");
+        using var admission = await Get(host, "/platform/session");
+        Assert.Equal(HttpStatusCode.OK, admission.StatusCode);
+        using var request = new HttpRequestMessage(HttpMethod.Post, "/platform/catalog/categories")
+        {
+            Content = new StringContent("{}", System.Text.Encoding.UTF8, "application/json")
+        };
+        request.Headers.Add("Origin", "https://medipos.example.test");
+        using var write = await host.Client.SendAsync(request, Token);
+        Assert.Equal(HttpStatusCode.BadRequest, write.StatusCode);
+        await AssertCode(write, "auth.csrf_invalid");
+        Assert.Equal(30, reader.Calls);
+    }
+
+    [Fact]
+    public async Task ReSelectingAnotherTenantIsAConflictAndTheResponseIsSanitized()
+    {
+        var reader = new Reader
+        {
+            BeforePage = _ =>
+            {
+                var scope = new TenantDataContext();
+                scope.SelectTenant(Guid.NewGuid());
+                scope.SelectTenant(Guid.NewGuid());
+                return Task.CompletedTask;
+            }
+        };
+        await using var host = await Host(reader);
+        await PlatformLicenseHttpTests.Login(host);
+        using var response = await Get(host, "/platform/tenants");
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        await AssertCode(response, "tenant.scope_conflict");
+    }
+
+    private static async Task AssertCode(HttpResponseMessage response, string code)
+    {
+        using var problem = JsonDocument.Parse(await response.Content.ReadAsStringAsync(Token));
+        Assert.Equal(code, problem.RootElement.GetProperty("code").GetString());
+        Assert.False(string.IsNullOrWhiteSpace(problem.RootElement.GetProperty("traceId").GetString()));
+        Assert.False(problem.RootElement.TryGetProperty("detail", out _));
+    }
+
     private static Task<GoogleHost> Host(Reader reader, bool approved = true, bool enabled = true, Categories? categories = null) => GoogleHost.CreateAsync(
         configure: config =>
         {
@@ -221,8 +324,14 @@ public sealed class PlatformDirectoryHttpTests
         internal Guid Tenant { get; } = Guid.NewGuid(); internal Guid User { get; } = Guid.NewGuid();
         internal int Calls, Limit; internal Guid ReceiptActor; internal bool Missing;
         private LicenseDetails License => new(Tenant, Guid.NewGuid(), LicenseStatus.Trial, DateTimeOffset.UtcNow, DateTimeOffset.UtcNow.AddDays(30), 2);
-        public Task<PlatformTenantPage> TenantsAsync(Guid? afterTenantId, int limit, CancellationToken token)
-        { Calls++; Limit = limit; return Task.FromResult(new PlatformTenantPage([new(Tenant, "Synthetic QA tenant", DateTimeOffset.UtcNow)], null)); }
+        internal Func<CancellationToken, Task>? BeforePage { get; init; }
+        public async Task<PlatformTenantPage> TenantsAsync(Guid? afterTenantId, int limit, CancellationToken token)
+        {
+            Interlocked.Increment(ref Calls);
+            Limit = limit;
+            if (BeforePage is not null) await BeforePage(token);
+            return new([new(Tenant, "Synthetic QA tenant", DateTimeOffset.UtcNow)], null);
+        }
         public Task<PlatformTenantDetails?> TenantAsync(Guid tenantId, CancellationToken token)
         { Calls++; return Task.FromResult<PlatformTenantDetails?>(new(new(Tenant, "Synthetic QA tenant", DateTimeOffset.UtcNow), License, null)); }
         public Task<PlatformGoogleIdentity?> GoogleIdentityAsync(Guid userId, CancellationToken token)

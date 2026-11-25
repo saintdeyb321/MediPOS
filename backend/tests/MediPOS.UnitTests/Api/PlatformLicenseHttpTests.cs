@@ -229,6 +229,7 @@ public sealed class PlatformLicenseHttpTests
         for (var index = 0; index < 10; index++)
         { using var ok = await Send(host, state, "suspend", csrf); Assert.Equal(HttpStatusCode.OK, ok.StatusCode); }
         using var limited = await Send(host, state, "suspend", csrf); await Problem(limited, HttpStatusCode.TooManyRequests, "platform.rate_limited");
+        Assert.InRange(limited.Headers.RetryAfter?.Delta?.TotalSeconds ?? 0, 1, 60);
         Assert.Single(state.Audits);
         using var me = await host.Client.GetAsync("/auth/me", Token); Assert.Equal(HttpStatusCode.OK, me.StatusCode);
     }
@@ -248,7 +249,7 @@ public sealed class PlatformLicenseHttpTests
         using (var secondLease = limiter.AttemptAcquire(third))
         {
             Assert.True(firstLease.IsAcquired); Assert.True(secondLease.IsAcquired);
-            using var response = await Send(host, state, "suspend", csrf); await Problem(response, HttpStatusCode.TooManyRequests, "platform.rate_limited");
+            using var response = await Send(host, state, "suspend", csrf); await Problem(response, HttpStatusCode.TooManyRequests, "platform.busy");
             Assert.Equal(0, state.Lookups);
         }
         using var recovered = await Send(host, state, "suspend", csrf); Assert.Equal(HttpStatusCode.OK, recovered.StatusCode);
@@ -315,7 +316,7 @@ public sealed class PlatformLicenseHttpTests
         try
         {
             await state.Entered.Task.WaitAsync(TimeSpan.FromSeconds(10), Token);
-            using var repeated = await Send(host, state, "suspend", csrf); await Problem(repeated, HttpStatusCode.TooManyRequests, "platform.rate_limited"); Assert.Equal(1, state.Lookups);
+            using var repeated = await Send(host, state, "suspend", csrf); await Problem(repeated, HttpStatusCode.TooManyRequests, "platform.busy"); Assert.Equal(1, state.Lookups);
         }
         finally { state.Release.TrySetResult(); }
         using var completed = await pending; Assert.Equal(HttpStatusCode.OK, completed.StatusCode);

@@ -1,112 +1,146 @@
 import { useState } from 'react'
-import { Link, useSearchParams } from 'react-router'
-import { ShieldCheck } from 'lucide-react'
-import { ApiErrorState, useRuntime, useSession } from '../access'
-import { ApiError } from '../../shared/api/http'
-import type { HttpClient } from '../../shared/api/http'
+import { useSearchParams } from 'react-router'
+import { Building2, CircleUserRound, KeyRound, Layers3, ShieldCheck, UserRoundCheck } from 'lucide-react'
 import { Button } from '../../shared/ui/Button'
 import { TextField } from '../../shared/ui/TextField'
-import { Panel } from '../../shared/ui/Panel'
 import { Notice } from '../../shared/ui/Notice'
 import { PageHeader } from '../../shared/ui/PageHeader'
 import { Modal } from '../../shared/ui/Modal'
 import { DateText } from '../../shared/ui/DateText'
 import { UtcDateTimeField } from '../../shared/ui/UtcDateTimeField'
-import type { LicenseAction, TrialInput } from './api'
-import { usePlatformConsole } from './usePlatformConsole'
+import { licenseLabel } from '../../shared/ui/licenseLabel'
+import type { LicenseAction } from './api'
+import { usePlatformAdmission } from './usePlatformAdmission'
+import { categoryNameKey, usePlatformConsole } from './usePlatformConsole'
 import { NewTenantForm } from './NewTenantDialog'
+import { PlatformAccount, PlatformCategories, PlatformHome } from './PlatformAreas'
+import { PlatformReadError } from './PlatformAdmissionError'
 import { PlatformTenantDirectory } from './PlatformTenantDirectory'
 import { PlatformTenantDetails } from './PlatformTenantDetails'
 import { PlatformRecovery } from './PlatformRecovery'
-import { licenseActions } from './presentation'
+import { licenseActions, platformDestination } from './presentation'
 import '../../shared/styles/operations.css'
 
-// Admission belongs to PlatformLayout. Tenant selection must not remount a write's hook.
+const sections = {
+  home: { title: 'Inicio de plataforma', description: 'Revisa las boticas, sus asignaciones y los próximos vencimientos.', icon: ShieldCheck },
+  businesses: { title: 'Boticas', description: 'Consulta cada negocio y gestiona su alta.', icon: Building2 },
+  owners: { title: 'Propietarios pendientes', description: 'El propietario reclama el acceso al ingresar con el Gmail designado y verificado.', icon: UserRoundCheck },
+  licenses: { title: 'Licencias', description: 'Consulta vigencia, estado y cupo de sucursales.', icon: KeyRound },
+  catalog: { title: 'Catálogo global', description: 'Categorías compartidas como referencia por las boticas.', icon: Layers3 },
+  account: { title: 'Mi cuenta', description: 'Tu sesión y alcance administrativo.', icon: CircleUserRound },
+} as const
+type Task = 'create' | 'category' | 'owner' | 'license'
+
+// A switch of administrative area keeps the same operation coordinator mounted.
 export function PlatformPage() {
-  const { http } = useRuntime(); const session = useSession()
-  return http && session.data ? <PlatformConsole key={session.data.userId} http={http} userId={session.data.userId} /> : null
+  const { admission, http, session } = usePlatformAdmission('cached')
+  return http && session.data ? <PlatformConsole key={session.data.userId + (session.data.expiresAtUtc ?? '')} http={http}
+    userId={session.data.userId} expiresAt={session.data.expiresAtUtc ?? undefined} admitted={admission.isSuccess} /> : null
 }
-function PlatformConsole({ http, userId }: { http: HttpClient; userId: string }) {
-  const p = usePlatformConsole(http, userId); const [params, setParams] = useSearchParams()
+function PlatformConsole({ http, userId, expiresAt, admitted }: { http: NonNullable<ReturnType<typeof usePlatformAdmission>['http']>; userId: string; expiresAt?: string; admitted: boolean }) {
+  const [params] = useSearchParams()
   const area = params.get('area') ?? 'home'
-  const titles: Record<string, string> = { home: 'Inicio de plataforma', businesses: 'Boticas', owners: 'Propietarios pendientes', licenses: 'Licencias', catalog: 'Catálogo global', account: 'Mi cuenta' }
-  const [createDirty, setCreateDirty] = useState(false); const [createEpoch, setCreateEpoch] = useState(0)
+  const current = sections[area as keyof typeof sections]
+  const inDirectory = ['home', 'businesses', 'owners', 'licenses'].includes(area)
+  const selected = params.get('tenant')
+  const [drawer, setDrawer] = useState(Boolean(selected))
+  const [task, setTask] = useState<Task | null>(null)
+  const [taskHidden, setTaskHidden] = useState(false)
+  const open = task !== null && !taskHidden
+  const detailOpen = drawer && inDirectory && Boolean(selected)
+  const p = usePlatformConsole(http, userId, expiresAt, area, admitted, detailOpen || open && (task === 'owner' || task === 'license'), detailOpen || open && task === 'owner')
+  const [createDirty, setCreateDirty] = useState(false)
+  const [createEpoch, setCreateEpoch] = useState(0)
   const [ownerEmail, setOwnerEmail] = useState('')
-  const [action, setAction] = useState<LicenseAction>('renew'); const [expires, setExpires] = useState(''); const [status, setStatus] = useState<'trial' | 'active' | 'grace'>('active')
+  const [revoking, setRevoking] = useState(false)
+  const [action, setAction] = useState<LicenseAction>('renew')
+  const [expires, setExpires] = useState('')
+  const [status, setStatus] = useState<'trial' | 'active' | 'grace'>('active')
   const [categoryName, setCategoryName] = useState('')
-  const [task, setTask] = useState<'create' | 'category' | 'owner' | 'license' | null>(null)
-  const [taskHidden, setTaskHidden] = useState(false); const [detailOpen, setDetailOpen] = useState(Boolean(p.tenantId))
-  const denied = p.denied || [p.list.error, p.detail.error, p.initialOwner.error].some(error => error instanceof ApiError && [401, 403].includes(error.status))
-  function openTask(next: NonNullable<typeof task>) { setTask(next); setTaskHidden(false); setDetailOpen(false) }
-  function created() { setTask(null); setTaskHidden(false); setCreateDirty(false); setCreateEpoch(value => value + 1); setDetailOpen(true) }
-  function operationRecovered() { setTask(null); setTaskHidden(false); setOwnerEmail(''); setExpires(''); setDetailOpen(true) }
+
+  function openTask(next: Task) { setTask(next); setTaskHidden(false); setDrawer(false) }
+  function dismissCreate() { setTask(null); setTaskHidden(false); setCreateDirty(false); setCreateEpoch(value => value + 1) }
+  function created() { dismissCreate(); setDrawer(true) }
+  function operationRecovered() { setTask(null); setTaskHidden(false); setOwnerEmail(''); setExpires(''); setRevoking(false); setDrawer(true) }
   function categoryRecovered() { setTask(null); setTaskHidden(false); setCategoryName('') }
-  async function create(input: TrialInput) { const saved = await p.create(input); if (saved) created(); return saved }
   function manage(next: 'owner' | 'license') {
-    if (next === 'owner') { setOwnerEmail(p.initialOwner.data?.email ?? '') }
+    if (next === 'owner') {
+      setOwnerEmail(p.initialOwner.data?.email ?? '')
+      setRevoking(false)
+    } else if (p.data) {
+      const allowed = licenseActions(p.data.license.status)
+      setAction(allowed.reactivate ? 'reactivate' : 'renew')
+      setStatus('active')
+    }
     openTask(next)
   }
-  function select(id: string) { p.select(id); setDetailOpen(true) }
-  function setArea(next: string) { const copy = new URLSearchParams(params); copy.set('area', next); setParams(copy, { replace: true }) }
-  const canCreateCategory = !p.locked && p.categoriesRead && p.categories.data && p.categories.data.length < 100 && categoryName.trim().length > 0 && categoryName.trim().length <= 128 && !p.categories.data.some(row => row.name.trim().toLocaleLowerCase('es-PE') === categoryName.trim().toLocaleLowerCase('es-PE'))
-  if (denied) return <Notice tone="error">La autoridad de plataforma ya no está disponible. Vuelve a ingresar o solicita su revisión.</Notice>
-  return <div className="operations">
-    <PageHeader eyebrow="MEDIPOS · PLATAFORMA" title={titles[area] ?? 'Plataforma'} description="Administración de negocios y accesos; independiente de la operación comercial." icon={ShieldCheck} action={<Button disabled={p.locked} onClick={() => openTask('create')}>Nueva botica</Button>} />
-    {p.notice && <p role="status" className="notice info">{p.notice}</p>}{p.error != null && !task && <ApiErrorState error={p.error} />}
-    <PlatformRecovery p={p} kind="creation" recovered={created} /><PlatformRecovery p={p} kind="operation" recovered={operationRecovered} /><PlatformRecovery p={p} kind="category" recovered={categoryRecovered} />
-    {task && taskHidden && (p.pending || p.creationKey || p.categoryPending) && <Button data-recovery-focus variant="secondary" disabled={p.busy} onClick={() => setTaskHidden(false)}>Revisar solicitud pendiente sin reenviar</Button>}
-    {area === 'home' && <>
-      {p.list.isFetching && <p role="status">Consultando indicadores de esta página…</p>}{p.list.isError && <ApiErrorState error={p.list.error} retry={() => void p.list.refetch()} />}
-      {p.list.isSuccess && <><p>Indicadores de esta página; no son totales globales.</p><dl className="platform-kpis">
-        <div><dt>Boticas en esta página</dt><dd>{p.list.data.items.length}</dd></div>
-        <div><dt>Owners pendientes en esta página</dt><dd>{p.list.data.items.filter(row => row.administration?.ownerStatus === 'pending').length}</dd></div>
-        <div><dt>Licencias por vencer en 7 días en esta página</dt><dd>{p.list.data.items.filter(row => row.administration && Date.parse(row.administration.expiresAt) >= p.list.dataUpdatedAt && Date.parse(row.administration.expiresAt) <= p.list.dataUpdatedAt + 7 * 86400000).length}</dd></div>
-        <div><dt>Solicitudes por conciliar en esta vista</dt><dd>{Number(Boolean(p.pending || p.creationKey)) + Number(Boolean(p.categoryPending))}</dd></div>
-      </dl></>}
-      <Panel><div className="operation-body"><h2>Incorporar una nueva botica</h2><p>Designa el Gmail del Owner y la licencia. Su primer ingreso con Google verificado completará la asignación; no necesita un registro previo.</p><div className="operation-actions"><Button disabled={p.locked} onClick={() => openTask('create')}>Iniciar alta por Gmail</Button><Button variant="secondary" onClick={() => setArea('businesses')}>Ver boticas</Button></div></div></Panel>
-    </>}
-    {['businesses', 'owners', 'licenses'].includes(area) && <PlatformTenantDirectory p={p} area={area} select={select} />}
-    {area === 'catalog' && <Panel><div className="operation-body"><div className="platform-context"><h2>Categorías globales</h2><Button disabled={p.locked || !p.categoriesRead || !p.categories.data || p.categories.data.length >= 100} onClick={() => openTask('category')}>Nueva categoría</Button></div><p>Referencias compartidas. No crean productos, precios ni existencias.</p>
-      <Button variant="secondary" disabled={p.busy} onClick={() => { void p.readCategories() }}>Consultar categorías globales</Button>
-      {p.categoriesRead && p.categories.data && <>{!p.categories.data.length ? <p>No hay categorías activas.</p> : <ul>{p.categories.data.map(row => <li key={row.id}>{row.name} · <DateText value={row.createdAt} /></li>)}</ul>}{p.categories.data.length >= 100 && <Notice tone="warning">La lectura está acotada a 100 categorías. No crees otra sin revisar el catálogo completo.</Notice>}</>}
-    </div></Panel>}
-    {area === 'account' && <Panel><div className="operation-body"><h2>Cuenta administrativa</h2><p>Sesión Google con autoridad admitida por el servidor. No concede membresía comercial, acceso global a stock, ventas ni información privada de otras boticas.</p><p>La revocación depende de la configuración administrativa protegida y un reinicio controlado. No se modifica desde este panel.</p><div className="platform-account-actions"><Link to="/seleccionar-botica">Cambiar explícitamente a mis boticas</Link></div><p>El cierre de sesión está disponible en el menú de plataforma.</p></div></Panel>}
-    {!titles[area] && <Notice>Selecciona un área desde el menú de plataforma.</Notice>}
-    <PlatformTenantDetails p={p} open={detailOpen} close={() => setDetailOpen(false)} manage={manage} />
-    <Modal open={task === 'create' && !taskHidden} wide title="Nueva botica" onClose={() => { setTask(null); setCreateDirty(false); setCreateEpoch(value => value + 1) }} onRecoveryClose={() => setTaskHidden(true)} dirty={createDirty} busy={p.busy} recovery={Boolean(p.creationKey)}>
-      {p.error != null && <ApiErrorState error={p.error} />}<PlatformRecovery p={p} kind="creation" recovered={created} />
-      <NewTenantForm key={createEpoch} locked={p.locked} create={create} dirty={setCreateDirty} />
+  const select = (id: string) => { p.select(id); setDrawer(true) }
+  const relevantError = <PlatformReadError error={p.error} failedAt={p.failedAt} fetching={p.busy} />
+  const hydratedCategory = p.categoriesRead && p.categories.data && p.categories.data.length < 100
+  const duplicate = p.categories.data?.some(row => categoryNameKey(row.name) === categoryNameKey(categoryName))
+  const canCreateCategory = !p.locked && hydratedCategory && categoryName.trim().length > 0 && categoryName.trim().length <= 128 && !duplicate
+  const owner = p.initialOwner.data
+  const canEditOwner = !p.locked && p.data && !p.data.initialOwnerUserId && p.initialOwner.isSuccess && !p.initialOwner.isFetching && owner?.status === 'pending'
+  const changedAddress = Boolean(ownerEmail.trim() && ownerEmail.trim().toLowerCase() !== owner?.email.toLowerCase())
+  const actions = p.data && licenseActions(p.data.license.status)
+  const canChange = !p.locked && actions?.[action] && (action !== 'renew' || Boolean(expires))
+  if (p.denied) return <Notice tone="error">La autoridad de plataforma ya no está disponible. Vuelve a ingresar o solicita su revisión.</Notice>
+  return <div className="operations platform-console">
+    <PageHeader title={current?.title ?? 'Plataforma'} description={current?.description} icon={current?.icon}
+      action={['home', 'businesses'].includes(area) && <Button disabled={p.locked} onClick={() => openTask('create')}>Nueva botica</Button>} />
+    {p.notice && !detailOpen && <Notice><span role="status">{p.notice}</span></Notice>}
+    {!open && !detailOpen && relevantError}
+    {(!open || task !== 'create') && <PlatformRecovery key={p.creationKey ?? 'creation'} p={p} kind="creation" recovered={created} />}
+    {(!open || task !== 'owner' && task !== 'license') && <PlatformRecovery key={(p.pending ?? '') + p.tenantId} p={p} kind="operation" recovered={operationRecovered} />}
+    {(!open || task !== 'category') && <PlatformRecovery key={p.categoryPending ?? 'category'} p={p} kind="category" recovered={categoryRecovered} />}
+    {task && taskHidden && (p.pending || p.creationKey || p.categoryPending) && <Button data-recovery-focus variant="secondary" disabled={p.busy} onClick={() => setTaskHidden(false)}>Mostrar la solicitud original</Button>}
+
+    {area === 'home' && <PlatformHome p={p} destination={next => platformDestination(params, area, next)} />}
+    {inDirectory && area !== 'home' && <PlatformTenantDirectory key={area} p={p} area={area} select={select} />}
+    {area === 'catalog' && <PlatformCategories p={p} create={() => openTask('category')} />}
+    {area === 'account' && <PlatformAccount expiresAt={expiresAt} />}
+    {!current && <Notice>Selecciona un área desde el menú de plataforma.</Notice>}
+    <PlatformTenantDetails p={p} open={detailOpen} close={() => setDrawer(false)} manage={manage} />
+
+    <Modal open={open && task === 'create'} wide title="Nueva botica" onClose={dismissCreate} onRecoveryClose={() => setTaskHidden(true)} dirty={createDirty} busy={p.busy} recovery={Boolean(p.creationKey)}>
+      {relevantError}<PlatformRecovery p={p} kind="creation" recovered={created} />
+      <NewTenantForm key={createEpoch} locked={p.locked} create={async input => { const saved = await p.create(input); if (saved) created(); return saved }} dirty={setCreateDirty} />
     </Modal>
-    <Modal open={task === 'category' && !taskHidden} title="Crear categoría global" onClose={() => { setTask(null); setCategoryName('') }} onRecoveryClose={() => setTaskHidden(true)} dirty={Boolean(categoryName)} busy={p.busy} recovery={Boolean(p.categoryPending)}>
-      {p.error != null && <ApiErrorState error={p.error} />}<PlatformRecovery p={p} kind="category" recovered={categoryRecovered} />
-      <form className="operation-body" onSubmit={event => { event.preventDefault(); if (canCreateCategory) { void p.createCategory(categoryName.trim()).then(saved => { if (saved) { setTask(null); setCategoryName('') } }) } }}>
-        <TextField label="Nombre de la categoría global" value={categoryName} maxLength={128} disabled={p.locked} onChange={event => { setCategoryName(event.target.value) }} />
-        {p.categories.data?.some(row => row.name.trim().toLocaleLowerCase('es-PE') === categoryName.trim().toLocaleLowerCase('es-PE')) && <p>Esa categoría ya existe. Reutilízala.</p>}
-        <p>La categoría estará disponible como referencia global.</p><Button type="submit" disabled={!canCreateCategory}>Crear categoría global una vez</Button>
+    <Modal open={open && task === 'category'} title="Crear categoría global" onClose={categoryRecovered} onRecoveryClose={() => setTaskHidden(true)} dirty={Boolean(categoryName)} busy={p.busy} recovery={Boolean(p.categoryPending)}>
+      {relevantError}<PlatformRecovery p={p} kind="category" recovered={categoryRecovered} />
+      <form className="operation-body" onSubmit={event => { event.preventDefault(); if (canCreateCategory) { void p.createCategory(categoryName.trim()).then(saved => { if (saved) categoryRecovered() }) } }}>
+        <TextField label="Nombre de la categoría global" value={categoryName} maxLength={128} disabled={p.locked} onChange={event => setCategoryName(event.target.value)} />
+        {duplicate && <p>Esa categoría ya existe.</p>}
+        <Button type="submit" disabled={!canCreateCategory}>Crear categoría</Button>
       </form>
     </Modal>
-    <Modal open={task === 'owner' && !taskHidden} title="Propietario pendiente" onClose={() => { setTask(null); setOwnerEmail(''); setDetailOpen(true) }} onRecoveryClose={() => setTaskHidden(true)} dirty={Boolean(p.initialOwner.data && ownerEmail.trim() !== p.initialOwner.data.email)} busy={p.busy} recovery={Boolean(p.pending)}>
-      {p.error != null && <ApiErrorState error={p.error} />}<PlatformRecovery p={p} kind="operation" recovered={operationRecovered} />
-      {p.initialOwner.data && <form className="operation-body" onSubmit={event => { event.preventDefault(); if (!p.locked && p.initialOwner.data?.status === 'pending' && ownerEmail.trim() && ownerEmail.trim() !== p.initialOwner.data.email) { void p.changeOwner(ownerEmail.trim()).then(saved => { if (saved) { setTask(null); setOwnerEmail(''); setDetailOpen(true) } }) } }}>
-        <TextField label="Gmail del propietario pendiente" type="email" value={ownerEmail} maxLength={320} disabled={p.locked || p.initialOwner.data.status !== 'pending'} onChange={event => { setOwnerEmail(event.target.value) }} />
-        <p>Solo puede corregirse o revocarse antes del reclamo. No cambia al Owner ya vinculado a Google.</p>
-        <p>Asignación actual: {p.initialOwner.data.email}. Revocarla impedirá que esta cuenta reclame el acceso pendiente.</p>
-        <div className="form-footer"><Button type="submit" disabled={p.locked || p.initialOwner.data.status !== 'pending' || !ownerEmail.trim() || ownerEmail.trim() === p.initialOwner.data.email}>Guardar Gmail pendiente</Button><Button variant="danger" disabled={p.locked || p.initialOwner.data.status !== 'pending'} onClick={() => { void p.changeOwner(null).then(saved => { if (saved) { setTask(null); setOwnerEmail(''); setDetailOpen(true) } }) }}>Revocar asignación pendiente</Button></div>
+    <Modal open={open && task === 'owner'} title="Propietario pendiente" onClose={operationRecovered} onRecoveryClose={() => setTaskHidden(true)} dirty={Boolean(owner && changedAddress)} busy={p.busy} recovery={Boolean(p.pending)}>
+      {relevantError}<PlatformRecovery p={p} kind="operation" recovered={operationRecovered} />
+      <PlatformReadError error={p.detail.error} failedAt={p.detail.errorUpdatedAt} fetching={p.detail.isFetching} retry={admitted ? () => void p.detail.refetch() : undefined} />
+      <PlatformReadError error={p.initialOwner.error} failedAt={p.initialOwner.errorUpdatedAt} fetching={p.initialOwner.isFetching} retry={admitted && p.detail.isSuccess ? () => void p.initialOwner.refetch() : undefined} />
+      {owner && <form className="operation-body" onSubmit={event => { event.preventDefault(); if (canEditOwner && changedAddress && !revoking) { void p.changeOwner(ownerEmail.trim()).then(saved => { if (saved) operationRecovered() }) } }}>
+        {revoking ? <><Notice tone="warning">Revocarás el acceso pendiente de {owner.email} a {p.data?.tenant.tradingName ?? 'esta botica'}.</Notice>
+          <div className="form-footer"><Button variant="secondary" onClick={() => setRevoking(false)}>Volver a editar</Button><Button variant="danger" disabled={!canEditOwner} onClick={() => void p.changeOwner(null).then(saved => { if (saved) operationRecovered() })}>Confirmar revocación</Button></div></> :
+          <><TextField label="Gmail del propietario pendiente" type="email" value={ownerEmail} maxLength={320} disabled={!canEditOwner} onChange={event => setOwnerEmail(event.target.value)} />
+            <p>La corrección o revocación solo está disponible antes de que el propietario reclame la asignación.</p>
+            <div className="form-footer"><Button type="submit" disabled={!canEditOwner || !changedAddress}>Guardar Gmail pendiente</Button><Button variant="secondary" disabled={!canEditOwner} onClick={() => setRevoking(true)}>Revocar asignación pendiente</Button></div></>}
       </form>}
     </Modal>
-    <Modal open={task === 'license' && !taskHidden} title="Gestionar licencia" onClose={() => { setTask(null); setExpires(''); setDetailOpen(true) }} onRecoveryClose={() => setTaskHidden(true)} dirty={Boolean(expires)} busy={p.busy} recovery={Boolean(p.pending)}>
-      {p.error != null && <ApiErrorState error={p.error} />}<PlatformRecovery p={p} kind="operation" recovered={operationRecovered} />
-      {p.data && <form className="operation-body" onSubmit={event => event.preventDefault()}>
-        <h3>{p.data.tenant.tradingName}</h3><label>Operación<select aria-label="Operación de licencia" value={action} disabled={p.locked} onChange={event => { setAction(event.target.value as LicenseAction) }}><option value="renew" disabled={!licenseActions(p.data.license.status).renew}>Renovar</option><option value="suspend" disabled={!licenseActions(p.data.license.status).suspend}>Suspender</option><option value="reactivate" disabled={!licenseActions(p.data.license.status).reactivate}>Reactivar</option></select></label>
-        {action === 'renew' && <UtcDateTimeField label="Nuevo vencimiento" value={expires} required disabled={p.locked} change={value => { setExpires(value) }} />}
-        {action === 'reactivate' && <label>Estado al reactivar<select aria-label="Estado al reactivar" value={status} disabled={p.locked} onChange={event => { setStatus(event.target.value as typeof status) }}><option value="trial">Prueba gratuita</option><option value="active">Activa</option><option value="grace">Periodo de gracia</option></select></label>}
-        <Notice>{action === 'suspend' ? 'Suspender bloquea las operaciones comerciales según las reglas del servidor. No borra registros.' : action === 'renew' ? 'Se conservará el historial y el servidor validará el nuevo vencimiento.' : 'El servidor comprobará si esta transición permite reactivar la licencia.'}</Notice>
-        <Button variant={action === 'suspend' ? 'danger' : 'primary'} disabled={p.locked || !licenseActions(p.data.license.status)[action] || action === 'renew' && !expires} onClick={() => {
-          if (p.locked || !p.data || !licenseActions(p.data.license.status)[action] || action === 'renew' && !expires) return
-          void p.change(action, action === 'renew' ? { expiresAt: expires } : action === 'reactivate' ? { status } : {}).then(saved => {
-            if (saved) { setTask(null); setExpires(''); setDetailOpen(true) }
-          })
-        }}>{action === 'suspend' ? 'Suspender licencia' : action === 'renew' ? 'Renovar licencia' : 'Reactivar licencia'}</Button>
+    <Modal open={open && task === 'license'} title="Gestionar licencia" onClose={operationRecovered} onRecoveryClose={() => setTaskHidden(true)} dirty={Boolean(expires)} busy={p.busy} recovery={Boolean(p.pending)}>
+      {relevantError}<PlatformRecovery p={p} kind="operation" recovered={operationRecovered} />
+      <PlatformReadError error={p.detail.error} failedAt={p.detail.errorUpdatedAt} fetching={p.detail.isFetching} retry={admitted ? () => void p.detail.refetch() : undefined} />
+      {p.data && actions && <form className="operation-body" onSubmit={event => {
+        event.preventDefault()
+        if (canChange) void p.change(action, action === 'renew' ? { expiresAt: expires } : action === 'reactivate' ? { status } : {}).then(saved => { if (saved) operationRecovered() })
+      }}>
+        <div><h3>{p.data.tenant.tradingName}</h3><p>Licencia {licenseLabel(p.data.license.status)} · vence <DateText value={p.data.license.expiresAt} /></p></div>
+        <label>Operación<select aria-label="Operación de licencia" value={action} disabled={p.locked} onChange={event => setAction(event.target.value as LicenseAction)}>
+          <option value="renew" disabled={!actions.renew}>Renovar</option><option value="suspend" disabled={!actions.suspend}>Suspender</option><option value="reactivate" disabled={!actions.reactivate}>Reactivar</option>
+        </select></label>
+        {action === 'renew' && <UtcDateTimeField label="Nuevo vencimiento" value={expires} required disabled={p.locked} change={setExpires} />}
+        {action === 'reactivate' && <label>Estado al reactivar<select aria-label="Estado al reactivar" value={status} disabled={p.locked} onChange={event => setStatus(event.target.value as typeof status)}><option value="trial">Prueba gratuita</option><option value="active">Activa</option><option value="grace">Periodo de gracia</option></select></label>}
+        {action === 'suspend' && <Notice tone="warning">Suspender {p.data.tenant.tradingName} restringe sus operaciones comerciales.</Notice>}
+        <Button type="submit" variant={action === 'suspend' ? 'danger' : 'primary'} disabled={!canChange}>{action === 'suspend' ? 'Suspender licencia' : action === 'renew' ? 'Renovar licencia' : 'Reactivar licencia'}</Button>
       </form>}
     </Modal>
   </div>

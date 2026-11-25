@@ -4,7 +4,8 @@ using MediPOS.Application.Modules.IdentityAccess.Authentication;
 namespace MediPOS.Application.Modules.TenancyLicensing;
 
 public sealed record PlatformTenantSummary(Guid TenantId, string TradingName, DateTimeOffset CreatedAt, PlatformTenantAdministration? Administration = null);
-public sealed record PlatformTenantAdministration(string LicenseStatus, DateTimeOffset ExpiresAt, int MaxBranches, string OwnerStatus, string? OwnerEmail, string? OwnerName);
+public sealed record PlatformTenantAdministration(string LicenseStatus, DateTimeOffset ExpiresAt, int MaxBranches, string OwnerStatus,
+    string? OwnerEmail, string? OwnerName, DateTimeOffset? StartsAt = null, DateTimeOffset? OwnerAssignedAt = null);
 public sealed record PlatformTenantPage(IReadOnlyList<PlatformTenantSummary> Items, Guid? NextAfterTenantId);
 public sealed record PlatformTenantDetails(PlatformTenantSummary Tenant, LicenseDetails License, Guid? InitialOwnerUserId);
 public sealed record PlatformGoogleIdentity(Guid UserId, string DisplayName, string Email);
