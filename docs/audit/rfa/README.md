@@ -2,11 +2,11 @@
 
 Baseline de cierre `939ad83a5da8de3ceb7d4308879f6ac470546b9f`, rama `ci/postgres-diagnostics-8bc6b4c`, 26/11/2026 Lima. El árbol estaba limpio al reanudar y coincidía con el publicado auditado. Se conserva el inventario original capturado sobre `7d453285252d2bf9279cb7c42e1ac95f4f8c70c6` y sus cambios UAX registrados, incluida la huella del HTML `68cb1c38d5fbe3a07d59479aae3d0e2772215b0194baab178797b825f8d429cf`. Artefacto servido y esquema real NO_DETERMINADO. [SPEC](../../SPEC.md), [ARCHITECTURE](../../ARCHITECTURE.md) y [ADR](../../ADR.md) son las fuentes canónicas.
 
-[Inventario](USE_CASES.md) · [Matriz](MATRIX.csv) · [Indicios](FINDINGS.md) · [Continuidad](CHECKPOINT.md)
+[Inventario](USE_CASES.md) · [Matriz acumulativa](MATRIX.csv) · [Validación RFA2](VALIDATION.md) · [Hallazgos](FINDINGS.md) · [Continuidad](CHECKPOINT.md)
 
 ## Cobertura
 
-**FASE_01_COMPLETA (cierre documental RFA0–RFA1)**. Se reconciliaron 27/27 declaraciones del router con casos o exclusiones y 123/123 contratos HTTP inventariados con fichas. Se trazaron los 74 E0 de la entrega previa y se añadió UC-REP-17 para reposición interna. Hay 155/155 casos E1, 0 E0, 155 NOT_RUN, ocho diagramas y cinco hallazgos. E1 acredita un trayecto estático en el alcance expuesto o su límite de exposición. Las pruebas citadas son referencias y no constituyen resultados de ejecución.
+**FASE_01_COMPLETA (historial RFA0–RFA1)**. Se reconciliaron 27/27 declaraciones del router con casos o exclusiones y 123/123 contratos HTTP inventariados con fichas. Se trazaron los 74 E0 de la entrega previa y se añadió UC-REP-17 para reposición interna. En ese corte hubo 155/155 casos E1 y NOT_RUN, ocho diagramas y cinco hallazgos. La matriz refleja la evidencia acumulada posterior.
 
 | Familia | E1 / inventario |
 |---|---:|
@@ -28,3 +28,7 @@ Los resultados de comportamiento, la reproducción de los hallazgos, el estado d
 - Catálogo y presentaciones alimentan POS, Compras y Transferencias. La recepción genera lotes y movimientos, y la confirmación de venta consume stock y produce pagos. La anulación compensa con registros auditados.
 - Caja calcula efectivo físico desde pagos/reversiones y préstamos. El arqueo por ID y el directorio de abiertas son consultas distintas. Reportes agregan ventas/stock; comisiones contabilizan con la venta y su reversión.
 - Avisos derivan de lotes y registran lectura por membresía. La auditoría muestra metadatos. El módulo offline usa catálogo de sede, dispositivo y acuses originales, y CPE queda desacoplado.
+
+## RFA2 · Validación conductual
+
+**FASE_02_PARCIAL** sobre `2c54e1f71aa6f66a67190d37eacda6ada71f4b0f`. Los 155 UC están clasificados en 9/9 familias y 12 escenarios. Evidencia más alta por caso: 27 E1, 128 E2, 0 E3 y 0 E4. Veredictos: 1 PASS, 1 FAIL, 148 BLOCKED, 4 NOT_RUN y 1 N/A. Los PASS parciales de ejecución se detallan aparte. Falta evidencia real de persistencia, concurrencia, RLS y reentrada en navegador aislado. [Ejecuciones y reanudación](VALIDATION.md).

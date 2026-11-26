@@ -1,5 +1,7 @@
 # Inventario transversal
 
+Los 155 IDs conservan su alcance AS-IS. Para evidencia y veredicto de la revisión conductual, consultar la [matriz acumulativa](MATRIX.csv) y los [escenarios RFA2](VALIDATION.md).
+
 ## Router
 
 - `39:      <Route path="/" element={<LoginPage />} />`
