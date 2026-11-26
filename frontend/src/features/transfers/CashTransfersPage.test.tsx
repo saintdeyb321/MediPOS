@@ -3,18 +3,20 @@ import { beforeEach, expect, it } from 'vitest'
 import { stringifyExactJson } from '../../shared/api/exactJson'
 import { CashTransfersPage } from './CashTransfersPage'
 import { cashServer, sentCash } from './cash.test.support'
-import { id, json, mountTransfers, other, workspace } from './transfers.test.support'
+import { id, json, mountTransfers, n, other, workspace } from './transfers.test.support'
 
 beforeEach(() => sessionStorage.clear())
 
 function openDispatch() { fireEvent.click(screen.getByRole('button', { name: 'Nuevo envío de sencillo' })) }
 async function selectCash() {
-  await screen.findAllByRole('option', { name: /apertura UTC/ }); fireEvent.change(screen.getByRole('combobox', { name: 'Caja para sencillo' }), { target: { value: id(302) } }); await screen.findByText(/Caja ABIERTA/)
+  await screen.findAllByRole('option', { name: /apertura UTC/ }); fireEvent.change(screen.getByRole('combobox', { name: 'Caja para sencillo' }), { target: { value: id(302) } }); await screen.findByText('Caja abierta.')
 }
 async function dispatch() {
   openDispatch()
   await selectCash(); fireEvent.change(screen.getByRole('combobox', { name: 'Sucursal destino de sencillo' }), { target: { value: other.id } }); fireEvent.change(screen.getByRole('textbox', { name: 'Importe de sencillo PEN' }), { target: { value: '1.0001' } })
-  expect(screen.getByText(/Entrega S\/ 1\.0001/)).toBeInTheDocument(); const button = screen.getByRole('button', { name: 'Confirmar despacho de sencillo' }); fireEvent.click(button); fireEvent.click(button)
+  const button = screen.getByRole('button', { name: 'Confirmar despacho de sencillo' })
+  expect(button).toBeEnabled()
+  expect(screen.getByText(/Entrega S\/ 1\.0001/)).toBeInTheDocument(); fireEvent.click(button); fireEvent.click(button)
 }
 it('opens the cash selector only in the editor and resumes the same unsent amount', async () => {
   const fake = cashServer(); mountTransfers(fake, <CashTransfersPage />)
@@ -31,7 +33,8 @@ it('opens the cash selector only in the editor and resumes the same unsent amoun
 it('dispatches once from a selected open cash with exact amount and rereads without changing ledger locally', async () => {
   const fake = cashServer(); mountTransfers(fake, <CashTransfersPage />); await dispatch()
   await screen.findByRole('heading', { name: 'Sencillo: EN TRÁNSITO' }); expect(fake.writes()).toHaveLength(1)
-  expect(fake.writes()[0]?.[1]?.body).toContain('"amount":1.0001'); expect(fake.cash.expected.literal).toBe('10')
+  expect(fake.writes()[0]?.[1]?.body).toContain('"amount":1.0001')
+  expect(new Headers(fake.writes()[0]?.[1]?.headers).get('Idempotency-Key')).toMatch(/^[a-f\d-]{36}$/)
   await waitFor(() => expect(screen.getByTestId('location')).not.toHaveTextContent('cashTransferPending'))
   expect(screen.getByRole('button', { name: 'Confirmar recepción de sencillo' })).toBeDisabled()
   expect(fake.fetcher.mock.calls.some(([path, init]) => init?.method === 'GET' && String(path).endsWith('/cash-transfers/' + sentCash.id))).toBe(true)
@@ -49,12 +52,55 @@ it('denies Pharmacist before all cash requests and limits Cashier to its own ses
   mountTransfers(fake, <CashTransfersPage />, '', { ...workspace, access: { ...workspace.access, role: 'cashier' } }); openDispatch(); await selectCash()
   expect(fake.fetcher.mock.calls.some(([path]) => String(path).includes('/cash-sessions/active'))).toBe(false); expect(screen.queryByRole('combobox', { name: 'Destino de consulta' })).not.toBeInTheDocument()
 })
-it('does not open cash automatically and blocks zero, excessive, out-of-range and overprecision amounts', async () => {
+it('does not open cash automatically and blocks zero, negative, out-of-range and overprecision amounts', async () => {
   const fake = cashServer(); fake.cash.open = false; const view = mountTransfers(fake, <CashTransfersPage />)
   openDispatch()
   await screen.findByRole('link', { name: /Ir a Caja/ }); expect(screen.getByRole('button', { name: 'Confirmar despacho de sencillo' })).toBeDisabled(); expect(fake.writes()).toHaveLength(0)
   view.unmount(); fake.cash.open = true; mountTransfers(fake, <CashTransfersPage />); openDispatch(); await selectCash(); fireEvent.change(screen.getByRole('combobox', { name: 'Sucursal destino de sencillo' }), { target: { value: other.id } })
-  for (const value of ['0', '10.0001', '0.00001', '100000000000000']) { fireEvent.change(screen.getByRole('textbox', { name: 'Importe de sencillo PEN' }), { target: { value } }); expect(screen.getByRole('button', { name: 'Confirmar despacho de sencillo' })).toBeDisabled() }
+  for (const value of ['0', '-1', '0.00001', '100000000000000']) { fireEvent.change(screen.getByRole('textbox', { name: 'Importe de sencillo PEN' }), { target: { value } }); expect(screen.getByRole('button', { name: 'Confirmar despacho de sencillo' })).toBeDisabled() }
+  expect(fake.writes()).toHaveLength(0)
+})
+it('lets the server reject insufficient funds and keeps the original inputs editable without resending', async () => {
+  const fake = cashServer(); fake.cash.available = n('10')
+  mountTransfers(fake, <CashTransfersPage />); openDispatch(); await selectCash()
+  const destination = screen.getByRole('combobox', { name: 'Sucursal destino de sencillo' })
+  expect(Array.from(destination.querySelectorAll('option')).map(option => option.value)).not.toContain(workspace.branchId)
+  const amount = screen.getByRole('textbox', { name: 'Importe de sencillo PEN' })
+  const button = screen.getByRole('button', { name: 'Confirmar despacho de sencillo' })
+  fireEvent.change(amount, { target: { value: '10.0001' } })
+  expect(button).toBeDisabled()
+  fireEvent.change(destination, { target: { value: other.id } })
+  expect(button).toBeEnabled()
+  fireEvent.click(button)
+  await screen.findByText(/El efectivo disponible en la caja no alcanza para este envío/)
+  expect(fake.writes()).toHaveLength(1)
+  expect(fake.writes()[0]?.[1]?.body).toContain('"amount":10.0001')
+  expect(fake.cash.records).toHaveLength(0)
+  await waitFor(() => expect(screen.getByTestId('location')).not.toHaveTextContent('cashTransferRequest'))
+  expect(destination).toHaveValue(other.id); expect(destination).toBeEnabled()
+  expect(amount).toHaveValue('10.0001'); expect(amount).toBeEnabled()
+})
+it.each(['closed', 'unavailable', 'other-branch'])('blocks dispatch while reading cash status and when it returns %s', async state => {
+  const fake = cashServer()
+  const normal = fake.fetcher.getMockImplementation()!
+  let reply!: (response: Response) => void
+  const status = new Promise<Response>(resolve => { reply = resolve })
+  fake.fetcher.mockImplementation((path, init) => String(path).endsWith('/cash-sessions/' + id(302)) ? status : normal(path, init))
+  mountTransfers(fake, <CashTransfersPage />); openDispatch()
+  await screen.findAllByRole('option', { name: /apertura UTC/ })
+  fireEvent.change(screen.getByRole('combobox', { name: 'Caja para sencillo' }), { target: { value: id(302) } })
+  fireEvent.change(screen.getByRole('combobox', { name: 'Sucursal destino de sencillo' }), { target: { value: other.id } })
+  fireEvent.change(screen.getByRole('textbox', { name: 'Importe de sencillo PEN' }), { target: { value: '1' } })
+  await screen.findByText('Consultando estado de caja…')
+  const button = screen.getByRole('button', { name: 'Confirmar despacho de sencillo' })
+  expect(button).toBeDisabled()
+  reply(state === 'unavailable' ? json({ code: 'unit.unavailable' }, 503) : json({
+    cashSessionId: id(302), branchId: state === 'other-branch' ? other.id : workspace.branchId,
+    membershipId: workspace.access.membershipId, openingAmount: 10, openedAt: sentCash.dispatchedAt,
+    closedAt: state === 'closed' ? sentCash.dispatchedAt : null, status: state === 'closed' ? 'closed' : 'open', expectedCashAmount: null,
+  }))
+  await screen.findByText(state === 'closed' ? /La caja consultada ya está cerrada/ : 'No pudimos consultar estado de caja')
+  expect(button).toBeDisabled()
   expect(fake.writes()).toHaveLength(0)
 })
 it('shows the current commitment after changing the cash session and rejects a foreign-membership cashier session', async () => {

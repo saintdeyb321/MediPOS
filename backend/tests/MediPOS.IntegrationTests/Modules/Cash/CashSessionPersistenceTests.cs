@@ -73,6 +73,36 @@ public sealed class CashSessionPersistenceTests(PostgreSqlFixture fixture)
     }
 
     [Fact]
+    public async Task OpenStatusReturnsPersistedIdentityAndNullClosingExpectedAmount()
+    {
+        var token = TestContext.Current.CancellationToken;
+        await using var services = IdentityAccessTestSetup.CreateServices(fixture);
+        IdentityAccessTestSetup.Setup setup;
+        Guid cashSessionId;
+        await using (var writeScope = services.CreateAsyncScope())
+        {
+            var source = writeScope.ServiceProvider;
+            setup = await CashSessionTestData.CreateAsync(source);
+            cashSessionId = (await CashSessionTestData.OpenAsync(source, setup, 10m)).CashSessionId;
+        }
+
+        await using var runtime = IdentityAccessTestSetup.CreateServices(fixture, fixtureAuthorization: false);
+        await using var readScope = runtime.CreateAsyncScope();
+        var reader = readScope.ServiceProvider;
+        CashSessionTestData.Authenticate(reader, setup.UserId);
+        var status = await reader.GetRequiredService<CashSessionStatusQueries>()
+            .StatusAsync(setup.TenantId, setup.BranchId, cashSessionId, token);
+
+        Assert.Equal(cashSessionId, status.CashSessionId);
+        Assert.Equal(setup.BranchId, status.BranchId);
+        Assert.Equal(setup.MembershipId, status.MembershipId);
+        Assert.Equal("open", status.Status);
+        Assert.Equal(10m, status.OpeningAmount);
+        Assert.Null(status.ClosedAt);
+        Assert.Null(status.ExpectedCashAmount);
+    }
+
+    [Fact]
     public async Task ConcurrentOpeningsHaveOneWinnerAndOneStableConflictWithNoOrphanAudit()
     {
         await using var services = IdentityAccessTestSetup.CreateServices(fixture);

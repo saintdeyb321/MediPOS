@@ -1,5 +1,23 @@
 # RFA2 · Validación conductual y persistencia
 
+<a id="run-11"></a>
+## RUN-11 · RFA4A / L-01 · Candidato Sencillo
+
+Baseline `50b97a2c451a15ac59a21d06c11d266b81a77a68`. Vitest 5.0.4 en jsdom con dobles HTTP. La verificación del candidato se registra aparte de los veredictos del baseline y de RUN-10. Docker no estaba en PATH ni en su ubicación estándar.
+
+| Verificación | Comando o selección | Resultado |
+|---|---|---|
+| RED | Desde frontend, `npm.cmd run test -- src/features/transfers/CashTransfersPage.test.tsx -t 'dispatches once from a selected open cash'` | 1 FAIL esperado en `toBeEnabled()`, 13 excluidas por filtro. Caja abierta, esperado null, importe 1.0001 y destino válido. |
+| GREEN | Desde frontend, `npm.cmd run test -- src/features/transfers/CashTransfersPage.test.tsx src/features/transfers/cashApi.test.ts src/features/transfers/recovery.test.tsx` | 24 PASS, 0 FAIL, 0 SKIP. La primera pasada GREEN detectó dos problemas en la preparación de las pruebas: un límite del doble afectaba el caso de máximo decimal y la aserción de URL se adelantaba a la navegación. El límite quedó particularizado al caso de falta de fondos y la aserción espera la transición sin reducir cobertura. |
+| Lint y tipos | ESLint local sobre `CashTransfersPage.tsx`, `CashSelection.tsx`, `CashTransfersPage.test.tsx`, `cash.test.support.tsx` y `access/errors.ts`. `tsc.cmd -b` desde frontend. | PASS. |
+| Compilación de integración | Desde backend, `dotnet build tests/MediPOS.IntegrationTests --no-restore -p:BaseOutputPath=obj/rfa4a-bin/ -m:1 --disable-build-servers` | PASS, 0 advertencias, 0 errores. |
+
+**Verificado en E2.** Un POST con importe exacto y clave pese al doble clic, seguido de lectura. Cero POST para caja en consulta, cerrada, ajena o con error, ausencia de caja, importe inválido y falta de destino válido. Se conservan las negativas por rol y membresía. El rechazo 409 `cash_transfer.insufficient_cash` conserva los campos editables y no reenvía. La pérdida de acuse conserva la clave original ante GET insuficiente y concilia sin otro POST. La recepción completa verifica un único envío y estado terminal, también tras perder el acuse. El rechazo de fondos es simulado en esta verificación.
+
+**Contrato pendiente.** Para el fixture PostgreSQL 18 aislado, desde backend: `dotnet test tests/MediPOS.IntegrationTests --filter FullyQualifiedName~OpenStatusReturnsPersistedIdentityAndNullClosingExpectedAmount`. Esta prueba abre una caja sintética y lee por `StatusAsync` en un nuevo scope con autorización del runtime. Afirma ID, sede, membresía, monto inicial, estado open y nulos de cierre. Se compiló y queda NOT_RUN sin Docker. El fixture disponible compone servicios de aplicación con PostgreSQL, y el encargo deja pendiente la frontera HTTP completa.
+
+En un entorno aislado autorizado con API, PostgreSQL y sesión sintética, abrir caja y consultar como su operador `GET /api/tenants/{tenantId}/branches/{branchId}/cash-sessions/{cashSessionId}`. Verificar HTTP 200, IDs de fixture, `status: open` y presencia de `expectedCashAmount: null` en JSON. Si difiere, detener la aceptación de la guarda y comprobar versión servida y serialización. E3 para la nueva prueba, HTTP real, E4 y CI del candidato siguen pendientes.
+
 <a id="run-10"></a>
 ## RUN-10 · Conciliación de 02B
 

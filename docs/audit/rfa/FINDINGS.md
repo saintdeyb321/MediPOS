@@ -25,6 +25,8 @@ La evidencia de ejecución se vincula al [registro RFA2](VALIDATION.md). E2 se l
 
 ## F-002 · Sencillo exige saldo esperado en una caja abierta
 
+**RFA4A · Corrección local provisional.** [RUN-11](VALIDATION.md#run-11) reproduce el bloqueo en el baseline y verifica la alternativa A con dobles HTTP. El importe se valida localmente por formato, rango y positividad. El saldo viene del ledger bajo bloqueo al ejecutar el despacho. El rechazo definitivo por fondos insuficientes mantiene importe y destino editables. Una respuesta incierta conserva la intención original. Pendientes el GET real de caja abierta y CI del candidato.
+
 **RFA2 · CONFIRMADO_EN_EJECUCION E2, P1 provisional.** SC-02 / RUN-02 caracteriza que, con estado `open` y `expectedCashAmount: null` según el contrato inspeccionado, el botón queda deshabilitado y se envían cero POST aun con apertura positiva y destino elegido. El doble heredado con esperado no nulo sí permite enviar. Falta probar respuesta real del servidor, cálculo/recepción y la misma UI en navegador aislado.
 
 - UC-TRA-01, UC-CAJ-04, FR-CASH-004. E1 de cableado corroborada por la revisión externa del baseline 939ad83. P1 provisional para despacho por UI. `CashTransfersPage.tsx:63,98–101` exige esperado no nulo. `CashSessionStatusQueries.cs:18–28` entrega el valor persistido y `CashSession.cs:54–60` lo establece al cerrar. `CashTransferTransaction.cs:90–96` calcula el saldo vigente al despachar. El doble `cash.test.support.tsx:13` devuelve un esperado en open; su existencia no acredita funcionamiento del circuito real. En RFA2 comparar respuesta de estado y disponibilidad del botón con caja válida y saldo inicial positivo. PENDIENTE_RFA2.

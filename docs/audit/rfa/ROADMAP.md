@@ -14,6 +14,8 @@ Baseline `5d38898`. Los lotes son propuestas. La columna de decisión de los [15
 
 ## L-01 · Sencillo (UC-TRA-01–04/13, UC-CAJ-04)
 
+**Estado vigente: `L01_CANDIDATO_PENDIENTE_CONTRATO_REAL`.** Alternativa A autorizada e implementada localmente. [RUN-11](VALIDATION.md#run-11) acredita RED/GREEN con dobles HTTP. Se preparó la prueba de `StatusAsync` para PostgreSQL 18 efímero. El operador debe revisar el diff, comprobar el GET real según la receta y ejecutar CI sobre el SHA del candidato antes de aceptar.
+
 **Resultado esperado:** el cajero puede presentar un despacho válido aun cuando la caja abierta no tenga arqueo final. `CashTransfersPage.tsx:63,98–101` condiciona la acción a ese campo. `CashSessionStatusQueries.StatusAsync` expone el esperado persistido; `DispatchCashTransferHandler`, `CashTransferAccess.Expected` y `CashTransferTransaction.DispatchScope` recalculan bajo bloqueo y revalidan actor. RUN-02 reproduce el bloqueo DOM y RUN-10 acredita ledger, concurrencia y constancia. La prioridad se justifica por cero envíos válidos con el contrato observado en el código.
 
 1. **Caracterizar primero.** En fixture acreditado, consultar el estado HTTP de una caja abierta, importe y destino válidos. Comprobar el valor de `expectedCashAmount` y contrastar con RUN-02. Si difiere, detener el cambio de guarda y revisar el DTO/build del consumidor.

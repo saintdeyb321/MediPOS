@@ -18,6 +18,8 @@ stateDiagram-v2
 
 ## UC-TRA-01
 
+**Candidato L-01.** La caja abierta autorizada, un destino consultable distinto y un importe válido habilitan el despacho. El servidor comprueba el saldo al recibir la solicitud. RUN-11 acredita la corrección a E2 y conserva el FAIL histórico del baseline. Pendiente de contrato real.
+
 POST `/api/tenants/{tenantId}/branches/{branchId}/cash-transfers` · `backend/src/MediPOS.Api/Tenant/CashTransferEndpoints.cs:19`. **E3 · IMPLEMENTADO · FAIL**. Elegir caja/sede/importe y confirmar. CashTransfersPage.tsx:56–65,98–101 requiere saldo esperado no nulo. CashSessionStatusQueries.cs:18–28 retorna valor persistido, nulo para open (CashSession.cs:54–60). La UI bloquea el flujo normal. En API el candado y cálculo vigente los realiza CashTransferTransaction.cs:57–73,90–96; la constancia se asocia a la intención original. Requisito FR-CASH-004. Indicio F-002.
 
 ## UC-TRA-02

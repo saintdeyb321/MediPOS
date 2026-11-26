@@ -1,6 +1,5 @@
 import { Link } from 'react-router'
 import { ApiErrorState, useWorkspace } from '../access'
-import { decimalLabel } from '../../shared/api/decimal'
 import { PageControls } from '../../shared/ui/PageControls'
 import type { useTransferCash } from './useTransferCash'
 
@@ -12,8 +11,8 @@ export function CashSelection({ cash, disabled }: { cash: ReturnType<typeof useT
     {cash.choices.data?.length === 0 && !cash.choices.isError && <p>No hay cajas en esta página. <Link to={w.base + '/caja'}>Ir a Caja para gestionar una apertura explícita</Link>.</p>}
     <PageControls size={50} offset={cash.offset} count={cash.owner && !cash.choices.isError ? cash.choices.data?.length : 0} busy={disabled || cash.choices.isFetching} change={value => { cash.setId(''); cash.setOffset(value) }} />
     {cash.status.isError && <ApiErrorState error={cash.status.error} title="No pudimos consultar estado de caja" />}
-    {cash.status.isFetching && <p>Consultando saldo de caja…</p>}
-    {cash.session && <p>Caja ABIERTA · Efectivo esperado consultado: {cash.session.expectedCashAmount === null ? 'No disponible; no se puede despachar' : 'S/ ' + decimalLabel(cash.session.expectedCashAmount, 2)}. El servidor vuelve a comprobar saldo y permisos al operar.</p>}
+    {cash.status.isFetching && <p>Consultando estado de caja…</p>}
+    {cash.session && <p>Caja abierta.</p>}
     {cash.status.data?.status === 'closed' && <p>La caja consultada ya está cerrada; vuelve a consultar cajas abiertas.</p>}
   </section>
 }

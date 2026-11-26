@@ -59,6 +59,7 @@ const messages: Record<string, string> = {
   'sale.cash_session_closed': 'La caja original ya está cerrada; esta venta no puede anularse por este flujo.',
   'sale.forbidden_void': 'Solo el propietario o el vendedor autorizado pueden anular esta venta.',
   'sale.insufficient_cash': 'El efectivo disponible en la caja no alcanza para la devolución. Consulta el arqueo antes de continuar.',
+  'cash_transfer.insufficient_cash': 'El efectivo disponible en la caja no alcanza para este envío. Ajusta el importe antes de confirmar.',
   'sale.invalid_void_reason': 'Indica un motivo de anulación de hasta 512 caracteres.',
   'cash_session.invalid_counted_amount': 'El efectivo contado debe ser no negativo y tener como máximo cuatro decimales.',
   'cash_session.forbidden_close': 'No puedes cerrar la caja de otra persona.',

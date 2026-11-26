@@ -1,5 +1,10 @@
 # Checkpoint RFA
 
+## RFA4A · L-01
+
+- Baseline `50b97a2c451a15ac59a21d06c11d266b81a77a68`; solo dos MD del operador sin rastrear al iniciar. Docker ausente. RED focalizado: caja abierta con esperado nulo dejó deshabilitado el botón en `toBeEnabled()`.
+- **`L01_CANDIDATO_PENDIENTE_CONTRATO_REAL`.** Alternativa A implementada, 24/24 regresiones E2, lint/tipos y compilación aislada de tests .NET en PASS. [RUN-11](VALIDATION.md#run-11) conserva los resultados del baseline y separa contrato preparado de evidencia ejecutada. Próxima acción del operador: revisar el diff, ejecutar CI del candidato y verificar el GET aislado de estado abierto con JSON null siguiendo RUN-11. RFA2 sigue parcial y producción NO-GO.
+
 ## Corte RFA3 · FASE_03_COMPLETA para revisión del operador
 
 26/11/2026. Rama `ci/postgres-diagnostics-8bc6b4c`, HEAD `5d3889806e11fea23a3ba19402c22c15635a1301`. El árbol de entrada contenía cambios documentales de 02B y los MD del operador sin rastrear. Se incorporó copia idéntica del resumen saneado que estaba en `docs/`. No hubo nueva ejecución. Gobierno, contratos, aplicación, tests y entornos operativos conservados.

@@ -4,7 +4,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { ApiErrorState, useRuntime, useWorkspace } from '../access'
 import { ApiError } from '../../shared/api/http'
 import { scopedKey } from '../../shared/api/contracts'
-import { compare, decimalInput, decimalLabel, maximumMoney } from '../../shared/api/decimal'
+import { decimalInput, decimalLabel, maximumMoney } from '../../shared/api/decimal'
 import { ConfirmDialog } from '../../shared/ui/ConfirmDialog'
 import { Button } from '../../shared/ui/Button'
 import { TextField } from '../../shared/ui/TextField'
@@ -60,7 +60,7 @@ function CashTransfersWorkspace() {
   const complete = branches.isSuccess && !branches.isError && branches.data.length < 100
   const label = (id: string) => branches.data?.find(row => equalId(row.id, id))?.name ?? 'Sucursal no disponible en el directorio'
   const amount = decimalInput(amountText, maximumMoney, 4)
-  const canDispatch = Boolean(!tracked.locked && !tracked.record && api && complete && branches.data.some(row => equalId(row.id, destination) && !equalId(row.id, w.branchId)) && cash.session && amount && cash.session.expectedCashAmount !== null && compare(amount, cash.session.expectedCashAmount) <= 0)
+  const canDispatch = Boolean(!tracked.locked && !tracked.record && api && complete && branches.data.some(row => equalId(row.id, destination) && !equalId(row.id, w.branchId)) && cash.session && amount)
   const canReceive = Boolean(t?.status === 'in_transit' && equalId(t.destinationBranchId, w.branchId) && cash.session && !equalId(cash.session.cashSessionId, t.sourceCashSessionId))
   const cashLabel = cash.choices.data?.find(row => equalId(row.id, cash.session?.cashSessionId ?? ''))?.label
   const resume = directory && dispatchOpen && !tracked.id && !t
@@ -94,11 +94,9 @@ function CashTransfersWorkspace() {
         {!canReceive && <p>Selecciona una caja abierta autorizada en la sucursal destino. Si estás en otra sede, cambia de sucursal y recupera esta transferencia; no se presume autorización remota.</p>}</fieldset>}
     </div></Panel>}
     <Panel hidden={!dispatchOpen || Boolean(t)}><div className="operation-body"><h2>Despachar sencillo desde {w.branch.name}</h2><fieldset disabled={tracked.locked || !api || !complete}><legend>Destino e importe</legend><label htmlFor="new-cash-transfer-destination">Sucursal destino de sencillo</label><select id="new-cash-transfer-destination" value={destination} onChange={event => { setDestination(event.target.value) }}><option value="">Seleccionar otra sucursal consultable</option>{complete && branches.data.filter(row => !equalId(row.id, w.branchId)).map(row => <option key={row.id} value={row.id}>{row.name}</option>)}</select>
-      <TextField label="Importe de sencillo PEN" inputMode="decimal" value={amountText} maxLength={60} onChange={event => { setAmountText(event.target.value) }} hint="Hasta el efectivo esperado de la caja seleccionada." />
+      <TextField label="Importe de sencillo PEN" inputMode="decimal" value={amountText} maxLength={60} onChange={event => { setAmountText(event.target.value) }} hint="El saldo se verifica al confirmar el envío." />
       {canDispatch && amount && <p>Entrega S/ {decimalLabel(amount)} de {cashLabel ?? 'la caja seleccionada'} de {w.branch.name} a {label(destination)}. El efectivo quedará en tránsito hasta su recepción.</p>}<Button disabled={!canDispatch} onClick={() => { if (api && amount && cash.session && canDispatch) void tracked.run('create', (signal, requestId) => api.dispatch(w, cash.session!.cashSessionId, destination, amount, requestId, signal)) }}>Confirmar despacho de sencillo</Button>
-      {!canDispatch && <p>{cash.session?.expectedCashAmount === null
-        ? 'La consulta de esta caja abierta no informa el saldo esperado. El despacho queda bloqueado.'
-        : 'Selecciona otra sede y una caja abierta con efectivo esperado suficiente.'}</p>}</fieldset>
+      {!canDispatch && !tracked.locked && <p>Selecciona una caja abierta de esta sede, otra sucursal como destino e ingresa un importe positivo con hasta cuatro decimales.</p>}</fieldset>
       {!tracked.pending && <Button variant="quiet" disabled={tracked.busy} onClick={() => {
         if (amountText || destination || cash.id) setCancelDispatch(true)
         else { setDirectory(true); setDispatchOpen(false) }
