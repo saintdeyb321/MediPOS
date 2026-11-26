@@ -13,7 +13,7 @@ stateDiagram-v2
 
 ## UC-ACC-01
 
-GET `/api/tenants/{tenantId}/employees` · `backend/src/MediPOS.Api/Tenant/EmployeeEndpoints.cs:16`. **E0 · IMPLEMENTADO · NOT_RUN**. Abrir Personal, consultar integrantes y datos de sede/horario. EmployeeDirectoryQueries desde EmployeeEndpoints.cs:16. EF de proyección pendiente.
+GET `/api/tenants/{tenantId}/employees` · `backend/src/MediPOS.Api/Tenant/EmployeeEndpoints.cs:16`. **E1 · IMPLEMENTADO · NOT_RUN**. Como Owner abre Personal y pagina integrantes. EmployeeEndpoints.cs:16 y EmployeeDirectoryQueries validan administración; EmployeeDirectoryReader.cs:10–21 selecciona tenant, combina membresías, nombre, sedes y horarios y entrega proyección por integrante. Reconsulta tras cambios de la ficha.
 
 ## UC-ACC-02
 
@@ -21,39 +21,39 @@ POST `/api/tenants/{tenantId}/employees` · `backend/src/MediPOS.Api/Tenant/Empl
 
 ## UC-ACC-03
 
-POST `/api/tenants/{tenantId}/employees/{membershipId}/deactivate` · `backend/src/MediPOS.Api/Tenant/EmployeeEndpoints.cs:24`. **E0 · IMPLEMENTADO · NOT_RUN**. Seleccionar integrante y solicitar desactivación. EmployeeEndpoints.cs:24–28 → DeactivateMembershipHandler; revalidación/refresco en useEmployeeWrite. Candado último Owner por completar.
+POST `/api/tenants/{tenantId}/employees/{membershipId}/deactivate` · `backend/src/MediPOS.Api/Tenant/EmployeeEndpoints.cs:24`. **E1 · IMPLEMENTADO · NOT_RUN**. Selecciona integrante y confirma desactivación. DeactivateMembershipHandler.cs:18–45 revalida administración en el alcance de licencia, verifica que queda un Owner y conserva historial. TenantLicenseProvisioning.cs:12–31 bloquea licencia; IdentityAccessStore.cs:64–76 guarda estado y auditoría. Relee integrante antes de repetir si se pierde respuesta.
 
 ## UC-ACC-04
 
-PUT `/api/tenants/{tenantId}/employees/{membershipId}/branches` · `backend/src/MediPOS.Api/Tenant/EmployeeEndpoints.cs:29`. **E0 · IMPLEMENTADO · NOT_RUN**. Editar sucursales en ficha y guardar conjunto. EmployeeEndpoints.cs:29–34 retorna 204; se reconsulta integrante y preserva intención incierta. Reglas y tablas de asignaciones pendientes.
+PUT `/api/tenants/{tenantId}/employees/{membershipId}/branches` · `backend/src/MediPOS.Api/Tenant/EmployeeEndpoints.cs:29`. **E1 · IMPLEMENTADO · NOT_RUN**. Edita las sucursales permitidas de un integrante. EmployeeEndpoints.cs:29–34 entrega IDs a SetMembershipBranchesHandler, con administración y pertenencia de las sedes al tenant. IdentityAccessStore.cs:79–92 reemplaza el conjunto por membresía y guarda auditoría; 204, reconsulta al mismo integrante. No se altera el rol.
 
 ## UC-ACC-05
 
-PUT `/api/tenants/{tenantId}/employees/{membershipId}/schedule` · `backend/src/MediPOS.Api/Tenant/EmployeeEndpoints.cs:35`. **E0 · IMPLEMENTADO · NOT_RUN**. Editar ventanas de trabajo en ficha y guardar. EmployeeEndpoints.cs:35–40 y ReplaceWorkScheduleHandler; restricciones del store y autorización exacta pendiente.
+PUT `/api/tenants/{tenantId}/employees/{membershipId}/schedule` · `backend/src/MediPOS.Api/Tenant/EmployeeEndpoints.cs:35`. **E1 · IMPLEMENTADO · NOT_RUN**. Edita ventanas por día en ficha y guarda. EmployeeEndpoints.cs:35–40 y ReplaceWorkScheduleHandler.cs:19–51 verifican administración y construyen ventanas válidas para el miembro. IdentityAccessStore.cs:96–109 reemplaza work_schedules y audita. 204 permite releer ficha; la admisión posterior vuelve a evaluar horario.
 
 ## UC-ACC-06
 
-GET `/api/tenants/{tenantId}/employee-invitations/{invitationId}` · `backend/src/MediPOS.Api/Tenant/EmployeeInvitationEndpoints.cs:13`. **E0 · IMPLEMENTADO · NOT_RUN**. Reconsultar invitación original por ID para acción incierta. EmployeeInvitationHandler.cs:25–33 revalida administración antes y después de leer. Persistencia por completar.
+GET `/api/tenants/{tenantId}/employee-invitations/{invitationId}` · `backend/src/MediPOS.Api/Tenant/EmployeeInvitationEndpoints.cs:13`. **E1 · IMPLEMENTADO · NOT_RUN**. Abre la invitación original para consultar su estado. EmployeeInvitationHandler.cs:25–33 exige administración antes/después; EmployeeInvitationStore.cs:13–21 establece ámbito Owner y proyecta invitación por tenant/ID con versión. Mantener el ID si la lectura falla.
 
 ## UC-ACC-07
 
-GET `/api/tenants/{tenantId}/employee-invitations` · `backend/src/MediPOS.Api/Tenant/EmployeeInvitationEndpoints.cs:16`. **E0 · IMPLEMENTADO · NOT_RUN**. Abrir pestaña Invitaciones y paginar o buscar intención original. EmployeeInvitationHandler.cs:35–43. Store por completar.
+GET `/api/tenants/{tenantId}/employee-invitations` · `backend/src/MediPOS.Api/Tenant/EmployeeInvitationEndpoints.cs:16`. **E1 · IMPLEMENTADO · NOT_RUN**. Abre Invitaciones, pagina o busca por intención original. EmployeeInvitationHandler.cs:35–43 y EmployeeInvitationStore.cs:24–36 validan Owner, filtran tenant y, para clientRequestId, restringen a su membresía emisora. El listado permite recuperar estado sin volver a emitir el secreto.
 
 ## UC-ACC-08
 
-POST `/api/tenants/{tenantId}/employee-invitations` · `backend/src/MediPOS.Api/Tenant/EmployeeInvitationEndpoints.cs:19`. **E0 · IMPLEMENTADO · NOT_RUN**. Invitar, seleccionar rol y copiar enlace temporal una sola vez. EmployeeInvitationsPanel.tsx:49–63 y EmployeeInvitationHandler.cs:48–81 conservan intención y guardan en ámbito. Verificación de row/policy exactas pendiente.
+POST `/api/tenants/{tenantId}/employee-invitations` · `backend/src/MediPOS.Api/Tenant/EmployeeInvitationEndpoints.cs:19`. **E1 · IMPLEMENTADO · NOT_RUN**. Selecciona rol y genera invitación; copia enlace cuando la respuesta lo incluye. EmployeeInvitationsPanel.tsx:49–63 conserva intención; EmployeeInvitationHandler.cs:48–65 comprueba administración/licencia y repeticiones. EmployeeInvitationStore.cs:39–50,78–90 guarda hash y auditoría, sin almacenar enlace recuperable. Ante incertidumbre busca el clientRequestId original en UC-ACC-07.
 
 ## UC-ACC-09
 
-POST `/api/tenants/{tenantId}/employee-invitations/{invitationId}/approve` · `backend/src/MediPOS.Api/Tenant/EmployeeInvitationEndpoints.cs:31`. **E0 · IMPLEMENTADO · NOT_RUN**. Tras aceptación Google, verificar identidad independiente y aprobar con versión. EmployeeInvitationHandler.cs:89–113 exige estado aceptado, vigencia y actor. Concurrencia y datos persistidos por completar.
+POST `/api/tenants/{tenantId}/employee-invitations/{invitationId}/approve` · `backend/src/MediPOS.Api/Tenant/EmployeeInvitationEndpoints.cs:31`. **E1 · IMPLEMENTADO · NOT_RUN**. Tras la aceptación, revisa identidad y confirma aprobación. EmployeeInvitationHandler.cs:85–112 exige administración, coincidencia de versión y aceptación vigente; EmployeeInvitationStore.cs:53–64,78–90 bloquea invitación y persiste decisión y auditoría. MembershipProvisioning crea membresía en el alcance de la operación. Una aprobación repetida requiere la versión original; consulta el mismo ID si fue incierta.
 
 ## UC-ACC-10
 
-POST `/api/tenants/{tenantId}/employee-invitations/{invitationId}/revoke` · `backend/src/MediPOS.Api/Tenant/EmployeeInvitationEndpoints.cs:36`. **E0 · IMPLEMENTADO · NOT_RUN**. Revocar con motivo desde detalle. EmployeeInvitationHandler.cs:116–129 usa autorización de administración; resultado incierto recupera la misma invitación. Efectos SQL por completar.
+POST `/api/tenants/{tenantId}/employee-invitations/{invitationId}/revoke` · `backend/src/MediPOS.Api/Tenant/EmployeeInvitationEndpoints.cs:36`. **E1 · IMPLEMENTADO · NOT_RUN**. Desde detalle, introduce motivo y revoca. EmployeeInvitationHandler.cs:114–130 comprueba administración, versión y transición; EmployeeInvitationStore.cs:53–64,78–90 bloquea y guarda auditoría. La lectura del mismo ID permite verificar el estado sin revocar una membresía ya creada.
 
 ## UC-ACC-11
 
-POST `/api/employee-invitations/accept` · `backend/src/MediPOS.Api/Tenant/EmployeeInvitationEndpoints.cs:42`. **E0 · IMPLEMENTADO · NOT_RUN**. Abrir enlace, autenticarse y aceptar conscientemente. AcceptInvitationPage usa fragmento y lo retira. POST con ticket devuelve aceptación pendiente de aprobación. Store de uso único pendiente.
+POST `/api/employee-invitations/accept` · `backend/src/MediPOS.Api/Tenant/EmployeeInvitationEndpoints.cs:42`. **E1 · IMPLEMENTADO · NOT_RUN**. Abre el enlace, autentícate y pulsa aceptar. AcceptInvitationPage retira fragmento; EmployeeInvitationEndpoints.cs:42 y EmployeeInvitationHandler.cs:67–82 usan identidad autenticada y secreto verificado. EmployeeInvitationStore.cs:66–90,106 bloquea la invitación en transacción, guarda aceptación y audita. Respuesta pendiente de aprobación; el ingreso aún no concede membresía.
 
 ## UC-ACC-12
 
@@ -69,39 +69,39 @@ GET `/auth/google/callback` · `backend/src/MediPOS.Api/Authentication/GoogleAut
 
 ## UC-ACC-15
 
-GET `/auth/me` · `backend/src/MediPOS.Api/Authentication/GoogleAuthenticationRegistration.cs:199`. **E0 · IMPLEMENTADO · NOT_RUN**. Leer sesión actual desde React, cookies y origen en backend. GoogleAuthenticationRegistration.cs:199–204. Duración y revocación en store pendientes.
+GET `/auth/me` · `backend/src/MediPOS.Api/Authentication/GoogleAuthenticationRegistration.cs:199`. **E1 · IMPLEMENTADO · NOT_RUN**. Tras login o recarga, React consulta sesión. GoogleAuthenticationRegistration.cs:57–65,103,166–177,199–204 exige HTTPS/origen y sesión; ServerSessionTicketStore.cs:12–37 guarda tickets en memoria y solo recupera vigentes. Devuelve identidad de sesión, sin conceder botica ni plataforma. 401 requiere ingresar de nuevo.
 
 ## UC-ACC-16
 
-POST `/auth/logout` · `backend/src/MediPOS.Api/Authentication/GoogleAuthenticationRegistration.cs:205`. **E0 · IMPLEMENTADO · NOT_RUN**. Elegir Cerrar sesión. GoogleAuthenticationRegistration.cs:205–209 revoca el esquema de sesión. Verificación de store tras logout pendiente.
+POST `/auth/logout` · `backend/src/MediPOS.Api/Authentication/GoogleAuthenticationRegistration.cs:205`. **E1 · IMPLEMENTADO · NOT_RUN**. Pulsa Cerrar sesión. GoogleAuthenticationRegistration.cs:205–209 verifica CSRF y firma salida del esquema; ServerSessionTicketStore.cs:37 elimina ticket en memoria. La UI borra el contexto de la cuenta y la comprobación posterior es UC-ACC-15.
 
 ## UC-ACC-17
 
-GET `/api/me/tenants` · `backend/src/MediPOS.Api/Tenant/TenantEndpoints.cs:16`. **E0 · IMPLEMENTADO · NOT_RUN**. Tras ingreso, cargar boticas de la membresía. ListMyTenantsHandler y MyTenantDirectoryReader sirven página del actor. El directorio alimenta TenantSelection, la autorización efectiva sigue siendo una lectura separada por contexto. El cursor no concede acceso.
+GET `/api/me/tenants` · `backend/src/MediPOS.Api/Tenant/TenantEndpoints.cs:16`. **E1 · IMPLEMENTADO · NOT_RUN**. Después de ingresar, elige botica si hay varias; el directorio vacío no concede acceso. TenantEndpoints.cs:16 y ListMyTenantsHandler toman usuario de sesión. MyTenantDirectoryReader.cs:12–37 fija discovery_user_id en transacción y pagina membresías activas enlazadas a tenants. La autorización efectiva se verifica aparte en UC-ACC-18.
 
 ## UC-ACC-18
 
-GET `/api/tenants/{tenantId}/access` · `backend/src/MediPOS.Api/Tenant/TenantEndpoints.cs:20`. **E0 · IMPLEMENTADO · NOT_RUN**. Validar tenant, estado de membresía, licencia y sucursal/horario antes del workspace. ResolveAccessContextHandler.cs:6–19 combina identidad de sesión con snapshot persistido y EvaluateOperationalAccess.cs:36–58 determina licencia, asignación y horario, con excepción de Owner donde corresponde. Body de lector de snapshot y RLS específico siguen pendientes.
+GET `/api/tenants/{tenantId}/access` · `backend/src/MediPOS.Api/Tenant/TenantEndpoints.cs:20`. **E1 · IMPLEMENTADO · NOT_RUN**. Al abrir o cambiar botica/sede, verifica acceso antes de entrar. ResolveAccessContextHandler.cs:6–19 usa sesión; OperationalAccessReader.cs:10–40 selecciona tenant y compone membresía, licencia, sede asignada y horario bajo alcance RLS. EvaluateOperationalAccess.cs:36–58 decide causas de rechazo o admisión, incluidas excepciones Owner. React revalida al cambiar contexto.
 
 ## UC-ACC-19
 
-GET `/api/tenants/{tenantId}/branches` · `backend/src/MediPOS.Api/Tenant/TenantEndpoints.cs:23`. **E0 · IMPLEMENTADO · NOT_RUN**. Consultar sedes y elegir cuando existe decisión. BranchDirectoryQueries devuelve directorio y WorkspaceLayout vuelve a verificar acceso. SQL por revisar.
+GET `/api/tenants/{tenantId}/branches` · `backend/src/MediPOS.Api/Tenant/TenantEndpoints.cs:23`. **E1 · IMPLEMENTADO · NOT_RUN**. Elige sede si hay más de una habilitada. BranchDirectoryQueries.cs:16–31 revalida sesión/membresía y limita a asignadas si no es Owner; BranchDirectoryReader.cs:10–16 aplica ámbito tenant y pagina. Cada elección vuelve a UC-ACC-18 para validar el acceso efectivo.
 
 ## UC-ACC-20
 
-GET `/api/tenants/{tenantId}/legal-entities` · `backend/src/MediPOS.Api/Tenant/TenantEndpoints.cs:26`. **E0 · IMPLEMENTADO · NOT_RUN**. En Configuración, consultar entidades de la botica. BranchDirectoryQueries y TenantStructure.tsx:53–61. Proyección EF por revisar.
+GET `/api/tenants/{tenantId}/legal-entities` · `backend/src/MediPOS.Api/Tenant/TenantEndpoints.cs:26`. **E1 · IMPLEMENTADO · NOT_RUN**. En Configuración consulta entidades y elige una existente cuando corresponda. TenantStructure.tsx:53–61 y TenantEndpoints.cs:26 invocan BranchDirectoryQueries.cs:38–41 con administración antes/después. BranchDirectoryReader.cs:18–22 proyecta razón social/RUC por tenant y pagina. No crea una segunda entidad al seleccionar.
 
 ## UC-ACC-21
 
-GET `/api/tenants/{tenantId}/license` · `backend/src/MediPOS.Api/Tenant/TenantEndpoints.cs:29`. **E0 · IMPLEMENTADO · NOT_RUN**. Leer licencia desde Configuración/primera sede. TenantStructure.tsx:53 reconsulta por scope. El badge puede indicar vencimiento sin cambiar el estado persistido. Backend reader pendiente.
+GET `/api/tenants/{tenantId}/license` · `backend/src/MediPOS.Api/Tenant/TenantEndpoints.cs:29`. **E1 · IMPLEMENTADO · NOT_RUN**. Abre la licencia en Configuración. BranchDirectoryQueries.cs:43–48 exige administración; BranchDirectoryReader.cs:24–30 lee licencia del ámbito tenant y TenantStructure.tsx:53 y siguientes proyecta vigencia. Diferenciar vencimiento mostrado de un cambio de estado; una lectura no renueva.
 
 ## UC-ACC-22
 
-POST `/api/tenants/{tenantId}/legal-entities` · `backend/src/MediPOS.Api/Tenant/TenantEndpoints.cs:31`. **E0 · IMPLEMENTADO · NOT_RUN**. Registrar razón social y RUC solo si hace falta. TenantEndpoints.cs:31–35 y :64. Si se pierde acuse, no inventar equivalencia fiscal. Handler/EF por completar.
+POST `/api/tenants/{tenantId}/legal-entities` · `backend/src/MediPOS.Api/Tenant/TenantEndpoints.cs:31`. **E1 · IMPLEMENTADO · NOT_RUN**. Como Owner registra razón social y RUC solo si no dispone de entidad. CreateLegalEntityHandler.cs:15–33 verifica administración y licencia y construye la entidad; BranchesStore.cs:43–48 guarda entidad/auditoría en alcance de provisión. Respuesta permite reutilizar ID para sucursal. Si se pierde, revisar directorio y conciliar sin inferir coincidencia por nombre.
 
 ## UC-ACC-23
 
-POST `/api/tenants/{tenantId}/branches` · `backend/src/MediPOS.Api/Tenant/TenantEndpoints.cs:36`. **E0 · IMPLEMENTADO · NOT_RUN**. Crear sede con entidad legal, nombre y cupo vigente. TenantStructure.tsx:67–100 vuelve a verificar admisión; TenantEndpoints.cs:36–40 y :65. Transacción/cupo concurrente por rastrear.
+POST `/api/tenants/{tenantId}/branches` · `backend/src/MediPOS.Api/Tenant/TenantEndpoints.cs:36`. **E1 · IMPLEMENTADO · NOT_RUN**. Selecciona entidad, escribe nombre de sede y guarda. TenantStructure.tsx:67–100 y CreateBranchHandler.cs:15–37 validan administración, vínculo y cupo bajo bloqueo de licencia (TenantLicenseProvisioning.cs:12–31); BranchesStore.cs:51–57 guarda sede/auditoría. Ante alta confirmada revalida acceso; ante pérdida contrasta sede creada y no duplica entidad.
 
 ## UC-ACC-24
 
@@ -119,6 +119,21 @@ Primera sede y entrada automática. **E1 · IMPLEMENTADO · NOT_RUN**. Owner pre
 
  `` · ``. **E1 · IMPLEMENTADO · NOT_RUN**. Usar el Gmail designado y verificado. GoogleAuthenticationEvents.cs:16–23 y UpsertGoogleUserHandler.cs:17–18 enlazan login y reclamo. InitialOwnerInvitations.cs:78–97 verifica email, sujeto, licencia, condición de primer Owner y persistencia de membresía/invitación. Si no cumple, no obtiene acceso de Owner; la siguiente consulta de directorio usa la sesión resultante.
 
+
+## Admisión tras el ingreso
+
+```mermaid
+flowchart TD
+    Login["Entrar con Google"] --> Sesion["Comprobar sesión"]
+    Sesion --> Plataforma{"Admisión de plataforma"}
+    Plataforma -->|Autorizada| Consola["Consola"]
+    Plataforma -->|Sin autoridad o API ausente| Boticas["Consultar mis boticas"]
+    Boticas -->|Sin membresía| Vacio["Directorio vacío"]
+    Boticas -->|Con membresía| Sede["Elegir contexto cuando corresponda"]
+    Sede --> Verificar["Comprobar licencia, rol, sede y horario"]
+    Verificar -->|Admitido| Trabajo["Espacio de trabajo"]
+    Verificar -->|Denegado| Motivo["Mostrar causa"]
+```
 
 ## Fuentes
 

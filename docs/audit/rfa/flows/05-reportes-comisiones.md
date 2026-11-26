@@ -6,23 +6,23 @@ Reportes y Comisiones son visibles para Owner. `ReportsPage.tsx:34–54` separa 
 
 ## UC-REP-01
 
-GET `/api/tenants/{tenantId}/commissions/settings` · `backend/src/MediPOS.Api/Tenant/CommissionEndpoints.cs:16`. **E0 · IMPLEMENTADO · NOT_RUN**. Abrir Comisiones y leer configuración; endpoint devuelve configuración del tenant. Proyección y autorización concreta por rastrear.
+GET `/api/tenants/{tenantId}/commissions/settings` · `backend/src/MediPOS.Api/Tenant/CommissionEndpoints.cs:16`. **E1 · IMPLEMENTADO · NOT_RUN**. Como Owner abre Comisiones y consulta si está habilitado. CommissionEndpoints.cs:16–17 llama GetTenantCommissionSettingsHandler.cs:13–20; verifica Owner antes y después de leer la configuración scoped en CommissionConfigurationStore.cs:16–24,43–44. Sin registro devuelve deshabilitado y no configurado, sin crear fila.
 
 ## UC-REP-02
 
-PUT `/api/tenants/{tenantId}/commissions/settings` · `backend/src/MediPOS.Api/Tenant/CommissionEndpoints.cs:18`. **E0 · IMPLEMENTADO · NOT_RUN**. Cambiar habilitación desde modal. Historial sigue consultable. Follow-up de constancia y store por revisar.
+PUT `/api/tenants/{tenantId}/commissions/settings` · `backend/src/MediPOS.Api/Tenant/CommissionEndpoints.cs:18`. **E1 · IMPLEMENTADO · NOT_RUN**. En Comisiones cambia habilitación y guarda. SetTenantCommissionsEnabledHandler.cs:15–33 comprueba Owner, usa alcance transaccional, registra cambio y auditoría y rearma autorización antes del commit. CommissionConfigurationStore.cs:52–60,99–102 persiste settings. Respuesta contiene estado; si es incierta consulta UC-REP-01, conservando historial.
 
 ## UC-REP-03
 
-GET `/api/tenants/{tenantId}/commissions/rules` · `backend/src/MediPOS.Api/Tenant/CommissionEndpoints.cs:23`. **E0 · IMPLEMENTADO · NOT_RUN**. Filtrar reglas por producto/inclusión de inactivas. CommissionsPage muestra vigencias; backend devuelve revisiones. Paginación y SQL pendientes.
+GET `/api/tenants/{tenantId}/commissions/rules` · `backend/src/MediPOS.Api/Tenant/CommissionEndpoints.cs:23`. **E1 · IMPLEMENTADO · NOT_RUN**. En Comisiones filtra revisiones por producto o inactivas. GetCommissionRulesHandler.cs:14–19 exige Owner antes/después; CommissionConfigurationStore.cs:26–35 filtra tenant/producto/estado, ordena por creación e ID y pagina. La salida sirve de lista y contexto para editar o desactivar.
 
 ## UC-REP-04
 
-PUT `/api/tenants/{tenantId}/products/{productId}/commission-rule` · `backend/src/MediPOS.Api/Tenant/CommissionEndpoints.cs:26`. **E0 · IMPLEMENTADO · NOT_RUN**. Crear revisión con producto, valor fijo o porcentaje y hora de inicio; formulario y endpoint versionado por vigencia. Validación SQL de solapes pendiente.
+PUT `/api/tenants/{tenantId}/products/{productId}/commission-rule` · `backend/src/MediPOS.Api/Tenant/CommissionEndpoints.cs:26`. **E1 · IMPLEMENTADO · NOT_RUN**. Elige producto, importe fijo o porcentaje y vigencia; guarda revisión. SetCommissionRuleHandler.cs:17–45 verifica Owner, producto y regla activa y construye reemplazo. CommissionConfigurationStore.cs:61–79 guarda cierre/revisión y auditoría en transacción. Se puede contrastar resultado en UC-REP-03 tras ambigüedad; no recalcula devengos previos.
 
 ## UC-REP-05
 
-POST `/api/tenants/{tenantId}/commissions/rules/{ruleId}/deactivate` · `backend/src/MediPOS.Api/Tenant/CommissionEndpoints.cs:31`. **E0 · IMPLEMENTADO · NOT_RUN**. Desactivar revisión específica. No eliminar historial o devengamientos. Persistencia específica pendiente.
+POST `/api/tenants/{tenantId}/commissions/rules/{ruleId}/deactivate` · `backend/src/MediPOS.Api/Tenant/CommissionEndpoints.cs:31`. **E1 · IMPLEMENTADO · NOT_RUN**. Sobre una revisión, confirma desactivación. DeactivateCommissionRuleHandler.cs:15–31 verifica Owner antes y después, carga regla y desactiva con auditoría. CommissionConfigurationStore.cs:81–102 guarda y confirma. La consulta con inactivas permite verificar el estado; asiento previo permanece en su ledger.
 
 ## UC-REP-06
 
@@ -68,6 +68,10 @@ Calcular y revertir comisión durante venta. **E1 · IMPLEMENTADO · NOT_RUN**. 
 
 Filtrar consulta, paginar y exportar. **E1 · IMPLEMENTADO · NOT_RUN**. 1. Elegir reporte/periodo/sede. 2. Aplicar filtros. 3. Paginar o descargar cuando se admite. ReportsPage.tsx:34–54 separa borrador y filtros aplicados, scoping y exportación del conjunto aplicado, no de la sola página. Errores de consulta/exportación tienen estados separados.
 
+
+## UC-REP-17
+
+Consultar sugerencias de reposición en un consumidor interno. **E1 · NO_EXPUESTO · NOT_RUN**. El Owner solicitaría el cálculo por sede y periodo histórico. No hay una acción React ni ruta HTTP registrada para obtenerlo en este árbol. `DependencyInjection.cs:330` registra `GetOwnerReplenishmentSuggestionsHandler.cs:15–28`, que valida filtros y usa `OperationalReportPolicy.ReadOwnerAsync`. `OwnerReplenishmentReader.cs:9–19` toma una lectura scoped de ventas, stock vendible, mínimos y transferencias entrantes. El handler calcula cantidades explicables mediante `ReplenishmentEstimate` y devuelve una página. Una consulta repetida vuelve a calcular sobre una lectura nueva y no genera una orden. FR-INV-008. [Prueba de persistencia](../../../../backend/tests/MediPOS.IntegrationTests/Modules/Reporting/ReplenishmentPersistenceTests.cs), con ejecución NOT_RUN.
 
 ## Fuentes
 

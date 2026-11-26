@@ -10,55 +10,55 @@ GET `/health` · `backend/src/MediPOS.Api/Observability/ObservabilityRegistratio
 
 ## UC-INT-02
 
-GET `/health/ready` · `backend/src/MediPOS.Api/Observability/ObservabilityRegistration.cs:67`. **E0 · IMPLEMENTADO · NOT_RUN**. Readiness en ObservabilityRegistration.cs:67 y siguientes. Confirmar checks particulares según flags; no se midió el servidor.
+GET `/health/ready` · `backend/src/MediPOS.Api/Observability/ObservabilityRegistration.cs:67`. **E1 · IMPLEMENTADO · NOT_RUN**. El operador consulta readiness para saber si el host puede atender. ObservabilityRegistration.cs:52,67–72 mapea healthy a 200 y otros a 503. PostgreSqlReadinessCheck.cs:8–19 llama RuntimeDatabaseProbe.cs:15–32 bajo límite, que abre runtime con interceptor y SELECT 1 en transacción read-only. No verifica operaciones de dos tenants ni sustituye prueba RLS.
 
 ## UC-INT-03
 
-GET `/api/tenants/{tenantId}/branches/{branchId}/sync/devices` · `backend/src/MediPOS.Api/Tenant/SyncEndpoints.cs:13`. **E0 · IMPLEMENTADO · NOT_RUN**. Al preparar contingencia consulta dispositivos en la sede. workflow.ts:11 y SyncEndpoints.cs:13. Store y filtros pendientes.
+GET `/api/tenants/{tenantId}/branches/{branchId}/sync/devices` · `backend/src/MediPOS.Api/Tenant/SyncEndpoints.cs:13`. **E1 · IMPLEMENTADO · NOT_RUN**. En Contingencia prepara el navegador o consulta dispositivos. workflow.ts:18–32 usa esta lectura para conciliar etiqueta reservada; GetSyncDevicesHandler.cs:16–20 exige sede y revalida contexto. SyncDeviceDirectory aplica tenant/sede y ámbito de actor; se reutiliza dispositivo identificado en lugar de reintentar un alta desconocida.
 
 ## UC-INT-04
 
-POST `/api/tenants/{tenantId}/branches/{branchId}/sync/devices` · `backend/src/MediPOS.Api/Tenant/SyncEndpoints.cs:16`. **E0 · IMPLEMENTADO · NOT_RUN**. Preparar este navegador, registrar dispositivo cuando corresponda y obtener alcance. SyncEndpoints.cs:16. Validación de identidad/versiones persistidas por completar.
+POST `/api/tenants/{tenantId}/branches/{branchId}/sync/devices` · `backend/src/MediPOS.Api/Tenant/SyncEndpoints.cs:16`. **E1 · IMPLEMENTADO · NOT_RUN**. Pulsa preparar contingencia cuando estás en línea. workflow.ts:18–32 reserva etiqueta local; SyncEndpoints.cs:16–20 recibe label y RegisterSyncDeviceHandler (SyncDeviceHandlers.cs:14–24) valida acceso de sucursal y construye dispositivo. SyncStores.cs:19–45 guarda dispositivo y auditoría scoped. 201 identifica el dispositivo; si se perdió, buscar etiqueta reservada antes de generar otra.
 
 ## UC-INT-05
 
-POST `/api/tenants/{tenantId}/sync/devices/{deviceId}/revoke` · `backend/src/MediPOS.Api/Tenant/SyncEndpoints.cs:21`. **E0 · IMPLEMENTADO · NOT_RUN**. Revocar dispositivo y conservar pendientes aislados. OfflinePage refleja revocación original ante fallo. Persistencia y auditoría por cerrar.
+POST `/api/tenants/{tenantId}/sync/devices/{deviceId}/revoke` · `backend/src/MediPOS.Api/Tenant/SyncEndpoints.cs:21`. **E1 · IMPLEMENTADO · NOT_RUN**. Revoca un dispositivo desde Contingencia. RevokeSyncDeviceHandler (SyncDeviceHandlers.cs:34–48) comprueba identidad/sede y dispositivo, bloquea registro y guarda estado/auditoría en SyncStores.cs:19–45. El cliente conserva marcador de revocación por ámbito y quien no puede reconciliarlo no sincroniza; relee dispositivo original.
 
 ## UC-INT-06
 
-POST `/api/tenants/{tenantId}/sync/batches` · `backend/src/MediPOS.Api/Tenant/SyncEndpoints.cs:26`. **E0 · IMPLEMENTADO · NOT_RUN**. Conciliar envíos con POST por lote; workflow.ts:97 mantiene evento/identidad. ProcessOfflineSyncBatchHandler.cs:26–55 exige dispositivo y acceso. Savepoints, deduplicación y acuses por rastrear.
+POST `/api/tenants/{tenantId}/sync/batches` · `backend/src/MediPOS.Api/Tenant/SyncEndpoints.cs:26`. **E1 · IMPLEMENTADO · NOT_RUN**. Al recuperar conexión, sincroniza la cola original de la misma cuenta/sede. workflow.ts:97–117 revalida membresía y conserva sobres al fallar; ProcessOfflineSyncBatchHandler.cs:26–55 valida dispositivo y produce resultado por evento. ReserveSyncEventReceiptHandler.cs:10–33 y SyncStores.cs:48–118 reservan identidad única, recuperan resultado persistido y confirman por evento. El cliente consume acuses sin declarar venta a partir del mero envío.
 
 ## UC-INT-07
 
-GET `/api/tenants/{tenantId}/sync/conflicts` · `backend/src/MediPOS.Api/Tenant/SyncEndpoints.cs:33`. **E0 · IMPLEMENTADO · NOT_RUN**. Abrir conflictos y listar según estado. DTO paginado y usado en OfflinePage. SQL y permisos exactos pendientes.
+GET `/api/tenants/{tenantId}/sync/conflicts` · `backend/src/MediPOS.Api/Tenant/SyncEndpoints.cs:33`. **E1 · IMPLEMENTADO · NOT_RUN**. Abre Conflictos y aplica filtros. OfflineSaleConflictHandlers.cs:11–25 verifica sede/rol antes y después y restringe a membresía si no es Owner. OfflineSaleConflictStore.cs:25–44 consulta por tenant y filtros y pagina resultados. La lista deja volver al mismo conflicto.
 
 ## UC-INT-08
 
-POST `/api/tenants/{tenantId}/sync/conflicts/{conflictId}/resolve` · `backend/src/MediPOS.Api/Tenant/SyncEndpoints.cs:39`. **E0 · IMPLEMENTADO · NOT_RUN**. Elegir resolución explícita y nota. La UI no ofrece forzar venta o inventario. Handler y persistencia de decisión pendiente.
+POST `/api/tenants/{tenantId}/sync/conflicts/{conflictId}/resolve` · `backend/src/MediPOS.Api/Tenant/SyncEndpoints.cs:39`. **E1 · IMPLEMENTADO · NOT_RUN**. Como Owner abre el conflicto, elige resolución y nota. OfflineSaleConflictHandlers.cs:30–53 revalida rol y membresía después de bloquear; OfflineSaleConflictStore.cs:46–69 guarda decisión y auditoría. Reconsulta el mismo conflicto si falta respuesta. Resolver no crea venta, pago ni movimiento.
 
 ## UC-INT-09
 
-GET `/api/tenants/{tenantId}/sync/devices/{deviceId}/catalog/snapshot` · `backend/src/MediPOS.Api/Tenant/SyncEndpoints.cs:45`. **E0 · IMPLEMENTADO · NOT_RUN**. Preparar catálogo con snapshot del dispositivo. workflow.ts:11–55 requiere service worker y ámbito, sincronización incremental delegada a endpoint. Transacción del snapshot pendiente.
+GET `/api/tenants/{tenantId}/sync/devices/{deviceId}/catalog/snapshot` · `backend/src/MediPOS.Api/Tenant/SyncEndpoints.cs:45`. **E1 · IMPLEMENTADO · NOT_RUN**. Al preparar el navegador, descarga las páginas del snapshot del dispositivo. BranchCatalogHandlers.cs:18–65 exige dispositivo activo en la sede y revalida al terminar; BranchCatalogSyncReader.cs:12–47 abre snapshot RepeatableRead y usa cursor autenticado. Una versión o fecha obsoleta requiere nuevo snapshot y la UI conserva ámbito original.
 
 ## UC-INT-10
 
-GET `/api/tenants/{tenantId}/sync/devices/{deviceId}/catalog/changes` · `backend/src/MediPOS.Api/Tenant/SyncEndpoints.cs:51`. **E0 · IMPLEMENTADO · NOT_RUN**. Aplicar cambios a partir de cursor de dispositivo. Validar continuidad y errores; checkout real y contrato de cursor por cerrar.
+GET `/api/tenants/{tenantId}/sync/devices/{deviceId}/catalog/changes` · `backend/src/MediPOS.Api/Tenant/SyncEndpoints.cs:51`. **E1 · IMPLEMENTADO · NOT_RUN**. Al refrescar catálogo preparado, continúa con el cursor del dispositivo. BranchCatalogHandlers.cs:18–49,67–82 exige vínculo y valida secuencia estricta a través de ventana; BranchCatalogSyncReader.cs:48–58 filtra journal por tenant/sede/versiones. Cursor vencido, hueco o cambio de fecha solicita resync; workflow.ts:41–55 aplica el reinicio de snapshot.
 
 ## UC-INT-11
 
-Preparar o bloquear dispositivo PWA. **E0 · IMPLEMENTADO · NOT_RUN**. Abrir contingencia, preparar tras validar sesión/propia caja o bloquear el dispositivo local. workflow.ts:11–55 y ContingencyPage.tsx mantienen separada la preparación de la cola. Pendiente revisar IndexedDB claim y expiración.
+Preparar o bloquear dispositivo PWA. **E1 · IMPLEMENTADO · NOT_RUN**. Desde Contingencia, preparar en línea o bloquear localmente. workflow.ts:11–62 comprueba service worker, sesión, acceso y caja propia; obtiene catálogo y calcula lease limitada. storage.ts:20–65 guarda metadatos/catálogo en IndexedDB con scope de usuario, tenant, sede y membresía, nonce y vencimiento. Bloquear impide usar lease; no mezcla las ventas en cola de otra cuenta.
 
 ## UC-INT-12
 
-Encolar venta local, retomar y conciliar. **E0 · IMPLEMENTADO · NOT_RUN**. Registrar venta provisional, encolar misma identidad, y consultar acuses desde cola. workflow.ts:83–97 no la considera venta confirmada; backoff/efecto de persistencia por cerrar.
+Encolar venta local, retomar y conciliar. **E1 · IMPLEMENTADO · NOT_RUN**. Registra venta provisional offline y luego sincroniza desde la misma identidad. workflow.ts:83–117 serializa evento v1 con UUID y hash y revalida acceso al reconectar; storage.ts:71–110 guarda sobre, acuses por scope, diferimiento y estados. Procesar un rechazo o conflicto no lo vuelve venta confirmada. Reabrir conserva el evento original y aplica UC-INT-06.
 
 ## UC-INT-13
 
-Procesar catálogo oficial DIGEMID. **E0 · NO_EXPUESTO · NOT_RUN**. StageOfficialCatalogImportHandler y OfficialCatalogServices.cs:39 exponen servicios internos. No se encontró router HTTP en inventario para staging/curación/publicación. Diferenciar de catálogo global de lectura. Falta trazar entradas operativas y tablas por etapa.
+Procesar catálogo oficial DIGEMID. **E1 · NO_EXPUESTO · NOT_RUN**. No hay pantalla ni ruta pública para abastecer catálogo oficial. Los servicios internos aplican autoridad oficial y separan staging, curación, publicación y refresh. OfficialCatalogConfigurations.cs:12,44 mapea lotes/filas, OfficialCatalogCurationConfigurations.cs:14,44,63,84 mapea propuestas/revisiones/publicación/auditoría y OfficialCatalogRefreshConfigurations.cs:15,54 versiona refresh e historial. Revisar procedencia/estado del lote antes de publicar; el directorio global visible es otro flujo.
 
 ## UC-INT-14
 
-Importar UBL de proveedor. **E0 · NO_EXPUESTO · NOT_RUN**. ImportSupplierUblInvoiceHandler registrado en DependencyInjection.cs:292. Parser, store/revisión/conversión en Modules/Purchasing/Ubl. No se encontró ruta HTTP UBL en mapa API; revisar entrypoint interno y no confundir staging con recepción.
+Importar UBL de proveedor. **E1 · NO_EXPUESTO · NOT_RUN**. No hay acción UBL en Compras expuesta. Los handlers internos ImportSupplierUblInvoiceHandler, ReviewSupplierUblImportHandler y ConvertSupplierUblImportToPurchaseDraftHandler validan acceso, revisan líneas y convierten con ExpectedVersion. SupplierUblConfigurations.cs:25,56,83 mapea importación, líneas y vínculos; SupplierUblImportStore.cs:89 y siguientes guarda conversión a borrador, sin confirmar stock. Consultar importación/versión antes de repetir conversión.
 
 ## UC-INT-15
 
@@ -66,16 +66,30 @@ Entrega CPE y consultas de proveedor. **E1 · DESACTIVADO · NOT_RUN**. RunElect
 
 ## UC-INT-16
 
-Comprobar conexión local de plataforma. **E0 · IMPLEMENTADO · NOT_RUN**. Comprobación especial de startup para Platform DEV, registrada en LocalDevelopmentPlatform.cs:59. Condición y actores en Program.cs:28–29; SQL/rol efectivo no inspeccionados.
+Comprobar conexión local de plataforma. **E1 · IMPLEMENTADO · NOT_RUN**. Al arrancar plataforma en Development local, verificar entorno antes de ofrecer rutas. LocalDevelopmentPlatform.cs:28–59 limita host/puerto/base local y registra guard; :71–82 exige que RuntimeDatabaseProbe responda en el plazo. RuntimeDatabaseRoleInterceptor.cs:14–44 rechaza rol con privilegios incompatibles. Un fallo impide startup del modo; no mide acceso comercial.
 
 ## UC-INT-17
 
-Recuperación y respaldo CLI. **E0 · IMPLEMENTADO · NOT_RUN**. Backup y recuperación operativos fuera del router. Ver BACKUP_RECOVERY_RUNBOOK, sin ejecutar scripts. Falta relacionar subcomandos y entrypoints concretos.
+Recuperación y respaldo CLI. **E1 · IMPLEMENTADO · NOT_RUN**. Operador ejecuta backup, verifica archivo, prepara migraciones offline o restaura/ensaya en destino autorizado. Program.cs:26–52,82–90 requiere configuración privada y confirmación concreta. RecoveryWorkflow.cs:15–71 verifica archivo/manifiesto y :83–125 restaura, compara integridad y registra cobertura; un resultado backup distingue archivo verificado de restauración ejecutada. No reintentar sobre destino incierto sin verificar identidad/estado.
 
 ## UC-INT-18
 
-Servir SPA y caché offline. **E0 · IMPLEMENTADO · NOT_RUN**. SPA seleccionada en Program.cs:60–63. PublishedFrontend.cs:10–16 exige Production con LocalFrontend=false; PWA empaqueta app. Caché de actualización y fallback offline por cerrar.
+Servir SPA y caché offline. **E1 · IMPLEMENTADO · NOT_RUN**. Abre la aplicación en el origen configurado, luego accede a contingencia si hay lease válida. Program.cs:60–63 selecciona hosting y PublishedFrontend.cs:8–32 exige HTTPS/origen y separa API. frontend/build/pwa.ts:7–17 almacena shell y assets para navegación sin conexión, elimina versiones antiguas y no cachea endpoints. Sesión y cola siguen los flujos ACC e INT; fallback visual no autoriza operaciones.
 
+
+## Venta provisional y conciliación
+
+```mermaid
+flowchart LR
+    Preparar["Preparar sesión, caja, dispositivo y catálogo"] --> Lease{"Lease válida para este contexto"}
+    Lease -->|Sí| Cola["Guardar evento original en IndexedDB"]
+    Lease -->|No| Bloqueo["Reconectar y verificar acceso"]
+    Cola --> Reconectar["Revalidar identidad, membresía y dispositivo"]
+    Reconectar --> Lote["Enviar los mismos eventos"]
+    Lote -->|Respuesta incierta| Cola
+    Lote -->|Acuse| Estado["Mostrar aceptado, conflicto o rechazado"]
+    Estado -->|Conflicto| Revision["Owner revisa la decisión"]
+```
 
 ## Fuentes
 

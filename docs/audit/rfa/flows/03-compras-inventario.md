@@ -6,11 +6,11 @@ Compras e Inventario requieren Owner o Pharmacist en las páginas (`PurchasesPag
 
 ## UC-COM-01
 
-GET `/api/tenants/{tenantId}/branches/{branchId}/inventory/expiring-lots` · `backend/src/MediPOS.Api/Tenant/InventoryEndpoints.cs:13`. **E1 · IMPLEMENTADO · NOT_RUN**. Abrir Por vencer, buscar o paginar. InventoryDirectoryQueries proyecta lotes; configuración de visibilidad de costo y SQL pendiente. InventoryDirectoryQueries.cs:22–28 obtiene lotes de la sede, calcula ventana con fecha Lima y proyecta según rol. InventoryDirectoryReader.cs:23–34 une lotes y líneas originales y ordena por vencimiento. UI muestra costo solo para Owner. Filtros por productId, offset y límite. Requisito FR-INV-003;FR-INV-007.
+GET `/api/tenants/{tenantId}/branches/{branchId}/inventory/expiring-lots` · `backend/src/MediPOS.Api/Tenant/InventoryEndpoints.cs:13`. **E1 · IMPLEMENTADO · NOT_RUN**. Abrir Por vencer, buscar o paginar. InventoryDirectoryQueries.cs:22–28 obtiene lotes de la sede, calcula ventana con fecha Lima y proyecta según rol. InventoryDirectoryReader.cs:23–34 une lotes y líneas originales y ordena por vencimiento. UI muestra costo solo para Owner. Filtros por productId, offset y límite. Requisito FR-INV-003;FR-INV-007.
 
 ## UC-COM-02
 
-PUT `/api/tenants/{tenantId}/branches/{branchId}/products/{productId}/stock-threshold` · `backend/src/MediPOS.Api/Tenant/InventoryEndpoints.cs:16`. **E1 · IMPLEMENTADO · NOT_RUN**. Elegir producto y configurar mínimo. useInventoryWrite.ts:20–51 mantiene intención y recibe mínimo aplicado; InventoryEndpoints.cs:16–20 usa constancia, SetBranchProductStockThresholdHandler.cs:37–58 valida scope y guarda umbral más auditoría. La reconsulta exacta del mínimo fuera de la constancia sigue pendiente de identificar.
+PUT `/api/tenants/{tenantId}/branches/{branchId}/products/{productId}/stock-threshold` · `backend/src/MediPOS.Api/Tenant/InventoryEndpoints.cs:16`. **E1 · IMPLEMENTADO · NOT_RUN**. Elegir producto y configurar mínimo. useInventoryWrite.ts:20–51 mantiene intención y recibe mínimo aplicado; InventoryEndpoints.cs:16–20 usa constancia, SetBranchProductStockThresholdHandler.cs:37–58 valida scope y guarda umbral más auditoría. InventoryPage.tsx:62,125 muestra el acuse; InventoryEndpoints.cs:13–31 no ofrece un GET individual de mínimo. El dato también alimenta reportes de riesgo y reposición, que son lecturas agregadas.
 
 ## UC-COM-03
 
@@ -26,7 +26,7 @@ POST `/api/tenants/{tenantId}/inventory/lots/{lotId}/adjustments` · `backend/sr
 
 ## UC-COM-06
 
-POST `/api/tenants/{tenantId}/suppliers` · `backend/src/MediPOS.Api/Tenant/PurchasingEndpoints.cs:15`. **E0 · IMPLEMENTADO · NOT_RUN**. Elegir Nuevo proveedor, nombre y datos opcionales. CreateSupplierHandler y RecoverableWriteFilter en PurchasingEndpoints.cs:15–19. Distinguir alta confirmada y referencia de intención; revisar unicidad y transaction scope.
+POST `/api/tenants/{tenantId}/suppliers` · `backend/src/MediPOS.Api/Tenant/PurchasingEndpoints.cs:15`. **E1 · IMPLEMENTADO · NOT_RUN**. En Compras selecciona Nuevo proveedor, completa datos y guarda. SuppliersPanel conserva la intención por separado. PurchasingEndpoints.cs:15–19 recibe SupplierRequest; CreateSupplierHandler.cs:16–27 aplica permiso de compras/licencia y PurchasingStore guarda proveedor/auditoría. RecoverableOperations.cs:39–101 serializa y confirma negocio y constancia en un commit. El 201 habilita seleccionarlo; ante pérdida consulta la constancia supplier original.
 
 ## UC-COM-07
 
@@ -34,7 +34,7 @@ GET `/api/tenants/{tenantId}/branches/{branchId}/suppliers` · `backend/src/Medi
 
 ## UC-COM-08
 
-POST `/api/tenants/{tenantId}/branches/{branchId}/purchases` · `backend/src/MediPOS.Api/Tenant/PurchasingEndpoints.cs:23`. **E0 · IMPLEMENTADO · NOT_RUN**. Crear recepción desde proveedor/referencia opcional y Continuar. usePurchaseReceipt.ts:105–146 conserva intencion original, valida actor, recupera por constancia e ID. PurchasingStore.cs:20–26 guarda inicial/auditoría. Validación de revisión del alta pendiente.
+POST `/api/tenants/{tenantId}/branches/{branchId}/purchases` · `backend/src/MediPOS.Api/Tenant/PurchasingEndpoints.cs:23`. **E1 · IMPLEMENTADO · NOT_RUN**. Elige proveedor y referencia opcionales y pulsa Continuar. usePurchaseReceipt.ts:105–146 conserva intención. PurchasingEndpoints.cs:23–27 y CreatePurchaseHandler.cs:15–29 autorizan sede/licencia y crean borrador sin movimientos; PurchasingStore.cs:20–26 y RecoverableOperations.cs:89–101 guardan compra/auditoría/constancia en transacción. 201 contiene ID para seguir editando.
 
 ## UC-COM-09
 
@@ -42,7 +42,7 @@ GET `/api/tenants/{tenantId}/branches/{branchId}/purchases/{purchaseId}` · `bac
 
 ## UC-COM-10
 
-PUT `/api/tenants/{tenantId}/purchases/{purchaseId}/lines` · `backend/src/MediPOS.Api/Tenant/PurchasingEndpoints.cs:32`. **E0 · IMPLEMENTADO · NOT_RUN**. Editar productos y lotes y guardar. Revisar revisión de servidor tras la escritura. PurchasingStore.cs:43–44,66–67 bloquea recibo y guarda líneas. Verificar permisos y alcance exacto del reemplazo.
+PUT `/api/tenants/{tenantId}/purchases/{purchaseId}/lines` · `backend/src/MediPOS.Api/Tenant/PurchasingEndpoints.cs:32`. **E1 · IMPLEMENTADO · NOT_RUN**. Añade/edita productos, cantidades, lote y vencimiento; guarda líneas. PurchasingEndpoints.cs:32–36 recibe ExpectedRevision. ReplacePurchaseLinesHandler.cs:25–55 autoriza en la sede, bloquea compra, compara revisión de líneas observada y valida producto/unidad; PurchasingStore.cs:43–44,66–76 reemplaza líneas del borrador. Revisión nueva a partir del resultado; ante conflicto o respuesta perdida, relee la compra y conserva edición local para contrastar.
 
 ## UC-COM-11
 
@@ -58,12 +58,27 @@ Editar recepción local y volver. **E1 · IMPLEMENTADO · NOT_RUN**. Volver a co
 
 ## UC-COM-14
 
-Recuperar recepción o proveedor. **E0 · IMPLEMENTADO · NOT_RUN**. Consultar la constancia del alta antes de otra creación. usePurchaseReceipt.ts:141–146 y caso UC-ACC-24. Flujo de proveedor usa su intención propia; falta concretar la frontera SQL por tipo.
+Recuperar recepción o proveedor. **E1 · IMPLEMENTADO · NOT_RUN**. Ante alta incierta en Compras o Proveedores, elige consultar operación; conserva el mismo requestId. usePurchaseReceipt.ts:105–146 y SuppliersPanel separan claves. RecoverableOperations.cs:29–101 lee constancia por actor/membresía/tenant/sede/tipo y protege comparación de payload. Si se observa constancia 201, se usa su identificador; 404 solo indica que aún no es visible. No reiniciar alta para conciliar.
 
 ## UC-COM-15
 
 Asignación FEFO. **E1 · IMPLEMENTADO · NOT_RUN**. FEFO se ejecuta al descontar en POS. Ver SaleCheckoutTransaction y SaleConfirmationPosting; SaleCheckoutTransaction.cs:128–146 selecciona lote de la sede y producto con existencias positivas, descarta vencidos en rama FEFO y usa vencimiento/fecha/ID con bloqueo. SaleConfirmationPosting.cs:94–134 usa los movimientos al confirmar; la reserva y serie exacta están dentro de la transacción. Requisito FR-INV-002.
 
+
+## Compra, revisión y existencias
+
+```mermaid
+flowchart LR
+    Inicio["Configurar recepción"] --> Envio["Crear borrador"]
+    Envio -->|Incierto| Constancia["Consultar constancia original"]
+    Envio --> Edicion["Abrir borrador por ID"]
+    Constancia --> Edicion
+    Edicion --> Revision["Guardar líneas con revisión"]
+    Revision -->|Conflicto| Edicion
+    Revision --> Confirmar["Confirmar revisión guardada"]
+    Confirmar --> Stock["Lotes y movimientos"]
+    Confirmar -->|Incierto| Lectura["Consultar compra original"]
+```
 
 ## Fuentes
 

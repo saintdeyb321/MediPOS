@@ -32,6 +32,14 @@
 
 ## Menú y roles visibles
 
+Fuente [navigation.ts](../../../frontend/src/app/navigation.ts#L7-L19). Visibilidad en la navegación comercial, sujeta a la admisión del servidor.
+
+| Roles visibles | Acciones de entrada |
+|---|---|
+| Owner, Pharmacist y Cashier | Inicio, POS, Caja, Transferencias, Notificaciones y Contingencia |
+| Owner y Pharmacist | Inventario y Compras |
+| Owner | Productos, Reportes, Comisiones, Personal y Configuración |
+| Superadmin con admisión independiente | Inicio de plataforma, Boticas, Propietarios, Licencias, Catálogo y Cuenta |
 
 
 ## Baseline sin rastrear
@@ -188,6 +196,7 @@
 - [UC-TRA-13](flows/04-transferencias.md#uc-tra-13) · Recuperar despacho original de sencillo
 - [UC-REP-15](flows/05-reportes-comisiones.md#uc-rep-15) · Calcular y revertir comisión durante venta
 - [UC-REP-16](flows/05-reportes-comisiones.md#uc-rep-16) · Filtrar consulta, paginar y exportar
+- [UC-REP-17](flows/05-reportes-comisiones.md#uc-rep-17) · Consultar sugerencias de reposición desde un consumidor interno
 - [UC-AVI-05](flows/06-avisos-auditoria.md#uc-avi-05) · Abrir detalle de aviso
 - [UC-AVI-06](flows/06-avisos-auditoria.md#uc-avi-06) · Generar alertas periódicas de vencimiento
 - [UC-AVI-07](flows/06-avisos-auditoria.md#uc-avi-07) · Recuperar lectura ambigua

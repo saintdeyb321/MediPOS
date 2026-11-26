@@ -1,12 +1,12 @@
 # Catálogo
 
-Productos es Owner (`frontend/src/features/catalog/ProductsPage.tsx:32–49`); POS usa contratos de sucursal y la búsqueda devuelve coincidencias y alternativas, no sustitución clínica. `CatalogEndpoints.cs:18–76` separa mantenimiento paginado, consultas operativas y corrección auditada. Lecturas y mutaciones privadas atraviesan `TenantEndpoints.cs:15–19`. En borradores/variantes E0 queda por cerrar el enlace a política SQL/EF concreta.
+Productos es Owner (`frontend/src/features/catalog/ProductsPage.tsx:32–49`); POS usa contratos de sucursal y la búsqueda devuelve coincidencias y alternativas, no sustitución clínica. `CatalogEndpoints.cs:18–76` separa mantenimiento paginado, consultas operativas y corrección auditada. Lecturas y mutaciones privadas atraviesan `TenantEndpoints.cs:15–19`. Los contratos de administración y operación comparten autenticación y aplican permisos diferentes.
 
 
 
 ## UC-CAT-01
 
-GET `/api/tenants/{tenantId}/branches/{branchId}/operational-products` · `backend/src/MediPOS.Api/Tenant/CatalogEndpoints.cs:18`. **E1 · IMPLEMENTADO · NOT_RUN**. En POS abrir catálogo. Catálogo operativo de sucursal recibe filtros de consulta. OperationalCatalogQueries en CatalogEndpoints.cs:18; verificar proyección activa y alcance SQL. OperationalCatalogQueries.cs:12–17 valida ProductSearch en la sede antes y después de leer; OperationalCatalogReader.cs:9–19 filtra productos activos por tenant, término/categoría y pagina. La respuesta sirve la grilla operativa sin escritura. Requisito FR-CAT-001.
+GET `/api/tenants/{tenantId}/branches/{branchId}/operational-products` · `backend/src/MediPOS.Api/Tenant/CatalogEndpoints.cs:18`. **E1 · IMPLEMENTADO · NOT_RUN**. En POS abrir catálogo. Catálogo operativo de sucursal recibe filtros de consulta. OperationalCatalogQueries.cs:12–17 valida ProductSearch en la sede antes y después de leer; OperationalCatalogReader.cs:9–19 filtra productos activos por tenant, término/categoría y pagina. La respuesta sirve la grilla operativa sin escritura. Requisito FR-CAT-001.
 
 ## UC-CAT-02
 
@@ -18,7 +18,7 @@ PUT `/api/tenants/{tenantId}/products/{productId}/local-data` · `backend/src/Me
 
 ## UC-CAT-04
 
-GET `/api/tenants/{tenantId}/categories` · `backend/src/MediPOS.Api/Tenant/CatalogEndpoints.cs:29`. **E1 · IMPLEMENTADO · NOT_RUN**. Cargar categorías en selector de alta/filtro. ProductsPage.tsx:50–58 pagina consulta; mapeo EF pendiente. CatalogDirectoryQueries.cs:17–18,32–37 exige Administración antes/después. CatalogDirectoryReader.cs:11–13 proyecta activas paginadas; el selector no modifica datos. Requisito FR-CAT-001.
+GET `/api/tenants/{tenantId}/categories` · `backend/src/MediPOS.Api/Tenant/CatalogEndpoints.cs:29`. **E1 · IMPLEMENTADO · NOT_RUN**. Cargar categorías en selector de alta/filtro. ProductsPage.tsx:50–58 pagina la consulta. CatalogDirectoryQueries.cs:17–18,32–37 exige Administración antes/después. CatalogDirectoryReader.cs:11–13 proyecta activas paginadas; el selector no modifica datos. Requisito FR-CAT-001.
 
 ## UC-CAT-05
 
@@ -26,7 +26,7 @@ GET `/api/tenants/{tenantId}/global-products` · `backend/src/MediPOS.Api/Tenant
 
 ## UC-CAT-06
 
-GET `/api/tenants/{tenantId}/products` · `backend/src/MediPOS.Api/Tenant/CatalogEndpoints.cs:33`. **E1 · IMPLEMENTADO · NOT_RUN**. Abrir Mis productos y filtrar página cargada. Properties de lista privada y offset/limit, consultar `ProductsPage.tsx:48–62`. Verificar EF. CatalogDirectoryQueries.cs:21–22,32–37 autoriza Administración; CatalogDirectoryReader.cs:17–22 limita negocio por tenant y pagina. El filtro local conserva inactivos si están en la página. Requisito FR-CAT-001. Indicio F-003.
+GET `/api/tenants/{tenantId}/products` · `backend/src/MediPOS.Api/Tenant/CatalogEndpoints.cs:33`. **E1 · IMPLEMENTADO · NOT_RUN**. Abrir Mis productos y filtrar página cargada. ProductsPage.tsx:48–62 filtra la página privada obtenida por offset/límite. CatalogDirectoryQueries.cs:21–22,32–37 autoriza Administración; CatalogDirectoryReader.cs:17–22 limita negocio por tenant y pagina. El filtro local conserva inactivos si están en la página. Requisito FR-CAT-001. Indicio F-003.
 
 ## UC-CAT-07
 
@@ -34,51 +34,51 @@ GET `/api/tenants/{tenantId}/branches/{branchId}/products/{productId}` · `backe
 
 ## UC-CAT-08
 
-GET `/api/tenants/{tenantId}/branches/{branchId}/products/search` · `backend/src/MediPOS.Api/Tenant/CatalogEndpoints.cs:40`. **E0 · IMPLEMENTADO · NOT_RUN**. En POS/Inventario buscar nombre/código y elegir coincidencia. InlineProductLookup consulta y devuelve ID; SearchProductsHandler se registra en CatalogEndpoints.cs:40–42. Índices y SQL de ranking pendientes. Requisito FR-POS-002;FR-POS-003.
+GET `/api/tenants/{tenantId}/branches/{branchId}/products/search` · `backend/src/MediPOS.Api/Tenant/CatalogEndpoints.cs:40`. **E1 · IMPLEMENTADO · NOT_RUN**. En POS o Inventario, escribe nombre, código o ingrediente y elige un resultado; el stock mostrado pertenece a la sede seleccionada. InlineProductLookup y SearchProductsHandler.cs:17–43 autorizan ProductSearch antes y después de leer. ProductSearchStore.cs:33–112,138–204 aplica normalización SQL, coincidencia exacta/textual y pg_trgm, productos activos por tenant, stock vendible por lote/sede, límite y orden estable. Devuelve coincidencias, composición farmacéutica en sede y disponibilidad en otras sedes admitidas. La consulta no cambia stock ni acredita equivalencia terapéutica. FR-POS-002, FR-POS-003.
 
 ## UC-CAT-09
 
-POST `/api/tenants/{tenantId}/products/local` · `backend/src/MediPOS.Api/Tenant/CatalogEndpoints.cs:43`. **E0 · IMPLEMENTADO · NOT_RUN**. Completar datos de alta local y confirmar. CreateProductForm/useCatalogWrite, contrato LocalProductRequest. Persistencia/Auditoría de creación por trazar.
+POST `/api/tenants/{tenantId}/products/local` · `backend/src/MediPOS.Api/Tenant/CatalogEndpoints.cs:43`. **E1 · IMPLEMENTADO · NOT_RUN**. Como Owner, abre Nuevo producto, completa datos locales y guarda. CatalogEndpoints.cs:43–48 recibe LocalProductRequest. CreateLocalBusinessProductHandler.cs:15–48 verifica administración/licencia y categoría, construye datos de negocio y agrega producto y auditoría por BusinessProductStore; 201 devuelve identificador. Si se pierde respuesta, useCatalogWrite.ts:46–82 conserva intención/código para contrastar con ficha, sin repetir alta.
 
 ## UC-CAT-10
 
-POST `/api/tenants/{tenantId}/products/from-global` · `backend/src/MediPOS.Api/Tenant/CatalogEndpoints.cs:49`. **E0 · IMPLEMENTADO · NOT_RUN**. Añadir referencia del catálogo global desde la pestaña. GlobalProductRequest crea producto a nivel tenant; persistencia por trazar.
+POST `/api/tenants/{tenantId}/products/from-global` · `backend/src/MediPOS.Api/Tenant/CatalogEndpoints.cs:49`. **E1 · IMPLEMENTADO · NOT_RUN**. En Catálogo global, selecciona referencia, ingresa código y precios, y confirma. CatalogEndpoints.cs:49–53 recibe GlobalProductRequest. CreateBusinessProductFromGlobalHandler.cs:14–43 valida alcance y licencia, carga referencia global y persiste vínculo local y auditoría mediante BusinessProductStore. 201 devuelve producto del tenant, sin disponibilidad de inventario implícita. Conciliación UC-CAT-21.
 
 ## UC-CAT-11
 
-PUT `/api/tenants/{tenantId}/products/{productId}/prices` · `backend/src/MediPOS.Api/Tenant/CatalogEndpoints.cs:54`. **E0 · IMPLEMENTADO · NOT_RUN**. Editar precios minorista y opcional mayorista. ProductDetailPanel / PricesRequest. La salida del formulario no confirma escritura incierta, consultar producto original. Revisión transaccional pendiente.
+PUT `/api/tenants/{tenantId}/products/{productId}/prices` · `backend/src/MediPOS.Api/Tenant/CatalogEndpoints.cs:54`. **E1 · IMPLEMENTADO · NOT_RUN**. Desde la ficha, guarda precios minorista y mayorista opcional. CatalogEndpoints.cs:54–58 y UpdateBusinessProductPricesHandler.cs:12–41 validan administración/licencia y actualizan el BusinessProduct local con auditoría en BusinessProductStore.cs:79. El DTO devuelve el producto actualizado. Si falta respuesta verifica la ficha original (UC-CAT-21).
 
 ## UC-CAT-12
 
-PUT `/api/tenants/{tenantId}/products/{productId}/status` · `backend/src/MediPOS.Api/Tenant/CatalogEndpoints.cs:59`. **E0 · IMPLEMENTADO · NOT_RUN**. Cambiar estado activo/inactivo. ProductDetailPanel y ProductStatusRequest. Diferenciar baja lógica de borrado; DB por trazar.
+PUT `/api/tenants/{tenantId}/products/{productId}/status` · `backend/src/MediPOS.Api/Tenant/CatalogEndpoints.cs:59`. **E1 · IMPLEMENTADO · NOT_RUN**. Desde la ficha, cambia disponibilidad del producto. SetBusinessProductStatusHandler.cs:12–38 valida administración/licencia y aplica IsActive en BusinessProductStore.cs:79 con auditoría si cambia. El resultado mantiene el ID y los datos históricos. POS filtra inactivos; consulta la ficha tras una respuesta ambigua.
 
 ## UC-CAT-13
 
-GET `/api/tenants/{tenantId}/products/{productId}/unit-configuration` · `backend/src/MediPOS.Api/Tenant/CatalogEndpoints.cs:64`. **E0 · IMPLEMENTADO · NOT_RUN**. Abrir configuración de unidades para obtener versión vigente; el mismo componente lee y escribe. ProductDetailPanel.tsx:64–86; ProductUnitConfigurationHandler. Proyección de unidades por trazar.
+GET `/api/tenants/{tenantId}/products/{productId}/unit-configuration` · `backend/src/MediPOS.Api/Tenant/CatalogEndpoints.cs:64`. **E1 · IMPLEMENTADO · NOT_RUN**. Abre Presentaciones. ProductDetailPanel.tsx:64–86 consulta configuración del producto seleccionado. ProductUnitConfigurationHandler.cs:17–33 exige administración y ProductUnitConfigurationStore.cs:13–21 proyecta unidades y versión xmin por tenant/producto. La versión se conserva para guardar UC-CAT-14; ante lectura fallida se consulta el mismo producto.
 
 ## UC-CAT-14
 
-PUT `/api/tenants/{tenantId}/products/{productId}/unit-configuration` · `backend/src/MediPOS.Api/Tenant/CatalogEndpoints.cs:67`. **E0 · IMPLEMENTADO · NOT_RUN**. Editar presentaciones, confirmar y enviar versión. ProductDetailPanel.tsx:64–86 y ProductUnitConfigurationHandler.cs:38–63 entregan estado deseado y auditoría a SaveAsync bajo expectedVersion. Falta cerrar SQL final para detectar versión y dependencias históricas.
+PUT `/api/tenants/{tenantId}/products/{productId}/unit-configuration` · `backend/src/MediPOS.Api/Tenant/CatalogEndpoints.cs:67`. **E1 · IMPLEMENTADO · NOT_RUN**. Edita presentaciones y guarda la versión obtenida al abrir. ProductUnitConfigurationHandler.cs:38–63 autoriza administración, contrasta estado y referencias de unidades; ProductUnitConfigurationStore.cs:23–61 bloquea el producto por tenant, condiciona UPDATE al xmin esperado, persiste unidades y auditoría y devuelve nueva versión. Ante conflicto o pérdida de respuesta, recarga configuración antes de repetir.
 
 ## UC-CAT-15
 
-PUT `/api/tenants/{tenantId}/products/{productId}/units` · `backend/src/MediPOS.Api/Tenant/CatalogEndpoints.cs:72`. **E0 · NO_DETERMINADO · NOT_RUN**. Ruta alternativa ReplaceProductUnitsHandler; el consumidor normal observado usa unit-configuration. Revisión de consumidores y compatibilidad pendiente.
+PUT `/api/tenants/{tenantId}/products/{productId}/units` · `backend/src/MediPOS.Api/Tenant/CatalogEndpoints.cs:72`. **E1 · NO_EXPUESTO · NOT_RUN**. Cliente compat.: envía lista de unidades para un producto existente. CatalogEndpoints.cs:72–76 y ReplaceProductUnitsHandler.cs:42 y siguientes validan administración/licencia y reglas de reemplazo, con guardado/auditoría de unidades. La ruta no recibe ExpectedVersion; el editor actual usa UC-CAT-14. El cliente puede verificar unidades en la ficha original.
 
 ## UC-CAT-16
 
-GET `/api/tenants/{tenantId}/product-imports/template` · `backend/src/MediPOS.Api/Tenant/ImportEndpoints.cs:11`. **E0 · IMPLEMENTADO · NOT_RUN**. Descargar plantilla desde ImportPage, generación devuelve XLSX. Sin escritura comercial del cliente. Seguridad del endpoint por cerrar.
+GET `/api/tenants/{tenantId}/product-imports/template` · `backend/src/MediPOS.Api/Tenant/ImportEndpoints.cs:11`. **E1 · IMPLEMENTADO · NOT_RUN**. En Importación pulsa Descargar plantilla. ImportPage.tsx:101–106 descarga blob; ImportEndpoints.cs:11–15 llama GenerateTenantProductImportTemplateHandler, que comprueba administración y genera XLSX. No modifica productos ni crea trabajo; la descarga puede volver a solicitarse.
 
 ## UC-CAT-17
 
-POST `/api/tenants/{tenantId}/product-imports` · `backend/src/MediPOS.Api/Tenant/ImportEndpoints.cs:16`. **E0 · IMPLEMENTADO · NOT_RUN**. Seleccionar XLSX y enviar. ImportPage rota intención original y ImportEndpoints.cs:16–28 aplica RecoverableWriteFilter product-import; resultados por fila y trabajo. Atomicidad por fila por trazar.
+POST `/api/tenants/{tenantId}/product-imports` · `backend/src/MediPOS.Api/Tenant/ImportEndpoints.cs:16`. **E1 · IMPLEMENTADO · NOT_RUN**. Selecciona XLSX y pulsa Importar. ImportPage.tsx:58–69 conserva requestId; ImportEndpoints.cs:16–28 limita tamaño y tipo y registra RecoverableWriteFilter. ImportProductsFromExcelHandler valida administración y filas; ProductImportStore.cs:124–221 mantiene lease y persiste resultados/producto/auditoría por fila, reautoriza antes de commit y cierra trabajo en otra transacción. 201 devuelve el trabajo y resumen; si se pierde, consulta constancia y mismo trabajo (UC-CAT-18), sin reenviar archivo.
 
 ## UC-CAT-18
 
-GET `/api/tenants/{tenantId}/product-imports/{importJobId}` · `backend/src/MediPOS.Api/Tenant/ImportEndpoints.cs:29`. **E0 · IMPLEMENTADO · NOT_RUN**. Consultar por trabajo y paginar resultados, incluidos errores. UC-CAT-17 deja job original, UI no lo reenvía. Store pendiente.
+GET `/api/tenants/{tenantId}/product-imports/{importJobId}` · `backend/src/MediPOS.Api/Tenant/ImportEndpoints.cs:29`. **E1 · IMPLEMENTADO · NOT_RUN**. Abre resultado del trabajo y pagina errores. ImportPage.tsx:40–52,72–89 y ImportEndpoints.cs:29–34 usan jobId y cursor de fila. GetImportJobResultHandler y ProductImportStore.cs:286–294 autorizan y leen trabajo/resultados ordenados en alcance tenant. CanRecoverInterrupted exige processing y flag posterior a writer drain. La consulta no reimporta.
 
 ## UC-CAT-19
 
-POST `/api/tenants/{tenantId}/product-imports/{importJobId}/recover-interrupted` · `backend/src/MediPOS.Api/Tenant/ImportEndpoints.cs:35`. **E0 · IMPLEMENTADO · NOT_RUN**. Si aparece recuperación de interrumpido, cerrar el trabajo original. RecoverInterruptedImportHandler.cs:11–24 y feature flag; falta inspección de candado y conciliación del job.
+POST `/api/tenants/{tenantId}/product-imports/{importJobId}/recover-interrupted` · `backend/src/MediPOS.Api/Tenant/ImportEndpoints.cs:35`. **E1 · IMPLEMENTADO · NOT_RUN**. En un trabajo interrumpido elegible, pulsa recuperar; usa el mismo jobId. ImportPage.tsx:79–89 y RecoverInterruptedImportHandler.cs:11–24 aplican flag y administración. ProductImportStore.cs:243–284 toma lease y bloqueo del trabajo, reautoriza, conserva filas comprometidas y persiste cierre auditado; un trabajo terminal ya no se modifica. Consulta el mismo trabajo después del intento, sin volver a subir el archivo.
 
 ## UC-CAT-20
 
@@ -90,8 +90,21 @@ Recuperar escritura de producto. **E1 · IMPLEMENTADO · NOT_RUN**. Tras ambigü
 
 ## UC-CAT-22
 
-Borrado físico de producto. **E1 · NO_EXPUESTO · NOT_RUN**. La superficie encontrada ofrece status inactivo y no hay ruta DELETE de productos en CatalogEndpoints. Pendiente verificar posibles operadores internos fuera de TenantApi.
+Borrado físico de producto. **E1 · NO_EXPUESTO · NOT_RUN**. La superficie encontrada ofrece status inactivo y no hay ruta DELETE de productos en CatalogEndpoints. La clasificación se limita al recorrido de usuario y al contrato HTTP operativo.
 
+
+## Estados de importación
+
+```mermaid
+flowchart LR
+    Archivo["Seleccionar XLSX"] --> Envio["Enviar con requestId"]
+    Envio -->|201| Trabajo["Consultar jobId y filas"]
+    Envio -->|Respuesta incierta| Constancia["Leer constancia original"]
+    Constancia --> Trabajo
+    Trabajo -->|processing y habilitado| Cierre["Recuperar el mismo trabajo"]
+    Cierre --> Trabajo
+    Trabajo -->|Terminal| Resumen["Revisar resumen"]
+```
 
 ## Fuentes
 

@@ -18,15 +18,15 @@ POST `/api/tenants/{tenantId}/branches/{branchId}/cash-transfers` · `backend/sr
 
 ## UC-TRA-02
 
-GET `/api/tenants/{tenantId}/cash-transfers/pending` · `backend/src/MediPOS.Api/Tenant/CashTransferEndpoints.cs:21`. **E0 · IMPLEMENTADO · NOT_RUN**. Consultar envíos pendientes y destino. CashTransferReader.cs:15–24 solo InTransit, por tenant y destino opcional. La UI conserva filtros. Autorización exacta de destinos por revisar.
+GET `/api/tenants/{tenantId}/cash-transfers/pending` · `backend/src/MediPOS.Api/Tenant/CashTransferEndpoints.cs:21`. **E1 · IMPLEMENTADO · NOT_RUN**. En Sencillo abre envíos pendientes y elige sede destino si corresponde. GetPendingCashTransfersHandler.cs:15–22 exige acceso al destino; el directorio sin destino exige Owner. CashTransferReader.cs:15–24 filtra InTransit por tenant/destino y pagina. La lista permite abrir el mismo envío después de navegar.
 
 ## UC-TRA-03
 
-GET `/api/tenants/{tenantId}/cash-transfers/{cashTransferId}` · `backend/src/MediPOS.Api/Tenant/CashTransferEndpoints.cs:24`. **E0 · IMPLEMENTADO · NOT_RUN**. Elegir Ver y abrir ficha, o recuperar ID original. CashTransferReader.cs:10–14 consulta identidad/tenant. Alcance actor origen-destino del handler pendiente.
+GET `/api/tenants/{tenantId}/cash-transfers/{cashTransferId}` · `backend/src/MediPOS.Api/Tenant/CashTransferEndpoints.cs:24`. **E1 · IMPLEMENTADO · NOT_RUN**. Pulsa Ver o consulta el ID original de un préstamo. GetCashTransferHandler.cs:14–22 aplica admisión y alcance en sede origen o destino; CashTransferReader.cs:10–14 lee por tenant/ID. Recibido puede aparecer en detalle aunque ya no esté en pendientes. No inferir pérdida por lista vacía.
 
 ## UC-TRA-04
 
-POST `/api/tenants/{tenantId}/cash-transfers/{cashTransferId}/receive` · `backend/src/MediPOS.Api/Tenant/CashTransferEndpoints.cs:27`. **E0 · IMPLEMENTADO · NOT_RUN**. Desde destino, seleccionar caja abierta y confirmar recepción completa. CashTransferTransaction.cs:37–52,107–125 guarda el acuse y auditoría en la misma transición. Confirmar condiciones actor/sede del handler antes de elevar evidencia.
+POST `/api/tenants/{tenantId}/cash-transfers/{cashTransferId}/receive` · `backend/src/MediPOS.Api/Tenant/CashTransferEndpoints.cs:27`. **E1 · IMPLEMENTADO · NOT_RUN**. Desde destino, elige caja abierta y confirma la recepción completa. ReceiveCashTransferHandler.cs:13–29 resuelve acceso antes y durante el bloqueo, valida caja destino y rechaza ya recibido. CashTransferTransaction.cs:37–52,107–125 guarda transición y auditoría. 200 devuelve estado; si no llega, consultar original (UC-TRA-03) y verificar caja destino antes de habilitar otra acción.
 
 ## UC-TRA-05
 

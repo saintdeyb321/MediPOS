@@ -80,7 +80,7 @@ PUT `/api/tenants/{tenantId}/branches/{branchId}/sales/{saleId}/lines` · `backe
 
 ## UC-CAJ-11
 
-POST `/api/tenants/{tenantId}/branches/{branchId}/sales/{saleId}/confirm` · `backend/src/MediPOS.Api/Tenant/PosEndpoints.cs:58`. **E1 · IMPLEMENTADO · NOT_RUN**. Preparar pago, confirmar y leer ticket. ConfirmSaleHandler.cs:29–58 recibe versión/pagos y llama a SaleConfirmationPosting.cs:43–134. Calcula y valida, confirma la venta, guarda pagos, stock, comisiones y auditoría con CompleteAsync. Si el envío es incierto se mantiene la venta original (useSaleCheckout.ts:28–41,62–80). La política SQL específica de cada tabla queda pendiente. Requisito FR-POS-005;FR-POS-006;FR-POS-009. Prueba existente: `frontend/src/features/pos/PosPage.test.tsx`.
+POST `/api/tenants/{tenantId}/branches/{branchId}/sales/{saleId}/confirm` · `backend/src/MediPOS.Api/Tenant/PosEndpoints.cs:58`. **E1 · IMPLEMENTADO · NOT_RUN**. Preparar pago, confirmar y leer ticket. ConfirmSaleHandler.cs:29–58 recibe versión/pagos y llama a SaleConfirmationPosting.cs:43–134. Calcula y valida, confirma la venta, guarda pagos, stock, comisiones y auditoría con CompleteAsync. Si el envío es incierto se mantiene la venta original (useSaleCheckout.ts:28–41,62–80). Los pagos se insertan bajo las políticas de 20261007035126_AddAtomicSaleConfirmationAndPayments.cs:102–107 y el stock se registra bajo 20261006173701_AddPurchasingAndReceiptFoundation.cs:328–338. CommissionHistorySql.cs:17–22 aplica políticas de tenant al ledger. Requisito FR-POS-005;FR-POS-006;FR-POS-009. Prueba existente: `frontend/src/features/pos/PosPage.test.tsx`.
 
 ## UC-CAJ-12
 

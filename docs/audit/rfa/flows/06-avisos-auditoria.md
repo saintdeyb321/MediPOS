@@ -6,7 +6,7 @@ La bandeja muestra lectura y riesgo como estados distintos. La auditoría expone
 
 ## UC-AVI-01
 
-GET `/api/tenants/{tenantId}/audit` · `backend/src/MediPOS.Api/Tenant/AuditEndpoints.cs:7`. **E0 · IMPLEMENTADO · NOT_RUN**. Filtrar periodo y abrir detalle. AuditPage.tsx renderiza acción/entidad/fecha y metadatos; GetAuditHistoryHandler.cs:7–25 valida autorización, rango y proyección sin before/after en el DTO. EF/RLS de consulta queda pendiente.
+GET `/api/tenants/{tenantId}/audit` · `backend/src/MediPOS.Api/Tenant/AuditEndpoints.cs:7`. **E1 · IMPLEMENTADO · NOT_RUN**. Como Owner abre Auditoría, filtra periodo y consulta registros. AuditPage.tsx presenta acción/entidad/fecha. AuditEndpoints.cs:7 y GetAuditHistoryHandler.cs:7–25 validan propietario, rango y filtro. AuditHistoryReader.cs:10–16 selecciona tenant para RLS, pagina con orden determinista y devuelve metadatos de audit_logs sin before/after. Repetir la lectura no cambia historial.
 
 ## UC-AVI-02
 
@@ -26,7 +26,7 @@ Abrir detalle de aviso. **E1 · IMPLEMENTADO · NOT_RUN**. Abrir drawer desde un
 
 ## UC-AVI-06
 
-Generar alertas periódicas de vencimiento. **E0 · IMPLEMENTADO · NOT_RUN**. Scheduler habilitado por composición de DependencyInjection.cs:154 ejecuta job de vencimiento; ExpirationAlertsScheduler.cs:21 despacha al handler. Configuración, detección/deduplicación y SQL por completar.
+Generar alertas periódicas de vencimiento. **E1 · IMPLEMENTADO · NOT_RUN**. El operador configura el job; el usuario ve alertas en el centro de avisos. DependencyInjection.cs:144–154 registra scheduler cuando corresponde, ExpirationAlertsScheduler.cs:21 despacha lote y ExpirationAlerts.cs:25–47,73–89 recorre lotes/tenants. ExpirationAlertsStore.cs:12–41 selecciona ámbito, filtra ventana y deduplica por tenant/lote/tipo/fecha mediante ON CONFLICT. Se consulta el aviso en UC-AVI-02; reejecutar el job no agrega ese duplicado.
 
 ## UC-AVI-07
 

@@ -6,7 +6,7 @@ Seis áreas en `PlatformPage.tsx:24–32`. Allowlist privada de UUID y sesión i
 
 ## UC-PLA-01
 
-GET `/platform/catalog/categories` · `backend/src/MediPOS.Api/Platform/PlatformDirectoryEndpoints.cs:13`. **E0 · IMPLEMENTADO · NOT_RUN**. Entrar a Catálogo global y listar categorías; límite validado en PlatformDirectoryEndpoints.cs:13–21. Store por revisar.
+GET `/platform/catalog/categories` · `backend/src/MediPOS.Api/Platform/PlatformDirectoryEndpoints.cs:13`. **E1 · IMPLEMENTADO · NOT_RUN**. En Catálogo global abre categorías. PlatformDirectoryEndpoints.cs:13–21 valida límite y autoridad de plataforma; PlatformCategoryQueries.cs:9 en adelante llama CatalogDirectoryReader para categorías de administración. La lista alimenta tarjetas; una consulta fallida no modifica categorías.
 
 ## UC-PLA-02
 
@@ -14,23 +14,23 @@ GET `/platform/session` · `backend/src/MediPOS.Api/Platform/PlatformDirectoryEn
 
 ## UC-PLA-03
 
-GET `/platform/tenants` · `backend/src/MediPOS.Api/Platform/PlatformDirectoryEndpoints.cs:24`. **E0 · IMPLEMENTADO · NOT_RUN**. Entrar a Boticas/Propietarios/Licencias y paginar. usePlatformConsole.ts:42 y PlatformDirectoryEndpoints.cs:24–32. Scope SQL por completar.
+GET `/platform/tenants` · `backend/src/MediPOS.Api/Platform/PlatformDirectoryEndpoints.cs:24`. **E1 · IMPLEMENTADO · NOT_RUN**. Abre Boticas, Propietarios o Licencias y avanza por cursor. usePlatformConsole.ts:42 y PlatformDirectoryQueries.cs:24–30 validan autoridad; PlatformDirectoryReader.cs:15–55 ordena tenant por ID y proyecta su administración con el ámbito de cada tenant. La lista no concede acceso a operaciones comerciales.
 
 ## UC-PLA-04
 
-GET `/platform/tenants/{tenantId:guid}/details` · `backend/src/MediPOS.Api/Platform/PlatformDirectoryEndpoints.cs:33`. **E0 · IMPLEMENTADO · NOT_RUN**. Abrir ficha de la botica seleccionada. usePlatformConsole.ts:43–44 encadena detalle e invitación solo por contexto. Join de licencias/tenants pendiente.
+GET `/platform/tenants/{tenantId:guid}/details` · `backend/src/MediPOS.Api/Platform/PlatformDirectoryEndpoints.cs:33`. **E1 · IMPLEMENTADO · NOT_RUN**. Selecciona una botica para ver licencia y estado de titular. usePlatformConsole.ts:43–44 y PlatformDirectoryQueries.cs:33–39 resuelven detalle; PlatformDirectoryReader.cs:58–66 consulta tenant/licencia y primer Owner histórico bajo ámbito seleccionado. Se consulta invitación por separado cuando aplica.
 
 ## UC-PLA-05
 
-GET `/platform/identities/{userId}` · `backend/src/MediPOS.Api/Platform/PlatformDirectoryEndpoints.cs:39`. **E0 · NO_EXPUESTO · NOT_RUN**. Consulta de identidad interna para soporte heredado; mirar consumidores y no asumir requisito del alta moderna. PlatformDirectoryEndpoints.cs:39–43. Proyección privada pendiente.
+GET `/platform/identities/{userId}` · `backend/src/MediPOS.Api/Platform/PlatformDirectoryEndpoints.cs:39`. **E1 · NO_EXPUESTO · NOT_RUN**. En un cliente de compatibilidad consulta una identidad por UUID interno. PlatformDirectoryEndpoints.cs:39–43 y PlatformDirectoryQueries.cs:42–48 requieren Superadmin; PlatformDirectoryReader.cs:69–71 solo proyecta identidad Google existente. La UI de alta por Gmail no usa esta ruta, y la consulta no concede autoridad.
 
 ## UC-PLA-06
 
-GET `/platform/tenant-requests/{requestKey}` · `backend/src/MediPOS.Api/Platform/PlatformDirectoryEndpoints.cs:43`. **E0 · IMPLEMENTADO · NOT_RUN**. Consultar constancia cuando se conserva creación pendiente. usePlatformConsole.ts:152–173 verifica IDs y confirma antes de refrescar lista. PlatformDirectoryQueries.cs:53–56 revalida autoridad; store por completar.
+GET `/platform/tenant-requests/{requestKey}` · `backend/src/MediPOS.Api/Platform/PlatformDirectoryEndpoints.cs:43`. **E1 · IMPLEMENTADO · NOT_RUN**. Ante alta incierta, consulta la constancia con la clave original. usePlatformConsole.ts:152–173 contrasta resultado y cierra antes del refresco; PlatformDirectoryQueries.cs:51–57 y PlatformDirectoryReader.cs:73 en adelante verifican actor/clave y leen resultado de creación. Un error al refrescar directorio no revierte confirmación.
 
 ## UC-PLA-07
 
-GET `/platform/tenants/{tenantId}/initial-owner` · `backend/src/MediPOS.Api/Platform/PlatformInitialOwnerEndpoints.cs:12`. **E0 · IMPLEMENTADO · NOT_RUN**. Abrir ficha y leer asignación. PlatformInitialOwnerEndpoints.cs:12 y usePlatformConsole.ts:44. Completar store y estado terminal.
+GET `/platform/tenants/{tenantId}/initial-owner` · `backend/src/MediPOS.Api/Platform/PlatformInitialOwnerEndpoints.cs:12`. **E1 · IMPLEMENTADO · NOT_RUN**. Abre detalle para ver asignación inicial. PlatformInitialOwnerEndpoints.cs:12 y usePlatformConsole.ts:44 consultan por tenant bajo autoridad de plataforma. InitialOwnerInvitationStore.cs:42–54 usa ámbito de plataforma y ordena el registro actual priorizando no revocados; la respuesta distingue estado y ausencia.
 
 ## UC-PLA-08
 
@@ -42,19 +42,19 @@ POST `/platform/tenants/{tenantId}/initial-owner/revoke` · `backend/src/MediPOS
 
 ## UC-PLA-10
 
-POST `/platform/tenants/{tenantId}/licenses/{licenseId}/renew` · `backend/src/MediPOS.Api/Platform/PlatformLicenseEndpoints.cs:35`. **E0 · IMPLEMENTADO · NOT_RUN**. Renovar con vencimiento seleccionado; usePlatformConsole.ts:184–200 actualiza licencia/acuses y directorio. Falta revisar invariantes de dominio y store.
+POST `/platform/tenants/{tenantId}/licenses/{licenseId}/renew` · `backend/src/MediPOS.Api/Platform/PlatformLicenseEndpoints.cs:35`. **E1 · IMPLEMENTADO · NOT_RUN**. En Licencias, aumenta el vencimiento y confirma. RenewLicenseHandler.cs:13–30 y License.cs:69–91 validan autoridad y que fecha no retroceda ni estado sea terminal; TenancyLicensingStore.cs:20–47 guarda licencia, historial y auditoría. Consulta detalle tras respuesta incierta.
 
 ## UC-PLA-11
 
-POST `/platform/tenants/{tenantId}/licenses/{licenseId}/suspend` · `backend/src/MediPOS.Api/Platform/PlatformLicenseEndpoints.cs:41`. **E0 · IMPLEMENTADO · NOT_RUN**. Confirmar suspensión en modal y volver a ficha/lista. Cambio no equivale a purga. Persistencia y efecto de admisión pendiente.
+POST `/platform/tenants/{tenantId}/licenses/{licenseId}/suspend` · `backend/src/MediPOS.Api/Platform/PlatformLicenseEndpoints.cs:41`. **E1 · IMPLEMENTADO · NOT_RUN**. Confirma suspensión desde la ficha. SuspendLicenseHandler.cs:13–30 y License.cs:93–110 cambian desde estado operativo y agregan historial auditado en TenancyLicensingStore.cs:27–47. License.cs:66–67 excluye suspendida de operación. Si falla la respuesta, verificar licencia original.
 
 ## UC-PLA-12
 
-POST `/platform/tenants/{tenantId}/licenses/{licenseId}/reactivate` · `backend/src/MediPOS.Api/Platform/PlatformLicenseEndpoints.cs:44`. **E0 · IMPLEMENTADO · NOT_RUN**. Reactivar con estado permitido y reconsultar. Controles de dominio y store pendientes.
+POST `/platform/tenants/{tenantId}/licenses/{licenseId}/reactivate` · `backend/src/MediPOS.Api/Platform/PlatformLicenseEndpoints.cs:44`. **E1 · IMPLEMENTADO · NOT_RUN**. Desde suspendida, elige Trial, Active o Grace y confirma. ReactivateLicenseHandler.cs:13–30 y License.cs:112–130 comprueban transición y registran historial/auditoría en TenancyLicensingStore.cs:27–47. Admisión sigue sujeta a fechas. Reconsulta estado antes de otro cambio.
 
 ## UC-PLA-13
 
-POST `/platform/tenants` · `backend/src/MediPOS.Api/Platform/PlatformLicenseEndpoints.cs:47`. **E0 · NO_EXPUESTO · NOT_RUN**. Alta histórica sin correo desde API. PlatformLicenseEndpoints.cs:81–99 comparte orquestador; formulario vigente busca with-owner. Compatibilidad a revisar.
+POST `/platform/tenants` · `backend/src/MediPOS.Api/Platform/PlatformLicenseEndpoints.cs:47`. **E1 · NO_EXPUESTO · NOT_RUN**. Cliente de compatibilidad puede crear botica sin designación por Gmail. PlatformLicenseEndpoints.cs:47,81–99 acepta payload/clave y CreateTenantIdempotentlyHandler.cs:22–54 valida autoridad, estado inicial y reserva. TenancyLicensingStore.cs:12–18 guarda tenant/licencia y auditoría en el alcance de la constancia. La UI usa with-owner; consultar UC-PLA-06 ante pérdida.
 
 ## UC-PLA-14
 
@@ -62,11 +62,11 @@ POST `/platform/tenants/with-owner` · `backend/src/MediPOS.Api/Platform/Platfor
 
 ## UC-PLA-15
 
-POST `/platform/tenants/{tenantId}/bootstrap-owner` · `backend/src/MediPOS.Api/Platform/PlatformLicenseEndpoints.cs:51`. **E0 · NO_EXPUESTO · NOT_RUN**. Bootstrap histórico por UUID en PlatformLicenseEndpoints.cs:51. UI actual delega primer Owner a with-owner/reclamo y no llama a este endpoint. Flujo histórico exacto por inspeccionar.
+POST `/platform/tenants/{tenantId}/bootstrap-owner` · `backend/src/MediPOS.Api/Platform/PlatformLicenseEndpoints.cs:51`. **E1 · NO_EXPUESTO · NOT_RUN**. Cliente de compatibilidad envía UUID verificado para primer Owner. PlatformLicenseEndpoints.cs:62–71 y CreateMembershipHandler.cs:43–66 exigen Superadmin y ausencia de Owner histórico; IdentityAccessStore.cs:42–46,55–61 persiste membresía y auditoría en el alcance de licencia. Devuelve 201 y no se usa en flujo Gmail. Verificar detalle antes de repetir.
 
 ## UC-PLA-16
 
-POST `/platform/catalog/categories` · `backend/src/MediPOS.Api/Platform/PlatformLicenseEndpoints.cs:52`. **E0 · IMPLEMENTADO · NOT_RUN**. Nueva categoría, validar directorio completo y no duplicar. usePlatformConsole.ts:131–145 cambia caché tras respuesta; CreateCategoryHandler enlazado en PlatformLicenseEndpoints.cs:52. Store por cerrar.
+POST `/platform/catalog/categories` · `backend/src/MediPOS.Api/Platform/PlatformLicenseEndpoints.cs:52`. **E1 · IMPLEMENTADO · NOT_RUN**. Abre Catálogo global, escribe nombre y guarda. PlatformLicenseEndpoints.cs:52–58 y CreateCategoryHandler.cs:12–20 revalidan autoridad y crean Category; GlobalCatalogStore.cs:17–21 guarda categoría en directorio compartido. 201 actualiza caché, usePlatformConsole.ts:131–145; ante pérdida consulta el directorio antes de intentar otra alta.
 
 ## UC-PLA-17
 
@@ -74,8 +74,21 @@ Navegar las seis áreas administrativas. **E1 · IMPLEMENTADO · NOT_RUN**. Nave
 
 ## UC-PLA-18
 
-Solicitar purga e inspeccionar retención. **E0 · NO_EXPUESTO · NOT_RUN**. RequestTenantPurgeHandler está registrado (DependencyInjection.cs:164), pero no se encontró ruta pública de purga en el inventario Platform. Cronograma y persistencia pendientes; sin atribuir borrado físico al estado.
+Solicitar purga e inspeccionar retención. **E1 · NO_EXPUESTO · NOT_RUN**. No hay acción pública de solicitar purga o inspeccionar retención. Si se invoca internamente, RequestTenantPurgeHandler.cs:10–30 exige autoridad y License.cs:132–149 agrega PurgePending e historial; TenancyLicensingStore.cs:27–47 guarda evento/auditoría. No se ejecuta borrado físico ni se puede prometer limpieza mediante esa transición. FR-LIC-005.
 
+
+## Alta de botica y primer Owner
+
+```mermaid
+flowchart LR
+    Admin["Superadmin con sesión admitida"] --> Alta["Enviar alta con Gmail y clave"]
+    Alta -->|Respuesta incierta| Consulta["Consultar clave original"]
+    Alta --> Pendiente["Botica, licencia y designación pendiente"]
+    Consulta -->|Constancia visible| Pendiente
+    Pendiente --> Google["Destinatario ingresa con Google"]
+    Google -->|Correo verificado y designación elegible| Owner["Asociar primer Owner y auditar"]
+    Google -->|Otro correo o designación no elegible| SinPermiso["Sin membresía por esta invitación"]
+```
 
 ## Fuentes
 
