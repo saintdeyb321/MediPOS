@@ -1,5 +1,20 @@
 # Hallazgos RFA
 
+## Diagnóstico vigente · RUN-10 / RFA3
+
+Los seis IDs se conservan. Los párrafos de caracterización bajo esta tabla documentan los cortes anteriores. [Pruebas y aserciones en el SHA del run](VALIDATION.md#run-10) · [decisiones, dependencias y aceptación por lote](ROADMAP.md).
+
+| ID · tipo · prioridad | Actor y expectativa | Causa, confianza y alcance | Decisión mínima, prueba y riesgo de regresión |
+|---|---|---|---|
+| F-001 · descubrimiento de arqueo · P2 | Cajero/Owner cierra y vuelve por entrada limpia. FR-CASH-002/003 exigen arqueo y FR-CASH-005 directorio de abiertas. Un historial para cerradas es una capacidad adicional. | Alta en la separación de lecturas. SC-01 E2 muestra el vacío y la recuperación con URL original. E3 acredita fila, signo, auditoría y relectura por ID en un cierre análogo. Causa del incidente DEV desconocida. | L-02. Decidir roles y periodo de historial. Verificar 100→10 exacto con vacío en activas y relectura de −90 por el actor autorizado. Riesgo: exponer arqueos ajenos o permitir segundo cierre. |
+| F-002 · defecto de habilitación · P1 | Cajero con caja abierta y destino válido intenta despachar. FR-CASH-004 exige préstamo vinculado y auditable. | Alta en la guarda incompatible: E2 con valor nulo bloquea el botón; E3 acredita saldo transaccional aun sin arqueo final. Falta ligar GET abierto y UI en el mismo sistema aislado. | L-01. Aprobar envío sujeto al saldo del ledger; decidir aparte si mostrar un disponible informativo. Insuficiente y carrera con reembolso no deben producir sobregiro. Pendiente conserva clave, sin otro POST. |
+| F-003 · alcance de búsqueda · P2 | Owner filtra una página que no contiene el producto. FR-CAT-001 define catálogo privado/global; no establece búsqueda administrativa transversal. | Alta en el alcance local por RUN-04; necesidad de buscar sobre todo el directorio pendiente de producto. La búsqueda POS E3 tiene otra finalidad. | L-03. Conservar etiqueta o aprobar consulta paginada global al negocio. Caso de segunda página, rol y exclusión de otro tenant. Riesgo: presentar vacío de página como ausencia total. |
+| F-004 · descubrimiento de compra · P2 | Operador intenta reabrir recepción sin referencia. FR-PUR-004 pide buscar el documento/referencia y FR-PUR-002 protege la recepción. | Alta en coincidencia exacta y recuperación por ID. RUN-04 lo observa en DOM. E3 contrasta dos compras por la misma referencia, detalle de la sede y exclusión de ajenas. No se ha demostrado pérdida de la compra. | L-03. Decidir si el operador requiere recientes sin documento. Probar salida, entrada limpia, dos referencias iguales y una ausente. Riesgo: usar referencia duplicada como clave para rehacer compra. |
+| F-005 · coste de lectura · P2 provisional | Personal de inventario cambia de existencias a lotes y necesita nombres legibles de su sede. FR-INV-001/FR-TEN-003 son invariantes, sin objetivo de latencia acordado. | Alta en la cuenta DOM 3/0/3 de RUN-09. Coste de red y demora percibida desconocidos. E3 verifica ámbito y cantidades de las lecturas, sin cronometrar el navegador. | L-04. Medir y acordar presupuesto antes de ampliar DTO. Eliminar lecturas solo si se conserva nombre, ámbito y paginación. Riesgo: reutilizar etiquetas de otra sede. |
+| F-006 · repetibilidad de pruebas · P2 provisional | QA navega por Transferencias o Plataforma. El control debe esperar el resultado de acceso o la carga del destinatario. Sin requisito FR de sincronización de tests. | Alta para los dos resultados discordantes RUN-03/05; causa de temporización específica y efecto en producto sin demostrar. RUN-10 tiene un FAIL frontend sin nombre. | L-05. Identificar el caso de CI y caracterizar las transiciones observables antes de ajustar esperas. Riesgo: esconder una carrera de autorización o duplicar el diagnóstico de un fallo desconocido. |
+
+El P1 tiene reproducción DOM y bloqueo E4 específico B-02. Ninguno de los seis demuestra pérdida de dinero, fuga entre tenants ni corrupción de stock. Se mantienen las pruebas de esos invariantes como condición de corrección.
+
 La evidencia de ejecución se vincula al [registro RFA2](VALIDATION.md). E2 se limita a las fronteras indicadas. Los diagnósticos originales siguen abajo.
 
 ## F-001 · Una caja cerrada deja de aparecer en activas
@@ -29,6 +44,8 @@ La evidencia de ejecución se vincula al [registro RFA2](VALIDATION.md). E2 se l
 ## F-005 · Existencias y lotes cargan el nombre por detalle
 
 **RFA2 · CONFIRMADO_EN_EJECUCION E2.** SC-06 / RUN-04 cuenta un GET de detalle en frío y cero GET adicionales al abrir Lotes con el mismo ID y ámbito. El posible costo con varios IDs, caché vencida, nuevo ámbito o red real queda pendiente de medición.
+
+**02B · RUN-09.** Con tres IDs distintos, la UI solicitó tres detalles en frío, reutilizó los tres al pasar a Lotes y solicitó tres nuevos al cambiar de sede, sin etiquetas de la sede anterior. Transporte simulado, sin medición de latencia o tráfico real. Se conserva P2 provisional.
 
 - UC-COM-03/04. E1 del circuito. P2 provisional. `InventoryDirectoryReader.cs:9–22` proyecta IDs. `ProductLookup.tsx:10–23` resuelve nombre con caché scoped por ID. Comparar cantidad de GET con caché fría, caliente y paginación. Hipótesis de coste en operación real, pendiente de medición. PENDIENTE_RFA2.
 

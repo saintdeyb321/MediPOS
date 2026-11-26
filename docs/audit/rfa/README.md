@@ -1,10 +1,18 @@
-# Radiografía AS-IS · Fase 01
+# Auditoría funcional · AS-IS y TO-BE
+
+## Corte vigente · 26/11/2026
+
+**RFA2 PARCIAL.** 155/155 UC en nueve familias: 3 E1, 34 E2, 118 E3 y 0 E4. Veredictos: 19 PASS, 1 FAIL, 133 BLOCKED, 1 NOT_RUN y 1 N/A. El fallo comercial corresponde al despacho de sencillo en React. [RUN-10 y límites](VALIDATION.md#run-10) · [Resumen CI original](evidence/CI_RUN_45891472332_SANITIZED.md).
+
+**RFA3 COMPLETA para revisión documental.** [Recorridos y decisión principal de cada UC](TO_BE.md) · [Lotes y criterios de aceptación](ROADMAP.md) · [Seis hallazgos](FINDINGS.md) · [Próxima acción](CHECKPOINT.md). Solo L-01 tiene recomendación inicial de corrección condicionada. El operador conserva la aprobación por lote. Producción NO-GO.
+
+### Referencias históricas del AS-IS
 
 Baseline de cierre `939ad83a5da8de3ceb7d4308879f6ac470546b9f`, rama `ci/postgres-diagnostics-8bc6b4c`, 26/11/2026 Lima. El árbol estaba limpio al reanudar y coincidía con el publicado auditado. Se conserva el inventario original capturado sobre `7d453285252d2bf9279cb7c42e1ac95f4f8c70c6` y sus cambios UAX registrados, incluida la huella del HTML `68cb1c38d5fbe3a07d59479aae3d0e2772215b0194baab178797b825f8d429cf`. Artefacto servido y esquema real NO_DETERMINADO. [SPEC](../../SPEC.md), [ARCHITECTURE](../../ARCHITECTURE.md) y [ADR](../../ADR.md) son las fuentes canónicas.
 
 [Inventario](USE_CASES.md) · [Matriz acumulativa](MATRIX.csv) · [Validación RFA2](VALIDATION.md) · [Hallazgos](FINDINGS.md) · [Continuidad](CHECKPOINT.md)
 
-## Cobertura
+## Cobertura estática de Fase 01
 
 **FASE_01_COMPLETA (historial RFA0–RFA1)**. Se reconciliaron 27/27 declaraciones del router con casos o exclusiones y 123/123 contratos HTTP inventariados con fichas. Se trazaron los 74 E0 de la entrega previa y se añadió UC-REP-17 para reposición interna. En ese corte hubo 155/155 casos E1 y NOT_RUN, ocho diagramas y cinco hallazgos. La matriz refleja la evidencia acumulada posterior.
 
@@ -29,6 +37,8 @@ Los resultados de comportamiento, la reproducción de los hallazgos, el estado d
 - Caja calcula efectivo físico desde pagos/reversiones y préstamos. El arqueo por ID y el directorio de abiertas son consultas distintas. Reportes agregan ventas/stock; comisiones contabilizan con la venta y su reversión.
 - Avisos derivan de lotes y registran lectura por membresía. La auditoría muestra metadatos. El módulo offline usa catálogo de sede, dispositivo y acuses originales, y CPE queda desacoplado.
 
-## RFA2 · Validación conductual
+## Cortes históricos de RFA2
 
 **FASE_02_PARCIAL** sobre `2c54e1f71aa6f66a67190d37eacda6ada71f4b0f`. Los 155 UC están clasificados en 9/9 familias y 12 escenarios. Evidencia más alta por caso: 27 E1, 128 E2, 0 E3 y 0 E4. Veredictos: 1 PASS, 1 FAIL, 148 BLOCKED, 4 NOT_RUN y 1 N/A. Los PASS parciales de ejecución se detallan aparte. Falta evidencia real de persistencia, concurrencia, RLS y reentrada en navegador aislado. [Ejecuciones y reanudación](VALIDATION.md).
+
+En 02B, `5d38898` conserva el código y los tests del corte anterior. RUN-09 amplía F-005 en DOM con varios IDs y cambio de sede. La incorporación de E3 está pendiente del resumen del run del operador. La clasificación permanece **FASE_02_PARCIAL**.

@@ -1,5 +1,24 @@
 # Checkpoint RFA
 
+## Corte RFA3 · FASE_03_COMPLETA para revisión del operador
+
+26/11/2026. Rama `ci/postgres-diagnostics-8bc6b4c`, HEAD `5d3889806e11fea23a3ba19402c22c15635a1301`. El árbol de entrada contenía cambios documentales de 02B y los MD del operador sin rastrear. Se incorporó copia idéntica del resumen saneado que estaba en `docs/`. No hubo nueva ejecución. Gobierno, contratos, aplicación, tests y entornos operativos conservados.
+
+- 9/9 familias y 155/155 UC clasificados en [TO_BE](TO_BE.md). [ROADMAP](ROADMAP.md) distingue el bugfix, las capacidades opcionales y las validaciones de los circuitos conservados. Seis hallazgos, un P1 reproducido a E2, sin P0 demostrado.
+- RFA2 permanece **FASE_02_PARCIAL** conforme al corte inmediatamente inferior. E4 cero. Falta atribuir el FAIL frontend del run 45891472332. La falta de nombre no identifica un séptimo defecto.
+- **Próxima acción exacta del operador:** revisar [L-01](ROADMAP.md) y aprobar, si procede, caracterización del GET de caja abierta en destino efímero y corrección mínima A en la guarda de Sencillo. Cualquier nuevo campo de saldo, directorio de arqueos/compras o búsqueda transversal precisa decisión independiente. RFA4/RFA5 siguen sin iniciar. **NO-GO producción.**
+
+## Corte 02B · reconciliación cerrada, FASE_02_PARCIAL
+
+HEAD y run coinciden en `5d3889806e11fea23a3ba19402c22c15635a1301`. RUN-10 importado después de RUN-09; 905/905 en 99 clases contra PostgreSQL 18.7, frontend 641/642 y fallo innominado. 3 E1, 34 E2, 118 E3. 133 BLOCKED, 1 FAIL, 1 N/A, 1 NOT_RUN, 19 PASS. Los 155 IDs se conservan. B-01 queda resuelto para las aserciones citadas en [VALIDATION](VALIDATION.md#run-10). Quedan el cierre exacto 100→10 y GET open de Sencillo, B-02 de navegador y B-03 externo. UC-TRA-01 conserva FAIL comercial E2 pese a la evidencia E3 del ledger. Sigue el diagnóstico RFA3 autorizado.
+
+## Continuación 02B · preflight
+
+- HEAD `5d3889806e11fea23a3ba19402c22c15635a1301`, rama `ci/postgres-diagnostics-8bc6b4c`. Sin cambios rastreados al iniciar. Entre `2c54e1f7` y este SHA solo cambió documentación, por lo que RUN-01–08 conservan su alcance. Se preservan los dos MD de 02B sin rastrear.
+- El encargo no incluye URL ni resumen del run nuevo. Solicitado exclusivamente el resumen sanitizado. Docker ausente en PATH y en la ubicación estándar, sin destino aislado acreditado. Mantener B-01/B-02 y el FAIL E2 de Sencillo hasta incorporar evidencia válida. Trabajar mientras tanto en el contraste de aserciones y F-005 multi-ID.
+- RUN-09 / F-005, 1 PASS, 0 FAIL, 0 SKIP. Tres GET en frío, cero en la vista de Lotes con caché vigente y tres GET de otra sede. Límite E2. Se cotejaron candidatos de Caja/Sencillo y los cuatro NOT_RUN sin importar resultados aún.
+- **FASE_02_PARCIAL.** 155 casos, 128 E2, 27 E1, 0 E3/E4. Próximo paso exacto al recibir el resumen: conciliar SHA, attempt, motor y clases completas, vincular primero aserciones de Caja/Sencillo en VALIDATION y reflejar el alcance por UC. Conservar los huecos de 100→10 y del GET `open` si el resumen no los demuestra. E4 requiere B-02. RFA3 solo podría planificarse de forma condicionada tras revisión del operador. Producción NO-GO.
+
 ## FASE_02_PARCIAL · RFA2
 
 - Preflight 26/11/2026 Lima. HEAD `2c54e1f71aa6f66a67190d37eacda6ada71f4b0f` en `ci/postgres-diagnostics-8bc6b4c`, sin diferencias rastreadas. Se conservan los dos MD del operador sin rastrear. Docker no disponible en PATH, sin destino PostgreSQL aislado acreditado. E3/E4 bloqueados y DEV excluido. Fixture revisado: crea su propio Testcontainers, aplica migraciones allí y utiliza roles de prueba. Próxima acción: piloto E2 de Caja, antes de Sencillo.

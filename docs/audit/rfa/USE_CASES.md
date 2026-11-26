@@ -1,5 +1,7 @@
 # Inventario transversal
 
+**Corte RFA3.** Los 155 identificadores del inventario siguen siendo la clave estable. [Decisión operativa por familia e ID](TO_BE.md), [frontera acreditada en CI](VALIDATION.md#run-10) y [orden de aceptación](ROADMAP.md).
+
 Los 155 IDs conservan su alcance AS-IS. Para evidencia y veredicto de la revisión conductual, consultar la [matriz acumulativa](MATRIX.csv) y los [escenarios RFA2](VALIDATION.md).
 
 ## Router

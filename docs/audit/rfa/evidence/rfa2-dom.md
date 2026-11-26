@@ -145,3 +145,50 @@ it('fetches a cold product label once and reuses it across same-scope stock and 
 })
 ```
 
+
+## SC-06 · Tres productos y cambio de sede (02B)
+
+En una copia temporal con las mismas dependencias, añadir `src/features/inventory/Rfa2bScope.test.tsx` y ejecutar `vitest run Rfa2bScope --reporter=json --outputFile="$result/f005.json"`. La prueba cuenta llamadas interceptadas y usa dos sedes sintéticas del mismo tenant. No se mide latencia ni hay tráfico real.
+
+```tsx
+import { fireEvent, screen, waitFor } from '@testing-library/react'
+import { expect, it } from 'vitest'
+import { id, json, lot, mountOperation, operationServer, workspace } from '../../test/operations'
+import { InventoryPage } from './InventoryPage'
+
+it('counts scoped detail reads for three products in cold and warm cache', async () => {
+  const fake = operationServer()
+  const ids = [id(10), id(13), id(14)]
+  const otherBranch = id(52)
+  const label = (branch: string, product: string) => `${branch === otherBranch ? 'Nueva sede' : 'Sede original'} producto ${ids.indexOf(product) + 1}`
+  fake.state.lots = ids.map((product, index) => ({
+    ...lot, inventoryLotId: id(30 + index), businessProductId: product, batchNumber: 'LOTE-RFA-' + index,
+  }))
+  const base = fake.fetcher.getMockImplementation()!
+  fake.fetcher.mockImplementation(async (input, init) => {
+    const path = new URL(String(input), 'https://unit.test').pathname
+    const match = /\/branches\/([^/]+)\/products\/([^/]+)$/.exec(path)
+    if ((init?.method ?? 'GET') === 'GET' && match && ids.includes(match[2]!)) {
+      return json({ ...fake.state.detail, product: { ...fake.state.detail.product, id: match[2], name: label(match[1]!, match[2]!) } })
+    }
+    return base(input, init)
+  })
+  const reads = (branch: string) => fake.fetcher.mock.calls
+    .filter(([path, init]) => (init?.method ?? 'GET') === 'GET' && ids.some(product => String(path).endsWith(`/branches/${branch}/products/${product}`)))
+    .map(([path]) => String(path).split('/').at(-1)).sort()
+  const view = mountOperation(fake, <InventoryPage />)
+  for (const product of ids) await screen.findByRole('button', { name: 'Filtrar por ' + label(workspace.branchId, product) })
+  expect(reads(workspace.branchId)).toEqual([...ids].sort())
+  fireEvent.click(screen.getByRole('button', { name: 'Lotes' }))
+  await screen.findByRole('button', { name: 'Ajustar lote LOTE-RFA-0' })
+  for (const product of ids) await screen.findByRole('button', { name: 'Filtrar por ' + label(workspace.branchId, product) })
+  expect(reads(workspace.branchId)).toEqual([...ids].sort())
+  view.changeContext({ ...workspace, branchId: otherBranch,
+    branch: { ...workspace.branch, id: otherBranch }, access: { ...workspace.access, branchId: otherBranch } })
+  for (const product of ids) await screen.findByRole('button', { name: 'Filtrar por ' + label(otherBranch, product) })
+  await waitFor(() => expect(reads(otherBranch)).toEqual([...ids].sort()))
+  for (const product of ids) expect(screen.queryByText(label(workspace.branchId, product))).not.toBeInTheDocument()
+  expect(reads(workspace.branchId)).toHaveLength(3)
+  expect(fake.writes()).toHaveLength(0)
+})
+```
