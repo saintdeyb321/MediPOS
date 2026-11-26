@@ -93,7 +93,7 @@
 }
 
 /* V3: the working regions, rather than introductory panels, own the viewport. */
-.pos-workbench { display: flex; flex-direction: column; gap: var(--space-3); min-width: 0; }
+.pos-workbench { container-type: inline-size; display: flex; flex-direction: column; gap: var(--space-3); min-width: 0; }
 .pos-heading { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-3); min-height: 3rem; }
 .pos-heading h1 { display: flex; align-items: center; gap: var(--space-2); font-size: var(--text-title); letter-spacing: -.025em; }
 .cash-status-strip { display: flex; flex-wrap: wrap; gap: var(--space-2); align-items: center; }
@@ -140,16 +140,13 @@
 .pos-search-help { display: grid; gap: var(--space-3); padding: var(--space-6); color: var(--text-muted); font-size: var(--text-sm); }
 .product-results .state-block { min-height: 8rem; padding: var(--space-4); border: 0; }
 .product-results { min-height: 0; }
-@media (min-width: 1100px) and (min-height: 640px) {
-  .app-shell-pos .workspace-main { display: flex; flex-direction: column; height: calc(100dvh - var(--topbar-height)); }
-  .pos-workbench { flex: 1; min-height: 0; }
-  .pos-layout { flex: 1; overflow: hidden; }
-  #buscador-pos { min-height: 0; display: flex; }
-  .product-workspace { flex: 1; display: flex; flex-direction: column; min-height: 0; }
-  .product-results { overflow-y: auto; flex: 1; }
-  .ticket-actions { max-height: 55%; overflow-y: auto; }
+@media (min-height: 640px) {
+  @container (min-width: 50rem) {
+    .pos-layout { align-items: start; }
+    .pos-sale { position: sticky; inset-block-start: calc(var(--topbar-height) + var(--space-3)); }
+  }
 }
-@media (max-width: 1099px), (max-height: 639px) {
+@container (max-width: 49.999rem) {
   .pos-layout { grid-template-columns: minmax(0, 1fr); }
   .pos-sale { overflow: visible; }
   .cart-list { overflow: visible; }

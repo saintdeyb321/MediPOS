@@ -1,5 +1,7 @@
 export { catalogApi } from './api'
 export type { ProductSearch, ProductMatch, ProductUnit } from './api'
 export { ProductsPage } from './ProductsPage'
+export { InlineProductLookup } from './InlineProductLookup'
+export type { ProductChoice } from './InlineProductLookup'
 export { ProductLookup, ProductLabel } from './ProductLookup'
 export type { ProductDetail } from './api'

@@ -114,7 +114,8 @@ async function fillLocal(type: 'retail' | 'medicine' = 'retail') {
 it('lists real-shaped records without inventing stock and reads presentations/prices from the scoped detail', async () => {
   const fake = server(); mount(fake)
   showList()
-  expect(await screen.findByRole('cell', { name: /Categoría unitaria.*Venta general/ })).toBeInTheDocument()
+  expect(await screen.findByRole('cell', { name: 'Categoría unitaria' })).toBeInTheDocument()
+  expect(screen.getByRole('cell', { name: /Venta general/ })).toBeInTheDocument()
   const detail = within(await selectProduct())
   fireEvent.click(detail.getByRole('button', { name: 'Presentaciones' }))
   expect(detail.getByText(/Precio minorista por presentación: S\/ 10.00/)).toBeInTheDocument()
@@ -163,7 +164,7 @@ it('requires structured documented medicine fields and preserves microgram/spell
 })
 it('shows an empty global catalog honestly and associates a selected reference without inventory writes', async () => {
   const fake = server(); mount(fake)
-  fireEvent.click(screen.getByRole('button', { name: 'Referencias del catálogo global' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Catálogo global' }))
   await screen.findByText('No hay productos globales en esta página.')
   const businessReads = () => fake.fetcher.mock.calls.filter(([path]) => String(path).includes('/products?')).length
   const before = businessReads()

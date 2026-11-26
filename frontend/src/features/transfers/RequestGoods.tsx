@@ -10,7 +10,7 @@ import type { TransferLineInput } from './api'
 import { requestLine, validRequest } from './model'
 import type { RequestLine } from './model'
 
-export function RequestGoods({ branches, destinationId, destinationName, disabled, create }: { branches: readonly Branch[]; destinationId: string; destinationName: string; disabled: boolean; create: (source: string, lines: TransferLineInput[]) => void }) {
+export function RequestGoods({ branches, destinationId, destinationName, disabled, create, discard }: { branches: readonly Branch[]; destinationId: string; destinationName: string; disabled: boolean; create: (source: string, lines: TransferLineInput[]) => void; discard?: (dirty: boolean) => void }) {
   const [source, setSource] = useState(''); const [product, setProduct] = useState<ProductDetail | null>(null); const [unitId, setUnitId] = useState(''); const [quantity, setQuantity] = useState('')
   const [lines, setLines] = useState<RequestLine[]>([]); const id = useId()
   const candidate = product ? requestLine(product, product.units.find(row => equalId(row.id, unitId)), quantity) : null
@@ -32,5 +32,6 @@ export function RequestGoods({ branches, destinationId, destinationName, disable
       <Button disabled={!sources.some(branch => equalId(branch.id, source)) || !validRequest(lines) || Boolean(quantity.trim())} onClick={() => { create(source, lines.map(row => row.input)) }}>Enviar solicitud de mercadería</Button>
       {quantity.trim() && <p>Agrega la cantidad en edición o vacía el campo antes de enviar.</p>}
     </fieldset>
+    {discard && <Button variant="quiet" onClick={() => discard(Boolean(source || product || quantity || lines.length))}>Descartar solicitud sin guardar</Button>}
   </section>
 }

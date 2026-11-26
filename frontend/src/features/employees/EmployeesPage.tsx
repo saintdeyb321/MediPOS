@@ -11,6 +11,7 @@ import { PageHeader } from '../../shared/ui/PageHeader'
 import { PageControls } from '../../shared/ui/PageControls'
 import { Panel } from '../../shared/ui/Panel'
 import { Drawer, Modal } from '../../shared/ui/Modal'
+import { DataSection } from '../../shared/ui/DataSection'
 import { PageToolbar } from '../../shared/ui/PageToolbar'
 import { SearchField } from '../../shared/ui/TextField'
 import { Badge } from '../../shared/ui/Badge'
@@ -34,6 +35,7 @@ function EmployeesWorkspace() {
   const offset = /^\d{1,5}$/.test(rawOffset) && Number(rawOffset) <= 10000 && Number(rawOffset) % 20 === 0 ? Number(rawOffset) : 0
   const selected = params.get('employee') ?? ''; const write = useEmployeeWrite(offset)
   const [reviewed, setReviewed] = useState(false)
+  const [section, setSection] = useState<'team' | 'invitations'>(params.has('invitationRequest') || params.has('invitationTarget') ? 'invitations' : 'team')
   const [invitationOpen, setInvitationOpen] = useState(false); const [drawerOpen, setDrawerOpen] = useState(false)
   const [tab, setTab] = useState<'profile' | 'branches' | 'schedule' | 'status'>('profile')
   const [task, setTask] = useState<'branches' | 'schedule' | 'status' | null>(null); const [dirty, setDirty] = useState(false)
@@ -53,9 +55,8 @@ function EmployeesWorkspace() {
   const taskEmployee = editSnapshot ?? employee
   const deactivationVerified = task === 'status' && editSnapshot?.isActive && write.observed?.isActive === false && sameId(write.observed.membershipId, editSnapshot.membershipId) && !write.pending && !write.busy
   const visibleEmployees = employees.data?.filter(row => row.displayName.toLocaleLowerCase('es-PE').includes(filter.toLocaleLowerCase('es-PE')))
-  return <div className="operations"><PageHeader icon={UsersRound} eyebrow="Equipo · acceso por rol y sucursal" title="Personal" description={`Equipo y accesos de ${w.tenantName}`} action={<Button disabled={!http || write.locked} onClick={() => setInvitationOpen(true)}>Invitar integrante</Button>} />
+  return <div className="operations"><PageHeader icon={UsersRound} eyebrow="" title="Personal" action={<Button disabled={!http || write.locked} onClick={() => { setSection('invitations'); setInvitationOpen(true) }}>Invitar integrante</Button>} />
     {!http && <Notice tone="warning">Esta pantalla requiere conexión HTTPS real.</Notice>}
-    <EmployeeInvitationsPanel createOpen={invitationOpen} onCreateClose={() => setInvitationOpen(false)} onCreateOpen={() => setInvitationOpen(true)} />
     {write.error != null && <ApiErrorState error={write.error} title="No pudimos completar el cambio de acceso" />}
     {write.notice && <p role="status">{write.notice}</p>}
     {write.pending && <Panel><div className="operation-body"><h2>Cambio pendiente de conciliación</h2><p>No repitas el POST/PUT. Consulta el empleado original en su página. Una lectura temprana, incluso coincidente, no demuestra que una asignación u horario terminó ni que hubo rollback.</p>
@@ -68,8 +69,14 @@ function EmployeesWorkspace() {
       {write.pending === 'deactivate' && <p>Mientras la membresía siga activa no se repite la desactivación. Solo observarla inactiva permite verificar ese resultado terminal.</p>}
     </div></Panel>}
     {branches.isError && <ApiErrorState error={branches.error} retry={() => void branches.refetch()} title="No pudimos consultar las sucursales" />}
-    <Panel><div className="operation-body"><h2>Equipo registrado</h2>
-      <PageToolbar actions={<div className="segmented-control" role="group" aria-label="Vista de personal"><Button variant="quiet" aria-pressed={viewMode === 'cards'} onClick={() => setViewMode('cards')}><LayoutGrid size={18} aria-hidden="true" />Tarjetas</Button><Button variant="quiet" aria-pressed={viewMode === 'list'} onClick={() => setViewMode('list')}><List size={18} aria-hidden="true" />Lista</Button></div>}><SearchField label="Filtrar nombres de esta página" hint="No busca cuentas ni empleados fuera de esta página." value={filter} onChange={event => setFilter(event.target.value)} /></PageToolbar>
+    <DataSection className="team-directory" tabs={<nav className="task-tabs" aria-label="Secciones de personal">
+      <Button variant="quiet" aria-pressed={section === 'team'} onClick={() => setSection('team')}>Integrantes</Button>
+      <Button variant="quiet" aria-pressed={section === 'invitations'} onClick={() => setSection('invitations')}>Invitaciones</Button>
+    </nav>}
+    toolbar={section === 'team' && <PageToolbar actions={<div className="segmented-control" role="group" aria-label="Vista de personal"><Button variant="quiet" aria-pressed={viewMode === 'cards'} onClick={() => setViewMode('cards')}><LayoutGrid size={18} aria-hidden="true" />Tarjetas</Button><Button variant="quiet" aria-pressed={viewMode === 'list'} onClick={() => setViewMode('list')}><List size={18} aria-hidden="true" />Lista</Button></div>}><SearchField label="Filtrar nombres de esta página" value={filter} onChange={event => setFilter(event.target.value)} /></PageToolbar>}
+    footer={section === 'team' && <PageControls offset={offset} count={employees.isError ? undefined : employees.data?.length} busy={employees.isFetching || write.busy || Boolean(write.pending)} change={page} />}>
+      <EmployeeInvitationsPanel active={section === 'invitations'} createOpen={invitationOpen} onCreateClose={() => setInvitationOpen(false)} onCreateOpen={() => { setSection('invitations'); setInvitationOpen(true) }} />
+      <div hidden={section !== 'team'}>
       {employees.isFetching && <p role="status">Consultando empleados…</p>}
       {employees.isError && <ApiErrorState error={employees.error} title="No pudimos consultar empleados" retry={() => void employees.refetch()} />}
       {visibleEmployees && !employees.isError && viewMode === 'cards' && <><div className="team-grid">{visibleEmployees.map(row => <article className="team-card" key={row.membershipId}>
@@ -78,14 +85,14 @@ function EmployeesWorkspace() {
         <div className="member-assignment"><Clock3 size={18} aria-hidden="true" /><div><strong>Horario · Lima</strong><p>{row.schedule.length ? `${row.schedule.length} ventanas configuradas · consulta el detalle` : row.role === 'owner' ? 'Excepción de horario de Owner' : 'Sin horario: no habilita operaciones'}</p></div></div>
         <Button variant="secondary" disabled={write.busy || Boolean(write.pending && !sameId(row.membershipId, write.targetId))} onClick={() => select(row.membershipId)}>Ver integrante y accesos</Button>
       </article>)}</div>{!visibleEmployees.length && <p className="loading-strip">No hay integrantes para el filtro de esta página.</p>}</>}
-      {employees.data && !employees.isError && viewMode === 'list' && <div className="operation-table" role="region" aria-label="Directorio del personal" tabIndex={0}><table><caption>Personal de la botica · detalle de accesos por integrante</caption><thead><tr><th>Integrante</th><th>Rol / estado</th><th>Sucursales asignadas</th><th>Horarios</th><th>Acción</th></tr></thead><tbody>{visibleEmployees?.map(row => <tr key={row.membershipId}>
+      {employees.data && !employees.isError && viewMode === 'list' && <div className="operation-table" role="region" aria-label="Directorio del personal" tabIndex={0}><table><thead><tr><th>Integrante</th><th>Rol / estado</th><th>Sucursales asignadas</th><th>Horarios</th><th>Acción</th></tr></thead><tbody>{visibleEmployees?.map(row => <tr key={row.membershipId}>
         <td>{row.displayName}{sameId(row.membershipId, w.access.membershipId) && <strong> · Tú</strong>}</td><td>{roleLabels[row.role]}<br /><Badge tone={row.isActive ? 'success' : 'neutral'}>{row.isActive ? 'Activo' : 'Inactivo'}</Badge></td>
         <td>{row.branchIds.length ? <ul>{row.branchIds.map(id => <li key={id}>{branches.data?.find(branch => sameId(branch.id, id))?.name ?? 'Sucursal no disponible en la consulta'}</li>)}</ul> : 'Sin asignaciones registradas'}</td>
         <td>{row.schedule.length ? `${row.schedule.length} ventanas · ver detalle` : 'Sin horario configurado'}</td>
-        <td><Button variant="quiet" disabled={write.busy || Boolean(write.pending && !sameId(row.membershipId, write.targetId))} onClick={() => select(row.membershipId)}>Ver {row.displayName}</Button></td>
+        <td><Button variant="quiet" disabled={write.busy || Boolean(write.pending && !sameId(row.membershipId, write.targetId))} aria-label={`Ver ${row.displayName}`} onClick={() => select(row.membershipId)}>Ver</Button></td>
       </tr>)}</tbody></table>{!employees.data.length && <p>No hay empleados en esta página.</p>}</div>}
-      <PageControls offset={offset} count={employees.isError ? undefined : employees.data?.length} busy={employees.isFetching || write.busy || Boolean(write.pending)} change={page} />
-    </div></Panel>
+      </div>
+    </DataSection>
     <Drawer open={drawerOpen && Boolean(employee)} title={employee ? employee.displayName : 'Detalle del integrante'} onClose={() => setDrawerOpen(false)}>
     {employee && <div className="operation-body"><p>{roleLabels[employee.role]} · {employee.isActive ? 'Activo' : 'Inactivo'}</p>
       <nav className="task-tabs" aria-label="Ficha del integrante">{([['profile', 'Perfil'], ['branches', 'Sucursales'], ['schedule', 'Horarios'], ['status', 'Estado']] as const).map(([id, label]) => <Button key={id} variant="quiet" aria-pressed={tab === id} onClick={() => setTab(id)}>{label}</Button>)}</nav>

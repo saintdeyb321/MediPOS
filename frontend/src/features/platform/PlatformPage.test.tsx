@@ -63,11 +63,15 @@ function mount(fake: ReturnType<typeof fixture>, query = '') {
   return render(<RuntimeProvider runtime={{ service: createMediPosService(http), http, preview: false }}><MemoryRouter initialEntries={['/plataforma' + query]}><Routes><Route path="/plataforma" element={<PlatformLayout />}><Route index element={<PlatformPage />} /></Route></Routes><Location /></MemoryRouter></RuntimeProvider>)
 }
 async function create() {
-  fireEvent.click(await screen.findByRole('button', { name: 'Nueva botica' }))
+  const button = await screen.findByRole('button', { name: 'Nueva botica' })
+  await waitFor(() => expect(button).toBeEnabled())
+  fireEvent.click(button)
   const dialog = screen.getByRole('dialog', { name: 'Nueva botica' }); const form = within(dialog)
   fireEvent.change(form.getByLabelText('Nombre comercial'), { target: { value: 'Synthetic new botica' } })
   fireEvent.change(form.getByLabelText('Gmail del propietario'), { target: { value: 'future.owner@example.invalid' } })
-  fireEvent.click(form.getByRole('button', { name: 'Crear botica y asignación pendiente' }))
+  const confirm = form.getByRole('button', { name: 'Crear botica y asignación pendiente' })
+  expect(confirm).toBeEnabled()
+  await act(async () => { fireEvent.click(confirm) })
   return dialog
 }
 const pending = (): Invitation => ({ invitationId: id(6), email: 'future.owner@example.invalid', status: 'pending', createdAt: time, userId: null })
@@ -86,6 +90,8 @@ it('does not let a 503 list hide a concurrent 403 authority revocation', async (
 })
 it('creates with Gmail/CSRF/idempotency, closes the confirmed wizard and clears dirty', async () => {
   const fake = fixture(); mount(fake); await create()
+  expect(fake.state.receipt).toBe(true)
+  expect(fake.fetcher.mock.calls.filter(([path, init]) => init?.method === 'GET' && String(path).startsWith('/platform/tenant-requests/'))).toHaveLength(1)
   await screen.findByRole('dialog', { name: 'Ficha de botica' })
   expect(screen.queryByRole('dialog', { name: 'Nueva botica' })).not.toBeInTheDocument()
   expect(fake.writes()).toHaveLength(1)

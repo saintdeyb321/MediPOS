@@ -48,7 +48,7 @@ it('lists names, roles, state, assigned branches, schedules and registration fro
   const details = await employeeDetails(); expect(details.getByText(/Integrante desde/)).toBeInTheDocument()
   fireEvent.click(details.getByRole('button', { name: 'Horarios' })); expect(details.getByText('Lunes 09:00:00–18:00:00')).toBeInTheDocument()
   fireEvent.click(details.getByRole('button', { name: /Cerrar/ }))
-  expect(screen.getByRole('heading', { name: 'Invitaciones por enlace' })).toBeInTheDocument()
+  expect(screen.getByRole('button', { name: 'Invitaciones' })).toBeInTheDocument()
   fireEvent.click(screen.getByRole('button', { name: 'Invitar integrante' }))
   expect(screen.getByRole('button', { name: 'Crear enlace temporal' })).toBeEnabled()
   expect(screen.queryByRole('textbox', { name: /correo|UUID|UserId/i })).not.toBeInTheDocument()

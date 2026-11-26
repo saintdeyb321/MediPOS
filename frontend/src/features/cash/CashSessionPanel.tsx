@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import type { ReactNode } from 'react'
 import { ApiErrorState } from '../access'
 import { Badge } from '../../shared/ui/Badge'
 import { Button } from '../../shared/ui/Button'
@@ -10,7 +11,7 @@ import { decimalInput, decimalLabel, maximumMoney } from '../../shared/api/decim
 import type { CashController } from './useCashSession'
 import { CashAge } from './CashAge'
 
-export function CashSessionPanel({ cash, compact = false, blocked = false }: { cash: CashController; compact?: boolean; blocked?: boolean }) {
+export function CashSessionPanel({ cash, compact = false, blocked = false, actions }: { cash: CashController; compact?: boolean; blocked?: boolean; actions?: ReactNode }) {
   const [amount, setAmount] = useState('')
   const [opening, setOpening] = useState(false)
   const valid = decimalInput(amount, maximumMoney, 4, true)
@@ -26,6 +27,7 @@ export function CashSessionPanel({ cash, compact = false, blocked = false }: { c
       {cash.session ? !compact && <dl className="data-summary"><div><dt>Monto inicial registrado</dt><dd>S/ {decimalLabel(cash.session.openingAmount, 2)}</dd></div></dl> :
         cash.uncertain ? <Notice tone="warning">La apertura tiene un resultado pendiente. Consulta la caja; no se enviará otra apertura automáticamente.</Notice> :
           !cash.query.isPending && !cash.query.isError && cash.connected && <Button disabled={cash.pending || blocked} onClick={() => setOpening(true)}>Abrir caja</Button>}
+      {!compact && actions && <div className="operation-actions">{actions}</div>}
       {!compact && cash.session && <CashAge key={cash.session.cashSessionId} openedAt={cash.session.openedAt} />}
       {!compact && !cash.session && !cash.query.isPending && !cash.query.isError && !cash.uncertain && <p className="data-caption">Caja cerrada: ábrela para cobrar.</p>}
       {cash.query.isError && <Button variant="quiet" onClick={() => void cash.refresh()} disabled={cash.pending || cash.query.isFetching || !cash.connected}>Reintentar lectura de caja</Button>}

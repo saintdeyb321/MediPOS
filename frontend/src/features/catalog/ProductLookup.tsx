@@ -7,6 +7,7 @@ import { Button } from '../../shared/ui/Button'
 import { TextField } from '../../shared/ui/TextField'
 import { catalogApi } from './api'
 import type { ProductDetail } from './api'
+import type { ProductChoice } from './InlineProductLookup'
 
 // Purchases may select an active product with zero stock; no POS availability guard here.
 function useProductDetail(id: string) {
@@ -15,10 +16,13 @@ function useProductDetail(id: string) {
     queryFn: ({ signal }) => { if (!http) throw new ApiError(0, 'client.https_required'); return catalogApi(http).detail(w, id, signal) },
     enabled: Boolean(http && id), retry: false, staleTime: 30_000, refetchOnWindowFocus: false })
 }
-export function ProductLabel({ id }: { id: string }) {
+export function ProductLabel({ id, onSelect }: { id: string; onSelect?: (product: ProductChoice) => void }) {
   const detail = useProductDetail(id)
   if (detail.isError) return <span>Nombre no disponible <Button variant="quiet" onClick={() => void detail.refetch()}>Consultar nombre</Button></span>
-  return <span>{detail.data?.product.name ?? 'Consultando nombre…'}</span>
+  const product = detail.data?.product
+  if (product && onSelect) return <button type="button" className="text-link" onClick={() => onSelect({ id, name: product.name })}
+    aria-label={`Filtrar por ${product.name}`}>{product.name}</button>
+  return <span>{product?.name ?? 'Consultando nombre…'}</span>
 }
 export function ProductLookup({ onSelect, disabled = false }: { onSelect: (detail: ProductDetail) => void; disabled?: boolean }) {
   const w = useWorkspace(); const { http } = useRuntime()

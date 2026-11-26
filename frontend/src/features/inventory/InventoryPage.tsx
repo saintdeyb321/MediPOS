@@ -1,10 +1,10 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Link } from 'react-router'
-import { Boxes, Search, X } from 'lucide-react'
+import { Boxes, X } from 'lucide-react'
 import { ApiErrorState, useRuntime, useWorkspace } from '../access'
-import { ProductLabel, ProductLookup } from '../catalog'
-import type { ProductDetail } from '../catalog'
+import { InlineProductLookup, ProductLabel } from '../catalog'
+import type { ProductChoice } from '../catalog'
 import { scopedKey } from '../../shared/api/contracts'
 import { compare, decimalLabel, zero } from '../../shared/api/decimal'
 import { ApiError } from '../../shared/api/http'
@@ -15,7 +15,8 @@ import { PageControls } from '../../shared/ui/PageControls'
 import { Notice } from '../../shared/ui/Notice'
 import { Badge } from '../../shared/ui/Badge'
 import { DateText } from '../../shared/ui/DateText'
-import { InlineHelp } from '../../shared/ui/FormLayout'
+import { HelpPopover } from '../../shared/ui/HelpPopover'
+import { DataSection } from '../../shared/ui/DataSection'
 import { EmptyState, LoadingState } from '../../shared/ui/States'
 import { Modal } from '../../shared/ui/Modal'
 import { PageToolbar } from '../../shared/ui/PageToolbar'
@@ -33,20 +34,25 @@ export function InventoryPage() {
 function InventoryWorkspace() {
   const w = useWorkspace(); const { http } = useRuntime(); const write = useInventoryWrite()
   const [mode, setMode] = useState<'stock' | 'lots' | 'expiring'>('stock'); const [offset, setOffset] = useState(0)
-  const [product, setProduct] = useState<ProductDetail | null>(null); const [lot, setLot] = useState<LotStock | null>(null)
-  const [filterOpen, setFilterOpen] = useState(false); const [minimumOpen, setMinimumOpen] = useState(false)
+  const [product, setProduct] = useState<ProductChoice | null>(null); const [lot, setLot] = useState<LotStock | null>(null)
+  const [minimumOpen, setMinimumOpen] = useState(false)
   const [adjustmentOpen, setAdjustmentOpen] = useState(false)
   const [minimumEpoch, setMinimumEpoch] = useState(0)
   const [dirty, setDirty] = useState(false)
-  const key = (resource: string) => scopedKey(w, resource, w.session.userId, w.access.membershipId, product?.product.id, offset)
+  const key = (resource: string) => scopedKey(w, resource, w.session.userId, w.access.membershipId, product?.id, offset)
   const api = () => { if (!http) throw new ApiError(0, 'client.https_required'); return inventoryApi(http) }
-  const stock = useQuery({ queryKey: key('stock'), queryFn: ({ signal }) => api().stock(w, product?.product.id, offset, 20, signal), enabled: Boolean(http && mode === 'stock'), retry: false, staleTime: 0, refetchOnWindowFocus: true })
-  const lots = useQuery({ queryKey: key('inventory-lots'), queryFn: ({ signal }) => api().lots(w, product?.product.id, offset, 20, signal), enabled: Boolean(http && mode === 'lots'), retry: false, staleTime: 0, refetchOnWindowFocus: true })
-  const expiring = useQuery({ queryKey: key('inventory-expiring'), queryFn: ({ signal }) => api().expiring(w, product?.product.id, offset, 20, signal), enabled: Boolean(http && mode === 'expiring'), retry: false, staleTime: 0, refetchOnWindowFocus: true })
+  const stock = useQuery({ queryKey: key('stock'), queryFn: ({ signal }) => api().stock(w, product?.id, offset, 20, signal), enabled: Boolean(http && mode === 'stock'), retry: false, staleTime: 0, refetchOnWindowFocus: true })
+  const lots = useQuery({ queryKey: key('inventory-lots'), queryFn: ({ signal }) => api().lots(w, product?.id, offset, 20, signal), enabled: Boolean(http && mode === 'lots'), retry: false, staleTime: 0, refetchOnWindowFocus: true })
+  const expiring = useQuery({ queryKey: key('inventory-expiring'), queryFn: ({ signal }) => api().expiring(w, product?.id, offset, 20, signal), enabled: Boolean(http && mode === 'expiring'), retry: false, staleTime: 0, refetchOnWindowFocus: true })
   const current = mode === 'stock' ? stock : mode === 'lots' ? lots : expiring
   const dateParts = new Intl.DateTimeFormat('en', { timeZone: 'America/Lima', year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(new Date())
   const today = ['year', 'month', 'day'].map(type => dateParts.find(part => part.type === type)!.value).join('-')
-  return <div className="operations"><PageHeader icon={Boxes} eyebrow="Existencias · control por sucursal" title="Inventario" description="Controla las existencias y vencimientos de tu sucursal." action={<Link className="button primary" to={w.base + '/compras'}>Registrar recepción</Link>} />
+  function filterProduct(value: ProductChoice | null) {
+    if (write.busy || write.pending) return
+    setProduct(value); setOffset(0); setLot(null)
+  }
+  const reception = w.base + '/compras?nueva=1&origen=inventario'
+  return <div className="operations"><PageHeader icon={Boxes} eyebrow="" title="Inventario" action={<Link className="button primary" to={reception}>Registrar recepción</Link>} />
     {!http && <Notice tone="warning">Inventario requiere conexión HTTPS real.</Notice>}
     {write.error != null && <ApiErrorState error={write.error} title="No pudimos completar la operación de inventario" />}
     {write.pending && !write.recoverable && <p role="alert">Solicitud anterior sin constancia consultable. Conserva su referencia y concilia con soporte antes de otra escritura.</p>}
@@ -54,42 +60,43 @@ function InventoryWorkspace() {
     {write.pending && <Notice tone="warning">Resultado pendiente de conciliación operacional. No repitas el ajuste ni el mínimo, incluso tras recargar. Un saldo consultado no identifica un movimiento ni prueba que la escritura falló. Conserva esta dirección y consulta la constancia original antes de otra escritura.</Notice>}
     {write.pending && !adjustmentOpen && !minimumOpen && (lot || product) && <Button data-recovery-focus variant="secondary" disabled={write.busy} onClick={() => { if (lot) setAdjustmentOpen(true); else setMinimumOpen(true) }}>Revisar solicitud pendiente sin reenviar</Button>}
     {write.result && <Panel><div className="operation-body" role="status">{'stockMovementId' in write.result ? <><h2>Ajuste registrado por el servidor</h2><p>Antes: {decimalLabel(write.result.before)} · Después: {decimalLabel(write.result.after)}. Se reconsultan saldos y lotes; el resultado no se suma localmente.</p></> : <><h2>Mínimo guardado por el servidor</h2><p>Valor: {decimalLabel(write.result.minimumStockBase)} unidades base · {write.result.updatedAt}.</p></>}</div></Panel>}
-    <Panel className="inventory-data"><div className="operation-body">
-      <div className="data-view-heading">
+    <DataSection className="inventory-data" tabs={<div className="data-view-heading">
         <nav className="task-tabs" aria-label="Consulta de inventario">
-          {(['stock', 'lots', 'expiring'] as const).map(view => <Button key={view} variant="quiet" aria-pressed={mode === view} onClick={() => {
+          {(['stock', 'lots', 'expiring'] as const).map(view => <Button key={view} variant="quiet" aria-pressed={mode === view} aria-label={view === 'expiring' ? 'Próximos a vencer (30 días)' : undefined} onClick={() => {
             setMode(view); setOffset(0); if (!write.pending) setLot(null)
-          }}>{view === 'stock' ? 'Existencias' : view === 'lots' ? 'Lotes' : 'Próximos a vencer (30 días)'}</Button>)}
+          }}>{view === 'stock' ? 'Existencias' : view === 'lots' ? 'Lotes' : 'Por vencer'}</Button>)}
         </nav>
-        <InlineHelp title="Sobre el stock">
-          <p>Las cantidades se muestran en la unidad base del producto. Los indicadores corresponden a esta página. Un saldo cero y el mínimo configurado son datos distintos.</p>
-          {w.access.role === 'owner' && <Link className="text-link" to={w.base + '/reportes'}>Ver stock crítico y vencimientos en Reportes</Link>}
-        </InlineHelp>
-      </div>
-      <PageToolbar actions={w.access.role === 'owner' && product && <Button variant="secondary" disabled={write.locked} onClick={() => { setDirty(false); setMinimumOpen(true) }}>Configurar mínimo</Button>}>
-        <Button variant="secondary" disabled={write.busy || write.pending} onClick={() => setFilterOpen(true)}><Search size={17} aria-hidden="true" />Filtrar por producto</Button>
-        {product && <Button variant="quiet" disabled={write.busy || write.pending} aria-label={`Quitar filtro ${product.product.name}`}
-          onClick={() => { setProduct(null); setOffset(0); setLot(null) }}>{product.product.name}<X size={16} aria-hidden="true" /></Button>}
-      </PageToolbar>
-      {mode === 'stock' && !current.isError && !current.isFetching && Boolean(stock.data?.length) && <dl className="data-summary">
-        <div><dt>Productos en esta página</dt><dd>{stock.data!.length}</dd></div>
-        <div><dt>Sin stock en esta página</dt><dd>{stock.data!.filter(row => compare(row.quantityAvailableBase, zero) === 0).length}</dd></div>
-      </dl>}
+        <HelpPopover label="Sobre el stock"><p>Disponible se expresa en la unidad base del producto. Por vencer muestra los próximos 30 días en Lima. Puedes filtrar un producto inactivo al elegirlo en Existencias o Lotes.</p></HelpPopover>
+      </div>}
+      toolbar={<PageToolbar actions={w.access.role === 'owner' && product && <Button variant="secondary" disabled={write.locked} onClick={() => { setDirty(false); setMinimumOpen(true) }}>Configurar mínimo</Button>}>
+        <InlineProductLookup onSelect={filterProduct} disabled={write.busy || write.pending} />
+        {product && <Button variant="quiet" disabled={write.busy || write.pending} aria-label={`Quitar filtro ${product.name}`}
+          onClick={() => filterProduct(null)}>{product.name}<X size={16} aria-hidden="true" /></Button>}
+      </PageToolbar>}
+      footer={<>
+        {mode === 'stock' && !current.isError && !current.isFetching && Boolean(stock.data?.length) && <dl className="inventory-page-totals">
+          <div><dt>Productos en esta página</dt><dd>{stock.data!.length}</dd></div>
+          <div><dt>Sin stock en esta página</dt><dd>{stock.data!.filter(row => compare(row.quantityAvailableBase, zero) === 0).length}</dd></div>
+        </dl>}
+        <PageControls offset={offset} count={current.isError ? undefined : current.data?.length} busy={current.isFetching} change={value => { setOffset(value); if (!write.pending) setLot(null) }} />
+      </>}>
       {!current.data && current.isFetching && <LoadingState label="Consultando inventario…" />}
       {current.isError && <ApiErrorState error={current.error} title="No pudimos consultar inventario" retry={() => void current.refetch()} />}
       {current.data?.length === 0 && !current.isError && <EmptyState
         title={mode === 'stock' ? product ? 'No encontramos existencias para este producto' : 'Aún no hay existencias'
           : mode === 'lots' ? 'No hay lotes en esta página' : 'No hay lotes próximos a vencer'}
+        action={product ? <Button variant="secondary" disabled={write.pending || write.busy} onClick={() => filterProduct(null)}>Limpiar filtro</Button>
+          : mode === 'stock' ? <Link className="button secondary" to={reception}>Ir a Compras</Link> : undefined}
         description={product ? 'Quita el filtro para buscar en toda la sucursal.'
           : mode === 'stock' ? 'Registra una recepción de compra para incorporar los primeros productos.'
           : mode === 'lots' ? 'Los lotes aparecerán al registrar una recepción con existencias.' : 'Aquí aparecen lotes con saldo positivo que vencen en los próximos 30 días, según la hora de Lima.'} />}
       {mode === 'stock' && Boolean(stock.data?.length) && !stock.isError && <div className="operation-table" role="region" aria-label="Tabla de existencias" tabIndex={0}>
-        <table><caption>Existencias disponibles en unidades base</caption><thead><tr><th scope="col">Producto</th><th scope="col" className="table-number">Disponible</th></tr></thead>
-          <tbody>{stock.data?.map(row => <tr key={row.businessProductId}><td><ProductLabel id={row.businessProductId} /></td><td className="table-number">{decimalLabel(row.quantityAvailableBase)}</td></tr>)}</tbody></table>
+        <table><thead><tr><th scope="col">Producto</th><th scope="col" className="table-number">Disponible</th></tr></thead>
+          <tbody>{stock.data?.map(row => <tr key={row.businessProductId}><td><ProductLabel id={row.businessProductId} onSelect={!product && !write.busy && !write.pending ? filterProduct : undefined} /></td><td className="table-number">{decimalLabel(row.quantityAvailableBase)}</td></tr>)}</tbody></table>
       </div>}
       {mode === 'lots' && Boolean(lots.data?.length) && !lots.isError && <div className="operation-table" role="region" aria-label="Tabla de lotes" tabIndex={0}>
-        <table><caption>Lotes de la sucursal</caption><thead><tr><th scope="col">Producto</th><th scope="col">Lote y vencimiento</th><th scope="col" className="table-number">Disponible (base)</th><th scope="col" className="table-action">Acción</th></tr></thead>
-          <tbody>{lots.data?.map(row => <tr key={row.inventoryLotId}><td><ProductLabel id={row.businessProductId} /></td>
+        <table><thead><tr><th scope="col">Producto</th><th scope="col">Lote y vencimiento</th><th scope="col" className="table-number">Disponible (base)</th><th scope="col" className="table-action">Acción</th></tr></thead>
+          <tbody>{lots.data?.map(row => <tr key={row.inventoryLotId}><td><ProductLabel id={row.businessProductId} onSelect={!product && !write.busy && !write.pending ? filterProduct : undefined} /></td>
             <td><strong>{row.batchNumber ?? 'Sin número de lote'}</strong><LotExpiry value={row.expirationDate} today={today} /></td>
             <td className="table-number">{decimalLabel(row.quantityAvailableBase)}</td>
             <td className="table-action"><Button variant="quiet" disabled={write.locked} onClick={() => { setDirty(false); setLot(row); setAdjustmentOpen(true) }}>Ajustar lote {row.batchNumber ?? 'sin número'}</Button></td>
@@ -104,9 +111,7 @@ function InventoryWorkspace() {
               <td className="table-number">S/ {decimalLabel(row.potentialSaleValue, 2)}</td></tr>)}</tbody></table>
         </div>
       </>}
-      <PageControls offset={offset} count={current.isError ? undefined : current.data?.length} busy={current.isFetching} change={value => { setOffset(value); if (!write.pending) setLot(null) }} />
-    </div></Panel>
-    <Modal open={filterOpen} title="Filtrar inventario" onClose={() => setFilterOpen(false)}><ProductLookup onSelect={value => { setProduct(value); setOffset(0); setLot(null); setFilterOpen(false) }} /></Modal>
+    </DataSection>
     <Modal open={adjustmentOpen && lot !== null} title="Ajustar lote" onClose={() => { setAdjustmentOpen(false); setLot(null); setDirty(false) }} onRecoveryClose={() => setAdjustmentOpen(false)} dirty={dirty} busy={write.busy} recovery={write.pending}>
       <div className="operation-body">{write.error != null && <ApiErrorState error={write.error} />}
         {write.pending && <Notice tone="warning">Resultado pendiente. Conserva esta dirección y concilia el movimiento antes de otra escritura; consultar el saldo no identifica el ajuste.</Notice>}
@@ -116,7 +121,7 @@ function InventoryWorkspace() {
     <Modal open={minimumOpen && Boolean(product)} title="Configurar mínimo de stock" onClose={() => { setMinimumOpen(false); setDirty(false); setMinimumEpoch(value => value + 1) }} onRecoveryClose={() => setMinimumOpen(false)} dirty={dirty} busy={write.busy} recovery={write.pending}>
       <div className="operation-body">{write.error != null && <ApiErrorState error={write.error} />}
         {write.pending && <Notice tone="warning">Resultado pendiente. La API no permite consultar el mínimo actual; no lo vuelvas a guardar sin conciliación.</Notice>}
-        {w.access.role === 'owner' && product && <MinimumForm key={`${product.product.id}/${minimumEpoch}`} productId={product.product.id} write={write} onDirty={setDirty} onSaved={() => { setMinimumOpen(false); setDirty(false) }} />}
+        {w.access.role === 'owner' && product && <MinimumForm key={`${product.id}/${minimumEpoch}`} productId={product.id} write={write} onDirty={setDirty} onSaved={() => { setMinimumOpen(false); setDirty(false) }} />}
         {write.result && !('stockMovementId' in write.result) && <p role="status">Mínimo guardado: {decimalLabel(write.result.minimumStockBase)} unidades base.</p>}
       </div>
     </Modal>

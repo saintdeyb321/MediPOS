@@ -6,7 +6,7 @@ import { reportLabels } from './filters'
 import type { ReportKind } from './contracts'
 import { reportingServer, mountTransfers, workspace, reports, id, n, json } from './reporting.test.support'
 
-async function choose(kind: ReportKind) { fireEvent.change(screen.getByRole('combobox', { name: 'Reporte' }), { target: { value: kind } }); const apply = screen.getByRole('button', { name: 'Aplicar filtros' }); await waitFor(() => expect(apply).toBeEnabled()); fireEvent.click(apply); await screen.findByRole('heading', { name: reportLabels[kind] + ' · consulta aplicada' }); await waitFor(() => expect(screen.queryByText('Consultando reporte…')).not.toBeInTheDocument()) }
+async function choose(kind: ReportKind) { fireEvent.change(screen.getByRole('combobox', { name: 'Reporte' }), { target: { value: kind } }); const apply = screen.getByRole('button', { name: 'Aplicar filtros' }); await waitFor(() => expect(apply).toBeEnabled()); fireEvent.click(apply); await screen.findByRole('heading', { name: reportLabels[kind] }); await waitFor(() => expect(screen.queryByText('Consultando reporte…')).not.toBeInTheDocument()) }
 it('loads overview first, preserves large exact metrics and applies dashboard with only named-period parameters', async () => {
   const fake = reportingServer(); mountTransfers(fake, <ReportsPage />)
   await screen.findByRole('table', { name: 'Resumen por sucursal · filas del servidor' }); expect(screen.getAllByText('S/ 9007199254740993.1234').length).toBeGreaterThan(0)
@@ -26,13 +26,13 @@ it.each(['pharmacist', 'cashier'] as const)('denies %s before fetching report or
 })
 it('displays all report contracts and empty rows separately from failed queries without creating commercial data', async () => {
   const fake = reportingServer(); fake.reportState.values.sales = { ...reports.sales, rows: [] }; mountTransfers(fake, <ReportsPage />)
-  await screen.findByRole('table', { name: /Resumen por sucursal/ }); await choose('sales'); await screen.findByText(/No hay filas para los filtros/)
+  await screen.findByRole('table', { name: /Resumen por sucursal/ }); await choose('sales'); await screen.findByText(/No hay resultados para estos filtros/)
   for (const kind of ['stock-risk', 'expirations', 'inventory-capital', 'product-rotation', 'commissions'] as const) await choose(kind)
   expect(screen.getByText(/regla vigente no recalcula el historial/)).toBeInTheDocument()
   fake.reportState.reject = 503
   await refocus(31_000)
   await screen.findByText('No pudimos consultar el reporte')
-  expect(screen.queryByText(/No hay filas para los filtros/)).not.toBeInTheDocument(); expect(fake.writes()).toHaveLength(0)
+  expect(screen.queryByText(/No hay resultados para estos filtros/)).not.toBeInTheDocument(); expect(fake.writes()).toHaveLength(0)
 })
 it('uses server totals for paging and keeps draft changes separate from the applied results', async () => {
   const fake = reportingServer(); fake.reportState.values.sales = { ...reports.sales, rows: Array.from({ length: 21 }, (_, index) => ({ ...reports.sales.rows[0]!, groupId: id(700 + index), groupName: 'Grupo unitario ' + index })), totals: { ...reports.sales.totals, groupCount: n('21') } }

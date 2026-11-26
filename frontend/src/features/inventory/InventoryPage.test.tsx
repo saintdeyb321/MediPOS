@@ -10,9 +10,10 @@ async function openAdjustment() {
   return within(screen.getByRole('form', { name: 'Ajustar lote' }))
 }
 async function pickProduct() {
-  fireEvent.click(screen.getByRole('button', { name: 'Filtrar por producto' }))
-  fireEvent.change(screen.getByRole('textbox', { name: 'Buscar producto por nombre, ingrediente o código' }), { target: { value: 'ingrediente' } })
-  fireEvent.click(screen.getByRole('button', { name: 'Buscar productos' })); fireEvent.click(await screen.findByRole('button', { name: 'Consultar Producto sintético unitario' })); fireEvent.click(await screen.findByRole('button', { name: 'Usar producto consultado' }))
+  const input = screen.getByRole('combobox', { name: 'Buscar producto' })
+  fireEvent.change(input, { target: { value: 'ingrediente' } })
+  await screen.findByRole('option', { name: /Producto sintético unitario/ })
+  fireEvent.keyDown(input, { key: 'ArrowDown' }); fireEvent.keyDown(input, { key: 'Enter' })
   fireEvent.click(await screen.findByRole('button', { name: 'Configurar mínimo' }))
   return screen.findByRole('form', { name: 'Configurar stock mínimo' })
 }
@@ -20,6 +21,22 @@ it('reads stock, lots and their dates without translating an error into empty in
   const fake = operationServer(); mountOperation(fake, <InventoryPage />)
   expect(await screen.findByRole('cell', { name: '20' })).toBeInTheDocument()
   await openAdjustment(); expect(document.querySelector('time[datetime="2027-12-31"]')).toBeInTheDocument()
+  expect(fake.writes()).toHaveLength(0)
+})
+it('selects a single direct match by keyboard and filters by business product ID without a write', async () => {
+  const fake = operationServer(); mountOperation(fake, <InventoryPage />)
+  await screen.findByRole('cell', { name: '20' })
+  const input = screen.getByRole('combobox', { name: 'Buscar producto' })
+  fireEvent.change(input, { target: { value: 'ingrediente' } })
+  fireEvent.keyDown(input, { key: 'Enter' })
+  await screen.findByRole('option', { name: /Producto sintético unitario/ })
+  fireEvent.keyDown(input, { key: 'ArrowDown' })
+  expect(input.getAttribute('aria-activedescendant')).toBeTruthy()
+  fireEvent.keyDown(input, { key: 'Enter' })
+  await screen.findByRole('button', { name: /Quitar filtro/ })
+  const calls = fake.fetcher.mock.calls.map(([path]) => String(path))
+  expect(calls.filter(path => path.includes('/products/search'))).toHaveLength(1)
+  expect(calls.some(path => /\/inventory\/stock\?[^ ]*productId=/.test(path))).toBe(true)
   expect(fake.writes()).toHaveLength(0)
 })
 it('distinguishes returned zero, absent balance and failed read', async () => {
@@ -37,7 +54,7 @@ it('shows only page-scoped metrics next to the inventory table', async () => {
   expect(within(table).getByRole('cell', { name: '0' })).toBeInTheDocument()
   expect(screen.getByText('Productos en esta página').nextElementSibling).toHaveTextContent('1')
   expect(screen.getByText('Sin stock en esta página').nextElementSibling).toHaveTextContent('1')
-  expect(screen.getByText('Sobre el stock').closest('details')).not.toHaveAttribute('open')
+  expect(screen.getByRole('button', { name: 'Sobre el stock' })).toHaveAttribute('popovertarget')
   expect(fake.writes()).toHaveLength(0)
 })
 it('uses actual page offsets for stock and lots without inventing a total', async () => {

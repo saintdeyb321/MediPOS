@@ -59,7 +59,7 @@ function mount(fake: ReturnType<typeof server>, search = '', role: 'owner' | 'ca
 }
 async function prepare(fake: ReturnType<typeof server>) {
   const view = mount(fake)
-  const button = screen.getByRole('button', { name: 'Preparar cierre de mi caja' })
+  const button = await screen.findByRole('button', { name: 'Preparar cierre de mi caja' })
   await waitFor(() => expect(button).toBeEnabled()); fireEvent.click(button)
   await screen.findByRole('form', { name: 'Cierre de caja' })
   expect(fake.posts()).toHaveLength(0)
@@ -118,7 +118,7 @@ it('keeps uncertain closure blocked across reload while still open, then reads a
 it('does not expose Owner active-cash queries to a cashier', async () => {
   const fake = server(); mount(fake, '', 'cashier')
   await screen.findByText('Caja abierta')
-  expect(screen.queryByRole('heading', { name: 'Cajas activas en esta sucursal' })).not.toBeInTheDocument()
+  expect(screen.queryByRole('heading', { name: 'Cajas activas' })).not.toBeInTheDocument()
   expect(fake.fetcher.mock.calls.some(([path]) => String(path).includes('/active?'))).toBe(false)
   expect(fake.posts()).toHaveLength(0)
 })

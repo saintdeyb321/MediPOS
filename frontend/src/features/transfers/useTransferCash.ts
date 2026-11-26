@@ -7,7 +7,7 @@ import { ApiError } from '../../shared/api/http'
 import { equalId } from './api'
 
 // Only the current, operationally authorized branch. Cross-branch receipt requires switching workspace.
-export function useTransferCash() {
+export function useTransferCash(enabled: boolean) {
   const w = useWorkspace(); const { http } = useRuntime(); const [offset, setOffset] = useState(0); const [id, setId] = useState('')
   const choices = useQuery({ queryKey: scopedKey(w, 'transfer-cash-choices', w.session.userId, w.access.membershipId, offset), queryFn: async ({ signal }) => {
     if (!http) throw new ApiError(0, 'client.https_required')
@@ -16,8 +16,8 @@ export function useTransferCash() {
     if (!result.session) return []
     if (!equalId(result.session.membershipId, w.access.membershipId) || !equalId(result.session.openedByActorId, w.session.userId)) throw new ApiError(0, 'client.unexpected_response')
     return [{ id: result.session.cashSessionId, label: 'Tu caja · apertura UTC ' + result.session.openedAt }]
-  }, enabled: Boolean(http), retry: false, staleTime: 0, refetchOnWindowFocus: false })
-  const selected = !choices.isError && !choices.isFetching && choices.data?.some(row => equalId(row.id, id))
+  }, enabled: Boolean(http && enabled), retry: false, staleTime: 0, refetchOnWindowFocus: false })
+  const selected = enabled && !choices.isError && !choices.isFetching && choices.data?.some(row => equalId(row.id, id))
   const status = useQuery({ queryKey: scopedKey(w, 'transfer-cash-status', w.session.userId, w.access.membershipId, id), queryFn: async ({ signal }) => {
     if (!http) throw new ApiError(0, 'client.https_required')
     const value = await cashApi(http).status(w, id, signal)

@@ -4,8 +4,10 @@ import { useQuery } from '@tanstack/react-query'
 import { ApiErrorState, useRuntime, useWorkspace } from '../access'
 import { Button } from '../../shared/ui/Button'
 import { Panel } from '../../shared/ui/Panel'
+import { HardDriveDownload } from 'lucide-react'
+import { DataSection } from '../../shared/ui/DataSection'
+import { HelpPopover } from '../../shared/ui/HelpPopover'
 import { PageHeader } from '../../shared/ui/PageHeader'
-import { InlineHelp } from '../../shared/ui/FormLayout'
 import { PageControls } from '../../shared/ui/PageControls'
 import { TextField } from '../../shared/ui/TextField'
 import { Notice } from '../../shared/ui/Notice'
@@ -53,15 +55,20 @@ function OfflineWorkspace() {
     } catch (failure) { if (mounted.current) setError(failure) }
     finally { running.current = false; if (mounted.current) setBusy(false) }
   }
-  return <div className="operations"><PageHeader title="Contingencia y sincronización" description="Prepara el catálogo de tu sucursal y revisa las ventas pendientes de sincronizar." />
+  return <div className="operations"><PageHeader title="Contingencia y sincronización" icon={HardDriveDownload} eyebrow="" />
     <Notice tone="warning">Operación local pendiente ≠ venta confirmada. Conserva los datos del navegador hasta conciliar cada evento con su identidad original.</Notice>
-    <Panel><div className="operation-body"><h2>Preparar este navegador</h2><Notice tone="info">Necesitas conexión y tu propia caja abierta. El stock descargado es orientativo.</Notice><InlineHelp title="Qué se comprueba al sincronizar">El servidor vuelve a validar permisos, horario, precio, caja y existencias. La contingencia cubre ventas. La administración, transferencias y edición de stock requieren conexión.</InlineHelp>
+    <DataSection tabs={<div className="section-heading"><h2>Contingencia en este navegador</h2>
+      <HelpPopover label="Qué se comprueba al sincronizar"><p>El servidor verifica permisos, horario, precio, caja y existencias. La contingencia cubre ventas.</p></HelpPopover>
+    </div>}>
+      <div className="offline-task"><p>Para preparar el catálogo, necesitas conexión y tu propia caja abierta. El stock descargado es orientativo.</p>
       <Button disabled={busy || !http || Boolean(revocation)} onClick={() => void run('prepare')}>Preparar / actualizar contingencia</Button>
-      {lease && <><p>Preparada para {lease.branchName}, hasta {new Date(lease.expiresAt).toISOString()}. Claves de sesión y CSRF nunca se guardan en IndexedDB.</p><Link className="button secondary" to="/contingencia">Abrir POS de contingencia</Link><Button variant="quiet" disabled={busy} onClick={() => void run('revoke')}>Revocar este dispositivo</Button></>}
+      {lease && <><p>Preparada para {lease.branchName} hasta <DateText value={new Date(lease.expiresAt).toISOString()} />.</p><Link className="button secondary" to="/contingencia">Abrir POS de contingencia</Link><Button variant="quiet" disabled={busy} onClick={() => void run('revoke')}>Revocar este dispositivo</Button></>}
       {revocation && <><p>Revocación original pendiente. La contingencia local está bloqueada; no se permite otra preparación ni reemplazar el dispositivo para ocultarla.</p><Button variant="secondary" disabled={busy || !http} onClick={() => void run('revoke')}>Conciliar revocación del mismo dispositivo</Button></>}
       {notice && <p role="status">{notice}</p>}{error != null && <ApiErrorState error={error} title="No pudimos completar la sincronización" />}
-    </div></Panel>
-    <Panel><div className="operation-body"><h2>Cola de esta cuenta y sucursal</h2><p>No borres los datos del navegador mientras existan pendientes. Al cerrar sesión o cambiar contexto se limpia el catálogo; los pendientes quedan aislados hasta verificar nuevamente esta misma cuenta. Reintentos automáticos limitados a seis por evento, con espera creciente; una respuesta perdida no cambia UUID ni payload.</p><Button disabled={busy || !http} onClick={() => void run('sync')}>Conciliar pendientes originales</Button><OutboxTable rows={rows} base={w.base} /></div></Panel>
+    </div></DataSection>
+    <DataSection tabs={<div className="section-heading"><h2>Cola de esta cuenta y sucursal</h2>
+      <Button disabled={busy || !http} onClick={() => void run('sync')}>Conciliar pendientes originales</Button>
+    </div>}><OutboxTable rows={rows} base={w.base} /></DataSection>
     {http && <Conflicts key={scope.membershipId} />}
   </div>
 }

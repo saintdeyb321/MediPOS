@@ -10,6 +10,9 @@ import { TextField } from '../../shared/ui/TextField'
 import { Notice } from '../../shared/ui/Notice'
 import { Drawer, Modal } from '../../shared/ui/Modal'
 import { FormFooter } from '../../shared/ui/FormLayout'
+import { DataSection } from '../../shared/ui/DataSection'
+import { PageControls } from '../../shared/ui/PageControls'
+import '../../shared/styles/operations.css'
 import { scopedKey } from '../../shared/api/contracts'
 import { decimalInput, decimalLabel, maximumMoney } from '../../shared/api/decimal'
 import { cashApi } from './api'
@@ -28,7 +31,7 @@ export function CashPage() {
 }
 function CashWorkspace() {
   const cash = useCashSession()
-  return <><PageHeader icon={Banknote} title="Arqueos y cajas" description="Abre tu caja, revisa el efectivo y registra el cierre." /><CashManagement cash={cash} /></>
+  return <><PageHeader icon={Banknote} eyebrow="" title="Arqueos y cajas" /><CashManagement cash={cash} /></>
 }
 export function CashManagement({ cash, embedded = false, blocked = false }: { cash: CashController; embedded?: boolean; blocked?: boolean }) {
   const w = useWorkspace(); const { http } = useRuntime()
@@ -42,23 +45,26 @@ export function CashManagement({ cash, embedded = false, blocked = false }: { ca
   const pick = (id: string) => { setAmount(''); setManaging(false); setClosing(true); void close.consult(id) }
   const valid = decimalInput(amount, maximumMoney, 4, true)
   const canClose = !close.denied && close.status?.status === 'open' && (w.access.role === 'owner' || close.status.membershipId === w.access.membershipId)
+  const closeAction = <Button variant="secondary" disabled={!cash.session || close.busy || close.pending || blocked}
+    onClick={() => { if (cash.session) pick(cash.session.cashSessionId) }}>Preparar cierre de mi caja</Button>
   return <>
-    {close.pending ? <Notice tone="warning">Cierre por conciliar. Consulta esta misma caja; no se enviará otro cierre.</Notice> : <CashSessionPanel cash={cash} compact={embedded} blocked={blocked} />}
-    <Panel className={embedded ? 'cash-management-embedded' : 'pos-cash'}><div className="pos-section-body">
-      {!embedded && <h2>Cierre y arqueo</h2>}
+    {close.pending ? <Notice tone="warning">Cierre por conciliar. Consulta esta misma caja; no se enviará otro cierre.</Notice> : <CashSessionPanel cash={cash} compact={embedded} blocked={blocked} actions={cash.session && closeAction} />}
+    {(embedded || close.id || close.busy || close.error != null) && <Panel className={embedded ? 'cash-management-embedded' : 'pos-cash'}><div className="pos-section-body">
       {close.error != null && <ApiErrorState error={close.error} title="Revisa el estado de la caja" />}
-      {embedded ? cash.session && <Button variant="quiet" disabled={close.busy || close.pending || blocked} onClick={() => setManaging(true)}>Gestionar caja</Button> : <Button variant="secondary" disabled={!cash.session || close.busy || close.pending || blocked} onClick={() => { if (cash.session) pick(cash.session.cashSessionId) }}>Preparar cierre de mi caja</Button>}
+      {embedded ? cash.session && <Button variant="quiet" disabled={close.busy || close.pending || blocked} onClick={() => setManaging(true)}>Gestionar caja</Button> : null}
       {close.id && <Button data-recovery-focus variant="quiet" disabled={close.busy} onClick={() => { setClosing(true); void close.consult() }}>Consultar cierre guardado</Button>}
       {close.busy && <p role="status">Consultando caja…</p>}
+    </div></Panel>}
       <Modal open={closing} title="Cerrar y cuadrar caja" onClose={() => { setClosing(false); setAmount('') }} onRecoveryClose={() => setClosing(false)} dirty={Boolean(canClose && amount)} busy={close.busy} recovery={close.pending}>
         <div className="pos-section-body">
         {close.error != null && <ApiErrorState error={close.error} title="Revisa el resultado del cierre" />}
         {close.pending && <><Notice tone="warning">Cierre pendiente de verificar. No se enviará otra solicitud.</Notice><Button disabled={close.busy} onClick={() => void close.consult()}>Consultar esta misma caja</Button></>}
       {canClose && !close.pending && <form aria-label="Cierre de caja" onSubmit={event => event.preventDefault()}>
-        <p className="data-caption">El efectivo esperado y la diferencia se obtienen del servidor al cerrar. Yape, Plin y tarjetas no son efectivo físico.</p>
+        <p className="data-caption">Cuenta el efectivo físico. El servidor informa el efectivo esperado y la diferencia al cerrar. Yape, Plin y tarjetas se registran aparte.</p>
         <TextField label="Efectivo físico contado (S/)" value={amount} inputMode="decimal" maxLength={32} required disabled={close.busy || blocked} onChange={event => setAmount(event.target.value)} />
-        <p>Al cerrar esta caja de {w.branch.name}, la sesión termina. Guarda el conteo físico de esta sesión.</p>
-        <FormFooter><Button type="button" pending={close.busy} disabled={!valid || blocked} onClick={() => { if (canClose && valid && !blocked) void close.close(close.status!.cashSessionId, amount) }}>Confirmar cierre de caja</Button></FormFooter>
+        <FormFooter><Button pending={close.busy} disabled={!valid || blocked} onClick={() => {
+          if (canClose && close.status && valid && !blocked) void close.close(close.status.cashSessionId, amount)
+        }}>Confirmar cierre de caja</Button></FormFooter>
       </form>}
       {close.status?.status === 'closed' && <p role="status">Caja cerrada en el servidor. Consultar su arqueo no repite el cierre.</p>}
       {close.status?.status === 'open' && <CashAge key={close.status.cashSessionId} openedAt={close.status.openedAt} />}
@@ -76,20 +82,22 @@ export function CashManagement({ cash, embedded = false, blocked = false }: { ca
       </section>}
         </div>
       </Modal>
-    </div></Panel>
     <Drawer open={managing} title="Gestionar mi caja" description={w.branch.name} onClose={() => setManaging(false)} busy={close.busy}>
       <div className="operation-body">{cash.session && <><p>Sesión de caja de tu membresía · inicial S/ {decimalLabel(cash.session.openingAmount, 2)}</p><CashAge openedAt={cash.session.openedAt} /><Button variant="primary" disabled={close.busy || close.pending || blocked} onClick={() => pick(cash.session!.cashSessionId)}>Cerrar y cuadrar caja</Button></>}
         {cash.query.isError && <ApiErrorState error={cash.query.error} retry={() => void cash.refresh()} />}
         {!close.pending && <Link className="text-link" to={w.base + '/caja'}>Consultar arqueos y cajas autorizadas</Link>}
       </div>
     </Drawer>
-    {!embedded && w.access.role === 'owner' && <Panel className="pos-cash"><div className="pos-section-body"><h2>Cajas activas en esta sucursal</h2>
+    {!embedded && w.access.role === 'owner' && <DataSection className="active-cash-directory" tabs={<h2>Cajas activas</h2>}
+      footer={<PageControls size={50} offset={offset} count={active.isError ? undefined : active.data?.length} busy={active.isFetching} change={setOffset} maxOffset={100000} />}>
       {active.isPending && <p>Consultando cajas activas…</p>}
       {active.isError && <ApiErrorState error={active.error} title="No pudimos consultar las cajas activas" retry={() => void active.refetch()} />}
       {active.data && !active.isError && <>{!active.data.length && <p>No hay cajas en esta página.</p>}
-        <ul>{active.data.map(row => <li key={row.cashSessionId}>{row.displayName} · Ventas acumuladas S/ {decimalLabel(row.accumulatedSales, 2)} <Button variant="quiet" disabled={close.busy || close.pending} onClick={() => pick(row.cashSessionId)}>Revisar caja de {row.displayName}</Button></li>)}</ul></>}
-      <Button variant="quiet" disabled={offset === 0 || active.isFetching} onClick={() => setOffset(offset - 50)}>Anterior</Button>
-      <Button variant="quiet" disabled={active.isFetching || !active.data || active.data.length < 50 || offset >= 100000} onClick={() => setOffset(offset + 50)}>Siguiente</Button>
-    </div></Panel>}
+        {active.data.length > 0 && <div className="operation-table" role="region" aria-label="Cajas activas en esta sucursal" tabIndex={0}><table>
+          <thead><tr><th scope="col">Operador</th><th scope="col" className="table-number">Ventas acumuladas</th><th scope="col">Acción</th></tr></thead>
+          <tbody>{active.data.map(row => <tr key={row.cashSessionId}><td>{row.displayName}</td><td className="table-number">S/ {decimalLabel(row.accumulatedSales, 2)}</td>
+            <td><Button variant="quiet" disabled={close.busy || close.pending} onClick={() => pick(row.cashSessionId)}>Revisar caja de {row.displayName}</Button></td></tr>)}</tbody>
+        </table></div>}</>}
+    </DataSection>}
   </>
 }

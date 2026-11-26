@@ -27,7 +27,7 @@ function server() {
 }
 it('requires independent identity review and an explicit separate approval; double clicks send one versioned write', async () => {
   const fake = server(); mountEmployees(fake, <EmployeesPage />)
-  fireEvent.click(screen.getByRole('button', { name: 'Consultar invitaciones' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Invitaciones' }))
   fireEvent.click(await screen.findByRole('button', { name: 'Revisar invitación' }))
   await within(screen.getByRole('dialog', { name: /Invitación ·/ })).findByText(/Cuenta que aceptó: Cuenta aceptante unitaria/)
   const button = screen.getByRole('button', { name: 'Aprobar incorporación' }); expect(button).toBeDisabled()

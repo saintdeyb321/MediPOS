@@ -17,7 +17,7 @@ import { MedicineView, PriceInputs } from './ProductFields'
 import type { CatalogWrite } from './useCatalogWrite'
 
 export type ProductTask = 'prices' | 'status' | 'units' | 'metadata'
-export function ProductDetailPanel({ detail, write, onEdit }: { detail: ProductDetail; write: CatalogWrite; onEdit: (task: ProductTask) => void }) {
+export function ProductDetailPanel({ detail, category, write, onEdit }: { detail: ProductDetail; category: string; write: CatalogWrite; onEdit: (task: ProductTask) => void }) {
   const w = useWorkspace()
   const [tab, setTab] = useState<'data' | 'prices' | 'units' | 'stock'>('data')
   const p = detail.product
@@ -25,7 +25,7 @@ export function ProductDetailPanel({ detail, write, onEdit }: { detail: ProductD
     {!p.globalProductId && <Button disabled={write.locked} onClick={() => onEdit('metadata')}>Corregir datos del producto local</Button>}
     <h2>{p.name}</h2><p>Código: {p.internalCode} · {p.productType === 'medicine' ? 'Medicamento' : 'Venta general'} · {p.isActive ? 'Activo' : 'Inactivo'}</p>
     <nav className="task-tabs" aria-label="Detalle del producto">{([['data', 'Datos'], ['prices', 'Precios'], ['units', 'Presentaciones'], ['stock', 'Lotes y stock']] as const).map(([id, label]) => <Button key={id} variant="quiet" aria-pressed={tab === id} onClick={() => setTab(id)}>{label}</Button>)}</nav>
-    {tab === 'data' && <><p>Marca/laboratorio: {p.brandOrLaboratory} · Barras: {p.barcode ?? 'No indicado'} · Origen: {p.globalProductId ? 'Vinculado desde catálogo global' : 'Local del negocio'}</p>
+    {tab === 'data' && <><p>Categoría: {category} · Marca/laboratorio: {p.brandOrLaboratory} · Barras: {p.barcode ?? 'No indicado'} · Origen: {p.globalProductId ? 'Vinculado desde catálogo global' : 'Local del negocio'}</p>
     <MedicineView value={p.medicine} /><Button variant="secondary" disabled={write.locked} onClick={() => onEdit('status')}>{p.isActive ? 'Desactivar producto' : 'Activar producto'}</Button></>}
     {tab === 'prices' && <><dl className="summary-grid"><div><dt>Minorista · unidad base</dt><dd>S/ {decimalLabel(p.retailPrice, 2)}</dd></div><div><dt>Mayorista · unidad base</dt><dd>{p.wholesalePrice ? `S/ ${decimalLabel(p.wholesalePrice, 2)}` : 'Sin configurar'}</dd></div></dl><Button disabled={write.locked} onClick={() => onEdit('prices')}>Editar precios</Button></>}
     {tab === 'units' && <>

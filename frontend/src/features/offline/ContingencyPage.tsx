@@ -1,5 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router'
+import { HardDriveDownload } from 'lucide-react'
+import { DataSection } from '../../shared/ui/DataSection'
+import { DateText } from '../../shared/ui/DateText'
+import { PageHeader } from '../../shared/ui/PageHeader'
+import { EmptyState } from '../../shared/ui/States'
 import { useRuntime } from '../access'
 import { Button } from '../../shared/ui/Button'
 import { Panel } from '../../shared/ui/Panel'
@@ -77,10 +82,13 @@ export function ContingencyPage() {
     } catch (failure) { if (alive.current) setError(failure instanceof Error ? failure.message : 'No se pudo guardar en la cola local.') }
     finally { writing.current = false; if (alive.current) setBusy(false) }
   }
-  return <main className="operations contingency-workspace"><h1>POS de contingencia</h1><Notice tone="warning">Operación local pendiente — aún no es venta confirmada.</Notice><p>Registro local provisional. No confirma stock, venta ni pago en el servidor. Los cambios de permiso, horario, licencia, caja y existencias se verifican al reconectar; pueden producir conflicto.</p>
+  return <main className="operations contingency-workspace"><PageHeader title="POS de contingencia" icon={HardDriveDownload} eyebrow="" />
+    {lease && <Notice tone="warning">Las ventas quedan pendientes en este navegador. El servidor verifica permisos, caja y existencias al sincronizar.</Notice>}
     {!ready && <p role="status">Leyendo preparación local…</p>}{error && <p role="alert">{error}</p>}
-    {ready && !lease && <Panel><p>No hay una preparación vigente. Inicia Google con conexión, entra a tu sucursal, abre tu caja y prepara la contingencia. No se extiende la sesión sin servidor.</p><Link to="/">Ingresar con conexión</Link></Panel>}
-    {lease && <><Panel><div className="operation-body"><h2>{lease.tenantName} · {lease.branchName}</h2><p>Vence: {new Date(lease.expiresAt).toISOString()}. Catálogo de una fotografía anterior; cantidades orientativas, sin reserva.</p><Link to={`/boticas/${lease.tenantId}/sucursales/${lease.branchId}/sincronizacion`}>Volver online y conciliar con identidad verificada</Link><Button variant="quiet" onClick={() => { void offlineStorage.lock().then(() => { setLease(null); setItems([]); setRows([]); setLines([]) }) }}>Bloquear contingencia local</Button></div></Panel>
+    {ready && !lease && <DataSection><EmptyState title="No hay una preparación vigente"
+      description="Ingresa con Google, abre tu caja y prepara la contingencia en la sucursal."
+      action={<Link to="/" className="button primary">Ingresar con conexión</Link>} /></DataSection>}
+    {lease && <><Panel><div className="operation-body"><h2>{lease.tenantName} · {lease.branchName}</h2><p>Vence <DateText value={new Date(lease.expiresAt).toISOString()} />. Las cantidades descargadas son orientativas.</p><Link to={`/boticas/${lease.tenantId}/sucursales/${lease.branchId}/sincronizacion`}>Volver a sincronización</Link><Button variant="quiet" onClick={() => { void offlineStorage.lock().then(() => { setLease(null); setItems([]); setRows([]); setLines([]) }) }}>Bloquear contingencia local</Button></div></Panel>
       <Panel><div className="operation-body"><TextField label="Buscar en catálogo descargado" value={query} onChange={event => setQuery(event.target.value)} />
         {query.trim().length >= 2 && !matches.length && <p>No hay coincidencias en el catálogo descargado.</p>}
         {matches.map(item => <section key={item.businessProductId}><h3>{item.product?.name}</h3><p>{item.product?.medicine?.activeIngredients.join(' + ')} · {item.product?.medicine?.normalizedStrength} · {item.product?.medicine?.dosageForm}</p><p>Precio por unidad base: S/ {decimalLabel(item.product!.retailPrice, 2)} · stock orientativo base: {item.stock && decimalLabel(item.stock.sellableStockBase)}</p>

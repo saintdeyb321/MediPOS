@@ -86,7 +86,7 @@ function PlatformConsole({ http, userId, expiresAt, serverTime, admitted }: { ht
   const canChange = !p.locked && actions?.[action] && (action !== 'renew' || Boolean(expires))
   if (p.denied) return <Notice tone="error">La autoridad de plataforma ya no está disponible. Vuelve a ingresar o solicita su revisión.</Notice>
   return <div className="operations platform-console">
-    <PageHeader title={current?.title ?? 'Plataforma'} description={current?.description} icon={current?.icon}
+    <PageHeader title={current?.title ?? 'Plataforma'} eyebrow="" icon={current?.icon}
       action={['home', 'businesses'].includes(area) && <Button disabled={p.locked} onClick={() => openTask('create')}>Nueva botica</Button>} />
     {p.notice && !detailOpen && <Notice><span role="status">{p.notice}</span></Notice>}
     {!open && !detailOpen && relevantError}

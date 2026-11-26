@@ -6,6 +6,7 @@ import { Badge } from '../../shared/ui/Badge'
 import { Button } from '../../shared/ui/Button'
 import { DateText } from '../../shared/ui/DateText'
 import { Notice } from '../../shared/ui/Notice'
+import { DataSection } from '../../shared/ui/DataSection'
 import { Panel } from '../../shared/ui/Panel'
 import { EmptyState, LoadingState } from '../../shared/ui/States'
 import { TextField } from '../../shared/ui/TextField'
@@ -46,16 +47,12 @@ export function PlatformCategories({ p, create }: { p: PlatformConsoleState; cre
   const visible = rows?.filter(row => categoryNameKey(row.name).includes(categoryNameKey(filter)))
   const lastRead = p.categories.isError || !p.admitted
   return <section className="platform-categories" aria-label="Categorías globales">
-    <Panel><div className="operation-body">
-      <div className="platform-context">
-        <TextField label="Buscar categoría" value={filter} onChange={event => setFilter(event.target.value)} />
-        <div className="platform-account-actions">
-          <Button disabled={p.locked || !p.categoriesRead || !rows || rows.length >= 100} onClick={create}>Nueva categoría</Button>
-        </div>
-      </div>
-      {rows && <p className="platform-note">{rows.length} {rows.length === 1 ? 'categoría consultada' : 'categorías consultadas'}.{lastRead && ' Datos de la última lectura.'}</p>}
+    <DataSection toolbar={<div className="platform-context">
+      <TextField label="Buscar categoría" value={filter} onChange={event => setFilter(event.target.value)} />
+      <Button disabled={p.locked || !p.categoriesRead || !rows || rows.length >= 100} onClick={create}>Nueva categoría</Button>
+    </div>}>
+      {lastRead && rows && <p className="platform-note">Datos de la última lectura.</p>}
       {rows && rows.length >= 100 && <Notice tone="warning">Esta consulta muestra hasta 100 categorías. Revisa el catálogo completo antes de crear otra.</Notice>}
-    </div></Panel>
     <PlatformReadError error={p.categories.error} failedAt={p.categories.errorUpdatedAt} fetching={p.categories.isFetching} retry={p.admitted && !p.categoryPending ? () => void p.categories.refetch() : undefined} />
     {p.categories.isFetching && (rows ? <p role="status">Actualizando categorías…</p> : <LoadingState label="Cargando categorías…" />)}
     {rows?.length === 0 && <EmptyState title="No hay categorías activas." description="Crea una referencia compartida para organizar el catálogo." />}
@@ -66,6 +63,7 @@ export function PlatformCategories({ p, create }: { p: PlatformConsoleState; cre
         <h2>{row.name}</h2>
         <p>Creada <DateText value={row.createdAt} /></p>
       </div></Panel></li>)}</ul>}
+    </DataSection>
   </section>
 }
 

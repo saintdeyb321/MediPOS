@@ -188,8 +188,8 @@ export function TenantStructure({ access, session, tenantName, workspaceBase }: 
     return <Navigate to={`${root}/${entry.id}`} replace />
 
   return <div className={first ? 'operations structure structure-onboarding' : 'operations structure'}>
-    <PageHeader icon={Settings2} eyebrow={first ? tenantName ?? '' : ''} title={first ? 'Configura tu botica' : workspaceBase ? 'Configuración' : 'Negocio y sucursales'} description={first ? 'Completa los datos de tu negocio y de tu primer local.' : tenantName} />
-    {showManagement && <nav className="structure-links" aria-label="Secciones de configuración"><a href="#negocio">Mi negocio</a><a href="#sucursales">Sucursales</a><a href="#plan">Plan y licencia</a>{workspaceBase && <Link to={workspaceBase + '/auditoria'}>Historial de actividad</Link>}</nav>}
+    <PageHeader icon={Settings2} eyebrow={first ? tenantName ?? '' : ''} title={first ? 'Configura tu botica' : workspaceBase ? 'Configuración' : 'Negocio y sucursales'} description={first ? 'Completa los datos del negocio y de tu primer local.' : undefined} />
+    {showManagement && <nav className="structure-links" aria-label="Secciones de configuración"><a href="#negocio">Mi negocio</a><a href="#sucursales">Sucursales</a><a href="#plan">Plan y licencia</a>{workspaceBase && <><Link to={workspaceBase + '/auditoria'}>Auditoría</Link><Link to={workspaceBase + '/importacion'}>Importar Excel</Link></>}</nav>}
     {!api && <Notice tone="warning">Se requiere conexión HTTPS real.</Notice>}
     {(notice || first && write.entityId) && <p role="status" className="notice info">{notice || 'Datos del negocio guardados. Falta crear tu sucursal.'}</p>}
     {entry && <Notice>{entering.isPending || entering.isFetching ? 'Verificando acceso a la sucursal registrada…' :
@@ -224,13 +224,10 @@ export function TenantStructure({ access, session, tenantName, workspaceBase }: 
     {showManagement && <div className="structure-directories">
       <Panel id="negocio" tabIndex={-1}><div className="operation-body">
         <div className="structure-heading"><h2>Mi negocio</h2><Button variant="secondary" disabled={locked || !legal.isSuccess} onClick={() => setTask('legal')}>{entities.length ? 'Registrar otros datos fiscales' : 'Registrar datos del negocio'}</Button></div>
-        {tenantName && <p className="structure-note">{tenantName}</p>}
-        <h3>Datos fiscales</h3>
         {legal.isFetching && <p role="status">Cargando datos fiscales…</p>}
         {legal.isSuccess && !entities.length && <p>{offset ? 'Esta página está vacía.' : 'Aún no has registrado los datos fiscales de tu negocio.'}</p>}
         <ul className="structure-records">{entities.map(row => <li key={row.id}><Building2 aria-hidden="true" size={22} /><div><strong>{row.legalName}</strong><p>{row.ruc}</p></div></li>)}</ul>
         {entityPager}
-        {workspaceBase && <Link className="text-link" to={workspaceBase + '/importacion'}>Importar productos Excel</Link>}
       </div></Panel>
       <Panel id="sucursales" tabIndex={-1}><div className="operation-body">
         <div className="structure-heading"><h2>Sucursales</h2>{!atLimit && <Button disabled={!canCreate} onClick={() => setTask('branch')}>Nueva sucursal</Button>}</div>

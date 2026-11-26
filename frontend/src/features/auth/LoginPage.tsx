@@ -18,15 +18,15 @@ export function LoginPage() {
       <div className="login-fields">
       <div className="login-copy">
         <h1 id="login-title">Ingresa a MediPOS</h1>
-        <p>Usa la cuenta de Google asociada a tu botica.</p>
+        <p>Ingresa con tu cuenta de Google.</p>
       </div>
-      {expired && <Notice tone="warning">Tu sesión terminó. Ingresa de nuevo para continuar de forma segura.</Notice>}
+      {expired && <Notice tone="warning">Tu sesión terminó. Ingresa de nuevo para continuar.</Notice>}
       {(session.isError || login.isError) && <Notice tone="error">{errorMessage(login.error ?? session.error)}</Notice>}
       <Button className="google-button" variant="secondary" disabled={busy || preview} pending={busy} onClick={() => login.mutate()}>
         <GoogleMark />{checking ? 'Verificando sesión…' : busy ? 'Abriendo Google…' : 'Continuar con Google'}
       </Button>
       {session.isError && <Button variant="quiet" onClick={() => void session.refetch()}>Revisar conexión</Button>}
-      <p className="login-help">Si recibiste una invitación, ingresa con el correo que figura en ella.</p>
+      <p className="login-help">Para reclamar una botica, usa el correo designado como propietario.</p>
       </div>
     </section>
   </main>
