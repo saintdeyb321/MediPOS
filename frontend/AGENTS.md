@@ -9,6 +9,6 @@ Complementa el [AGENTS.md raíz](../AGENTS.md). Mantén la dirección `app → f
 
 ## Diseño y frescura de vistas
 
-- Compón con los tokens y primitivas existentes. Usa español de botica, títulos cortos, una acción principal por tarea y formularios con etiquetas visibles. Muestra acciones y datos solo si existe el contrato.
+- Aplica [Blue Studio](../docs/MEDIPOS_FRONTEND_BLUE_DESIGN_MASTER.md) con los tokens y primitivas existentes. Usa el degradado en navegación y bienvenida, tablas semánticas con scroll local y color de estado acompañado de texto. Respeta movimiento reducido. Usa español de botica, títulos cortos, una acción principal por tarea y formularios con etiquetas visibles. Muestra acciones y datos solo si existe el contrato.
 - Corrige el reflow en las primitivas primero. Comprueba 320 px, móvil, tablet y escritorio en navegador. Conserva foco, teclado, objetivos táctiles, scroll de tablas contenido e impresión. Registra vistas pendientes por separado de Vitest.
 - Carga por contexto y revalida en foco o reconexión según frescura y seguridad. Usa el acuse validado o invalida claves relacionadas. Reserva los controles manuales para errores, recuperación, filtros aplicados, verificación y acciones de sincronización. Conserva el bloqueo de reenvío ante resultado incierto.

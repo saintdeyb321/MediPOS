@@ -25,6 +25,10 @@
 .module-row { padding: var(--space-4); border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--canvas); }
 .module-row:hover { background: var(--primary-soft); border-color: var(--primary); }
 .home-compact { display: grid; gap: var(--space-4); }
+.home-welcome { background: var(--studio-gradient); color: var(--on-primary); border-radius: var(--radius-lg); padding: var(--space-4) var(--page-gutter); border-inline-start: 4px solid var(--sky); }
+.home-welcome .page-heading { margin: 0; }
+.home-welcome .page-heading > div > p:last-child { color: var(--nav-active-text); }
+.home-welcome .module-heading-icon { background: var(--nav-active); border-color: var(--nav-active); color: var(--nav-accent); }
 .home-actions { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 12rem), 1fr)); gap: var(--space-3); }
 .home-action { display: flex; gap: var(--space-3); align-items: center; min-width: 0; padding: var(--space-4); border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface); }
 .home-action strong { flex: 1; font-size: var(--text-base); }

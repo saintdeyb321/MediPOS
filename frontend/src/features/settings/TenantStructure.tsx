@@ -83,9 +83,8 @@ export function TenantStructure({ access, session, tenantName, workspaceBase }: 
   }, [hash, showManagement])
 
   function clearForm() { setLegalName(''); setRuc(''); setName(''); setChosen(null); setNewEntity(false); setTask(null) }
-  function saved(row: StructureRecord, continueWithBranch: boolean, enterAfter = continueWithBranch) {
+  async function saved(row: StructureRecord, continueWithBranch: boolean, enterAfter = continueWithBranch) {
     if ('legalName' in row) {
-      client.setQueryData<LegalEntity[]>([...keys, 'legal', 0], old => old && old.length < 20 && !old.some(item => item.id === row.id) ? [...old, row] : old)
       setNotice(continueWithBranch ? 'Datos del negocio guardados. Falta crear tu sucursal.' : 'Datos guardados.')
       if (continueWithBranch) {
         setChosen(row)
@@ -93,11 +92,14 @@ export function TenantStructure({ access, session, tenantName, workspaceBase }: 
         setRuc('')
         setNewEntity(false)
       } else clearForm()
+      await client.cancelQueries({ queryKey: [...keys, 'legal'] })
+      client.setQueryData<LegalEntity[]>([...keys, 'legal', 0], old => old && old.length < 20 && !old.some(item => item.id === row.id) ? [...old, row] : old)
     } else {
-      client.setQueryData<BranchDetails[]>(branchKey, old => old?.some(item => item.id === row.id) ? old : [...(old ?? []), row])
       setNotice('Sucursal creada.')
       clearForm()
       if (enterAfter) setEntry(row)
+      await client.cancelQueries({ queryKey: branchKey })
+      client.setQueryData<BranchDetails[]>(branchKey, old => old?.some(item => item.id === row.id) ? old : [...(old ?? []), row])
     }
     setReviewed(false)
     setObservedRows(null)
@@ -133,8 +135,8 @@ export function TenantStructure({ access, session, tenantName, workspaceBase }: 
 
   const eligible = (observedRows ?? []).filter(row => !write.pending?.legalEntityId || 'legalEntityId' in row && row.legalEntityId === write.pending.legalEntityId)
   const candidate = eligible.find(row => row.id === (write.pending?.acknowledgedId ?? candidateId))
-  const recovery = write.pending && <Panel className="structure-recovery"><div className="operation-body">
-    <h2>No pudimos confirmar si se guardó</h2>
+  const recovery = write.pending && !write.busy && <Panel className="structure-recovery"><div className="operation-body">
+    <h2>{write.pending.acknowledgedId ? 'Revisa el registro original' : 'No pudimos confirmar si se guardó'}</h2>
     <p>Revisa el resultado antes de volver a intentar. Comprueba el registro original y la fecha.</p>
     <Button data-recovery-focus variant="secondary" disabled={write.busy} onClick={() => {
       setObservedRows(null)
@@ -182,7 +184,7 @@ export function TenantStructure({ access, session, tenantName, workspaceBase }: 
     <p className="structure-note">Para cambiar el plan o renovar, contacta con soporte de MediPOS.</p>
   </div></Panel>
 
-  if (entry && entering.isSuccess && entering.data.isAllowed && entered?.role === 'owner' && entered.membershipId === membershipId && !write.busy && !write.pending)
+  if (entry && entering.isSuccess && entering.data.isAllowed && entered?.role === 'owner' && entered.membershipId === membershipId && !write.busy && !write.pending && !write.recoveryInAddress)
     return <Navigate to={`${root}/${entry.id}`} replace />
 
   return <div className={first ? 'operations structure structure-onboarding' : 'operations structure'}>

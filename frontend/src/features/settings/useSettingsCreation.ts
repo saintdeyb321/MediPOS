@@ -6,8 +6,9 @@ import { useNavigationProtection } from '../../shared/ui/NavigationProtection'
 import { settingsApi } from './api'
 import type { BranchDetails, BranchInput, LegalEntity, LegalInput, TenantSettingsScope } from './api'
 
-type Pending = { kind: 'legal' | 'branch'; attempt?: string; acknowledgedId?: string; legalEntityId?: string; digest?: string }
-type Recovery = { pending?: Pending; entityId?: string }
+import { parseStructureRecovery, readStructureRecovery, structureRecoveryKey } from './structureRecovery'
+import type { Pending, Recovery } from './structureRecovery'
+
 export type StructureRecord = LegalEntity | BranchDetails
 const changeEvent = 'medipos-structure-changed'
 
@@ -26,33 +27,26 @@ function subscribe(change: () => void) {
   }
 }
 
-function read(key: string) {
-  try { return localStorage.getItem(key) } catch { return '!' }
-}
-
-function parse(raw: string | null): Recovery | null {
-  try {
-    const value = JSON.parse(raw ?? '{}') as Recovery
-    if (!value || typeof value !== 'object' || Array.isArray(value) || value.entityId !== undefined && !isUuid(value.entityId)) return null
-    if (value.pending !== undefined && (!value.pending || !['legal', 'branch'].includes(value.pending.kind) ||
-      !isUuid(value.pending.attempt) || value.pending.digest !== undefined && !/^[0-9a-f]{64}$/.test(value.pending.digest) || value.pending.legalEntityId !== undefined && !isUuid(value.pending.legalEntityId))) return null
-    return value
-  } catch { return null }
-}
-
 export function useSettingsCreation(scope: TenantSettingsScope, userId: string, membershipId: string) {
   const { http, service } = useRuntime()
   const [params, setParams] = useSearchParams()
   const address = useRef(params)
   useEffect(() => { address.current = params }, [params])
-  const key = `medipos-structure-v1/${userId}/${membershipId}/${scope.tenantId}`
-  const recovery = parse(useSyncExternalStore(subscribe, () => read(key)))
+  const key = structureRecoveryKey(userId, membershipId, scope.tenantId)
+  const recovery = parseStructureRecovery(useSyncExternalStore(subscribe, () => readStructureRecovery(key)))
   // Previous versions kept the intention in the URL. It remains manual evidence.
   const legacyKind = params.get('settingsPending')
   const legacyId = params.get('settingsCreated')
   const legacy: Pending | undefined = !params.has('settingsAttempt') && (legacyKind === 'legal' || legacyKind === 'branch')
     ? { kind: legacyKind, acknowledgedId: isUuid(legacyId) ? legacyId : undefined } : undefined
-  const pending = recovery?.pending ?? legacy
+  const [acknowledgement, setAcknowledgement] = useState<{ attempt: string; id: string }>()
+  const stored = recovery?.pending
+  const confirmedId = acknowledgement && acknowledgement.attempt === stored?.attempt ? acknowledgement.id : undefined
+  const attemptInUrl = params.get('settingsAttempt')
+  // The address locates an acknowledgement for review. The scoped intent remains authoritative.
+  const acknowledgedId = stored?.acknowledgedId ?? confirmedId ??
+    (stored?.attempt && stored.attempt === attemptInUrl && isUuid(legacyId) ? legacyId : undefined)
+  const pending = stored ? { ...stored, acknowledgedId } : legacy
   const active = useRef<AbortController | null>(null)
   const [busy, setBusy] = useState(false)
   const [saving, setSaving] = useState<'legal' | 'branch'>()
@@ -66,6 +60,7 @@ export function useSettingsCreation(scope: TenantSettingsScope, userId: string, 
     if (intent?.attempt) {
       next.set('settingsPending', intent.kind)
       next.set('settingsAttempt', intent.attempt)
+      if (intent.acknowledgedId) next.set('settingsCreated', intent.acknowledgedId)
     }
     address.current = next
     setParams(next, { replace: true })
@@ -79,19 +74,20 @@ export function useSettingsCreation(scope: TenantSettingsScope, userId: string, 
     window.dispatchEvent(new Event(changeEvent))
   }
 
-  const attemptInUrl = params.get('settingsAttempt')
-  const storedAttempt = recovery?.pending?.attempt
+  const storedAttempt = stored?.attempt
   useEffect(() => {
-    if (busy || !recovery || attemptInUrl === storedAttempt || !attemptInUrl && !storedAttempt) return
+    if (busy || !recovery || attemptInUrl === storedAttempt && (!acknowledgedId || acknowledgedId === legacyId) ||
+      !attemptInUrl && !storedAttempt) return
     // Restore a persisted address, or remove an address belonging to a different session.
     const next = new URLSearchParams(params)
     for (const field of ['settingsPending', 'settingsCreated', 'settingsAttempt']) next.delete(field)
     if (storedAttempt && recovery.pending) {
       next.set('settingsPending', recovery.pending.kind)
       next.set('settingsAttempt', storedAttempt)
+      if (acknowledgedId) next.set('settingsCreated', acknowledgedId)
     }
     setParams(next, { replace: true })
-  }, [attemptInUrl, busy, params, recovery, setParams, storedAttempt])
+  }, [acknowledgedId, attemptInUrl, busy, legacyId, params, recovery, setParams, storedAttempt])
 
   async function exclusive(work: (signal: AbortSignal) => Promise<void>) {
     if (active.current || denied) return
@@ -128,11 +124,11 @@ export function useSettingsCreation(scope: TenantSettingsScope, userId: string, 
   async function run(input: LegalInput | BranchInput, options: {
     firstBranchName?: string
     before?: (signal: AbortSignal) => Promise<void>
-    saved: (record: StructureRecord) => void
+    saved: (record: StructureRecord) => Promise<void>
   }) {
     if (!http || pending) return
     await exclusive(async signal => {
-      let current = parse(read(key))
+      let current = parseStructureRecovery(readStructureRecovery(key))
       if (!current) throw new ApiError(0, 'client.structure_recovery_unavailable')
       if (current.pending) throw new ApiError(409, 'client.structure_pending')
       await options.before?.(signal)
@@ -158,10 +154,21 @@ export function useSettingsCreation(scope: TenantSettingsScope, userId: string, 
           throw failure
         }
         signal.throwIfAborted()
-        // Update the view using the acknowledgement. A cache or follow-up read is not part of the write.
-        options.saved(result)
         current = 'legalName' in result && options.firstBranchName ? { entityId: result.id } : {}
-        persist(current)
+        try {
+          persist(current)
+          await options.saved(result)
+        } catch (failure) {
+          const receipt = { ...intent, acknowledgedId: result.id }
+          try {
+            persist({ ...current, pending: receipt })
+          } catch {
+            // Keep the receipt with the attempt in this tab if storage cannot be updated.
+            setAcknowledgement({ attempt, id: result.id })
+            updateAddress(receipt)
+          }
+          throw failure
+        }
         return result
       }
 
@@ -171,22 +178,23 @@ export function useSettingsCreation(scope: TenantSettingsScope, userId: string, 
     })
   }
 
-  async function reconcile(record: StructureRecord, first: boolean, saved: (record: StructureRecord) => void) {
+  async function reconcile(record: StructureRecord, first: boolean, saved: (record: StructureRecord) => Promise<void>) {
     const observed = pending
     if (!observed || record.tenantId !== scope.tenantId || observed.acknowledgedId && record.id !== observed.acknowledgedId ||
       (observed.kind === 'legal') !== ('legalName' in record) ||
       observed.legalEntityId && (!('legalEntityId' in record) || record.legalEntityId !== observed.legalEntityId)) return
     await exclusive(async signal => {
-      const current = parse(read(key))
+      const current = parseStructureRecovery(readStructureRecovery(key))
       if (!current || current.pending?.attempt !== observed.attempt) throw new ApiError(409, 'client.structure_pending')
       if (observed.attempt && observed.digest && await fingerprint(observed.attempt, record) !== observed.digest)
         throw new ApiError(409, 'client.structure_result_mismatch')
+      await requireCurrentOwner(signal)
       signal.throwIfAborted()
+      await saved(record)
       persist(first && 'legalName' in record ? { entityId: record.id } : {})
-      saved(record)
     })
   }
 
   useNavigationProtection({ busy, pending: Boolean(pending) })
-  return { pending, entityId: recovery?.entityId, busy, saving, error, denied, locked: !http || !recovery || busy || Boolean(pending) || denied, run, reconcile }
+  return { pending, recoveryInAddress: params.has('settingsPending'), entityId: recovery?.entityId, busy, saving, error, denied, locked: !http || !recovery || busy || Boolean(pending) || denied, run, reconcile }
 }

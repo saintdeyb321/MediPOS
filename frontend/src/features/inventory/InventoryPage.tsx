@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Link } from 'react-router'
-import { Boxes } from 'lucide-react'
+import { Boxes, Search, X } from 'lucide-react'
 import { ApiErrorState, useRuntime, useWorkspace } from '../access'
 import { ProductLabel, ProductLookup } from '../catalog'
 import type { ProductDetail } from '../catalog'
@@ -15,7 +15,8 @@ import { PageControls } from '../../shared/ui/PageControls'
 import { Notice } from '../../shared/ui/Notice'
 import { Badge } from '../../shared/ui/Badge'
 import { DateText } from '../../shared/ui/DateText'
-import { MetricGrid } from '../../shared/ui/MetricCard'
+import { InlineHelp } from '../../shared/ui/FormLayout'
+import { EmptyState, LoadingState } from '../../shared/ui/States'
 import { Modal } from '../../shared/ui/Modal'
 import { PageToolbar } from '../../shared/ui/PageToolbar'
 import { inventoryApi } from './api'
@@ -45,7 +46,7 @@ function InventoryWorkspace() {
   const current = mode === 'stock' ? stock : mode === 'lots' ? lots : expiring
   const dateParts = new Intl.DateTimeFormat('en', { timeZone: 'America/Lima', year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(new Date())
   const today = ['year', 'month', 'day'].map(type => dateParts.find(part => part.type === type)!.value).join('-')
-  return <div className="operations"><PageHeader icon={Boxes} eyebrow="Existencias · control por sucursal" title="Inventario" description={`${w.tenantName} · ${w.branch.name}. Existencias por unidad base.`} action={<Link className="button primary" to={w.base + '/compras'}>Registrar recepción</Link>} />
+  return <div className="operations"><PageHeader icon={Boxes} eyebrow="Existencias · control por sucursal" title="Inventario" description="Controla las existencias y vencimientos de tu sucursal." action={<Link className="button primary" to={w.base + '/compras'}>Registrar recepción</Link>} />
     {!http && <Notice tone="warning">Inventario requiere conexión HTTPS real.</Notice>}
     {write.error != null && <ApiErrorState error={write.error} title="No pudimos completar la operación de inventario" />}
     {write.pending && !write.recoverable && <p role="alert">Solicitud anterior sin constancia consultable. Conserva su referencia y concilia con soporte antes de otra escritura.</p>}
@@ -53,26 +54,59 @@ function InventoryWorkspace() {
     {write.pending && <Notice tone="warning">Resultado pendiente de conciliación operacional. No repitas el ajuste ni el mínimo, incluso tras recargar. Un saldo consultado no identifica un movimiento ni prueba que la escritura falló. Conserva esta dirección y consulta la constancia original antes de otra escritura.</Notice>}
     {write.pending && !adjustmentOpen && !minimumOpen && (lot || product) && <Button data-recovery-focus variant="secondary" disabled={write.busy} onClick={() => { if (lot) setAdjustmentOpen(true); else setMinimumOpen(true) }}>Revisar solicitud pendiente sin reenviar</Button>}
     {write.result && <Panel><div className="operation-body" role="status">{'stockMovementId' in write.result ? <><h2>Ajuste registrado por el servidor</h2><p>Antes: {decimalLabel(write.result.before)} · Después: {decimalLabel(write.result.after)}. Se reconsultan saldos y lotes; el resultado no se suma localmente.</p></> : <><h2>Mínimo guardado por el servidor</h2><p>Valor: {decimalLabel(write.result.minimumStockBase)} unidades base · {write.result.updatedAt}.</p></>}</div></Panel>}
-    {!current.isError && !current.isFetching && current.data && <MetricGrid compact metrics={[
-      ['Filas de esta página', String(current.data.length)],
-      [mode === 'stock' ? 'Saldos en cero · página' : 'Lotes en cero · página', String(current.data.filter(row => compare(row.quantityAvailableBase, zero) === 0).length)],
-      ...(mode === 'lots' && lots.data ? [['Fecha vencida · página', String(lots.data.filter(row => row.expirationDate && row.expirationDate < today).length)]] as [string, string][] : []),
-    ]} />}
-    <PageToolbar actions={<><Button variant="secondary" disabled={write.busy || write.pending} onClick={() => setFilterOpen(true)}>Filtrar por producto</Button>{w.access.role === 'owner' && product && <Button variant="secondary" disabled={write.locked} onClick={() => { setDirty(false); setMinimumOpen(true) }}>Configurar mínimo</Button>}</>}>
-      <p>{product ? `Producto: ${product.product.name}` : 'Todos los productos de esta sucursal'}</p>
-      {product && <Button variant="quiet" disabled={write.busy || write.pending} onClick={() => { setProduct(null); setOffset(0); setLot(null) }}>Quitar filtro</Button>}
-    </PageToolbar>
-    <div className="operation-actions"><Badge tone="info">Sucursal: {w.branch.name}</Badge><Badge tone="neutral">Referencia de fechas: {today} · Lima</Badge></div>
-    <details className="inline-help"><summary>Cómo interpretar stock, mínimos y movimientos</summary><div>Los indicadores cuentan solo esta página. Un saldo cero no equivale al riesgo por mínimo configurado. El contrato de Inventario no ofrece un directorio de movimientos; no se simula un historial. {w.access.role === 'owner' && <Link className="text-link" to={w.base + '/reportes'}>Consultar stock crítico y vencimientos en Reportes</Link>}</div></details>
-    <Modal open={filterOpen} title="Filtrar inventario" onClose={() => setFilterOpen(false)}><div className="operation-body"><ProductLookup onSelect={value => { setProduct(value); setOffset(0); setLot(null); setFilterOpen(false) }} /></div></Modal>
-    <Panel><div className="operation-body"><nav className="task-tabs" aria-label="Consulta de inventario"><Button variant="quiet" aria-pressed={mode === 'stock'} onClick={() => { setMode('stock'); setOffset(0); if (!write.pending) setLot(null) }}>Existencias</Button><Button variant="quiet" aria-pressed={mode === 'lots'} onClick={() => { setMode('lots'); setOffset(0); if (!write.pending) setLot(null) }}>Lotes</Button><Button variant="quiet" aria-pressed={mode === 'expiring'} onClick={() => { setMode('expiring'); setOffset(0); if (!write.pending) setLot(null) }}>Próximos a vencer (30 días)</Button></nav>
-      {current.isFetching && <p role="status">Consultando inventario…</p>}
-      {current.isError && <ApiErrorState error={current.error} title="No pudimos consultar inventario" />}
-      {mode === 'stock' && stock.data && !stock.isError && <div className="operation-table"><table><caption>Existencias disponibles en unidades base</caption><thead><tr><th>Producto</th><th>Cantidad disponible</th></tr></thead><tbody>{stock.data.map(row => <tr key={row.businessProductId}><td><ProductLabel id={row.businessProductId} /></td><td>{decimalLabel(row.quantityAvailableBase)}</td></tr>)}</tbody></table>{!stock.data.length && <p>No hay saldos registrados en esta página para el filtro seleccionado. No es un error de consulta.</p>}</div>}
-      {mode === 'lots' && lots.data && !lots.isError && <div className="operation-table"><table><caption>Lotes de la sucursal</caption><thead><tr><th>Producto</th><th>Lote / vencimiento</th><th>Cantidad disponible</th><th>Acción</th></tr></thead><tbody>{lots.data.map(row => <tr key={row.inventoryLotId}><td><ProductLabel id={row.businessProductId} /></td><td>{row.batchNumber ?? 'Sin número de lote'} / <LotExpiry value={row.expirationDate} today={today} /></td><td>{decimalLabel(row.quantityAvailableBase)}</td><td><Button variant="quiet" disabled={write.locked} onClick={() => { setDirty(false); setLot(row); setAdjustmentOpen(true) }}>Ajustar lote {row.batchNumber ?? 'sin número'}</Button></td></tr>)}</tbody></table>{!lots.data.length && <p>No hay lotes en esta página.</p>}</div>}
-      {mode === 'expiring' && expiring.data && !expiring.isError && <div className="operation-table"><p>Ventana del backend: hoy a 30 días, calendario de Lima, saldo positivo. Esta respuesta no incluye número de lote; consúltalo en Lotes.</p><table><caption>Lotes próximos a vencer</caption><thead><tr><th>Producto</th><th>Vencimiento</th><th>Cantidad disponible</th>{w.access.role === 'owner' && <th>Valor de costo</th>}<th>Valor potencial de venta</th></tr></thead><tbody>{expiring.data.map(row => <tr key={row.inventoryLotId}><td>{row.productName}</td><td>{row.expirationDate}</td><td>{decimalLabel(row.quantityAvailableBase)}</td>{w.access.role === 'owner' && <td>{row.costValue === null ? 'No disponible' : `S/ ${decimalLabel(row.costValue, 2)}`}</td>}<td>S/ {decimalLabel(row.potentialSaleValue, 2)}</td></tr>)}</tbody></table>{!expiring.data.length && <p>No hay lotes próximos a vencer en esta página.</p>}</div>}
+    <Panel className="inventory-data"><div className="operation-body">
+      <div className="data-view-heading">
+        <nav className="task-tabs" aria-label="Consulta de inventario">
+          {(['stock', 'lots', 'expiring'] as const).map(view => <Button key={view} variant="quiet" aria-pressed={mode === view} onClick={() => {
+            setMode(view); setOffset(0); if (!write.pending) setLot(null)
+          }}>{view === 'stock' ? 'Existencias' : view === 'lots' ? 'Lotes' : 'Próximos a vencer (30 días)'}</Button>)}
+        </nav>
+        <InlineHelp title="Sobre el stock">
+          <p>Las cantidades se muestran en la unidad base del producto. Los indicadores corresponden a esta página. Un saldo cero y el mínimo configurado son datos distintos.</p>
+          {w.access.role === 'owner' && <Link className="text-link" to={w.base + '/reportes'}>Ver stock crítico y vencimientos en Reportes</Link>}
+        </InlineHelp>
+      </div>
+      <PageToolbar actions={w.access.role === 'owner' && product && <Button variant="secondary" disabled={write.locked} onClick={() => { setDirty(false); setMinimumOpen(true) }}>Configurar mínimo</Button>}>
+        <Button variant="secondary" disabled={write.busy || write.pending} onClick={() => setFilterOpen(true)}><Search size={17} aria-hidden="true" />Filtrar por producto</Button>
+        {product && <Button variant="quiet" disabled={write.busy || write.pending} aria-label={`Quitar filtro ${product.product.name}`}
+          onClick={() => { setProduct(null); setOffset(0); setLot(null) }}>{product.product.name}<X size={16} aria-hidden="true" /></Button>}
+      </PageToolbar>
+      {mode === 'stock' && !current.isError && !current.isFetching && Boolean(stock.data?.length) && <dl className="data-summary">
+        <div><dt>Productos en esta página</dt><dd>{stock.data!.length}</dd></div>
+        <div><dt>Sin stock en esta página</dt><dd>{stock.data!.filter(row => compare(row.quantityAvailableBase, zero) === 0).length}</dd></div>
+      </dl>}
+      {!current.data && current.isFetching && <LoadingState label="Consultando inventario…" />}
+      {current.isError && <ApiErrorState error={current.error} title="No pudimos consultar inventario" retry={() => void current.refetch()} />}
+      {current.data?.length === 0 && !current.isError && <EmptyState
+        title={mode === 'stock' ? product ? 'No encontramos existencias para este producto' : 'Aún no hay existencias'
+          : mode === 'lots' ? 'No hay lotes en esta página' : 'No hay lotes próximos a vencer'}
+        description={product ? 'Quita el filtro para buscar en toda la sucursal.'
+          : mode === 'stock' ? 'Registra una recepción de compra para incorporar los primeros productos.'
+          : mode === 'lots' ? 'Los lotes aparecerán al registrar una recepción con existencias.' : 'Aquí aparecen lotes con saldo positivo que vencen en los próximos 30 días, según la hora de Lima.'} />}
+      {mode === 'stock' && Boolean(stock.data?.length) && !stock.isError && <div className="operation-table" role="region" aria-label="Tabla de existencias" tabIndex={0}>
+        <table><caption>Existencias disponibles en unidades base</caption><thead><tr><th scope="col">Producto</th><th scope="col" className="table-number">Disponible</th></tr></thead>
+          <tbody>{stock.data?.map(row => <tr key={row.businessProductId}><td><ProductLabel id={row.businessProductId} /></td><td className="table-number">{decimalLabel(row.quantityAvailableBase)}</td></tr>)}</tbody></table>
+      </div>}
+      {mode === 'lots' && Boolean(lots.data?.length) && !lots.isError && <div className="operation-table" role="region" aria-label="Tabla de lotes" tabIndex={0}>
+        <table><caption>Lotes de la sucursal</caption><thead><tr><th scope="col">Producto</th><th scope="col">Lote y vencimiento</th><th scope="col" className="table-number">Disponible (base)</th><th scope="col" className="table-action">Acción</th></tr></thead>
+          <tbody>{lots.data?.map(row => <tr key={row.inventoryLotId}><td><ProductLabel id={row.businessProductId} /></td>
+            <td><strong>{row.batchNumber ?? 'Sin número de lote'}</strong><LotExpiry value={row.expirationDate} today={today} /></td>
+            <td className="table-number">{decimalLabel(row.quantityAvailableBase)}</td>
+            <td className="table-action"><Button variant="quiet" disabled={write.locked} onClick={() => { setDirty(false); setLot(row); setAdjustmentOpen(true) }}>Ajustar lote {row.batchNumber ?? 'sin número'}</Button></td>
+          </tr>)}</tbody></table>
+      </div>}
+      {mode === 'expiring' && Boolean(expiring.data?.length) && !expiring.isError && <>
+        <p className="data-caption">Lotes con saldo positivo. Consulta su número en la pestaña Lotes.</p>
+        <div className="operation-table" role="region" aria-label="Tabla de vencimientos" tabIndex={0}>
+          <table><caption>Lotes próximos a vencer · 30 días (Lima)</caption><thead><tr><th scope="col">Producto</th><th scope="col">Vencimiento</th><th scope="col" className="table-number">Disponible (base)</th>{w.access.role === 'owner' && <th scope="col" className="table-number">Valor de costo</th>}<th scope="col" className="table-number">Valor potencial de venta</th></tr></thead>
+            <tbody>{expiring.data?.map(row => <tr key={row.inventoryLotId}><td>{row.productName}</td><td><DateText value={row.expirationDate} dateOnly /></td><td className="table-number">{decimalLabel(row.quantityAvailableBase)}</td>
+              {w.access.role === 'owner' && <td className="table-number">{row.costValue === null ? 'No disponible' : `S/ ${decimalLabel(row.costValue, 2)}`}</td>}
+              <td className="table-number">S/ {decimalLabel(row.potentialSaleValue, 2)}</td></tr>)}</tbody></table>
+        </div>
+      </>}
       <PageControls offset={offset} count={current.isError ? undefined : current.data?.length} busy={current.isFetching} change={value => { setOffset(value); if (!write.pending) setLot(null) }} />
     </div></Panel>
+    <Modal open={filterOpen} title="Filtrar inventario" onClose={() => setFilterOpen(false)}><ProductLookup onSelect={value => { setProduct(value); setOffset(0); setLot(null); setFilterOpen(false) }} /></Modal>
     <Modal open={adjustmentOpen && lot !== null} title="Ajustar lote" onClose={() => { setAdjustmentOpen(false); setLot(null); setDirty(false) }} onRecoveryClose={() => setAdjustmentOpen(false)} dirty={dirty} busy={write.busy} recovery={write.pending}>
       <div className="operation-body">{write.error != null && <ApiErrorState error={write.error} />}
         {write.pending && <Notice tone="warning">Resultado pendiente. Conserva esta dirección y concilia el movimiento antes de otra escritura; consultar el saldo no identifica el ajuste.</Notice>}
@@ -92,5 +126,5 @@ function LotExpiry({ value, today }: { value: string | null; today: string }) {
   if (!value) return <span>No informado</span>
   const nextMonth = new Date(`${today}T00:00:00Z`); nextMonth.setUTCDate(nextMonth.getUTCDate() + 30)
   const state = value < today ? 'Fecha vencida' : value === today ? 'Vence hoy' : value <= nextMonth.toISOString().slice(0, 10) ? 'Próximos 30 días' : 'Posterior'
-  return <span className="lot-expiry"><DateText value={value} dateOnly /><Badge tone={state === 'Posterior' ? 'neutral' : 'warning'}>{state}</Badge></span>
+  return <span className="lot-expiry"><DateText value={value} dateOnly /><Badge tone={state === 'Fecha vencida' ? 'error' : state === 'Posterior' ? 'neutral' : 'warning'}>{state}</Badge></span>
 }

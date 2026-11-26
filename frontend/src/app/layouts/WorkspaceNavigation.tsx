@@ -1,4 +1,4 @@
-import { Link, NavLink } from 'react-router'
+import { Link } from 'react-router'
 import { ArrowRightLeft, ChevronDown, MapPin, Store, UserRound } from 'lucide-react'
 import { availableNavigation } from '../navigation'
 import type { Workspace } from '../../features/access'
@@ -8,7 +8,7 @@ import { Brand } from '../../shared/ui/Brand'
 import { NotificationCounter } from '../../features/notifications'
 import { availabilityLabels } from '../../shared/ui/availability'
 
-export function WorkspaceNavigation({ workspace: w, onNavigate }: { workspace: Workspace; onNavigate?: () => void }) {
+export function WorkspaceNavigation({ workspace: w, activeSection = '', collapsed = false, onNavigate }: { workspace: Workspace; activeSection?: string; collapsed?: boolean; onNavigate?: () => void }) {
   const links = availableNavigation(w.access.role)
   return (
     <>
@@ -17,19 +17,20 @@ export function WorkspaceNavigation({ workspace: w, onNavigate }: { workspace: W
       <Link className="sidebar-branch" to={`/boticas/${w.tenantId}/sucursales?elegir=1`} aria-label="Cambiar sucursal" onClick={onNavigate}><MapPin size={18} aria-hidden="true" /><span><small>Sede actual</small><strong>{w.branch.name}</strong></span><ChevronDown size={16} aria-hidden="true" /></Link>
       <nav aria-label="Navegación principal" className="sidebar-links">
         {(['operation', 'management', 'more'] as const).map(section => {
-          const items = links.filter(item => section === 'more' ? ['caja', 'sincronizacion'].includes(item.id) : item.section === section && !['caja', 'sincronizacion'].includes(item.id))
+          const items = links.filter(item => section === 'more' ? item.id === 'sincronizacion' : item.section === section && item.id !== 'sincronizacion')
           return items.length > 0 && (
             <div className="nav-section" key={section}>
-              <p>{section === 'operation' ? 'OPERACIÓN' : section === 'management' ? 'GESTIÓN' : 'MÁS'}</p>
+              <p>{section === 'operation' ? 'Operación' : section === 'management' ? 'Gestión' : 'Contingencia'}</p>
               {items.map(item => (
-                <NavLink key={item.id} to={item.id ? `${w.base}/${item.id}` : w.base} end className={({ isActive }) => `nav-item${isActive ? ' active' : ''}`} onClick={onNavigate}
-                  aria-label={item.availability !== 'implemented' ? `${item.label} · ${availabilityLabels[item.availability]}` : undefined}
-                  title={item.availability !== 'implemented' ? item.description : undefined}>
+                <Link key={item.id} to={item.id ? `${w.base}/${item.id}` : w.base} className="nav-item" onClick={onNavigate}
+                  aria-current={activeSection === item.id ? 'page' : undefined}
+                  aria-label={item.availability !== 'implemented' ? `${item.label} · ${availabilityLabels[item.availability]}` : item.id === 'caja' ? 'Arqueos y cajas' : item.label}
+                  title={collapsed ? item.label : item.availability !== 'implemented' ? item.description : undefined}>
                   <item.icon size={20} aria-hidden="true" />
                   <span>{item.id === 'caja' ? 'Arqueos y cajas' : item.label}</span>
                   {item.id === 'notificaciones' && <NotificationCounter />}
                   {item.id === 'ventas' ? <kbd aria-hidden="true">Alt V</kbd> : item.availability !== 'implemented' && <small aria-hidden="true">{availabilityLabels[item.availability]}</small>}
-                </NavLink>
+                </Link>
               ))}
             </div>
           )
@@ -37,7 +38,7 @@ export function WorkspaceNavigation({ workspace: w, onNavigate }: { workspace: W
       </nav>
       <div className="sidebar-bottom">
         <details className="sidebar-account"><summary><UserRound size={20} aria-hidden="true" /><span>{roleLabels[w.access.role]}<small>Mi cuenta</small></span><ChevronDown size={16} aria-hidden="true" /></summary><div><p>Cuenta autenticada en esta botica.</p><details className="inline-help"><summary>Identificador para soporte</summary><code>{w.session.userId}</code></details></div></details>
-        <Link to="/seleccionar-botica?elegir=1" className="switch-tenant" onClick={onNavigate}><ArrowRightLeft size={18} aria-hidden="true" />Cambiar botica</Link>
+        <Link to="/seleccionar-botica?elegir=1" className="switch-tenant" aria-label="Cambiar botica" title="Cambiar botica" onClick={onNavigate}><ArrowRightLeft size={18} aria-hidden="true" /><span>Cambiar botica</span></Link>
         <LogoutButton />
       </div>
     </>

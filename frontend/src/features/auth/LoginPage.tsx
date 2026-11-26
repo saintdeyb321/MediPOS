@@ -14,7 +14,8 @@ export function LoginPage() {
   const busy = checking || login.isPending || login.isSuccess
   return <main className="login-page">
     <section className="login-form" aria-labelledby="login-title">
-      <Brand />
+      <header className="login-banner"><Brand /></header>
+      <div className="login-fields">
       <div className="login-copy">
         <h1 id="login-title">Ingresa a MediPOS</h1>
         <p>Usa la cuenta de Google asociada a tu botica.</p>
@@ -26,6 +27,7 @@ export function LoginPage() {
       </Button>
       {session.isError && <Button variant="quiet" onClick={() => void session.refetch()}>Revisar conexión</Button>}
       <p className="login-help">Si recibiste una invitación, ingresa con el correo que figura en ella.</p>
+      </div>
     </section>
   </main>
 }

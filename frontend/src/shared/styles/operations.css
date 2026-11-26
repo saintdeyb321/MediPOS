@@ -3,16 +3,34 @@
 .operation-body { padding: var(--space-6); }
 .operation-body fieldset { min-width: 0; padding: var(--space-4); border: 1px solid var(--border); border-radius: var(--radius-md); }
 .operation-body legend { padding-inline: var(--space-2); font-weight: 650; }
+.module-switch { display: inline-flex; flex-wrap: wrap; gap: var(--space-1); align-items: center; padding: var(--space-1); border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface); }
+.module-switch [aria-current] { display: inline-flex; align-items: center; min-height: var(--control-height); padding-inline: var(--space-3); border-radius: var(--radius-sm); color: var(--primary-hover); background: var(--primary-soft); font-weight: 700; }
+.data-view-heading { display: flex; flex-wrap: wrap; align-items: start; gap: var(--space-2) var(--space-4); justify-content: space-between; }
+.data-view-heading > .task-tabs { margin: 0; }
+.data-filter-form { padding: var(--space-4); border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface-muted); }
+.operation-body > .page-toolbar { background: var(--surface-muted); padding: var(--space-3); border-radius: var(--radius-md); }
+.notification-row { min-width: 0; overflow-wrap: anywhere; }
+.notification-attention { border-inline-start: 3px solid var(--accent); padding-inline-start: var(--space-3); }
+.data-summary { display: flex; flex-wrap: wrap; gap: var(--space-2) var(--space-5); padding: var(--space-3); border-radius: var(--radius-md); background: var(--surface-muted); }
+.data-summary > div { display: flex; align-items: baseline; gap: var(--space-2); }
+.data-summary dt { font-size: var(--text-sm); color: var(--text-muted); }
+.data-summary dd { font-weight: 700; font-variant-numeric: tabular-nums; }
+.inventory-data .page-toolbar { padding-block-end: var(--space-3); border-bottom: 1px solid var(--border); }
+.inventory-data .operation-table td:nth-child(2) { overflow-wrap: anywhere; }
 .operation-actions { display: flex; flex-wrap: wrap; gap: var(--space-3); align-items: center; }
 .operations select { max-width: 100%; min-height: 2.75rem; background: var(--surface); color: var(--text); border: 1px solid var(--control-border); padding: var(--space-2); font: inherit; }
 .operation-table, .catalog-table { min-inline-size: 0; max-inline-size: 100%; overflow-x: auto; overscroll-behavior-inline: contain; }
 .page-controls { align-items: center; }
 .page-controls span { font-size: var(--text-sm); color: var(--text-muted); }
-.operation-table table { width: 100%; border-collapse: collapse; }
+.operation-table table, .catalog-table table { width: 100%; border-collapse: collapse; }
 .operation-table th, .operation-table td { padding: var(--space-4); border-bottom: 1px solid var(--border); text-align: left; vertical-align: middle; }
 .operation-table th { background: var(--surface-muted); font-size: var(--text-sm); color: var(--text-muted); font-weight: 650; }
 .operation-table tbody tr:hover { background: var(--canvas); }
-.operation-table td:first-child { font-weight: 550; }
+.operation-table td:first-child { font-weight: 600; }
+.operation-table :is(th,td).table-number { text-align: right; font-variant-numeric: tabular-nums; }
+.operation-table :is(th,td).table-action { width: 1%; text-align: right; }
+.operation-table tbody tr:last-child > td { border-bottom: 0; }
+.operation-table:focus-visible, .catalog-table:focus-visible { outline-offset: -3px; }
 .operations ul { padding-left: var(--space-4); }
 .operations .state-block { min-height: auto; padding: var(--space-4); }
 .invitation-summary { padding-block: var(--space-4); border-top: 1px solid var(--border); }
@@ -41,7 +59,7 @@
 .workflow-context { padding: var(--space-4); background: var(--info-soft); border-left: 3px solid var(--info); border-radius: var(--radius-md); }
 .workflow-context p { color: var(--text-muted); margin-top: var(--space-2); }
 .team-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 19rem), 1fr)); gap: var(--space-5); }
-.team-card { display: flex; flex-direction: column; gap: var(--space-5); min-width: 0; padding: var(--space-5); border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--canvas); }
+.team-card { display: flex; flex-direction: column; gap: var(--space-5); min-width: 0; padding: var(--space-5); border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--surface-muted); }
 .team-card h3 { overflow-wrap: anywhere; }
 .team-card > .button { margin-top: auto; }
 .member-avatar { width: 3rem; height: 3rem; display: grid; place-items: center; border-radius: 50%; background: var(--primary-soft); color: var(--primary); flex-shrink: 0; }
@@ -67,7 +85,7 @@
 .invitation-summary { padding: var(--space-3); }
 .settings-index > .button { min-height: var(--control-height); }
 .operation-table { border: 1px solid var(--border); border-radius: var(--radius-md); }
-.operation-table caption { padding: var(--space-3) var(--space-4); text-align: left; font-size: var(--text-sm); color: var(--text-muted); background: var(--canvas); }
+.operation-table caption { padding: var(--space-3) var(--space-4); text-align: left; font-size: var(--text-sm); color: var(--text-muted); background: var(--surface); }
 .operation-body > h2 { padding-bottom: var(--space-3); border-bottom: 1px solid var(--border); }
 @media (max-width: 1279px) { .guided-layout { grid-template-columns: minmax(0, 1fr); } .guided-summary { position: static; } .guided-summary .summary-grid { grid-template-columns: repeat(auto-fit, minmax(min(100%, 12rem), 1fr)); } }
 @media (max-width: 740px) { .filter-bar { display: grid; grid-template-columns: 1fr; } .filter-bar select { width: 100%; } .operation-actions .button { max-width: 100%; } }

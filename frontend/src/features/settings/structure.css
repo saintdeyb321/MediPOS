@@ -8,7 +8,11 @@
 .structure-commit { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: var(--space-3); }
 .structure-commit > .button { margin-inline-start: auto; }
 .structure-links { border-bottom: 1px solid var(--border); gap: var(--space-1) var(--space-4); }
-.structure-links > a { min-height: var(--control-height); display: inline-flex; align-items: center; color: var(--info); }
+.structure-links > a { min-height: var(--control-height); display: inline-flex; align-items: center; color: var(--info); padding-inline: var(--space-2); border-radius: var(--radius-sm); font-weight: 600; }
+.structure-links > a:hover { background: var(--primary-soft); }
+.structure-directories > section { border-block-start: 3px solid var(--sky); }
+.structure-onboarding .structure-first fieldset { background: var(--surface-muted); }
+.structure-onboarding .structure-commit { border-block-start: 1px solid var(--border); padding-block-start: var(--space-3); }
 .structure [id] { scroll-margin-block-start: var(--space-6); }
 .structure-records { display: grid; gap: var(--space-2); list-style: none; margin: 0; padding: 0; }
 .structure-records li { display: flex; gap: var(--space-3); padding: var(--space-3); border-radius: var(--radius-md); background: var(--surface-muted); overflow-wrap: anywhere; }

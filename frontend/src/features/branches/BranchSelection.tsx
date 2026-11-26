@@ -9,6 +9,7 @@ import { Notice } from '../../shared/ui/Notice'
 import { PageHeader } from '../../shared/ui/PageHeader'
 import { Panel } from '../../shared/ui/Panel'
 import { EmptyState, LoadingState } from '../../shared/ui/States'
+import { hasPendingStructureRecovery } from '../settings'
 import { useBranches } from './useBranches'
 
 export function BranchSelection() {
@@ -31,8 +32,10 @@ export function BranchSelection() {
   const branchContext = single && verifiedAccess(access.data, session.data, tenantId, single.id)
   const root = `/boticas/${tenantId}`
   if (!valid) return <Notice tone="error">El identificador de botica no es válido.</Notice>
-  if (single && access.isSuccess && access.isFetchedAfterMount && !access.isFetching && access.data.isAllowed && branchContext)
-    return <Navigate to={`${root}/sucursales/${single.id}`} replace />
+  if (single && access.isSuccess && access.isFetchedAfterMount && !access.isFetching && access.data.isAllowed && branchContext) {
+    const pending = branchContext.role === 'owner' && hasPendingStructureRecovery(branchContext.userId, branchContext.membershipId, tenantId)
+    return <Navigate to={pending ? `${root}/configuracion` : `${root}/sucursales/${single.id}`} replace />
+  }
   if (!explicit && rows?.length === 0 && owner)
     return <Navigate to={`${root}/configuracion`} replace />
 

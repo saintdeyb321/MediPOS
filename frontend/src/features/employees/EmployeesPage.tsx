@@ -78,12 +78,12 @@ function EmployeesWorkspace() {
         <div className="member-assignment"><Clock3 size={18} aria-hidden="true" /><div><strong>Horario · Lima</strong><p>{row.schedule.length ? `${row.schedule.length} ventanas configuradas · consulta el detalle` : row.role === 'owner' ? 'Excepción de horario de Owner' : 'Sin horario: no habilita operaciones'}</p></div></div>
         <Button variant="secondary" disabled={write.busy || Boolean(write.pending && !sameId(row.membershipId, write.targetId))} onClick={() => select(row.membershipId)}>Ver integrante y accesos</Button>
       </article>)}</div>{!visibleEmployees.length && <p className="loading-strip">No hay integrantes para el filtro de esta página.</p>}</>}
-      {employees.data && !employees.isError && viewMode === 'list' && <div className="operation-table"><table><caption>Personal de la botica · detalle de accesos por integrante</caption><thead><tr><th>Integrante</th><th>Rol / estado</th><th>Sucursales asignadas</th><th>Horarios</th><th>Acción</th></tr></thead><tbody>{visibleEmployees?.map(row => <tr key={row.membershipId}>
+      {employees.data && !employees.isError && viewMode === 'list' && <div className="operation-table" role="region" aria-label="Directorio del personal" tabIndex={0}><table><caption>Personal de la botica · detalle de accesos por integrante</caption><thead><tr><th>Integrante</th><th>Rol / estado</th><th>Sucursales asignadas</th><th>Horarios</th><th>Acción</th></tr></thead><tbody>{visibleEmployees?.map(row => <tr key={row.membershipId}>
         <td>{row.displayName}{sameId(row.membershipId, w.access.membershipId) && <strong> · Tú</strong>}</td><td>{roleLabels[row.role]}<br /><Badge tone={row.isActive ? 'success' : 'neutral'}>{row.isActive ? 'Activo' : 'Inactivo'}</Badge></td>
         <td>{row.branchIds.length ? <ul>{row.branchIds.map(id => <li key={id}>{branches.data?.find(branch => sameId(branch.id, id))?.name ?? 'Sucursal no disponible en la consulta'}</li>)}</ul> : 'Sin asignaciones registradas'}</td>
         <td>{row.schedule.length ? `${row.schedule.length} ventanas · ver detalle` : 'Sin horario configurado'}</td>
         <td><Button variant="quiet" disabled={write.busy || Boolean(write.pending && !sameId(row.membershipId, write.targetId))} onClick={() => select(row.membershipId)}>Ver {row.displayName}</Button></td>
-      </tr>)}</tbody></table>{!employees.data.length && <p>No hay empleados en esta página. No se crearon identidades.</p>}</div>}
+      </tr>)}</tbody></table>{!employees.data.length && <p>No hay empleados en esta página.</p>}</div>}
       <PageControls offset={offset} count={employees.isError ? undefined : employees.data?.length} busy={employees.isFetching || write.busy || Boolean(write.pending)} change={page} />
     </div></Panel>
     <Drawer open={drawerOpen && Boolean(employee)} title={employee ? employee.displayName : 'Detalle del integrante'} onClose={() => setDrawerOpen(false)}>

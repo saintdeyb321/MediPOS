@@ -1,4 +1,5 @@
 import { useId } from 'react'
+import { ChevronDown, CircleHelp } from 'lucide-react'
 import type { ReactNode } from 'react'
 
 export function FormSection({ title, description, children }: { title: string; description?: string; children: ReactNode }) {
@@ -14,5 +15,5 @@ export function FormFooter({ children }: { children: ReactNode }) {
 }
 
 export function InlineHelp({ title = 'Más información', children }: { title?: string; children: ReactNode }) {
-  return <details className="inline-help"><summary>{title}</summary><div>{children}</div></details>
+  return <details className="inline-help"><summary><CircleHelp size={17} aria-hidden="true" />{title}<ChevronDown size={15} aria-hidden="true" /></summary><div>{children}</div></details>
 }

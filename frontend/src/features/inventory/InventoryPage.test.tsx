@@ -26,9 +26,19 @@ it('distinguishes returned zero, absent balance and failed read', async () => {
   const fake = operationServer(); fake.state.lots = [{ ...lot, quantityAvailableBase: n('0.000000000000') }]
   const view = mountOperation(fake, <InventoryPage />); expect(await screen.findByRole('cell', { name: '0' })).toBeInTheDocument()
   view.unmount(); fake.state.lots = []; const empty = mountOperation(fake, <InventoryPage />)
-  await screen.findByText(/No hay saldos registrados/); empty.unmount()
+  await screen.findByText(/Aún no hay existencias/); empty.unmount()
   fake.state.failStock = true; mountOperation(fake, <InventoryPage />)
-  await screen.findByText('No pudimos consultar inventario'); expect(screen.queryByText(/No hay saldos registrados/)).not.toBeInTheDocument()
+  await screen.findByText('No pudimos consultar inventario'); expect(screen.queryByText(/Aún no hay existencias/)).not.toBeInTheDocument()
+})
+it('shows only page-scoped metrics next to the inventory table', async () => {
+  const fake = operationServer(); fake.state.lots = [{ ...lot, quantityAvailableBase: n('0') }]
+  mountOperation(fake, <InventoryPage />)
+  const table = await screen.findByRole('region', { name: 'Tabla de existencias' })
+  expect(within(table).getByRole('cell', { name: '0' })).toBeInTheDocument()
+  expect(screen.getByText('Productos en esta página').nextElementSibling).toHaveTextContent('1')
+  expect(screen.getByText('Sin stock en esta página').nextElementSibling).toHaveTextContent('1')
+  expect(screen.getByText('Sobre el stock').closest('details')).not.toHaveAttribute('open')
+  expect(fake.writes()).toHaveLength(0)
 })
 it('uses actual page offsets for stock and lots without inventing a total', async () => {
   const fake = operationServer(); fake.state.lots = Array.from({ length: 21 }, (_, index) => ({ ...lot, inventoryLotId: id(100 + index), businessProductId: id(10 + index), batchNumber: 'Batch ' + index }))
@@ -89,7 +99,7 @@ it('shows cost only as Owner, preserves null cost and does not grant Pharmacist 
   expect(await screen.findByRole('columnheader', { name: 'Valor de costo' })).toBeInTheDocument(); expect(screen.getByRole('cell', { name: 'No disponible' })).toBeInTheDocument()
   view.unmount(); fake.state.expiring[0] = { ...fake.state.expiring[0]!, costValue: n('123.4567') }
   mountOperation(fake, <InventoryPage />, '', { ...workspace, access: { ...workspace.access, role: 'pharmacist' } }); fireEvent.click(screen.getByRole('button', { name: 'Próximos a vencer (30 días)' }))
-  await screen.findByRole('cell', { name: '2026-10-20' }); expect(screen.queryByRole('columnheader', { name: 'Valor de costo' })).not.toBeInTheDocument(); expect(screen.queryByText('S/ 123.4567')).not.toBeInTheDocument()
+  await screen.findByRole('table', { name: /Lotes próximos a vencer/ }); expect(document.querySelector('time[datetime="2026-10-20"]')).toBeInTheDocument(); expect(screen.queryByRole('columnheader', { name: 'Valor de costo' })).not.toBeInTheDocument(); expect(screen.queryByText('S/ 123.4567')).not.toBeInTheDocument()
   expect(screen.queryByRole('form', { name: 'Configurar stock mínimo' })).not.toBeInTheDocument(); expect(fake.writes()).toHaveLength(0)
 })
 it('denies Cashier before querying inventory', () => {

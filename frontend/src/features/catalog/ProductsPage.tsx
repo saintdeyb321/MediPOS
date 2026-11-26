@@ -78,15 +78,12 @@ function CatalogWorkspace() {
       <Button variant="secondary" disabled={!reviewed || write.busy || !write.canAcknowledge || recoveryCode.trim() !== write.observed.product.internalCode} onClick={() => { write.acknowledge(recoveryCode); setReviewed(false); setRecoveryCode('') }}>Continuar tras conciliación verificada</Button></>}
   </div></Panel>
   return <div className="catalog-page">
-    <PageHeader icon={Package} eyebrow="Catálogo · mantenimiento" title="Productos" description={`Catálogo de ${w.tenantName}. Consulta existencias y lotes en Inventario.`} action={<Button disabled={write.locked} onClick={() => openCreate(null)}><Plus size={18} aria-hidden="true" />Nuevo producto</Button>} />
+    <PageHeader icon={Package} eyebrow="Catálogo · mantenimiento" title="Productos" description="Organiza categorías, precios y presentaciones de tu botica." action={<Button disabled={write.locked} onClick={() => openCreate(null)}><Plus size={18} aria-hidden="true" />Nuevo producto</Button>} />
     {!http && <Notice tone="warning">Esta pantalla requiere conexión HTTPS real con MediPOS.</Notice>}
     {write.error != null && <ApiErrorState error={write.error} title="No pudimos completar la operación de catálogo" />}
     {write.notice && <p role="status">{write.notice}</p>}
     {!createOpen && !taskOpen && recovery}
     {write.pending && !createOpen && !taskOpen && <Button data-recovery-focus variant="secondary" disabled={write.busy} onClick={() => { if (task) setTaskOpen(true); else setCreateOpen(true) }}>Revisar solicitud pendiente sin reenviar</Button>}
-    <PageToolbar actions={<Link className="text-link" to={w.base + '/importacion'}>Importar desde Excel</Link>}>
-      <nav aria-label="Catálogo" className="task-tabs"><Button variant="quiet" aria-pressed={mode === 'products'} onClick={() => setMode('products')}>Productos de la botica</Button><Button variant="quiet" aria-pressed={mode === 'global'} onClick={() => setMode('global')}>Referencias del catálogo global</Button></nav>
-    </PageToolbar>
     {categories.isError && <ApiErrorState error={categories.error} title="No pudimos consultar las categorías" retry={() => void categories.refetch()} />}
     <Modal open={createOpen} wide title={global ? 'Añadir referencia a mi botica' : 'Nuevo producto'} description="Registra sus datos, revisa los precios y configura las presentaciones después de guardar." onClose={closeCreate} onRecoveryClose={() => setCreateOpen(false)} dirty={dirty} busy={write.busy} recovery={write.pending}>
       <div className="catalog-body">{write.error != null && <ApiErrorState error={write.error} />}{recovery}
@@ -95,14 +92,19 @@ function CatalogWorkspace() {
         {write.notice && selected && <Button disabled={write.locked} onClick={() => { closeCreate(); edit('units') }}>Configurar presentaciones del producto guardado</Button>}
       </div>
     </Modal>
-    {mode === 'global' && <Panel><div className="catalog-body"><h2>Catálogo global disponible</h2><p>Referencia global, sin precios privados ni existencias físicas. Asociar crea un producto propio, no stock.</p>
+    <Panel><div className="catalog-directory-bar">
+      <PageToolbar actions={<Link className="text-link" to={w.base + '/importacion'}>Importar desde Excel</Link>}>
+        <nav aria-label="Catálogo" className="task-tabs"><Button variant="quiet" aria-pressed={mode === 'products'} onClick={() => setMode('products')}>Productos de la botica</Button><Button variant="quiet" aria-pressed={mode === 'global'} onClick={() => setMode('global')}>Referencias del catálogo global</Button></nav>
+      </PageToolbar>
+    </div>
+    {mode === 'global' && <section className="catalog-body"><h2>Catálogo global disponible</h2><p>Referencia global, sin precios privados ni existencias físicas. Asociar crea un producto propio, no stock.</p>
       {globals.isPending && <p role="status">Consultando catálogo global…</p>}
       {globals.isError && <ApiErrorState error={globals.error} title="No pudimos consultar el catálogo global" retry={() => void globals.refetch()} />}
       {globals.data && !globals.isError && <>{!globals.data.length && <p>No hay productos globales en esta página.</p>}
         <ul>{globals.data.map(item => <li key={item.id}>{item.name} · {categoryName(item.categoryId)} · {item.brandOrLaboratory} <Button variant="quiet" disabled={write.locked} onClick={() => openCreate(item)}>Añadir {item.name} a mi botica</Button></li>)}</ul></>}
       <PageControls size={50} offset={globalOffset} change={setGlobalOffset} count={globals.isError ? undefined : globals.data?.length} busy={globals.isFetching} />
-    </div></Panel>}
-    {mode === 'products' && <Panel><div className="catalog-body"><h2>Productos de la botica</h2>
+    </section>}
+    {mode === 'products' && <section className="catalog-body"><h2>Productos de la botica</h2>
       <PageToolbar actions={<div className="segmented-control" role="group" aria-label="Vista del catálogo"><Button variant="quiet" aria-pressed={viewMode === 'grid'} onClick={() => setViewMode('grid')}><LayoutGrid size={18} aria-hidden="true" />Tarjetas</Button><Button variant="quiet" aria-pressed={viewMode === 'list'} onClick={() => setViewMode('list')}><List size={18} aria-hidden="true" />Lista</Button></div>}><SearchField label="Filtrar esta página" hint="Solo filtra los productos cargados en la página actual." placeholder="Nombre, código, marca o principio activo" value={filter} onChange={event => setFilter(event.target.value)} />
         <label>Estado en esta página<select aria-label="Estado en esta página" value={status} onChange={event => setStatus(event.target.value)}><option value="all">Todos</option><option value="active">Activos</option><option value="inactive">Inactivos</option></select></label>
       </PageToolbar>
@@ -116,13 +118,14 @@ function CatalogWorkspace() {
         {item.medicine && <details className="catalog-composition"><summary>Composición documentada</summary><p>{item.medicine.components.map(row => row.ingredient + ' ' + row.strengthNormalized).join(' · ')}</p></details>}
         <div className="catalog-card-price"><small>Minorista · unidad base</small><strong>S/ {decimalLabel(item.retailPrice, 2)}</strong><small>Mayorista: {item.wholesalePrice ? `S/ ${decimalLabel(item.wholesalePrice, 2)}` : 'Sin configurar'}</small></div>
         <Button variant="secondary" disabled={write.busy || (write.pending && task !== null && selected !== item.id)} onClick={() => openDetail(item.id)}>Ver detalle y presentaciones</Button>
-      </li>)}</ul> : <div className="catalog-table"><table><caption>Precios por unidad base · presentaciones en el detalle</caption><thead><tr><th>Producto/código</th><th>Categoría/tipo</th><th>Marca o laboratorio</th><th>Precios base</th><th>Estado</th><th>Detalle</th></tr></thead><tbody>{visibleProducts.map(item => <tr key={item.id}>
+      </li>)}</ul> : <div className="catalog-table" role="region" aria-label="Lista de productos" tabIndex={0}><table><caption>Precios por unidad base · presentaciones en el detalle</caption><thead><tr><th>Producto/código</th><th>Categoría/tipo</th><th>Marca o laboratorio</th><th>Precios base</th><th>Estado</th><th>Detalle</th></tr></thead><tbody>{visibleProducts.map(item => <tr key={item.id}>
         <td>{item.name}<br />{item.internalCode}</td><td>{categoryName(item.categoryId)}<br />{item.productType === 'medicine' ? 'Medicamento' : 'Venta general'}</td><td>{item.brandOrLaboratory}</td>
         <td>Minorista S/ {decimalLabel(item.retailPrice, 2)}<br />Mayorista {item.wholesalePrice ? `S/ ${decimalLabel(item.wholesalePrice, 2)}` : 'No configurado'}</td><td><Badge tone={item.isActive ? 'success' : 'neutral'}>{item.isActive ? 'Activo' : 'Inactivo'}</Badge></td>
         <td><Button variant="quiet" disabled={write.busy || (write.pending && task !== null && selected !== item.id)} onClick={() => openDetail(item.id)}>Ver {item.name}</Button></td>
       </tr>)}</tbody></table></div>}</>}
       <PageControls size={50} offset={offset} change={setOffset} count={products.isError ? undefined : products.data?.length} busy={products.isFetching} />
-    </div></Panel>}
+    </section>}
+    </Panel>
     <Drawer open={detailOpen} title="Detalle del producto" onClose={() => setDetailOpen(false)}>
       {detail.isPending && <p role="status">Consultando detalle…</p>}
       {detail.isError && <ApiErrorState error={detail.error} title="No pudimos consultar este producto" retry={() => void detail.refetch()} />}

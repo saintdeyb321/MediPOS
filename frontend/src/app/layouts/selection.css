@@ -4,7 +4,8 @@
 .selection-content { display: grid; gap: var(--space-4); align-content: start; width: min(65rem, calc(100% - 2 * var(--page-gutter))); margin: clamp(var(--space-4), 4vw, var(--space-8)) auto; }
 .selection-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 20rem), 1fr)); gap: var(--space-6); }
 .selection-card { background: var(--surface); border: 1px solid var(--border); padding: var(--space-6); border-radius: var(--radius-lg); text-align: left; max-width: 32rem; display: block; color: var(--text); text-decoration: none; }
-.selection-card:hover, .branch-option:hover { border-color: var(--primary); background: var(--primary-soft); }
+.selection-card, .branch-option { transition: background-color var(--motion-fast), border-color var(--motion-fast), box-shadow var(--motion-fast); border-inline-start: 3px solid var(--sky); }
+.selection-card:hover, .branch-option:hover { border-color: var(--primary); background: var(--primary-soft); box-shadow: var(--shadow); }
 .selection-card-top { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); }
 .selection-title { display: block; margin-top: var(--space-6); font-size: var(--text-xl); font-weight: 650; overflow-wrap: anywhere; }
 .selection-description { display: flex; gap: var(--space-2); color: var(--text-muted); margin-top: var(--space-2); font-size: var(--text-sm); }

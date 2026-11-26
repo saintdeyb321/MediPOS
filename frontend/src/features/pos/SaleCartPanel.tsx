@@ -6,7 +6,8 @@ import { Button } from '../../shared/ui/Button'
 import { TextField } from '../../shared/ui/TextField'
 import { Notice } from '../../shared/ui/Notice'
 import { decimalLabel } from '../../shared/api/decimal'
-import { cartError, estimateTotal, lineAmounts, lineKey } from './cart'
+import type { JsonNumber } from '../../shared/api/exactJson'
+import { lineAmounts, lineKey } from './cart'
 import type { CartLine } from './cart'
 
 function CartItem({ line, disabled, change, remove }: { line: CartLine; disabled: boolean; change: (line: CartLine) => void; remove: () => void }) {
@@ -31,10 +32,9 @@ function CartItem({ line, disabled, change, remove }: { line: CartLine; disabled
     </details>
   </li>
 }
-export function SaleCartPanel({ lines, change, disabled, message }: {
-  lines: CartLine[]; change: (lines: CartLine[]) => void; disabled: boolean; message: string
+export function SaleCartPanel({ lines, total, error, change, disabled, message }: {
+  lines: CartLine[]; total: JsonNumber | null; error: string | null; change: (lines: CartLine[]) => void; disabled: boolean; message: string
 }) {
-  const error = cartError(lines)
   return (
     <Panel id="carrito" tabIndex={-1} className="cart-panel" aria-labelledby="cart-title">
       <div className="panel-heading"><h2 id="cart-title"><ShoppingBasket size={18} aria-hidden="true" />Ticket en preparación</h2><Badge>{lines.length} líneas</Badge></div>
@@ -44,7 +44,7 @@ export function SaleCartPanel({ lines, change, disabled, message }: {
         change={updated => change(lines.map((current, at) => at === index ? updated : current))}
         remove={() => change(lines.filter((_, at) => at !== index))} />)}</ul> :
         <p className="cart-empty">Agrega productos desde el buscador.</p>}
-      <CheckoutSummary total={error ? null : estimateTotal(lines)} />
+      <CheckoutSummary total={total} />
     </Panel>
   )
 }

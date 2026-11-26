@@ -1,3 +1,4 @@
+import { QueryClient } from '@tanstack/react-query'
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { expect, it, vi } from 'vitest'
 import { createMemoryRouter, RouterProvider, Outlet, useLocation } from 'react-router'
@@ -6,6 +7,8 @@ import { createMediPosService } from '../access'
 import { NavigationSafety } from '../../shared/ui/NavigationSafety'
 import { HttpClient } from '../../shared/api/http'
 import { TenantOnboardingPage } from './TenantOnboardingPage'
+import { BranchSelection } from '../branches/BranchSelection'
+import { refocus } from '../../test/refocus'
 import { id, legalEntity, managementServer, workspace, json } from '../notifications/management.test.support'
 import { installTestStructureStorage } from './recovery.test.support'
 
@@ -17,7 +20,7 @@ function fixture() {
   const base = managementServer()
   base.management.legal = []
   base.management.branches = []
-  const state = { role: 'owner', allowed: true, branchFailure: 0, lost: '', mismatch: '', accessFailure: 0, actor: workspace.session.userId }
+  const state = { role: 'owner', allowed: true, branchFailure: 0, lost: '', mismatch: '', accessFailure: 0, actor: workspace.session.userId, beforeBranch: null as Promise<void> | null, staleBranches: null as Promise<Response> | null }
   const fetcher = vi.fn<typeof fetch>().mockImplementation(async (route, init) => {
     const u = new URL(String(route), 'https://unit.test')
     if (u.pathname === '/auth/me') return json({ userId: state.actor })
@@ -29,7 +32,9 @@ function fixture() {
         context: { ...workspace.access, membershipId: state.actor === workspace.session.userId ? workspace.access.membershipId : id(800), userId: state.actor, role: state.role, branchId } })
     }
     const kind = u.pathname.endsWith('/branches') ? 'branch' : u.pathname.endsWith('/legal-entities') ? 'legal' : ''
+    if (init?.method === 'GET' && kind === 'branch' && state.staleBranches) return state.staleBranches
     if (init?.method === 'POST' && kind) {
+      if (kind === 'branch') await state.beforeBranch
       if (kind === 'branch' && state.branchFailure) return json({ code: state.branchFailure === 409 ? 'branch.limit_reached' : 'unit.rejected' }, state.branchFailure)
       const response = await base.fetcher(route, init)
       if (state.lost === kind) throw new TypeError('Synthetic lost response')
@@ -41,12 +46,13 @@ function fixture() {
     }
     return base.fetcher(route, init)
   })
-  const mount = (search = '') => {
+  const mount = (search = '', entry = root + '/configuracion') => {
     const http = new HttpClient(fetcher)
     const router = createMemoryRouter([{ element: <NavigationSafety identity={state.actor}><Outlet /><Address /></NavigationSafety>, children: [
       { path: '/boticas/:tenantId/configuracion', element: <TenantOnboardingPage /> },
+      { path: '/boticas/:tenantId/sucursales', element: <BranchSelection /> },
       { path: '/boticas/:tenantId/sucursales/:branchId', element: <h1>Inicio de la sede</h1> },
-    ] }], { initialEntries: [`${root}/configuracion${search}`] })
+    ] }], { initialEntries: [entry + search] })
     return render(<RuntimeProvider runtime={{ service: createMediPosService(http), http, preview: false }}><RouterProvider router={router} /></RuntimeProvider>)
   }
   const writes = () => fetcher.mock.calls.filter(([, init]) => init?.method === 'POST')
@@ -189,6 +195,97 @@ it('rechecks zero branches under the writer lock and stops if another tab alread
   await screen.findByText(/La estructura cambió desde la última consulta/)
   expect(screen.getByRole('link', { name: 'Entrar' })).toHaveAttribute('href', root + '/sucursales/' + workspace.branchId)
   expect(fake.writes()).toHaveLength(0)
+})
+
+it('returns an Owner with a pending first branch to the original operation before automatic entry', async () => {
+  const fake = fixture(); fake.state.lost = 'branch'; const view = fake.mount()
+  await first()
+  await screen.findByRole('heading', { name: 'No pudimos confirmar si se guardó' })
+  view.unmount()
+
+  fake.mount('', root + '/sucursales')
+  await screen.findByRole('heading', { name: 'No pudimos confirmar si se guardó' })
+  expect(screen.queryByRole('heading', { name: 'Inicio de la sede' })).not.toBeInTheDocument()
+  expect(fake.writes()).toHaveLength(2)
+})
+
+it('retains the exact fiscal acknowledgement if saving the recovery state fails', async () => {
+  const fake = fixture(); const view = fake.mount()
+  const setItem = Storage.prototype.setItem
+  const store = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(function (this: Storage, key, value) {
+    if (this === localStorage && key.startsWith('medipos-structure-v1/')) {
+      const state = JSON.parse(value)
+      if (state.entityId && (!state.pending || state.pending.acknowledgedId)) throw new Error('Synthetic storage write failure')
+    }
+    setItem.call(this, key, value)
+  })
+  try {
+    await first()
+    await waitFor(() => expect(screen.getByTestId('address')).toHaveTextContent('settingsCreated=' + fake.management.legal[0]!.id))
+    expect(fake.writes()).toHaveLength(1)
+  } finally { store.mockRestore() }
+
+  const address = screen.getByTestId('address').textContent!
+  view.unmount()
+  fake.mount(address)
+  fireEvent.click(await screen.findByRole('button', { name: 'Consultar resultado' }))
+  await screen.findByText(/Registro encontrado. Synthetic QA entity/)
+  expect(screen.queryByRole('combobox', { name: 'Registro que quieres verificar' })).not.toBeInTheDocument()
+  expect(fake.writes()).toHaveLength(1)
+})
+
+it('retains the exact fiscal acknowledgement when publishing it to the cache fails', async () => {
+  const fake = fixture(); fake.mount()
+  const setQueryData = QueryClient.prototype.setQueryData
+  const cache = vi.spyOn(QueryClient.prototype, 'setQueryData').mockImplementation(function (this: QueryClient, key, value, options) {
+    if (key.includes('legal') && fake.management.legal.length) throw new Error('Synthetic directory cache failure')
+    return setQueryData.call(this, key, value, options)
+  })
+  try {
+    await first()
+    await screen.findByRole('heading', { name: 'Revisa el registro original' })
+    await waitFor(() => expect(screen.getByTestId('address')).toHaveTextContent('settingsCreated=' + fake.management.legal[0]!.id))
+    expect(fake.writes()).toHaveLength(1)
+  } finally { cache.mockRestore() }
+})
+
+it('cancels a branch directory read started during the write before publishing the confirmed branch', async () => {
+  const fake = fixture()
+  fake.management.legal = [legalEntity]
+  let allowPost!: () => void
+  fake.state.beforeBranch = new Promise(resolve => { allowPost = resolve })
+  fake.mount()
+  await first(false)
+  await waitFor(() => expect(fake.writes()).toHaveLength(1))
+
+  const before = fake.fetcher.mock.calls.length
+  let finishRead!: (result: Response) => void
+  fake.state.staleBranches = new Promise(resolve => { finishRead = resolve })
+  await refocus()
+  await waitFor(() => expect(fake.fetcher.mock.calls.slice(before).some(([url, init]) =>
+    init?.method === 'GET' && String(url).includes('/branches?'))).toBe(true))
+  const signal = fake.fetcher.mock.calls.slice(before).find(([url, init]) =>
+    init?.method === 'GET' && String(url).includes('/branches?'))![1]!.signal!
+  allowPost()
+  await screen.findByRole('heading', { name: 'Inicio de la sede' })
+  expect(signal.aborted).toBe(true)
+  finishRead(json([]))
+  expect(fake.writes()).toHaveLength(1)
+})
+
+it('revalidates the verified Owner before clearing the original recovery marker', async () => {
+  const fake = fixture(); fake.state.lost = 'legal'; fake.mount()
+  await first()
+  fireEvent.click(await screen.findByRole('button', { name: 'Consultar resultado' }))
+  const rows = await screen.findByRole('combobox', { name: 'Registro que quieres verificar' })
+  await within(rows).findByRole('option', { name: /Synthetic QA/ })
+  fireEvent.change(rows, { target: { value: fake.management.legal[0]!.id } })
+  fireEvent.click(screen.getByRole('checkbox', { name: /Verifiqué que este es el registro/ }))
+  fake.state.actor = id(801)
+  fireEvent.click(screen.getByRole('button', { name: 'Confirmar resultado revisado' }))
+  await screen.findByText(/Tu acceso cambió/)
+  expect(screen.getByTestId('address')).toHaveTextContent('settingsPending=legal')
+  expect(fake.writes()).toHaveLength(1)
 })
 
 it('keeps a legacy recovery URL blocked with no automatic retry', async () => {

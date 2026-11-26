@@ -1,6 +1,6 @@
 # Estado actual de MediPOS
 
-Revisión del 25 de noviembre de 2026. Rama `ci/postgres-diagnostics-8bc6b4c`, HEAD local `d3e4fd45177ae244e930e37a666029b4fdd85559`. ACCESS-LEAN y Frontend Foundation F1–F5 están en el árbol local. Los hitos anteriores conservan su evidencia por SHA en las secciones correspondientes. [SPEC](SPEC.md), [ARCHITECTURE](ARCHITECTURE.md) y [ADR](ADR.md) definen el producto y sus límites.
+Revisión del 25 de noviembre de 2026. Rama `ci/postgres-diagnostics-8bc6b4c`, HEAD local `8b9d2194e1afa788ed6d74dd1c54a5b495cb6f2c`. Frontend Foundation F1–F5 se completó sobre ese SHA con correctivos locales de recuperación. Los hitos anteriores conservan su evidencia por SHA en las secciones correspondientes. [SPEC](SPEC.md), [ARCHITECTURE](ARCHITECTURE.md) y [ADR](ADR.md) definen el producto y sus límites.
 
 - **CODE_READY** indica que el flujo existe en código y puede pasar a verificación.
 - **Probado** exige evidencia de una comprobación concreta con SHA, alcance y entorno registrados.
@@ -16,7 +16,7 @@ Revisión del 25 de noviembre de 2026. Rama `ci/postgres-diagnostics-8bc6b4c`, H
 
 El 2 de noviembre se observaron HTTP 200 en React y readiness, 401 en sesión de plataforma anónima y seis hashes de assets coincidentes en DEV. PostgreSQL 18.4 tenía 39 migraciones y 56 tablas FORCE RLS. Son evidencias fechadas, con la disponibilidad de hoy por verificar. El [gate PostgreSQL anterior](https://github.com/saintdeyb321/MediPOS/actions/runs/39147784981) está registrado como PASS para `9f5434549a9c06f61705523069fc13673aad3226`. Falta evidencia integral del SHA candidato actual y aceptación completa de los cambios posteriores.
 
-**Próxima simulación.** Certificar un SHA del candidato Frontend Foundation, autorizar la instalación local y verificar en Chrome con perfiles separados la entrada de Superadmin, la primera sede de un Owner, el ingreso directo de un trabajador y el cambio de botica y sucursal. Registrar resultados por rol y SHA con datos de aceptación autorizados. [Evidencia y guion Frontend Foundation](#frontend-foundation--f1f5).
+**Próxima simulación.** Tras autorizar e instalar Blue Studio en DEV, recorrer Inventario y POS en escritorio y móvil, además de verificar Superadmin, primera sede del Owner e ingreso de trabajador con perfiles separados. Registrar los resultados por rol y SHA. [Evidencia Blue Studio](#blue-studio--d1d5) · [Guion Frontend Foundation](#frontend-foundation--f1f5).
 
 **Bloqueos del MVP.** Quedan pendientes la evidencia integral del candidato, el cierre de aceptación Chrome/PostgreSQL por roles y boticas y la verificación de recuperación operativa. S4 solo condiciona empezar con datos comerciales vacíos. La preparación de un piloto público exige sus propios gates de despliegue y operación. SUNAT/SIRE y la purga física A18 conservan su alcance diferido.
 
@@ -222,7 +222,7 @@ Candidato local sobre `d3e4fd45177ae244e930e37a666029b4fdd85559`, rama `ci/postg
 
 ### Frontend Foundation · F1–F5
 
-Base local `d3e4fd45177ae244e930e37a666029b4fdd85559`, rama `ci/postgres-diagnostics-8bc6b4c`, con ACCESS-LEAN preservado. [Plan y criterios](MEDIPOS_FRONTEND_DESIGN_SYSTEM_ONBOARDING.md).
+Base de implementación `d3e4fd45177ae244e930e37a666029b4fdd85559`, rama `ci/postgres-diagnostics-8bc6b4c`, con ACCESS-LEAN preservado. Cierre local sobre `8b9d2194e1afa788ed6d74dd1c54a5b495cb6f2c`. [Plan y criterios](MEDIPOS_FRONTEND_DESIGN_SYSTEM_ONBOARDING.md).
 
 | Fase | Cambios y evidencia |
 |---|---|
@@ -230,11 +230,13 @@ Base local `d3e4fd45177ae244e930e37a666029b4fdd85559`, rama `ci/postgres-diagnos
 | F2 · Entrada | Login compacto; tarjetas de botica y sede; verificación del servidor antes del ingreso directo. Owner sin sede tiene una acción primaria y una vista de datos fiscales y primera sucursal. Un trabajador sin sede recibe su propio estado; una restricción de acceso se presenta por separado. |
 | F3 · Configuración | `TenantStructure` y `useSettingsCreation` comparten formulario y recuperación entre primera sede y gestión. Enlaces a Mi negocio, Sucursales, Plan y licencia e Historial de actividad. La licencia informa vigencia y cupo según el servidor. |
 | F4 · Lecturas | `PageControls` solo pagina. Se retiró la recarga rutinaria de directorios, catálogo, caja, compras, inventario, notificaciones, auditoría, reportes, comisiones, plataforma, ticket, importación y transferencias. Permanecen reintentos de errores, verificaciones de acceso, filtros, recuperación de la intención original y sincronización. |
-| F5 · Evidencia | FOUNDATION_EVIDENCE_PLACEHOLDER |
+| F5 · Evidencia | Base publicada `8b9d219` con 620 PASS en 67 archivos. Cierre local con build, lint y `git diff --check` PASS. Vitest focalizado 92 PASS en 8 archivos y suite completa 625 PASS en 67 archivos, con 0 FAIL y 0 SKIP. Los cinco casos nuevos cubren entrada con operación pendiente, persistencia del acuse ante fallos de almacenamiento y caché, lecturas tardías y revocación antes de conciliar. |
+
+**Cierre de integridad.** Una intención pendiente del Owner en la botica y membresía verificadas tiene prioridad sobre la entrada a la única sede. Cada conciliación revalida la identidad y la membresía vigentes. El acuse exacto se conserva si falla la actualización de caché o almacenamiento. Las lecturas anteriores se cancelan antes de publicar el registro confirmado. El guard usa la dirección que realmente le entrega Router antes de decidir si bloquea la navegación. Web Locks coordina pestañas del mismo navegador. El contrato vigente exige revisión del registro original si no llega un acuse. Un nombre o RUC coincidente no acredita la operación.
 
 **Interacciones y HTTP.** `MEDIDO_DOM`: se mantienen las 0 selecciones del caso único acreditadas por ACCESS-LEAN. Alta inicial en una vista y con un compromiso; con registro fiscal nuevo hay 2 POST secuenciales y con uno existente, 1. Los acuses válidos requieren 0 clics de conciliación. Un guardado fiscal normal en gestión observó un GET de autorización y un POST, sin lecturas adicionales del directorio. Al recuperar el foco en catálogo global, se actualiza lo visible con 0 GET del catálogo comercial oculto. Abrir una recepción sin desplegar proveedores realiza 0 GET de ese directorio. `ESTIMADO_POR_CODIGO`: las listas afectadas tenían 1 control rutinario de refresco por superficie; quedan 0. El directorio anterior de proveedores se consultaba 1 vez al entrar en compras aunque estuviera cerrado. Los conteos excluyen verificaciones periódicas de autorización.
 
-**MEDIDO_NAVEGADOR_FIXTURE.** Chrome aislado con el bundle de producción y respuestas sintéticas de solo lectura. Comparación a 390 y 1366 px con una copia de los assets públicos de DEV. Se pasó de cuatro etapas visibles a un formulario y una acción, visible a 390×844; a 320×640 se llega con scroll vertical. Se midieron 29 rutas y estados a 320×640, 390×844, 768×1024, 1366×768 y 1920×1080, con muestras horizontales a 844×390. La matriz de 159 comprobaciones se complementó con cinco pruebas al 200 % de zoom nativo de Chrome, con viewport efectivo 683×384. Cero desbordamientos horizontales de página, controles rebasados y solicitudes de escritura en las comprobaciones. El modal de sucursal quedó centrado en cuatro tamaños, con scroll interno a 260 px de alto, entrada y retorno de foco, Tab, Shift+Tab y Escape. Se comprobó apertura del menú móvil y retorno de foco. La impresión y el lector físico quedan para aceptación.
+**MEDIDO_NAVEGADOR_FIXTURE.** Chrome aislado con el bundle de producción y respuestas sintéticas de solo lectura. Comparación a 390 y 1366 px con una copia de los assets públicos de DEV. Se pasó de cuatro etapas visibles a un formulario y una acción, visible a 390×844; a 320×640 se llega con scroll vertical. Se midieron 29 rutas y estados a 320×640, 390×844, 768×1024, 1366×768 y 1920×1080, con muestras horizontales a 844×390. La matriz de 159 comprobaciones se complementó con cinco pruebas al 200 % de zoom nativo de Chrome, con viewport efectivo 683×384. Cero desbordamientos horizontales de página, controles rebasados y solicitudes de escritura en las comprobaciones. El modal de sucursal quedó centrado en cuatro tamaños, con scroll interno a 260 px de alto, entrada y retorno de foco, Tab, Shift+Tab y Escape. Se comprobó apertura del menú móvil y retorno de foco. Después de corregir las dependencias públicas entre módulos, los assets compilados cambiaron y la matriz se comprobó de nuevo sobre el bundle finalmente servido. La impresión y el lector físico quedan para aceptación.
 
 | Superficie | Cobertura de navegador |
 |---|---|
@@ -247,7 +249,36 @@ Base local `d3e4fd45177ae244e930e37a666029b4fdd85559`, rama `ci/postgres-diagnos
 | Personal y notificaciones | Directorios, listas y estados. Aceptación de invitación y revocación reales pendientes. |
 | Excel, auditoría y contingencia | Estructura y estados de consulta. Importación, colas offline y recuperación reales pendientes. |
 
-**DEV y aceptación.** `MEDIDO_DEV_REAL`: HTTPS, React y `/health/ready` 200 en 7243. React sirve `index-C2BThF9v.js` y `index-BjJBse5m.css`; el candidato aislado contiene `index-DVAhL-2V.js` (`3F078AC41D46…`) y `index-DPLkFuSd.css` (`9AA7AC8FFCEB…`). La actualización de assets y el reinicio del PID DEV identificado requieren autorización separada. Tras la instalación, volver a comprobar ambos hashes y readiness. Compilar desde `frontend/` con `npm.cmd run build`. Con el PID anterior detenido tras autorización, arrancar desde `backend/` con `$env:ProductImportRecovery__EnabledAfterWriterDrain = 'false'` y `dotnet run --project src/MediPOS.Api --launch-profile https-local`. Conservar el almacenamiento PWA que contiene marcadores pendientes. Quedan pendientes Google real, alta y acceso por rol, recuperación transaccional y PWA con el operador y el gate integral del SHA candidato. No se hicieron cambios de backend, datos ni configuración. **PENDIENTE_ACEPTACIÓN. NO-GO para piloto.**
+**DEV y aceptación.** `MEDIDO_DEV_REAL` el 25 de noviembre de 2026. La instancia ordinaria arrancó con el perfil `https-local`, PID de API 11844, solo loopback en [localhost:7243](https://localhost:7243/), con `ProductImportRecovery__EnabledAfterWriterDrain=false`. HTML, JS, CSS y `/health/ready` devolvieron 200. El SHA-256 del HTML es `2723D6D2D4F5177261E6DDE9025522390954A4D697A759C7B9893DF502210B6D`. `index-B3fZYSzX.js` tiene `328BD7A6D7EA04F24EC6E92BF5E253425457C20EE541D6D02EB78DBD1E2A4122` y `index-DskTWVKM.css`, `44A274A9A912918A7373B75B86227F097A6DB28AD8DEC2F617642108815D373D`. Los tres hashes y el del service worker coinciden con `frontend/dist`. Los assets de la versión que estaba instalada al iniciar el encargo devolvieron 404. PostgreSQL 18.4, `medipos_dev`, 39 migraciones y socket de la API con el rol restringido `medipos_runtime` comprobados por lectura. Se conservaron el código del backend, secretos, datos de PostgreSQL y almacenamiento del navegador. Chrome quedó abierto con el frontend final. Quedan pendientes el recorrido Google y por roles con el operador, la aceptación transaccional y PWA y el gate integral del SHA candidato. **GO para publicar el candidato de pruebas. PENDIENTE_ACEPTACIÓN. NO-GO para piloto.**
+
+### Blue Studio · D1–D5
+
+Base `8b9d2194e1afa788ed6d74dd1c54a5b495cb6f2c`, con el cierre local previo de Foundation preservado. [Contrato visual](MEDIPOS_FRONTEND_BLUE_DESIGN_MASTER.md).
+
+| Bloque | Checkpoint |
+|---|---|
+| D1 | `tokens.css` → `base.css`, `ui.css`, `operations.css` → botones, formularios, paneles, estados, encabezados, ayuda y diálogos. `routes` → Workspace, selección y plataforma → páginas y hooks existentes → API/cliente HTTP. Inventario es la pantalla patrón. La admisión de plataforma y los permisos operacionales conservan sus rutas. |
+| D2 | Inventario integra pestañas, ayuda, filtro, conteos de página y tabla. POS prioriza buscador y ticket. Caja separa monto inicial y acciones. Productos comparte un panel para ambos directorios. Compras y proveedores agrupan referencia, recepción y selección. Transferencias identifica mercadería y sencillo sin combinar sus transiciones. |
+| D3 | Acceso con marca y cabecera compacta, Inicio con accesos existentes, estructura fiscal y sucursales en el mismo formulario, reportes y auditoría con filtros agrupados, directorios de personal y comisiones, alertas priorizadas, Excel y contingencia con ayudas y tablas. Las seis áreas de Superadmin usan el mismo lenguaje visual con consola independiente. |
+| D4 | Pruebas focalizadas finales 159 PASS, 0 FAIL, 0 SKIP en 7 archivos. Incluyen arquitectura, contraste, POS, navegación, inventario y consola. |
+| D5 | Build, lint y `git diff --check` PASS. Suite completa 638 PASS, 0 FAIL, 0 SKIP en 67 archivos. El primer pase completo quedó en 637/1/0 por la espera de la ficha de botica. Superadmin por separado dio 28/28 y el pase integral siguiente fue verde sin Chrome en paralelo ni cambios de timeout. Build aislado en `backend/obj/blue-studio-gate`. GO para publicar candidato de pruebas. |
+
+**Chrome aislado.** 34 rutas y estados, 194 comprobaciones y 10 al 200 % de zoom nativo. Se revisaron 320×640, 390×844, 768×1024, 1366×768, 1920×1080 y muestras horizontales a 844×390. Cero desbordamientos de página y escrituras. Se comprobó foco y Escape en los menús, la navegación contraída, los diálogos, las tablas con contenido y el ajuste de inventario con movimiento reducido. Las respuestas de prueba son sintéticas.
+
+| Superficies | Cobertura visual |
+|---|---|
+| Acceso, invitación, selección y onboarding | Formularios, nombres largos, cero sucursales, licencia restringida y página inexistente. |
+| Inventario, productos, POS y caja | Existencias con datos, vacío, error y resultado pendiente, modal de ajuste, catálogo de productos, buscador, carrito y caja cerrada. |
+| Compras, proveedores y transferencias | Recepción, directorios, mercadería y sencillo con sus controles disponibles. |
+| Inicio, reportes, comisiones, personal y avisos | Indicadores, filtros, cambios de sección, tablas y tarjetas. |
+| Configuración, Excel, auditoría y contingencia | Entidad y sede, alta en modal, carga, historial y presentación de la cola. |
+| Superadmin | Seis áreas, menú móvil, filtros, categorías y directorio. |
+
+**Lecturas con los mismos fixtures a 1366 px.** Inventario 14 → 14, POS 8 → 8, caja 7 → 7, productos 7 → 7, compras 5 → 5 y Boticas de plataforma 3 → 3. Pendientes la aceptación autenticada, operaciones reales, lector, impresión y PWA.
+
+**Bundle medido.** JS y CSS suman 930 486 → 937 673 bytes minificados y 257 218 → 259 022 bytes gzip con Node, cerca de 0,7 % adicional comprimido. Se mantiene la advertencia de Vite por el tamaño del chunk principal. No se midió latencia operacional.
+
+**Build y DEV.** El candidato contiene `index-QhoYu9cD.js` (`66ced66a96fe…`) y `index-DC0lrfws.css` (`f7a092cb9293…`). DEV 7243 respondió 200 en React y readiness con el PID 11844. El SHA-256 de sus dos assets coincide con Foundation (`index-B3fZYSzX.js`, `index-DskTWVKM.css`). Estado `BUILD_LISTO_PENDIENTE_REINICIO` hasta la autorización operativa solicitada.
 
 ## CI y primer candidato
 

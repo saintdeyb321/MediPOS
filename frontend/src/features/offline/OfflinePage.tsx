@@ -5,6 +5,7 @@ import { ApiErrorState, useRuntime, useWorkspace } from '../access'
 import { Button } from '../../shared/ui/Button'
 import { Panel } from '../../shared/ui/Panel'
 import { PageHeader } from '../../shared/ui/PageHeader'
+import { InlineHelp } from '../../shared/ui/FormLayout'
 import { PageControls } from '../../shared/ui/PageControls'
 import { TextField } from '../../shared/ui/TextField'
 import { Notice } from '../../shared/ui/Notice'
@@ -52,9 +53,9 @@ function OfflineWorkspace() {
     } catch (failure) { if (mounted.current) setError(failure) }
     finally { running.current = false; if (mounted.current) setBusy(false) }
   }
-  return <div className="operations"><PageHeader title="Contingencia y sincronización" description={`${w.branch.name} · sesión online verificada. Nunca administración, transferencias o edición de stock offline.`} />
+  return <div className="operations"><PageHeader title="Contingencia y sincronización" description="Prepara el catálogo de tu sucursal y revisa las ventas pendientes de sincronizar." />
     <Notice tone="warning">Operación local pendiente ≠ venta confirmada. Conserva los datos del navegador hasta conciliar cada evento con su identidad original.</Notice>
-    <Panel><div className="operation-body"><h2>Preparar este navegador</h2><p>Requiere caja propia abierta y conexión. Descarga solo el catálogo de esta sucursal; el stock es orientativo. Una desconexión no permite comprobar revocaciones ni asegurar stock entre dispositivos. El servidor vuelve a validar acceso, horario, precio, caja y existencias al sincronizar.</p>
+    <Panel><div className="operation-body"><h2>Preparar este navegador</h2><Notice tone="info">Necesitas conexión y tu propia caja abierta. El stock descargado es orientativo.</Notice><InlineHelp title="Qué se comprueba al sincronizar">El servidor vuelve a validar permisos, horario, precio, caja y existencias. La contingencia cubre ventas. La administración, transferencias y edición de stock requieren conexión.</InlineHelp>
       <Button disabled={busy || !http || Boolean(revocation)} onClick={() => void run('prepare')}>Preparar / actualizar contingencia</Button>
       {lease && <><p>Preparada para {lease.branchName}, hasta {new Date(lease.expiresAt).toISOString()}. Claves de sesión y CSRF nunca se guardan en IndexedDB.</p><Link className="button secondary" to="/contingencia">Abrir POS de contingencia</Link><Button variant="quiet" disabled={busy} onClick={() => void run('revoke')}>Revocar este dispositivo</Button></>}
       {revocation && <><p>Revocación original pendiente. La contingencia local está bloqueada; no se permite otra preparación ni reemplazar el dispositivo para ocultarla.</p><Button variant="secondary" disabled={busy || !http} onClick={() => void run('revoke')}>Conciliar revocación del mismo dispositivo</Button></>}
@@ -67,7 +68,7 @@ function OfflineWorkspace() {
 export function OutboxTable({ rows, base }: { rows: OutboxRow[]; base?: string }) {
   const labels = { pending: 'Pendiente: sin confirmar', accepted: 'Aceptada por el servidor', conflict: 'Conflicto: no se registró venta', rejected: 'Rechazada: requiere revisión' }
   if (!rows.length) return <p>No hay eventos en esta cuenta y sucursal.</p>
-  return <div className="operation-table"><table><caption>Eventos locales y respuestas del servidor</caption><thead><tr><th>Fecha declarada · Lima</th><th>Estado</th><th>Resultado</th><th>Intentos</th></tr></thead><tbody>{rows.map(row => <tr key={row.id}><td><DateText value={row.envelope.clientOccurredAtUtc} /></td><td><Badge tone={row.status === 'accepted' ? 'success' : row.status === 'pending' ? 'warning' : 'neutral'}>{labels[row.status]}</Badge></td><td>{row.result?.resultCode ?? 'Sin respuesta definitiva'}{base && row.status === 'accepted' && row.result?.resultReferenceId && <Link to={base + '/ventas?sale=' + row.result.resultReferenceId}>Consultar venta y ticket con conexión</Link>}</td><td>{row.attempts}</td></tr>)}</tbody></table></div>
+  return <div className="operation-table" role="region" aria-label="Tabla de sincronización" tabIndex={0}><table><caption>Eventos locales y respuestas del servidor</caption><thead><tr><th>Fecha declarada · Lima</th><th>Estado</th><th>Resultado</th><th>Intentos</th></tr></thead><tbody>{rows.map(row => <tr key={row.id}><td><DateText value={row.envelope.clientOccurredAtUtc} /></td><td><Badge tone={row.status === 'accepted' ? 'success' : row.status === 'pending' ? 'warning' : 'neutral'}>{labels[row.status]}</Badge></td><td>{row.result?.resultCode ?? 'Sin respuesta definitiva'}{base && row.status === 'accepted' && row.result?.resultReferenceId && <Link to={base + '/ventas?sale=' + row.result.resultReferenceId}>Consultar venta y ticket con conexión</Link>}</td><td>{row.attempts}</td></tr>)}</tbody></table></div>
 }
 function Conflicts() {
   const w = useWorkspace(); const { http } = useRuntime(); const [offset, setOffset] = useState(0); const [status, setStatus] = useState<'open' | 'resolved'>('open')

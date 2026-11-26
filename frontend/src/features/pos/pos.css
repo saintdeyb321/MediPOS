@@ -76,6 +76,7 @@
   .internal-ticket, .internal-ticket * { visibility: visible; }
   .internal-ticket { position: absolute; inset: 0 auto auto 0; width: 100%; max-width: 100%; padding: 4mm; border: 0; color: black; background: white; }
   .internal-ticket .no-print { display: none; }
+  .internal-ticket :is(p,dd,dt,li,strong) { color: inherit; background: transparent; }
 }
 @media (max-width: 740px) {
   .pos-layout { grid-template-columns: 1fr; margin-top: var(--space-2); }
@@ -94,12 +95,12 @@
 /* V3: the working regions, rather than introductory panels, own the viewport. */
 .pos-workbench { display: flex; flex-direction: column; gap: var(--space-3); min-width: 0; }
 .pos-heading { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-3); min-height: 3rem; }
-.pos-heading h1 { display: flex; align-items: center; gap: var(--space-2); font-size: var(--text-xl); }
+.pos-heading h1 { display: flex; align-items: center; gap: var(--space-2); font-size: var(--text-title); letter-spacing: -.025em; }
 .cash-status-strip { display: flex; flex-wrap: wrap; gap: var(--space-2); align-items: center; }
 .pos-layout { margin-top: 0; grid-template-columns: minmax(0, 1fr) minmax(21rem, 24rem); gap: var(--space-4); min-height: 0; }
 .pos-sale { position: static; display: flex; flex-direction: column; gap: 0; min-height: 0; max-height: none; overflow: visible; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface); }
 .pos-sale .panel { border: 0; border-radius: 0; box-shadow: none; }
-.pos-sale .panel-heading { padding: var(--space-3) var(--space-4); }
+.pos-sale .panel-heading { padding: var(--space-3) var(--space-4); background: var(--surface-muted); border-radius: var(--radius-md) var(--radius-md) 0 0; }
 .pos-sale .panel-heading h2 { display: flex; align-items: center; gap: var(--space-2); font-size: var(--text-base); }
 .pos-sale .pos-section-body { padding: var(--space-3) var(--space-4); }
 .cash-ticket-control:has(.pos-section-body:empty) { display: none; }
@@ -120,8 +121,8 @@
 .cart-line-details { font-size: var(--text-sm); color: var(--text-muted); }
 .cart-line-details summary { cursor: pointer; padding-block: var(--space-2); }
 .cart-totals { padding: var(--space-3) var(--space-4); }
-.cart-grand-total { margin: 0; font-size: var(--text-lg); }
-.pos-search { padding: var(--space-3) var(--space-4); flex-shrink: 0; }
+.cart-grand-total { margin: 0; font-size: var(--text-xl); color: var(--primary-hover); }
+.pos-search { padding: var(--space-3) var(--space-4); flex-shrink: 0; background: var(--surface-muted); border-radius: var(--radius-lg) var(--radius-lg) 0 0; }
 .pos-search label { font-size: var(--text-sm); margin-bottom: var(--space-1); }
 .product-count { padding: var(--space-2) var(--space-4); font-size: var(--text-sm); }
 .product-list { grid-template-columns: repeat(auto-fill, minmax(min(100%, 11rem), 1fr)); gap: var(--space-3); padding: var(--space-3); }
@@ -140,7 +141,7 @@
 .product-results .state-block { min-height: 8rem; padding: var(--space-4); border: 0; }
 .product-results { min-height: 0; }
 @media (min-width: 1100px) and (min-height: 640px) {
-  .app-shell-pos .workspace-main { display: flex; flex-direction: column; height: calc(100dvh - 3.5rem); }
+  .app-shell-pos .workspace-main { display: flex; flex-direction: column; height: calc(100dvh - var(--topbar-height)); }
   .pos-workbench { flex: 1; min-height: 0; }
   .pos-layout { flex: 1; overflow: hidden; }
   #buscador-pos { min-height: 0; display: flex; }
@@ -152,5 +153,6 @@
   .pos-layout { grid-template-columns: minmax(0, 1fr); }
   .pos-sale { overflow: visible; }
   .cart-list { overflow: visible; }
-  .mobile-cart-link { display: inline-flex; align-self: flex-start; margin: 0; }
+  .mobile-cart-link { display: flex; margin: 0; justify-content: flex-start; }
+  .mobile-cart-link strong { margin-inline-start: auto; font-variant-numeric: tabular-nums; }
 }

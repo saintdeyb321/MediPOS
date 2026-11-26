@@ -21,7 +21,9 @@ function contrast(foreground: string, background: string) {
 describe('WCAG 2.2 semantic color pairs', () => {
   const pairs = [
     ...['surface', 'canvas', 'surface-muted', 'primary-soft'].flatMap(bg => ['text', 'text-muted', 'primary', 'info'].map(fg => [fg, bg])),
-    ['on-primary', 'primary'], ['on-primary', 'primary-hover'],
+    ['on-primary', 'primary'], ['on-primary', 'primary-hover'], ['on-primary', 'nav-bg-end'],
+    ...['nav-bg', 'nav-bg-end', 'nav-active'].flatMap(bg => ['nav-text', 'nav-accent', 'nav-active-text'].map(fg => [fg, bg])),
+    ['accent-text', 'accent'], ['accent-text', 'accent-soft'],
     ['success', 'success-soft'], ['warning', 'warning-soft'], ['error', 'error-soft'], ['info', 'info-soft'],
   ]
   it.each(pairs)('%s on %s meets normal text 4.5:1 without rounding up', (fg, bg) => {

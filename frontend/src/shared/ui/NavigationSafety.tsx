@@ -25,8 +25,8 @@ export function NavigationSafety({ identity, children }: { identity?: string; ch
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [storageKey, location.pathname, location.search, navigationType])
   const active = () => [...registry.entries.values()].some(v => v.busy) || Boolean(document.querySelector('dialog[open] .button[aria-busy="true"]'))
-  const modified = () => [...registry.entries.values()].some(v => v.dirty || v.pending) || hasPending(location.search)
-  const blocker = useBlocker(({ currentLocation, nextLocation, historyAction }) => Boolean(identity) && (currentLocation.pathname !== nextLocation.pathname || historyAction !== 'REPLACE' && hasPending(currentLocation.search) && currentLocation.search !== nextLocation.search) && (active() || modified()))
+  const modified = (search = location.search) => [...registry.entries.values()].some(v => v.dirty || v.pending) || hasPending(search)
+  const blocker = useBlocker(({ currentLocation, nextLocation, historyAction }) => Boolean(identity) && (currentLocation.pathname !== nextLocation.pathname || historyAction !== 'REPLACE' && hasPending(currentLocation.search) && currentLocation.search !== nextLocation.search) && (active() || modified(currentLocation.search)))
   useBeforeUnload(event => { if (active() || modified()) { remember(); event.preventDefault(); event.returnValue = '' } })
   const pending = hasPending(location.search)
   const recovery = read().filter(v => v !== location.pathname + location.search)

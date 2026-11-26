@@ -1,7 +1,7 @@
 import { WorkspaceOutboxSync } from '../../features/offline'
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Outlet, useLocation, useNavigate } from 'react-router'
-import { X } from 'lucide-react'
+import { PanelLeftClose, PanelLeftOpen, X } from 'lucide-react'
 import type { Workspace } from '../../features/access'
 import { IconButton } from '../../shared/ui/Button'
 import { Dialog } from '../../shared/ui/Dialog'
@@ -13,6 +13,7 @@ import './workspace.css'
 
 export function WorkspaceShell({ workspace }: { workspace: Workspace }) {
   const mobile = useRef<HTMLDialogElement>(null)
+  const [collapsed, setCollapsed] = useState(false)
   const navigate = useNavigate()
   const { pathname } = useLocation(); const content = useRef<HTMLElement>(null)
   const relative = pathname.slice(workspace.base.length).replace(/^\//, '')
@@ -23,6 +24,7 @@ export function WorkspaceShell({ workspace }: { workspace: Workspace }) {
     importacion: { label: 'Importar productos', parent: 'productos' },
   }
   const submodule = submodules[relative]
+  const activeSection = relative === 'comisiones' ? relative : submodule?.parent ?? relative
   const module = availableNavigation(workspace.access.role).find(item => item.id === (submodule?.parent ?? relative))
   const parentTo = submodule ? `${workspace.base}/${submodule.parent}` : workspace.base
   const crumbs = [{ label: 'Inicio', to: relative ? workspace.base : undefined }, ...(relative ? [{ label: module?.label ?? 'Módulo', to: submodule ? parentTo : undefined }] : []), ...(submodule ? [{ label: submodule.label }] : [])]
@@ -46,10 +48,14 @@ export function WorkspaceShell({ workspace }: { workspace: Workspace }) {
   return (
     <div className={`app-shell${relative === 'ventas' ? ' app-shell-pos' : ''}`}>
       <a href="#contenido" className="skip-link">Saltar al contenido</a>
-      <aside className="desktop-sidebar"><WorkspaceNavigation workspace={workspace} /></aside>
-      <Dialog dialogRef={mobile} label="Menú de MediPOS" className="mobile-navigation">
+      <aside className={`desktop-sidebar navigation-rail${collapsed ? ' rail-collapsed' : ''}`}>
+        <IconButton className="rail-toggle" label={collapsed ? 'Expandir navegación' : 'Contraer navegación'} title={collapsed ? 'Expandir navegación' : 'Contraer navegación'}
+          aria-expanded={!collapsed} onClick={() => setCollapsed(value => !value)}>{collapsed ? <PanelLeftOpen size={19} /> : <PanelLeftClose size={19} />}</IconButton>
+        <WorkspaceNavigation workspace={workspace} activeSection={activeSection} collapsed={collapsed} />
+      </aside>
+      <Dialog dialogRef={mobile} label="Menú de MediPOS" className="mobile-navigation navigation-rail">
         <IconButton className="close-nav" label="Cerrar navegación" onClick={closeMenu}><X /></IconButton>
-        <WorkspaceNavigation workspace={workspace} onNavigate={closeMenu} />
+        <WorkspaceNavigation workspace={workspace} activeSection={activeSection} onNavigate={closeMenu} />
       </Dialog>
       <div className="workspace">
         <WorkspaceHeader workspace={workspace} openMenu={() => mobile.current?.showModal()} />

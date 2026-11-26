@@ -6,7 +6,7 @@
   "start_url": "/contingencia",
   "scope": "/",
   "display": "standalone",
-  "background_color": "#ffffff",
-  "theme_color": "#067a67",
+  "background_color": "#EAF3FA",
+  "theme_color": "#0B2340",
   "icons": [{ "src": "/favicon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }]
 }

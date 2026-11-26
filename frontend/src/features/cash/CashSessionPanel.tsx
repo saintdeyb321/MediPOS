@@ -23,7 +23,7 @@ export function CashSessionPanel({ cash, compact = false, blocked = false }: { c
       {cash.query.isError && <ApiErrorState error={cash.query.error} title="No pudimos consultar la caja" />}
       {cash.error != null && <ApiErrorState error={cash.error} title="Revisa el resultado de apertura" />}
       {cash.session && cash.uncertain && <Notice tone="warning">Se encontró una caja abierta. Consulta el resultado de la apertura pendiente antes de crear un borrador.</Notice>}
-      {cash.session ? !compact && <p>Monto inicial registrado: S/ {decimalLabel(cash.session.openingAmount, 2)}. Tu caja está abierta en esta sucursal.</p> :
+      {cash.session ? !compact && <dl className="data-summary"><div><dt>Monto inicial registrado</dt><dd>S/ {decimalLabel(cash.session.openingAmount, 2)}</dd></div></dl> :
         cash.uncertain ? <Notice tone="warning">La apertura tiene un resultado pendiente. Consulta la caja; no se enviará otra apertura automáticamente.</Notice> :
           !cash.query.isPending && !cash.query.isError && cash.connected && <Button disabled={cash.pending || blocked} onClick={() => setOpening(true)}>Abrir caja</Button>}
       {!compact && cash.session && <CashAge key={cash.session.cashSessionId} openedAt={cash.session.openedAt} />}

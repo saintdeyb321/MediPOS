@@ -1,3 +1,5 @@
+.catalog-directory-bar { padding: var(--space-3) var(--space-4); border-bottom: 1px solid var(--border); background: var(--surface-muted); border-radius: var(--radius-lg) var(--radius-lg) 0 0; }
+.catalog-directory-bar :is(.page-toolbar,.task-tabs) { margin: 0; }
 .catalog-page > * + * { margin-top: var(--space-6); }
 .catalog-page nav, .catalog-actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-3); }
 .catalog-body { padding: var(--space-6); }
@@ -26,6 +28,8 @@
 .catalog-card-price strong { color: var(--primary); font-size: var(--text-xl); font-variant-numeric: tabular-nums; }
 .catalog-product-card > .button { width: 100%; }
 .catalog-body .task-tabs { margin-top: var(--space-4); }
+.catalog-directory-bar { padding: var(--space-3) var(--space-4); border-bottom: 1px solid var(--border); background: var(--surface-muted); border-radius: var(--radius-lg) var(--radius-lg) 0 0; }
+.catalog-directory-bar :is(.page-toolbar,.task-tabs) { margin: 0; }
 .catalog-page > * + * { margin-top: var(--space-4); }
 .catalog-body { padding: var(--space-4); }
 .catalog-body > * + *, .catalog-body form > * + *, .catalog-body fieldset > * + * { margin-top: var(--space-3); }

@@ -27,8 +27,8 @@ export function CashPage() {
   return <CashWorkspace key={`${w.session.userId}/${w.access.membershipId}/${w.tenantId}/${w.branchId}`} />
 }
 function CashWorkspace() {
-  const w = useWorkspace(); const cash = useCashSession()
-  return <><PageHeader icon={Banknote} title="Arqueos y cajas" description={w.branch.name} /><CashManagement cash={cash} /></>
+  const cash = useCashSession()
+  return <><PageHeader icon={Banknote} title="Arqueos y cajas" description="Abre tu caja, revisa el efectivo y registra el cierre." /><CashManagement cash={cash} /></>
 }
 export function CashManagement({ cash, embedded = false, blocked = false }: { cash: CashController; embedded?: boolean; blocked?: boolean }) {
   const w = useWorkspace(); const { http } = useRuntime()

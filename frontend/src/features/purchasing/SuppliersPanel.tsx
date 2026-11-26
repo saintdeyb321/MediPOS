@@ -55,7 +55,7 @@ export function SuppliersPanel({ selected, select, disabled, onBusyChange, recei
   </>
   return <Panel><div className="operation-body"><div className="operation-actions"><h2>Proveedores</h2><Button variant="secondary" onClick={() => setDirectoryOpen(!directoryOpen)}>{directoryOpen ? 'Ocultar directorio' : 'Elegir proveedor'}</Button>
     {w.access.role === 'owner' && <Button variant="secondary" disabled={disabled || busy || pending || denied} onClick={() => setCreateOpen(true)}>Nuevo proveedor</Button>}</div>
-    <p>Seleccionado: <strong>{selected?.name ?? 'Sin proveedor'}</strong>. Es opcional; registra solo datos documentados.</p>
+    <dl className="data-summary"><div><dt>Proveedor seleccionado</dt><dd>{selected?.name ?? 'Sin proveedor'}</dd></div></dl>
     <div hidden={!directoryOpen && !pending}>{directory}<Button variant="quiet" disabled={disabled || busy} onClick={() => select(null)}>Continuar sin proveedor</Button></div>
     {error != null && <ApiErrorState error={error} title="No pudimos crear el proveedor" />}
     {created && <p role="status">Proveedor creado mediante la API: {created.name}. La lista puede requerir otra página.</p>}
