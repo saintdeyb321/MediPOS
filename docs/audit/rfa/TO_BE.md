@@ -35,8 +35,8 @@ Los números son los sufijos del prefijo UC de cada fila. KEEP conserva el compo
 ### Catálogo · encontrar y mantener un producto
 
 1. Personal operativo busca en su sede; el Owner abre mantenimiento para alta local o asociación global. Comprueba tipo, composición cuando corresponda, presentaciones, estado y precio. Cambia unidades con la versión leída. Una colisión requiere abrir la configuración vigente antes de otra edición.
-2. En mantenimiento, el filtro opera sobre la página recibida. Hoy el operador cambia de página para localizar otra fila. Mantener esa opción salvo que el operador necesite buscar en **todo el catálogo del negocio**. En ese caso consultar el directorio administrativo con texto y página acotados, conservando filtros y alcance al volver; el buscador POS tiene otro surtido y permisos.
-3. Una escritura incierta se recupera con la intención o el recurso original. Un producto publicado globalmente aún requiere asociación local; su publicación no genera precios ni stock. Conservar importación Excel con resultados por fila. Un trabajo interrumpido solo se recupera con la autorización y los bloqueos vigentes. Borrado físico CAT-22 permanece fuera de alcance.
+2. En Mis productos, Owner aplica texto, categoría y estado. El servidor filtra todo el catálogo privado antes de paginar. Cambiar filtros vuelve a la primera página y conserva lista/tarjetas. El buscador POS sigue su propio alcance de sede, surtido y permisos.
+3. Tras un alta incierta, volver al directorio, buscar y contrastar el producto con la intención original conservada en esa sesión del navegador. Tras editar se recupera el mismo ID. Un producto publicado globalmente aún requiere asociación local y el alta no crea stock. Importar Excel conserva la constancia y resultados por fila. Un trabajo interrumpido solo se recupera con la autorización y los bloqueos vigentes. Borrado físico CAT-22 permanece fuera de alcance.
 
 ### Compras e inventario · reencontrar una recepción y seguir el lote
 

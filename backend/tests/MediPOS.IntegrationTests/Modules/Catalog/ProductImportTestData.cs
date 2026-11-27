@@ -12,12 +12,14 @@ namespace MediPOS.IntegrationTests.Modules.Catalog;
 
 internal static class ProductImportTestData
 {
-    internal static Dictionary<string, string> Retail(TenantIsolationTestData.TenantRows tenant, string code) => new(StringComparer.Ordinal)
+    internal static Dictionary<string, string> Retail(TenantIsolationTestData.TenantRows tenant, string code) => Retail(tenant.CategoryId, code);
+
+    internal static Dictionary<string, string> Retail(Guid categoryId, string code) => new(StringComparer.Ordinal)
     {
         ["InternalCode"] = code,
         ["ProductType"] = "retail",
         ["Name"] = "Imported " + code,
-        ["CategoryId"] = tenant.CategoryId.ToString("D"),
+        ["CategoryId"] = categoryId.ToString("D"),
         ["BrandOrLaboratory"] = "Marca",
         ["RetailPrice"] = "2.1250",
         ["BaseUnitName"] = "Unidad",

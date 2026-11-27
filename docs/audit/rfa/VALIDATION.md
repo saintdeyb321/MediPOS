@@ -1,5 +1,64 @@
 # RFA2 · Validación conductual y persistencia
 
+<a id="run-18"></a>
+## RUN-18 · L-06B candidato
+
+Base `5a94de91a17592d5d3739426db8ec08223976758`. RUN-04 caracteriza la falsa ausencia de un producto que estaba en la página 2. El primer RED del candidato falla porque la vista solo ofrecía filtro por página. El GREEN exige un GET filtrado de offset cero, coincidencia, estado/categoría, vacío, limpieza y cero mutaciones. F-007 se reproduce por separado. El RED permite confirmar tras recarga con otra ficha. El GREEN conserva el código original y mantiene bloqueada la escritura hasta revisar el producto correcto.
+
+| Control | Comando / selección | Resultado |
+|---|---|---|
+| Vitest focalizado | En frontend, `npm.cmd run test -- src/features/catalog/ProductsPage.test.tsx src/features/catalog/api.test.ts src/features/catalog/CatalogDirtyState.test.tsx src/features/product-import/ImportPage.test.tsx` | 47 PASS, 0 FAIL, 0 SKIP. E2 con dobles. Reentrada limpia verificada después con un PASS adicional del mismo caso de recuperación. |
+| .NET traducción | Runner xUnit en proceso, `-filterVSTest 'FullyQualifiedName~CatalogDirectorySqlTests'` | 1 PASS. Npgsql traduce el ingrediente, escape literal, ámbito, predicados, orden y página. SQL generado offline. |
+| .NET HTTP | Mismo runner, `-filterVSTest 'FullyQualifiedName~CatalogDirectoryBindsOptionalFiltersAndDiscardsResultsWhenAccessChanges'` | 1 PASS. Loopback temporal con dobles, arreglo compatible, filtros normalizados, seis 400 y 403 al revocar durante la lectura. |
+| Builds y lint | `dotnet build <proyecto UnitTests o E2E> --no-restore -p:BaseOutputPath=obj/b02-bin/ -m:1 --disable-build-servers`. `npm.cmd run build -- --outDir node_modules/.cache/medipos-l06b-build` y ESLint de los cinco archivos TS/TSX modificados. | PASS. Vite mantiene el aviso de chunk mayor de 500 kB. |
+| Reconciliación estática | YAML con PyYAML, comparación contra el workflow del baseline, matriz/fichas y `git diff --check`. | PASS. Controles P0–P4 preservados, START/PASS de P5 obligatorios y 41/41 fichas CAJ/CAT alineadas. |
+| P5 real | [Guía B-02](../../../backend/tests/MediPOS.E2E/README.md) y workflow `b02-browser-pilot.yml` | NOT_RUN, Docker ausente. Exige START y PASS `CATALOG_SEARCH_WRITE_IMPORT` además de P0–P4. |
+
+| UC | Decisión | Evidencia y límite |
+|---|---|---|
+| CAT-01 | KEEP | Lectura operativa por sucursal. P5 exige que Cajero no vea el inactivo. Stock de sede conserva evidencia previa. |
+| CAT-02 | KEEP | Categorías operativas conservan admisión ProductSearch. Sin variante nueva de navegador. |
+| CAT-03 | KEEP | Corrección local revisada y auditada. P5 prepara 409 por versión y referencia global, mismo ID y auditoría. Snapshots históricos mantienen evidencia anterior. |
+| CAT-04 | KEEP | DOM distingue error de categorías y bloquea alta inválida. P5 carga y elige una categoría real. |
+| CAT-05 | KEEP | DOM verifica directorio global vacío y asociación. P5 carga la referencia sintética existente. |
+| CAT-06 | FIX | FR-CAT-010, HTTP E2 y traducción Npgsql offline; P5 prepara ingrediente, literal, inactivos, páginas, roles, dos tenants y RLS efectivo. E3 anterior corresponde al listado sin filtros. |
+| CAT-07 | KEEP | DOM protege ante una respuesta tardía de otra ficha. P5 exige relectura del mismo ID tras edición. |
+| CAT-08 | KEEP | RUN-17 P4 E4 busca por código y elige presentación con stock real. Variantes de ingrediente y disponibilidad conservan sus pruebas anteriores. |
+| CAT-09 | FIX | Alta conserva código y bloqueo tras recarga. DOM exige exactitud y un solo POST. P5 pierde el acuse tras el commit y coteja la única fila. |
+| CAT-10 | KEEP | DOM verifica asociación y vínculo. P5 coteja 201, ID global, auditoría y ausencia de stock. |
+| CAT-11 | KEEP | E2 conserva el literal minorista 1.2345 y el mayorista nulo. P5 coteja 2.5678/1.2345 y auditoría vía HTTP/PostgreSQL. |
+| CAT-12 | KEEP | DOM conserva comportamiento ante 403 de estado. P5 comprueba la desactivación vía HTTP y fila persistida. |
+| CAT-13 | KEEP | DOM usa la versión que abrió el editor. P5 requiere GET autoritativo de configuración. |
+| CAT-14 | KEEP | DOM protege edición y versión tras 409/pérdida. P5 compara persistencia, factor 10.125 y 409 de la revisión vieja. |
+| CAT-15 | KEEP | Ruta legacy fuera del editor. P5 prepara no-op y 409 al intentar un cambio efectivo mediante HTTP. |
+| CAT-16 | KEEP | DOM descarga el archivo sin POST. P5 descarga la plantilla oficial de la API aislada. |
+| CAT-17 | KEEP | DOM conserva constancia y un envío. P5 prepara XLSX real, 22 filas, 1 importada y 21 inválidas. |
+| CAT-18 | KEEP | DOM conserva job y cursor. P5 recupera tras perder el acuse, pagina y verifica 403 cruzado. |
+| CAT-19 | VALIDATE | DOM y fixtures previos preservados. Variante real de recuperación interrumpida BLOCKED por gate de writer drain. |
+| CAT-20 | FIX | RED/GREEN verifica filtro aplicado a todo el catálogo, reset, vacío y compatibilidad de paginación. P5 pendiente. |
+| CAT-21 | FIX | RED/GREEN tras reentrada: otra ficha no habilita la conciliación. El código guardado habilita verificar el original sin repetir el POST. Un alta antigua sin referencia verificable requiere soporte. |
+| CAT-22 | N/A | Desactivar conserva la historia y no se expuso borrado físico. |
+
+La traducción offline y los dobles acotan el candidato local. P5 aún debe demostrar las aserciones contra PostgreSQL real. La aceptación E5 y el gate frontend completo siguen pendientes. Conservar RUN-17 de L-06A por SHA y la falta de atribución en DEV.
+
+<a id="run-17"></a>
+## RUN-17 · Gate de L-06A y entrada de L-06B
+
+[CI B-02 45935935713](https://github.com/saintdeyb321/MediPOS/actions/runs/45935935713), job 140299036413, intento 1, 199 s. El operador confirmó GO y suministró el extracto sanitizado de todos los pasos SUCCESS. SHA `5a94de91a17592d5d3739426db8ec08223976758`, manifiesto `d8375f0dc06b550c21627bf0f60c215e1c43d86088b2ce2d8bb3de8331f86dd0`, PostgreSQL 18.7 (180007), origen HTTPS efímero y `medipos_test_runtime`. P0–P2 PASS, P3 `CASH_HISTORY_AND_RECOVERY` PASS y P4 `POS_PAY_TICKET_VOID` PASS.
+
+| UC | Aserciones acreditadas en el SHA del run |
+|---|---|
+| CAJ-01/08/09 | P4 crea un borrador desde Cobrar, verifica vendedor, caja y versión y reentra a la venta por su ID. Confirma que el mismo ID se vuelve a consultar tras perder el acuse de confirmación. La pérdida del acuse al crear el borrador conserva evidencia anterior. |
+| CAJ-02/03/04 | P1 mantiene apertura por UI y GET 200/open/null, con negativas. P4 abre 10.0001 desde móvil, lee el mismo importe inicial vía GET de caja propia y acredita rechazo de apertura duplicada. |
+| CAJ-05/06/07/16/17 | P3 verifica el arqueo real 100→10 y −90, fila y auditoría únicas, ausencia en Activas, acuse perdido después del commit, un solo cierre desde UI y rechazo de una segunda escritura explícita. Recupera en la URL original tras recarga y por Cierres desde entrada limpia, con el mismo ID. |
+| CAJ-10/14 | P4 busca por código, elige la presentación con teclado y agrega con touch. Comprueba base 10, total 21.25 y 409 con revisión anterior. El vaciado y la protección al salir tienen evidencia DOM de RUN-16. |
+| CAJ-11/18 | P4 cobra 5.0001 en efectivo y 16.2499 en Yape, verifica ambos pagos persistidos y stock 25→15, pierde el acuse después del commit y recupera la venta sin reenviarla. La elección de otro vendedor sigue pendiente. |
+| CAJ-12/15 | P4 recupera el ticket confirmado y luego anulado. La acción de impresión llama una vez a la función del navegador sin escribir y también permite volver sin imprimir. La impresión física queda pendiente. |
+| CAJ-13 | P4 anula y verifica dos reversiones de pagos, retorno de 10 al mismo lote, reversión ligada al movimiento original, caja neta 10.0001 y auditorías por actor. La lectura de la venta desde otro tenant devuelve 403. |
+| CAJ-19 | P3 valida vacío histórico, rango 400, tenant ajeno 403 y acceso al arqueo desde Cierres. P4 acredita cierres propios del Cajero, exclusión de sede no asignada y páginas diferentes para Owner. Pharmacist y demás variantes del calendario siguen pendientes. |
+
+P0–P2 refuerzan las aserciones de RUN-15 de sesión/aislamiento y Sencillo Owner. Los resultados de P3/P4 acreditan L-06A para el alcance ejecutado y habilitan L-06B. Gate integral frontend 645/646, incidente DEV sin atribución, variantes restantes y aceptación del operador preservados.
+
 <a id="run-16"></a>
 ## RUN-16 · L-06A candidato
 

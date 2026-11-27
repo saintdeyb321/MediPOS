@@ -43,6 +43,8 @@ export const businessProduct = object<BusinessProduct>({ ...globalShape, tenantI
 const detail = object<ProductDetail>({ product: businessProduct, units: array(productUnit), revision: text })
 const category = object<Category>({ id: uuid, name: text, isActive: boolean, createdAt: utc })
 const globalProduct = object<GlobalProduct>(globalShape)
+export type CatalogProductFilters = { text: string; categoryId: string; status: 'all' | 'active' | 'inactive' }
+
 function page(offset: number, limit: number) {
   if (!Number.isInteger(offset) || offset < 0 || offset > 10000 || !Number.isInteger(limit) || limit < 1 || limit > 100) throw new RangeError('Invalid catalog page')
   return new URLSearchParams({ offset: String(offset), limit: String(limit) })
@@ -69,8 +71,12 @@ export function catalogApi(http: HttpClient) {
     async operationalCategories(scope: BranchScope, offset = 0, limit = 100, signal?: AbortSignal) {
       return array(category)(await http.request(`${branchPath(scope)}/operational-categories?${page(offset, limit)}`, { signal }))
     },
-    async list(scope: BranchScope, offset = 0, limit = 50, signal?: AbortSignal) {
-      const data = array(businessProduct)(await http.request(`${root(scope)}/products?${page(offset, limit)}`, { signal, exactNumbers: true }))
+    async list(scope: BranchScope, offset = 0, limit = 50, signal?: AbortSignal, filters?: CatalogProductFilters) {
+      const query = page(offset, limit)
+      if (filters?.text.trim()) query.set('q', filters.text.trim())
+      if (filters?.categoryId) query.set('categoryId', uuid(filters.categoryId))
+      if (filters && filters.status !== 'all') query.set('status', filters.status)
+      const data = array(businessProduct)(await http.request(`${root(scope)}/products?${query}`, { signal, exactNumbers: true }))
       return data.map(item => scopedProduct(item, scope))
     },
     async categories(scope: BranchScope, offset = 0, limit = 100, signal?: AbortSignal) {

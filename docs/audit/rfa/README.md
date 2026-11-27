@@ -2,7 +2,7 @@
 
 ## Corte vigente · 26/11/2026
 
-**RFA2 PARCIAL.** 156 UC en nueve familias, con 3 E1, 33 E2, 111 E3 y 9 E4. Veredictos acumulados: 19 PASS, 135 BLOCKED, 1 NOT_RUN y 1 N/A. B-02 está validado para el baseline, con Sencillo Owner y F-001 observados en navegador. El historial agrega UC-CAJ-19. L-06A queda como candidato. Frontend integral sigue en 645/646. [RUN-15](VALIDATION.md#run-15) · [RUN-16](VALIDATION.md#run-16) · [Aceptación por familia](ROADMAP.md#l-06--aceptación-funcional-por-familia).
+**RFA2 PARCIAL.** 156 UC en nueve familias, con 3 E1, 27 E2, 103 E3 y 23 E4. Veredictos acumulados: 19 PASS, 135 BLOCKED, 1 NOT_RUN y 1 N/A. L-06A acredita P0–P4 en su SHA y L-06B queda como candidato con P5 NOT_RUN. Frontend integral sigue en 645/646. [RUN-17](VALIDATION.md#run-17) · [RUN-18](VALIDATION.md#run-18) · [Aceptación por familia](ROADMAP.md#l-06--aceptación-funcional-por-familia).
 
 **RFA3 COMPLETA para revisión documental.** [Recorridos y decisión principal de cada UC](TO_BE.md) · [Lotes y criterios de aceptación](ROADMAP.md) · [Seis hallazgos](FINDINGS.md) · [Próxima acción](CHECKPOINT.md). Solo L-01 tiene recomendación inicial de corrección condicionada. El operador conserva la aprobación por lote. Producción NO-GO.
 

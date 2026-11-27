@@ -10,8 +10,9 @@
 .catalog-table { overflow-x: auto; }
 .catalog-directory { container-type: inline-size; }
 .catalog-directory .page-toolbar, .catalog-directory .page-toolbar-fields { gap: var(--space-2) var(--space-3); align-items: end; }
-.catalog-directory .page-toolbar-fields > label { display: grid; flex: 0 1 7rem; gap: var(--space-1); min-inline-size: 5.5rem; }
-.catalog-directory .page-toolbar-fields > .form-field { flex: 1 1 13rem; min-inline-size: min(100%, 11rem); }
+.catalog-filters { display: flex; flex: 1 1 26rem; flex-wrap: wrap; gap: var(--space-2) var(--space-3); align-items: end; min-inline-size: 0; }
+.catalog-filters > label { display: grid; flex: 0 1 7rem; gap: var(--space-1); min-inline-size: 5.5rem; }
+.catalog-filters > .form-field { flex: 1 1 13rem; min-inline-size: min(100%, 11rem); }
 .catalog-directory .page-toolbar-fields > .segmented-control { inline-size: auto; flex-shrink: 0; }
 .catalog-directory .page-toolbar-fields select { margin-block-start: 0; }
 .catalog-directory .catalog-table :is(th, td).catalog-price { text-align: end; font-variant-numeric: tabular-nums; }
@@ -29,8 +30,8 @@
   .catalog-directory .page-toolbar-fields { flex-wrap: nowrap; }
 }
 @container (max-width: 38rem) {
-  .catalog-directory .page-toolbar-fields > .form-field { flex-basis: 100%; }
-  .catalog-directory .page-toolbar-fields > label { flex: 1 1 5.5rem; }
+  .catalog-filters > .form-field { flex-basis: 100%; }
+  .catalog-filters > label { flex: 1 1 5.5rem; }
   .catalog-directory .catalog-import-direct { display: none; }
   .catalog-import-menu { display: block; }
   .business-product-table .catalog-extra { display: none; }

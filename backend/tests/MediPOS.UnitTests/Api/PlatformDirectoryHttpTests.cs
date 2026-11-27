@@ -345,7 +345,7 @@ public sealed class PlatformDirectoryHttpTests
         public Task<IReadOnlyList<CategoryDetails>> CategoriesAsync(int offset, int limit, CancellationToken token)
         { Assert.Equal(0, offset); Limit = limit; return Task.FromResult<IReadOnlyList<CategoryDetails>>([new(Guid.NewGuid(), "Synthetic category", true, DateTimeOffset.UtcNow)]); }
         public Task<IReadOnlyList<GlobalProductDetails>> GlobalProductsAsync(int offset, int limit, CancellationToken token) => throw new InvalidOperationException("Not a product directory.");
-        public Task<IReadOnlyList<BusinessProductDetails>> ProductsAsync(Guid tenantId, int offset, int limit, CancellationToken token) => throw new InvalidOperationException("No tenant access.");
+        public Task<IReadOnlyList<BusinessProductDetails>> ProductsAsync(Guid tenantId, int offset, int limit, CancellationToken token, CatalogProductFilters? filters = null) => throw new InvalidOperationException("No tenant access.");
         public Task<CatalogProductView?> ProductAsync(Guid tenantId, Guid productId, CancellationToken token) => throw new InvalidOperationException("No tenant access.");
     }
 }

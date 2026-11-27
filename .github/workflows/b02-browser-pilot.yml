@@ -59,7 +59,7 @@ jobs:
           dotnet restore tests/MediPOS.E2E/MediPOS.E2E.csproj --locked-mode
           dotnet build tests/MediPOS.E2E/MediPOS.E2E.csproj --no-restore
           pwsh tests/MediPOS.E2E/bin/Debug/net10.0/playwright.ps1 install --with-deps chromium
-      - name: Run preflight and P0–P3
+      - name: Run preflight and P0–P5
         working-directory: backend
         run: |
           export MEDIPOS_E2E_SHA="$GITHUB_SHA"
@@ -71,10 +71,11 @@ jobs:
           awk '
             match($0, /B02 SHA [a-fA-F0-9]{40} BUILD [a-f0-9]{64}$/) ||
             match($0, /B02 POSTGRES 18[0-9]{4} ORIGIN https:\/\/localhost:[0-9]{1,5} ROLE medipos_test_runtime$/) ||
-            match($0, /B02 P[0-4] START$/) ||
+            match($0, /B02 P[0-5] START$/) ||
             match($0, /B02 P[0-2] PASS$/) ||
             match($0, /B02 P3 PASS CASH_HISTORY_AND_RECOVERY$/) ||
-            match($0, /B02 P4 PASS POS_PAY_TICKET_VOID$/) { print substr($0, RSTART, RLENGTH) }
+            match($0, /B02 P4 PASS POS_PAY_TICKET_VOID$/) ||
+            match($0, /B02 P5 PASS CATALOG_SEARCH_WRITE_IMPORT$/) { print substr($0, RSTART, RLENGTH) }
           ' "$report" | tee -a "$GITHUB_STEP_SUMMARY"
           if [[ "$code" -ne 0 ]]; then
             printf '%s\n' 'B-02 failed or was incomplete. Unreported phases are unverified.' | tee -a "$GITHUB_STEP_SUMMARY"
@@ -87,3 +88,5 @@ jobs:
           done
           grep -Fxq 'B02 P3 PASS CASH_HISTORY_AND_RECOVERY' "$GITHUB_STEP_SUMMARY"
           grep -Fxq 'B02 P4 PASS POS_PAY_TICKET_VOID' "$GITHUB_STEP_SUMMARY"
+          grep -Fxq 'B02 P5 START' "$GITHUB_STEP_SUMMARY"
+          grep -Fxq 'B02 P5 PASS CATALOG_SEARCH_WRITE_IMPORT' "$GITHUB_STEP_SUMMARY"

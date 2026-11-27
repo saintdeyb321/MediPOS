@@ -1,10 +1,16 @@
 # Checkpoint RFA
 
-## RFA4 · L-06A
+## RFA4 · L-06B
+
+- Gate de entrada satisfecho con GO explícito, resumen sanitizado y HEAD `5a94de91a17592d5d3739426db8ec08223976758`. [RUN-17](VALIDATION.md#run-17) concilia P0–P4 por UC. L-06A acreditado para el recorrido ejecutado. Frontend integral y DEV siguen pendientes.
+- **L-06B_CANDIDATO.** Filtros de texto, categoría y estado en servidor antes de paginar, recuperación de alta con el código original y P5 preparado. [RUN-18](VALIDATION.md#run-18) registra los 22 UC, F-003/F-007, verificaciones y variantes pendientes.
+- Siguiente acción del operador: revisar y publicar en `ci/postgres-diagnostics-8bc6b4c`. Conciliar P0–P5 del mismo SHA, con `B02 P5 START` y `B02 P5 PASS CATALOG_SEARCH_WRITE_IMPORT`. No iniciar L-06C sin revisión. El gate frontend 645/646, E5 y DEV permanecen independientes. Producción NO-GO.
+
+## RFA4 · L-06A · corte local anterior a RUN-17
 
 - Base `c26ee5090ebbc2d48a27bb25b8817554f6ec7adf`. [RUN-15](VALIDATION.md#run-15) reconcilia el CI B-02 45933239638 P0–P3 con PostgreSQL 18.7 y navegador real. L-01 acreditado para Owner. F-001 demuestra brecha de entrada limpia y persistencia por ID. DEV sigue sin atribución.
 - **L-06A_CANDIDATO.** GET y pestaña Cierres (nuevo UC-CAJ-19), protección del borrador vaciado y pilotos P3/P4. [RUN-16](VALIDATION.md#run-16) incluye tabla de 19 UC, RED/GREEN, pruebas focalizadas y alcance pendiente. P3/P4 del candidato están NOT_RUN por Docker ausente. RFA2 parcial y gate frontend 645/646.
-- Acción exacta del operador: revisar y publicar en `ci/postgres-diagnostics-8bc6b4c` con los cambios del arnés. El push debe ejecutar B-02 en el SHA del candidato. Conciliar marcadores nuevos de P3/P4, ejecutar el gate completo cuando se acuerde y decidir apertura de L-06B. Producción NO-GO.
+- El operador publicó la revisión de L-06A y suministró el resultado saneado de P0–P4. La entrada de L-06B y las variantes pendientes quedan registradas en RUN-17.
 
 ## RFA4 · B-02
 

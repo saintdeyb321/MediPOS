@@ -191,7 +191,7 @@ Fuente [navigation.ts](../../../frontend/src/app/navigation.ts#L7-L19). Visibili
 - [UC-CAJ-16](flows/01-caja-pos.md#uc-caj-16) · Recuperar cierre incierto
 - [UC-CAJ-17](flows/01-caja-pos.md#uc-caj-17) · Relocalizar caja cerrada tras recarga
 - [UC-CAJ-18](flows/01-caja-pos.md#uc-caj-18) · Elegir vendedor y preparar cobro mixto
-- [UC-CAT-20](flows/02-catalogo.md#uc-cat-20) · Cambiar vista y filtrar página de catálogo
+- [UC-CAT-20](flows/02-catalogo.md#uc-cat-20) · Cambiar vista y aplicar filtros sobre Mis productos
 - [UC-CAT-21](flows/02-catalogo.md#uc-cat-21) · Recuperar escritura de producto
 - [UC-CAT-22](flows/02-catalogo.md#uc-cat-22) · Borrado físico de producto
 - [UC-COM-13](flows/03-compras-inventario.md#uc-com-13) · Editar recepción local y volver

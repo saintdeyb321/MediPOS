@@ -25,7 +25,7 @@ Baseline `5d38898`. Los lotes son propuestas. La columna de decisión de los [15
 
 ## L-02 · Caja (UC-CAJ-02–07/16/17)
 
-**L-06A_CANDIDATO.** Autorizado e implementado el historial aditivo de la sede con alcance por membresía y FR-CASH-006. UC-CAJ-19 identifica ese GET nuevo. P3 del candidato exige reentrada por Cierres y recuperación tras perder el acuse. [RUN-15](VALIDATION.md#run-15) preserva la brecha del baseline.
+**L-06A acreditado para el recorrido de RUN-17.** P3 verifica reentrada por Cierres y recuperación tras perder el acuse. P4 añade negativas por sede, cierres propios de Cajero y paginación Owner. [RUN-17](VALIDATION.md#run-17) delimita las variantes restantes. [RUN-15](VALIDATION.md#run-15) preserva la brecha del baseline.
 
 **Primero evidencia.** Con apertura 100 y contado 10 sin movimientos, verificar acuse, fila cerrada (100, 10, −90), auditoría única, salida de activas, lectura de arqueo por ID y reentrada con y sin URL. Revocar acceso y cambiar de sede para comprobar denegación. Tras POST confirmado y GET 404/503 no debe enviarse otro cierre; GET closed seguido de error de detalle permite reconsultar solo el arqueo.
 
@@ -34,7 +34,7 @@ Baseline `5d38898`. Los lotes son propuestas. La columna de decisión de los [15
 ## L-03 · Descubrimiento (UC-COM-09/12/13/14, UC-CAT-06/20)
 
 - **Compras.** Si una compra sin referencia debe encontrarse desde una entrada limpia, aprobar listado acotado por tenant, sede, permiso, estado y periodo. `PurchaseLookup`, `PurchasingStore`, lectores de compra y contrato de directorio. Contrastar dos compras con igual referencia, una sin referencia, paginación, permisos revocados y otro tenant. Elegir una fila abre el ID existente. Recuperar escritura sigue usando la clave original; la búsqueda nunca identifica una intención por nombre/documento.
-- **Catálogo.** Si se aprueba buscar en todo mantenimiento, ampliar el lector paginado de `CatalogDirectoryReader` y consumidores en `ProductsPage` con filtro opcional aplicado antes de paginar. Verificar el producto que está en la segunda página, conteos coherentes, inactivos según rol y exclusión de productos ajenos. Mantener búsqueda operativa de POS y contrato anterior sin filtro. Si se prefiere la página actual, conservar su etiqueta y cerrar con RUN-04. No trasladar precios, stock ni datos globales.
+- **Catálogo.** El operador autorizó la búsqueda en todo Mis productos. L-06B implementa filtros previos a paginar con respuesta compatible y conserva la búsqueda POS. P5 y recuperación quedan en [RUN-18](VALIDATION.md#run-18).
 - **Entrega reversible.** Lecturas optativas y UI después. Volver al consumidor anterior sin modificar filas. Cualquier índice/migración exigiría medición, plan SQL y aprobación propios.
 
 ## L-04 · Inventario (UC-COM-01/03/04)
@@ -53,8 +53,8 @@ La [matriz](MATRIX.csv) y el [TO-BE](TO_BE.md) definen el inventario y sus decis
 
 | Corte | Casos | Recorrido y criterio de aceptación | Dependencia o decisión |
 |---|---|---|---|
-| **L-06A · Caja/POS** | UC-CAJ-01–19 (19) | Cajero abre, recupera borrador, elige presentación, cobra mixto, imprime ticket, anula y arquea. Conciliar stock, efectivo, diferencias y auditoría. Salir con borrador intacto, editado o vaciado y recuperar sin duplicar escrituras. | Candidato local. L-02 incorporado, P3/P4 y aceptación pendientes. |
-| **L-06B · Catálogo** | UC-CAT-01–22 (22) | Owner da de alta/asocia, edita precio, estado y unidades versionadas. Personal busca dentro de su alcance. Importar con resultados parciales y recuperar intención/trabajo. El alta no crea stock. | Si se aprueba búsqueda ampliada de mantenimiento, verificar su variante L-03 aquí. |
+| **L-06A · Caja/POS** | UC-CAJ-01–19 (19) | Apertura, borrador, pagos mixtos, ticket, anulación y arqueo. Pérdida de acuse, reentrada y efectos persistidos. | B-02 P0–P4 PASS en RUN-17. Variantes y E5 pendientes. |
+| **L-06B · Catálogo** | UC-CAT-01–22 (22) | Filtrar, dar de alta/asociar, editar precio, estado y unidades versionadas. Importar parcialmente y recuperar la intención original. | L-06B_CANDIDATO, L-03 Catálogo incorporado. P5 y E5 pendientes. |
 | **L-06C · Compras e inventario** | UC-COM-01–15 (15) | Owner/Pharmacist autorizado elige proveedor, prepara recepción, revisa, confirma y vuelve a ella. Si otro editor cambia líneas, un POST con versión revisada retorna conflicto y preserva borrador y stock. Confirmación válida genera lotes, saldos, caducidad y movimientos exactos. | Incorporar descubrimiento L-03 si se aprueba. Medir coste de nombres según L-04 antes de proponer cambios. Incluir el caso CI identificado en RUN-13. |
 | **L-06D · Transferencias** | UC-TRA-01–13 (13) | Owner/roles habilitados prueban Sencillo y mercadería por estado. Comprobar solicitud, aprobación, despacho, recepción completa/parcial según contrato, cancelación permitida, concurrencia, origen/destino y constancia original. | RUN-15 acredita Sencillo con Owner. Variantes pendientes según matriz. |
 | **L-06E · Reportes y comisiones** | UC-REP-01–17 (17) | Owner filtra y contrasta pantalla/exportación con ventas, anulaciones y ledger. Cambiar regla y comprobar que la reversión compensa el importe original. Reposición según contrato interno. | Reutilizar datos conciliados de A/C/D. |
@@ -65,7 +65,7 @@ La [matriz](MATRIX.csv) y el [TO-BE](TO_BE.md) definen el inventario y sus decis
 
 ### Habilitador común B-02
 
-**Habilitador validado para P0–P3 del baseline.** [RUN-15](VALIDATION.md#run-15) · [Guía del arnés](../../../backend/tests/MediPOS.E2E/README.md). La ampliación P3/P4 de L-06A queda pendiente de ejecución en el SHA del candidato. Cada lote conserva su aprobación individual.
+**Habilitador validado para P0–P4 de L-06A.** [RUN-17](VALIDATION.md#run-17) · [Guía del arnés](../../../backend/tests/MediPOS.E2E/README.md). P5 queda pendiente en el SHA de L-06B. Cada lote conserva su aprobación individual.
 
 Solicitar una sola aprobación para preparar y reutilizar navegador, API y PostgreSQL efímero con autenticación sintética. El preflight debe acreditar SHA/build, identidad del contenedor/BD, roles mínimos con RLS, sesiones de prueba y dos tenants/sedes. Usar puertos y perfil exclusivos, impedir conexión a DEV o producción y tráfico hacia OAuth, CPE u otros servicios reales. Limitar la purga a una prueba sintética específicamente autorizada. Registrar alcance y evidencias saneadas y limpiar solo recursos del fixture. Reutilizar la misma composición para los nueve cortes; su diseño e implementación requieren un encargo propio.
 
@@ -73,4 +73,4 @@ Solicitar una sola aprobación para preparar y reutilizar navegador, API y Postg
 
 Conciliar los 156 UC vigentes y cualquier caso nuevo justificado con decisión, implementación aprobada cuando aplique, prueba acorde al riesgo y pendientes explícitos. Exigir E4 para recorridos críticos y E5 para aceptación del operador. Nombrar el SHA y build verificados. Producción permanece NO-GO mientras falle un gate requerido, exista un P0/P1 de release abierto o haya datos sin conciliar.
 
-**Siguiente paso.** Revisar el diff de L-06A y ejecutar B-02 para el SHA exacto del candidato. Incorporar solo la evidencia de las aserciones observadas, conservar el gate frontend independiente y esperar la autorización del siguiente lote.
+**Siguiente paso.** El operador revisa y publica L-06B en la rama diagnóstica. El push del arnés activa B-02. Importar P0–P5 del SHA exacto, incluyendo `CATALOG_SEARCH_WRITE_IMPORT`, antes de decidir si se abre L-06C. El gate frontend sigue independiente.

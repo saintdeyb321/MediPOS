@@ -170,7 +170,7 @@ public sealed partial class CashPilotTests
         await response.DisposeAsync();
     }
 
-    private static async Task<Func<int>> LosePostAfterCommitAsync(IPage page, string endpoint, ILocator button, Action<JsonElement> check)
+    private static async Task<Func<int>> LosePostAfterCommitAsync(IPage page, string endpoint, ILocator button, Action<JsonElement> check, int status = 200)
     {
         var completed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var posts = 0;
@@ -183,7 +183,7 @@ public sealed partial class CashPilotTests
                 var response = await route.FetchAsync(new() { MaxRedirects = 0 });
                 try
                 {
-                    Assert.Equal(200, response.Status);
+                    Assert.Equal(status, response.Status);
                     check((await response.JsonAsync())!.Value);
                     completed.SetResult();
                 }

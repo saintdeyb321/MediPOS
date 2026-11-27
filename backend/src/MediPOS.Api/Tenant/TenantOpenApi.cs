@@ -1,5 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using System.Text.Json;
+using MediPOS.Application.Modules.Catalog;
 using MediPOS.Application.Modules.Reporting.Operational;
 using Microsoft.AspNetCore.OpenApi;
 using Microsoft.OpenApi;
@@ -65,6 +66,8 @@ public static class TenantOpenApi
                             Maximum = Convert.ToString(range.Maximum, System.Globalization.CultureInfo.InvariantCulture)
                         };
                     }
+                    if (property.GetCustomAttributes(typeof(MaxLengthAttribute), true).OfType<MaxLengthAttribute>().SingleOrDefault() is { } length)
+                        schema = new OpenApiSchema { Type = JsonSchemaType.String, MaxLength = length.Length };
                     operation.Parameters.Add(new OpenApiParameter
                     {
                         Name = JsonNamingPolicy.CamelCase.ConvertName(property.Name),
@@ -97,6 +100,12 @@ public static class TenantOpenApi
     }
 
     public class Page { [Range(0, 10000)] public int? Offset { get; init; } [Range(1, 100)] public int? Limit { get; init; } }
+    public sealed class CatalogProducts : Page
+    {
+        [MaxLength(CatalogProductFilters.MaximumTextLength)] public string? Q { get; init; }
+        public Guid? CategoryId { get; init; }
+        public CatalogProductStatus? Status { get; init; }
+    }
     public sealed class MyTenants { public Guid? AfterTenantId { get; init; } [Range(1, 100)] public int? Limit { get; init; } }
     public sealed class Branch { public Guid? BranchId { get; init; } }
     public sealed class Search { [Required] public string Q { get; init; } = ""; [Range(1, 50)] public int? Limit { get; init; } }

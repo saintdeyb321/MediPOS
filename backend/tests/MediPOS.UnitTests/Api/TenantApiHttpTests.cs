@@ -2,6 +2,7 @@ using System.Net;
 using System.Text;
 using System.Text.Json;
 using MediPOS.Api.Tenant;
+using MediPOS.Application.Modules.Catalog;
 using MediPOS.Domain.Modules.AuditSupport;
 using MediPOS.Domain.Modules.Branches;
 using MediPOS.Domain.Modules.IdentityAccess;
@@ -196,6 +197,30 @@ public sealed class TenantApiHttpTests
         if (defect == "origin") { request.Headers.Remove("Origin"); request.Headers.Add("Origin", "https://foreign.test"); }
         if (defect == "host") request.Headers.Host = "foreign.test";
         using var response = await host.Client.SendAsync(request, Token); await Problem(response, status, code); Assert.Empty(state.Entities);
+    }
+
+    [Fact]
+    public async Task CatalogDirectoryBindsOptionalFiltersAndDiscardsResultsWhenAccessChanges()
+    {
+        var state = new TenantHttpTestState();
+        await using var host = await Host(state);
+        await PlatformLicenseHttpTests.Login(host);
+        var path = $"/api/tenants/{state.TenantId:D}/products";
+        using (var legacy = await Json(host, "GET", path))
+            Assert.Equal(JsonValueKind.Array, legacy.RootElement.ValueKind);
+        Assert.Equal(new CatalogProductFilters(), state.LastProductFilters);
+        var category = Guid.NewGuid();
+        foreach (var invalid in new[] { "status=1", "status=active&status=inactive", "categoryId=bad", "offset=10001", "limit=101", "q=" + new string('x', 129) })
+        {
+            using var invalidResponse = await Send(host, "GET", path + "?" + invalid);
+            Assert.Equal(HttpStatusCode.BadRequest, invalidResponse.StatusCode);
+        }
+        Assert.Equal(new CatalogProductFilters(), state.LastProductFilters);
+        state.AfterPrivateRead = () => state.Member!.Deactivate(DateTimeOffset.UtcNow);
+        using var revoked = await Send(host, "GET", path + $"?q=%20literal%25%5F%20&categoryId={category:D}&status=inactive");
+        await Problem(revoked, 403, "access.membership_inactive");
+        Assert.Equal(new CatalogProductFilters("literal%_", category, CatalogProductStatus.Inactive), state.LastProductFilters);
+        Assert.Empty(state.Audits);
     }
 
     [Fact]

@@ -30,8 +30,13 @@ public static partial class TenantEndpoints
             .Produces<IReadOnlyList<CategoryDetails>>().WithName("tenant.categories.list").WithQuery<TenantOpenApi.Page>();
         tenants.MapGet("/global-products", async (HttpContext c, CatalogDirectoryQueries queries) => TenantHttp.Response((await queries.GlobalProductsAsync(TenantHttp.Tenant(c), TenantHttp.Offset(c), TenantHttp.Limit(c), c.RequestAborted)).Select(GlobalProductResponse.From).ToArray()))
             .Produces<GlobalProductResponse[]>().WithName("tenant.global_products.list").WithQuery<TenantOpenApi.Page>();
-        tenants.MapGet("/products", async (HttpContext c, CatalogDirectoryQueries queries) => TenantHttp.Response((await queries.ProductsAsync(TenantHttp.Tenant(c), TenantHttp.Offset(c), TenantHttp.Limit(c), c.RequestAborted)).Select(ProductResponse.From).ToArray()))
-            .Produces<ProductResponse[]>().WithName("tenant.products.list").WithQuery<TenantOpenApi.Page>();
+        tenants.MapGet("/products", async (HttpContext c, CatalogDirectoryQueries queries) =>
+        {
+            var filters = new CatalogProductFilters(TenantHttp.Query(c, "q") ?? "", TenantHttp.OptionalId(c, "categoryId"),
+                TenantHttp.Choice(c, "status", CatalogProductStatus.All));
+            var products = await queries.ProductsAsync(TenantHttp.Tenant(c), TenantHttp.Offset(c), TenantHttp.Limit(c), c.RequestAborted, filters);
+            return TenantHttp.Response(products.Select(ProductResponse.From).ToArray());
+        }).Produces<ProductResponse[]>().WithName("tenant.products.list").WithQuery<TenantOpenApi.CatalogProducts>();
         tenants.MapGet("/branches/{branchId}/products/{productId}", async (HttpContext c, CatalogDirectoryQueries queries) =>
         {
             var result = await queries.ProductAsync(TenantHttp.Tenant(c), TenantHttp.Branch(c), TenantHttp.Id(c, "productId"), c.RequestAborted);

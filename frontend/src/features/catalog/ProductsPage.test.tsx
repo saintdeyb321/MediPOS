@@ -1,5 +1,5 @@
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
-import { expect, it, vi } from 'vitest'
+import { beforeEach, expect, it, vi } from 'vitest'
 import { MemoryRouter, useLocation } from 'react-router'
 import { RuntimeProvider } from '../../app/providers/runtime'
 import { WorkspaceContext } from '../access'
@@ -12,6 +12,7 @@ import { ProductsPage } from './ProductsPage'
 import type { BusinessProduct, GlobalProduct, LocalProductInput, PricesInput, ProductUnit, UnitChange } from './api'
 
 // Synthetic transport/component data only. No PostgreSQL, OIDC or commercial operation is executed here.
+beforeEach(() => sessionStorage.clear())
 const id = (value: string) => `019a0162-0000-7000-8000-${value.padStart(12, '0')}`
 const n = (value: string) => new JsonNumber(value)
 const tenantId = id('2'); const branchId = id('5'); const timestamp = '2026-10-16T12:00:00Z'
@@ -33,8 +34,13 @@ function server() {
     if (path.includes('/global-products?')) return json(state.globals)
     if (path.includes('/products?')) {
       if (state.failList) return json({ code: 'server.unavailable' }, 503)
-      const offset = Number(new URL(path, 'https://unit.test').searchParams.get('offset'))
-      return json(state.products.slice(offset, offset + 50))
+      const params = new URL(path, 'https://unit.test').searchParams
+      const offset = Number(params.get('offset')); const limit = Number(params.get('limit'))
+      const q = params.get('q')?.toLowerCase(); const category = params.get('categoryId'); const status = params.get('status')
+      return json(state.products.filter(row => (!category || row.categoryId === category) &&
+        (!status || status === 'all' || row.isActive === (status === 'active')) &&
+        (!q || [row.name, row.internalCode, row.brandOrLaboratory, ...(row.medicine?.activeIngredients ?? [])].some(field => field.toLowerCase().includes(q))))
+        .slice(offset, offset + limit))
     }
     if (method === 'POST' && path.endsWith('/products/local')) {
       const data = parseExactJson(String(init?.body)) as LocalProductInput
@@ -135,6 +141,32 @@ it('paginates with backend offset/limit and preserves true empty pages', async (
   expect(screen.queryByRole('button', { name: 'Ver Fila unitaria 0' })).not.toBeInTheDocument()
   expect(fake.fetcher.mock.calls.some(([path]) => String(path).includes('/products?offset=50&limit=50'))).toBe(true)
 })
+it('finds products beyond the original page, combines server filters and resets pagination', async () => {
+  const fake = server()
+  fake.state.products = Array.from({ length: 51 }, (_, index) => ({ ...record, id: id(String(100 + index)), name: `Fila unitaria ${index}` }))
+  fake.state.products[50] = { ...fake.state.products[50]!, brandOrLaboratory: 'Marca %_ especial', isActive: false }
+  mount(fake)
+  await screen.findByRole('button', { name: 'Ver Fila unitaria 0' })
+  expect(screen.queryByRole('button', { name: 'Ver Fila unitaria 50' })).not.toBeInTheDocument()
+  fireEvent.click(screen.getByRole('button', { name: 'Página siguiente' }))
+  await screen.findByRole('button', { name: 'Ver Fila unitaria 50' })
+  const reads = () => fake.fetcher.mock.calls.map(([path]) => String(path)).filter(path => path.includes('/products?'))
+  const count = reads().length
+  fireEvent.change(screen.getByRole('searchbox', { name: 'Buscar en mis productos' }), { target: { value: '%_' } })
+  fireEvent.change(screen.getByRole('combobox', { name: 'Categoría' }), { target: { value: id('8') } })
+  fireEvent.change(screen.getByRole('combobox', { name: 'Estado' }), { target: { value: 'inactive' } })
+  expect(reads()).toHaveLength(count)
+  fireEvent.click(screen.getByRole('button', { name: 'Aplicar filtros' }))
+  await waitFor(() => expect(reads().at(-1)).toContain(`offset=0&limit=50&q=%25_&categoryId=${id('8')}&status=inactive`))
+  await screen.findByRole('button', { name: 'Ver Fila unitaria 50' })
+  expect(screen.queryByRole('navigation', { name: 'Paginación' })).not.toBeInTheDocument()
+  fireEvent.change(screen.getByRole('combobox', { name: 'Estado' }), { target: { value: 'active' } })
+  fireEvent.click(screen.getByRole('button', { name: 'Aplicar filtros' }))
+  await screen.findByText('Sin coincidencias en mis productos')
+  fireEvent.click(screen.getByRole('button', { name: 'Limpiar filtros' }))
+  await screen.findByRole('button', { name: 'Ver Fila unitaria 0' })
+  expect(fake.writes()).toHaveLength(0)
+})
 it('creates a local general product only after review, serializes exact prices and refreshes the selected product once', async () => {
   const fake = server(); mount(fake); const form = await fillLocal()
   const button = form.getByRole('button', { name: 'Guardar producto' })
@@ -188,9 +220,23 @@ it('retains uncertain creation across reload and never resends it automatically'
   await screen.findByText('No pudimos completar la operación de catálogo')
   const search = screen.getByTestId('location').textContent!
   expect(search).toContain('catalogPending=create')
-  view.unmount(); mount(fake, search)
+  view.unmount(); mount(fake)
   expect(screen.getByRole('button', { name: 'Nuevo producto' })).toBeDisabled()
   showList(); await screen.findByRole('button', { name: 'Ver Nuevo producto unitario' })
+  const reconcile = async (name: string, code: string) => {
+    fireEvent.click(screen.getByRole('button', { name: 'Ver ' + name }))
+    fireEvent.click(screen.getByRole('button', { name: 'Cerrar Detalle del producto' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Consultar producto de la operación' }))
+    await screen.findAllByText(new RegExp('Producto consultado: ' + name))
+    fireEvent.change(screen.getByRole('textbox', { name: 'Código interno de la solicitud original' }), { target: { value: code } })
+    fireEvent.click(screen.getByRole('checkbox', { name: /Verifiqué el código/ }))
+    return screen.getByRole('button', { name: 'Continuar tras conciliación verificada' })
+  }
+  expect(await reconcile('Producto unitario', 'UNIT')).toBeDisabled()
+  const original = await reconcile('Nuevo producto unitario', 'UNIT-NEW')
+  expect(original).toBeEnabled()
+  fireEvent.click(original)
+  await waitFor(() => expect(screen.getByRole('button', { name: 'Nuevo producto' })).toBeEnabled())
   expect(fake.writes()).toHaveLength(1)
 })
 it('updates prices and status through their official endpoints, refetching actual detail', async () => {

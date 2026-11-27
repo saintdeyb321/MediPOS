@@ -39,6 +39,7 @@ const messages: Record<string, string> = {
   'branch.limit_reached': 'La botica ya alcanzó el cupo de sucursales de su licencia.',
   'access.branch_required': 'El acceso a esta botica se comprueba al elegir una sucursal asignada.',
   'client.purchase_recovery_storage_unavailable': 'Habilita el almacenamiento de este sitio en el navegador para poder recuperar el alta si se pierde la respuesta.',
+  'client.catalog_recovery_storage_unavailable': 'Habilita el almacenamiento de este sitio en el navegador para poder recuperar este producto si se pierde la respuesta.',
   'client.transfer_recovery_storage_unavailable': 'Habilita el almacenamiento de este sitio en el navegador para poder recuperar la solicitud si se pierde la respuesta.',
   'client.invalid_sale_id': 'El identificador del borrador no es válido. Usa su dirección guardada o recupera el identificador correcto.',
   'cash_session.already_open': 'Ya tienes una caja abierta en esta sucursal. Consulta su estado antes de continuar.',

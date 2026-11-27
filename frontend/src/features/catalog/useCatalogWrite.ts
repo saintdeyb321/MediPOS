@@ -12,19 +12,27 @@ type Kind = 'create' | 'global' | 'prices' | 'status' | 'units' | 'metadata'
 export function useCatalogWrite(select: (id: string) => void, onConfirmed?: (detail: ProductDetail) => void) {
   const w = useWorkspace(); const { http } = useRuntime(); const client = useQueryClient()
   const [parameters, setParameters] = useSearchParams(); const latest = useRef(parameters)
-  const [expected, setExpected] = useState<{ id?: string; code?: string }>(() => ({ id: parameters.get('catalogProduct') ?? undefined }))
+  const creationKey = `medipos-catalog-creation/${w.session.userId}/${w.tenantId}/${w.branchId}/${w.access.membershipId}`
+  const [originalCode, setOriginalCode] = useState(() => {
+    try { return sessionStorage.getItem(creationKey) } catch { return null }
+  })
+  const [expectedId, setExpectedId] = useState(() => parameters.get('catalogProduct'))
   useEffect(() => { latest.current = parameters }, [parameters])
   const [busy, setBusy] = useState(false); const running = useRef(false); const [denied, setDenied] = useState(false)
   const [error, setError] = useState<unknown>(null); const [notice, setNotice] = useState('')
   const [observed, setObserved] = useState<ProductDetail | null>(null)
   const controller = useRef<AbortController | null>(null); const mounted = useRef(true)
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; controller.current?.abort() } }, [])
-  const pending = parameters.has('catalogPending')
+  const pending = parameters.has('catalogPending') || originalCode !== null
   function mark(kind: Kind | null, id?: string) {
     const next = new URLSearchParams(latest.current)
     if (kind) next.set('catalogPending', kind); else { next.delete('catalogPending'); next.delete('catalogProduct') }
     if (id) next.set('catalogProduct', id)
     latest.current = next; setParameters(next, { replace: true })
+  }
+  function clearCreation() {
+    try { sessionStorage.removeItem(creationKey); setOriginalCode(null); return true }
+    catch { setError(new ApiError(0, 'client.catalog_recovery_storage_unavailable')); return false }
   }
   async function refresh(id: string, signal?: AbortSignal) {
     if (!http) throw new ApiError(0, 'client.https_required')
@@ -45,23 +53,34 @@ export function useCatalogWrite(select: (id: string) => void, onConfirmed?: (det
   }
   async function run(kind: Kind, id: string | undefined, write: (signal: AbortSignal) => Promise<string>, code?: string) {
     if (running.current || pending || denied || !http || w.access.role !== 'owner') return
+    const creating = kind === 'create' || kind === 'global'
+    if (creating) {
+      if (!code) return
+      try {
+        const existing = sessionStorage.getItem(creationKey)
+        if (existing !== null) { setOriginalCode(existing); return }
+        sessionStorage.setItem(creationKey, code)
+        setOriginalCode(code)
+      } catch { setError(new ApiError(0, 'client.catalog_recovery_storage_unavailable')); return }
+    }
     running.current = true; setBusy(true); setError(null); setNotice(''); setObserved(null)
     controller.current = new AbortController(); mark(kind, id)
-    setExpected({ id, code })
+    setExpectedId(id ?? null)
     let acknowledged = false; let affected = id
     try {
       affected = await write(controller.current.signal); acknowledged = true
       if (!mounted.current) return
-      setExpected(current => ({ ...current, id: affected }))
+      setExpectedId(affected)
       mark(kind, affected)
       const verified = await refresh(affected, controller.current.signal)
       if (!mounted.current) return
+      if (creating && !clearCreation()) return
       mark(null); if (verified) onConfirmed?.(verified); setNotice('Operación guardada y producto consultado nuevamente en el servidor. No se crearon existencias.')
     } catch (failure) {
       if (!mounted.current) return
       setError(failure)
       if (!acknowledged && failure instanceof ApiError && !failure.outcomeUnknown) {
-        mark(null)
+        if (!creating || clearCreation()) mark(null)
         if (failure.status === 401 || failure.status === 403) setDenied(true)
       }
       // Keep the marker on response loss. An early read alone cannot prove rollback or justify another write.
@@ -75,12 +94,16 @@ export function useCatalogWrite(select: (id: string) => void, onConfirmed?: (det
     try { await refresh(id, controller.current.signal) } catch (failure) { if (mounted.current) setError(failure) }
     finally { running.current = false; if (mounted.current) setBusy(false) }
   }
-  const canAcknowledge = Boolean(observed && (!expected.id || expected.id.toLowerCase() === observed.product.id.toLowerCase()) && (!expected.code || expected.code === observed.product.internalCode))
+  const originalIdentified = Boolean(expectedId || originalCode)
+  const canAcknowledge = Boolean(observed && originalIdentified &&
+    (!expectedId || expectedId.toLowerCase() === observed.product.id.toLowerCase()) &&
+    (originalCode === null || originalCode === observed.product.internalCode))
   function acknowledge(code: string) {
     if (!observed || running.current || !pending || !canAcknowledge || code.trim() !== observed.product.internalCode) return
+    if (originalCode !== null && !clearCreation()) return
     mark(null); onConfirmed?.(observed); setError(null); setNotice('El operador revisó el estado consultado y concilió la operación. No se repitió la escritura.')
   }
   useNavigationProtection({ busy, pending })
-  return { busy, pending, denied, error, notice, observed, run, consult, acknowledge, canAcknowledge, locked: busy || pending || denied || !http }
+  return { busy, pending, denied, error, notice, observed, run, consult, acknowledge, canAcknowledge, originalIdentified, locked: busy || pending || denied || !http }
 }
 export type CatalogWrite = ReturnType<typeof useCatalogWrite>

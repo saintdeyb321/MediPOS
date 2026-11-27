@@ -52,6 +52,9 @@ public sealed partial class CashPilotTests(ITestOutputHelper output)
         output.WriteLine("B02 P4 START");
         await P4Async(host, database, origin, destination.BranchId, browser, foreign);
         output.WriteLine("B02 P4 PASS POS_PAY_TICKET_VOID");
+        output.WriteLine("B02 P5 START");
+        await P5Async(host, database);
+        output.WriteLine("B02 P5 PASS CATALOG_SEARCH_WRITE_IMPORT");
     }
 
     private static async Task<(IdentityAccessTestSetup.Setup Origin, IdentityAccessTestSetup.Setup Destination, IdentityAccessTestSetup.Setup Other)> SeedAsync(PostgreSqlFixture database)

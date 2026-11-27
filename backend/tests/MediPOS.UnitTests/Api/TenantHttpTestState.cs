@@ -55,6 +55,7 @@ public sealed partial class TenantHttpTestState
     internal int Reads { get; private set; }
     internal Action? AfterDirectoryRead { get; set; }
     internal Action? AfterPrivateRead { get; set; }
+    internal CatalogProductFilters? LastProductFilters { get; private set; }
     internal Action? AfterCheckoutLock { get; set; }
     internal List<LegalEntity> Entities { get; } = [];
     internal List<Branch> Branches { get; } = [];
@@ -241,7 +242,7 @@ public sealed partial class TenantHttpTestState
             {
                 "CategoriesAsync" => Task.FromResult<IReadOnlyList<CategoryDetails>>(Categories.Select(CategoryDetails.From).ToArray()),
                 "GlobalProductsAsync" => Task.FromResult<IReadOnlyList<GlobalProductDetails>>(GlobalProducts.Select(GlobalProductDetails.From).ToArray()),
-                "ProductsAsync" => Task.FromResult<IReadOnlyList<BusinessProductDetails>>(Products.Select(BusinessProductDetails.From).ToArray()),
+                "ProductsAsync" => RecordProductFilters((CatalogProductFilters?)a[4]),
                 "ProductAsync" => Task.FromResult(Products.SingleOrDefault(value => value.Id == (Guid)a[1]!) is { } product ? new CatalogProductView(BusinessProductDetails.From(product), Units.Where(value => value.BusinessProductId == product.Id).Select(ProductUnitDetails.From).ToArray()) : null),
                 _ => throw new NotSupportedException(method)
             };
@@ -329,6 +330,11 @@ public sealed partial class TenantHttpTestState
         throw new NotSupportedException(type.Name + "." + method);
     }
     private static Task Save(Action action) { action(); return Task.CompletedTask; }
+    private Task<IReadOnlyList<BusinessProductDetails>> RecordProductFilters(CatalogProductFilters? filters)
+    {
+        LastProductFilters = filters;
+        return Task.FromResult<IReadOnlyList<BusinessProductDetails>>(Products.Select(BusinessProductDetails.From).ToArray());
+    }
     private async Task<ImportRowResult> ImportRowAsync(ImportJob job, int rowNumber, BusinessProduct product, ProductUnit unit, Func<CancellationToken, Task> reauthorize, CancellationToken token)
     { await reauthorize(token); var result = ImportRowResult.Imported(job, rowNumber, product); Products.Add(product); Units.Add(unit); ImportRows.Add(result); return result; }
     private async Task CompleteImportAsync(AuditLog audit, Func<CancellationToken, Task> reauthorize, CancellationToken token) { await reauthorize(token); Audits.Add(audit); }

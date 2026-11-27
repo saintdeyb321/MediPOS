@@ -1,8 +1,8 @@
 # Hallazgos RFA
 
-## Diagnóstico vigente · RUN-10 / RFA3
+## Hallazgos y seguimiento
 
-Los seis IDs se conservan. Los párrafos de caracterización bajo esta tabla documentan los cortes anteriores. [Pruebas y aserciones en el SHA del run](VALIDATION.md#run-10) · [decisiones, dependencias y aceptación por lote](ROADMAP.md).
+Los seis IDs originales se conservan. F-007 registra el defecto encontrado durante L-06B. Los párrafos bajo la tabla distinguen los resultados vigentes de la caracterización anterior. [Validación](VALIDATION.md) · [Aceptación por lote](ROADMAP.md).
 
 | ID · tipo · prioridad | Actor y expectativa | Causa, confianza y alcance | Decisión mínima, prueba y riesgo de regresión |
 |---|---|---|---|
@@ -12,12 +12,13 @@ Los seis IDs se conservan. Los párrafos de caracterización bajo esta tabla doc
 | F-004 · descubrimiento de compra · P2 | Operador intenta reabrir recepción sin referencia. FR-PUR-004 pide buscar el documento/referencia y FR-PUR-002 protege la recepción. | Alta en coincidencia exacta y recuperación por ID. RUN-04 lo observa en DOM. E3 contrasta dos compras por la misma referencia, detalle de la sede y exclusión de ajenas. No se ha demostrado pérdida de la compra. | L-03. Decidir si el operador requiere recientes sin documento. Probar salida, entrada limpia, dos referencias iguales y una ausente. Riesgo: usar referencia duplicada como clave para rehacer compra. |
 | F-005 · coste de lectura · P2 provisional | Personal de inventario cambia de existencias a lotes y necesita nombres legibles de su sede. FR-INV-001/FR-TEN-003 son invariantes, sin objetivo de latencia acordado. | Alta en la cuenta DOM 3/0/3 de RUN-09. Coste de red y demora percibida desconocidos. E3 verifica ámbito y cantidades de las lecturas, sin cronometrar el navegador. | L-04. Medir y acordar presupuesto antes de ampliar DTO. Eliminar lecturas solo si se conserva nombre, ámbito y paginación. Riesgo: reutilizar etiquetas de otra sede. |
 | F-006 · repetibilidad de pruebas · P2 provisional | QA navega por Transferencias o Plataforma. El control debe esperar el resultado de acceso o la carga del destinatario. Sin requisito FR de sincronización de tests. | Alta para los dos resultados discordantes RUN-03/05; causa de temporización específica y efecto en producto sin demostrar. RUN-10 tiene un FAIL frontend sin nombre. | L-05. Identificar el caso de CI y caracterizar las transiciones observables antes de ajustar esperas. Riesgo: esconder una carrera de autorización o duplicar el diagnóstico de un fallo desconocido. |
-
-El P1 tiene reproducción DOM y bloqueo E4 específico B-02. Ninguno de los seis demuestra pérdida de dinero, fuga entre tenants ni corrupción de stock. Se mantienen las pruebas de esos invariantes como condición de corrección.
+| F-007 · recuperación de un alta · P2 | Owner vuelve después de perder el acuse de un alta. La conciliación debe conservar la intención original. | E2. El código interno quedaba solo en memoria y, tras recargar, se podía cerrar la recuperación con otra ficha del mismo tenant. | L-06B conserva el código en el contexto de la sesión del navegador. Otro producto mantiene el bloqueo. Se conserva la revisión humana del original. |
 
 La evidencia de ejecución se vincula al [registro RFA2](VALIDATION.md). E2 se limita a las fronteras indicadas. Los diagnósticos originales siguen abajo.
 
 ## F-001 · Una caja cerrada deja de aparecer en activas
+
+**RUN-17 · E4 del historial.** La caja 100→10 conserva −90 y una auditoría. Tras perder el acuse, la UI recupera el mismo arqueo por URL y desde Cierres con entrada limpia. Activas excluye el cierre. Incidente DEV sin atribución. [Aserciones y variantes](VALIDATION.md#run-17).
 
 **RUN-15 · E4 anterior al historial.** El cierre 100→10 persistió −90 con una auditoría. El navegador recuperó el arqueo por URL y la entrada limpia no ofrecía cómo encontrarlo. El último hecho confirma la brecha de descubrimiento. L-06A añade Cierres para la sede autorizada. Su aceptación en el piloto nuevo y la causa del incidente DEV siguen pendientes. [Evidencia](VALIDATION.md#run-15).
 
@@ -45,6 +46,8 @@ La evidencia de ejecución se vincula al [registro RFA2](VALIDATION.md). E2 se l
 
 ## F-003 · El filtro de mantenimiento es por página
 
+**RUN-18 · Solución aprobada, candidato.** Mis productos combina filtros de texto, categoría y estado en SQL antes de paginar. La prueba con dobles encuentra la fila que antes quedaba en página 2 y verifica un nuevo GET desde offset cero. La comprobación real con PostgreSQL y navegador está preparada en P5. [Aserciones](VALIDATION.md#run-18).
+
 **RFA2 · CONFIRMADO_EN_EJECUCION E2.** SC-04 / RUN-04 muestra el vacío en la primera página y el producto al pasar a la segunda. El filtro estaba identificado como de página. El comportamiento coincide con el alcance visible, sin violación de contrato demostrada.
 
 - UC-CAT-06/20. E1. P2 provisional. `ProductsPage.tsx:48–62` filtra filas recibidas. `CatalogDirectoryReader.cs:17–22` aplica offset/límite. La UI expresa esa limitación. Medir producto en página posterior y observar si la necesidad requiere otra consulta. PENDIENTE_RFA3.
@@ -70,3 +73,7 @@ La evidencia de ejecución se vincula al [registro RFA2](VALIDATION.md). E2 se l
 **RFA4 · Sincronización ajustada.** Los dos casos esperan la transición que verifican. Transferencias controla el GET de origen y verifica el bloqueo antes y después de la denegación. Plataforma mantiene pendiente la lectura del destinatario y verifica la ficha antes y después de recibirlo. Los dos casos pasaron antes y después en esta sesión. El fallo histórico de CI sigue sin identificar. [RUN-12](VALIDATION.md#run-12).
 
 **CONFIRMADO_EN_EJECUCION para el runner, P2 provisional.** RUN-03 falló en `TransfersPage.test.tsx:66` al consultar de inmediato si se había emitido el GET de acceso y en `PlatformPage.test.tsx:275` mientras el destinatario seguía cargando. Ambos casos pasaron serializados en RUN-05. El fallo de repetibilidad dificulta interpretar el gate. La espera/aserción de lectura es la causa inmediata observada. La causa de calendario exacta y un fallo equivalente de producto siguen sin demostrar. Para una aceptación posterior, medir llegada del estado y comprobar que las acciones permanecen cerradas durante la espera. UC-TRA-08, UC-PLA-07 y UC-PLA-17.
+
+## F-007 · Conciliación de alta con un producto distinto tras recarga
+
+**RUN-18 · E2 RED/GREEN.** El código original vivía en el estado del hook. El marcador URL seguía presente después de recargar y quedaba vacía la comparación del código. La regresión observó el botón de conciliación habilitado con otra ficha. El candidato conserva el código original en `sessionStorage` por identidad, membresía, tenant y sede. Exige coincidencia y revisión explícita, conserva un único POST y deja bloqueadas las solicitudes anteriores sin un identificador verificable. Los endpoints de alta carecen de constancia transaccional por solicitud. [Aserciones y límites](VALIDATION.md#run-18).

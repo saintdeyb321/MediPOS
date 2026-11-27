@@ -80,6 +80,7 @@ Initial Owner onboarding by email (SA1–SA2): the independently approved platfo
 - **FR-CAT-007 P0** Tenant-local product when absent from global catalog.
 - **FR-CAT-008 P1** Curated candidates for global catalog.
 - **FR-CAT-009 P0** Excel import with per-row errors and no invalid-row import.
+- **FR-CAT-010 P1** Owner maintenance searches the entire private catalog by name, internal code, brand/laboratory or ingredient, with optional category and active/inactive filters applied before pagination. Keep the default unfiltered response and stable order. POS search and the global reference directory are independent.
 
 ### Inventory, purchasing, batches
 - **FR-INV-001 P0** Batch/expiration/cost/quantity/supplier traceability on pharmaceutical intake.
