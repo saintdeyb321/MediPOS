@@ -261,7 +261,16 @@ it('shows an expired Trial against server time without replacing its stored stat
 })
 
 it('navigates all six areas using one shared directory read and a scoped category read', async () => {
-  const fake = fixture(); fake.state.invitation = pending(); mount(fake)
+  const fake = fixture(); fake.state.invitation = pending()
+  const fetch = fake.fetcher.getMockImplementation()!
+  const ownerPath = '/platform/tenants/' + id(2) + '/initial-owner'
+  let completeOwner!: () => void
+  const ownerRead = new Promise<void>(resolve => { completeOwner = resolve })
+  fake.fetcher.mockImplementation(async (path, init) => {
+    if (String(path) === ownerPath && init?.method === 'GET') await ownerRead
+    return fetch(path, init)
+  })
+  mount(fake)
   await screen.findByRole('region', { name: 'Indicadores de la primera página' })
   const navigation = within(screen.getByRole('navigation', { name: 'Navegación de plataforma' }))
   for (const area of ['Boticas', 'Propietarios pendientes', 'Licencias']) {
@@ -272,7 +281,13 @@ it('navigates all six areas using one shared directory read and a scoped categor
   expect(fake.reads('/platform/tenants/' + id(2) + '/details')).toHaveLength(0)
   expect(fake.reads('/platform/tenants/' + id(2) + '/initial-owner')).toHaveLength(0)
   fireEvent.click(screen.getByRole('button', { name: 'Gestionar Synthetic QA botica' }))
-  await within(await screen.findByRole('dialog', { name: 'Ficha de botica' })).findByText(pending().email, { exact: false })
+  const drawer = within(await screen.findByRole('dialog', { name: 'Ficha de botica' }))
+  await drawer.findByText('Consultando propietario…')
+  expect(drawer.queryByText(pending().email, { exact: false })).not.toBeInTheDocument()
+  expect(drawer.queryByRole('button', { name: 'Corregir o revocar Gmail pendiente' })).not.toBeInTheDocument()
+  completeOwner()
+  await drawer.findByText(pending().email, { exact: false })
+  expect(drawer.getByRole('button', { name: 'Corregir o revocar Gmail pendiente' })).toBeEnabled()
   expect(fake.reads('/platform/tenants/' + id(2) + '/details')).toHaveLength(1)
   expect(fake.reads('/platform/tenants/' + id(2) + '/initial-owner')).toHaveLength(1)
   fireEvent.click(screen.getByRole('button', { name: 'Cerrar Ficha de botica' }))

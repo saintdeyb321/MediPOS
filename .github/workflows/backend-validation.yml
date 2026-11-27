@@ -312,8 +312,49 @@ jobs:
           GATE_STEPS: ${{ toJSON(steps) }}
         run: |
           python3 - <<'PY'
-          import json, os
+          import json, os, re, subprocess
           from pathlib import Path
+
+          def failure_identifiers(suites):
+              root = Path(os.environ['GITHUB_WORKSPACE']).resolve()
+              tracked = set(subprocess.check_output(
+                  ['git', 'ls-files', '-z', '--', 'frontend/'], cwd=root, encoding='utf-8',
+                  stderr=subprocess.DEVNULL).split('\0'))
+              safe_path = re.compile(r'frontend/(?:[A-Za-z0-9_-]+/)*[A-Za-z0-9_.-]+\.(?:test|spec)\.[cm]?[jt]sx?')
+              static_case = re.compile(
+                  r"""^\s*(?:it|test)\(\s*(['"])([A-Za-z][A-Za-z0-9 ,.?()/_-]{0,139})\1\s*,""",
+                  re.MULTILINE | re.ASCII)
+              limit = 10
+              found = []
+              for suite in suites:
+                  failures = [case for case in suite['assertionResults'] if case['status'] == 'failed']
+                  if not failures and suite.get('status') != 'failed':
+                      continue
+                  relative = None
+                  titles = []
+                  raw = suite.get('name')
+                  if isinstance(raw, str) and len(raw) <= 1024 and all(32 <= ord(c) < 127 for c in raw):
+                      candidate = Path(raw)
+                      if candidate.is_absolute() and candidate.is_relative_to(root):
+                          candidate = candidate.relative_to(root)
+                      key = candidate.as_posix()
+                      if len(key) <= 160 and key in tracked and safe_path.fullmatch(key):
+                          file = root / candidate
+                          if file.resolve(strict=True) == file and file.is_file():
+                              relative = key
+                              if failures:
+                                  titles = [title for _, title in static_case.findall(file.read_text(encoding='utf-8'))]
+                  for case in failures or [None]:
+                      if len(found) == limit:
+                          return found + ['Vitest: failure identifiers truncated (10 shown).']
+                      title = case.get('title') if case is not None else None
+                      if relative is None:
+                          found.append('Vitest failure: file and case withheld.')
+                      elif isinstance(title, str) and titles.count(title) == 1:
+                          found.append(f'Vitest failure: `{relative}` — `{title}`')
+                      else:
+                          found.append(f'Vitest failure: `{relative}` — case unavailable.')
+              return found or ['Vitest failure: no safe file or case identifier in report.']
 
           steps = json.loads(os.environ['GATE_STEPS'])
           lines = ['## Frontend gate', 'Selected commit: ' + os.environ['GITHUB_SHA']]
@@ -336,6 +377,11 @@ jobs:
               approved = (approved and report['success'] is True and total > 0 and passed == total
                           and failed == pending == todo == failed_suites == 0
                           and len(statuses) == total and all(status == 'passed' for status in statuses))
+              if failed or failed_suites or 'failed' in statuses:
+                  try:
+                      lines.extend(failure_identifiers(report['testResults']))
+                  except (OSError, RuntimeError, ValueError, subprocess.SubprocessError):
+                      lines.append('Vitest failure: identifiers unavailable.')
           except (OSError, ValueError, TypeError, KeyError):
               lines.append('Vitest: NO_RESULT (missing or invalid report)')
               approved = False

@@ -50,6 +50,55 @@ public sealed class CashClosePersistenceTests(PostgreSqlFixture fixture)
             """).SingleAsync(TestContext.Current.CancellationToken));
     }
 
+    [Fact]
+    public async Task ClosingEmptyCashFromOneHundredToTenPersistsShortageAndIsRecoverableById()
+    {
+        var token = TestContext.Current.CancellationToken;
+        await using var setupServices = IdentityAccessTestSetup.CreateServices(fixture);
+        await using var setupScope = setupServices.CreateAsyncScope();
+        var source = setupScope.ServiceProvider;
+        var setup = await CashSessionTestData.CreateAsync(source);
+        var owner = await CashSessionTestData.AddOwnerAsync(source, setup);
+        var opened = await CashSessionTestData.OpenAsync(source, setup, 100m);
+        var command = CashCloseTestData.Command(setup.TenantId, setup.BranchId, opened.CashSessionId, 10m);
+
+        await using var runtime = IdentityAccessTestSetup.CreateServices(fixture, fixtureAuthorization: false);
+        await using var closeScope = runtime.CreateAsyncScope();
+        var closing = closeScope.ServiceProvider;
+        CashSessionTestData.Authenticate(closing, setup.UserId);
+        var result = await closing.GetRequiredService<CloseCashSessionHandler>().HandleAsync(command, token);
+        Assert.Equal(100m, result.ExpectedCashAmount);
+        Assert.Equal(10m, result.CountedCashAmount);
+        Assert.Equal(-90m, result.CashDifference);
+        Assert.Equal(0m, result.NetSalesAmount);
+        Assert.Equal(new CashPaymentTotals(0m, 0m, 0m, 0m, 0m), result.PaymentTotals);
+        var duplicate = await Assert.ThrowsAsync<ApplicationErrorException>(() =>
+            closing.GetRequiredService<CloseCashSessionHandler>().HandleAsync(command, token));
+        Assert.Equal(CashSessionErrors.AlreadyClosed, duplicate.Error);
+
+        await using var readScope = runtime.CreateAsyncScope();
+        var reading = readScope.ServiceProvider;
+        CashSessionTestData.Authenticate(reading, owner);
+        Assert.Empty(await reading.GetRequiredService<GetActiveCashSessionsHandler>().HandleAsync(new(setup.TenantId), token));
+        Assert.Equal(result, await reading.GetRequiredService<GetCashSessionReconciliationHandler>().HandleAsync(
+            new(setup.TenantId, setup.BranchId, opened.CashSessionId), token));
+
+        await using var verify = fixture.CreateContext(setup.TenantId);
+        var row = await verify.CashSessions.SingleAsync(token);
+        Assert.Equal(opened.CashSessionId, row.Id);
+        Assert.Equal(CashSessionStatus.Closed, row.Status);
+        Assert.Equal((100m, 10m, -90m, setup.UserId, result.ClosedAt),
+            (row.ExpectedCashAmount!.Value, row.CountedCashAmount!.Value, row.CashDifference!.Value,
+                row.ClosedByActorId!.Value, row.ClosedAt!.Value));
+        var audit = await verify.AuditLogs.SingleAsync(a => a.Action == AuditAction.CashSessionClosed, token);
+        Assert.Equal(opened.CashSessionId, audit.EntityId);
+        Assert.Equal(setup.UserId, audit.ActorId);
+        Assert.Equal(AuditEntityType.CashSession, audit.EntityType);
+        Assert.Empty(await verify.Sales.ToListAsync(token));
+        Assert.Empty(await verify.SalePayments.ToListAsync(token));
+        Assert.Empty(await verify.CashTransfers.ToListAsync(token));
+    }
+
     [Theory]
     [InlineData(PaymentMethod.Cash)]
     [InlineData(PaymentMethod.Yape)]

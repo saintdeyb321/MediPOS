@@ -89,7 +89,13 @@ public sealed class TenantApiHttpTests
         var cashId = cash.RootElement.GetProperty("cashSessionId").GetGuid();
         using var current = await Json(host, "GET", operational + "/cash-sessions/current"); Assert.Equal(cashId, current.RootElement.GetProperty("session").GetProperty("cashSessionId").GetGuid());
         using var active = await Json(host, "GET", tenant + "/cash-sessions/active"); Assert.Equal(cashId, active.RootElement[0].GetProperty("cashSessionId").GetGuid());
-        using var cashStatus = await Json(host, "GET", operational + $"/cash-sessions/{cashId:D}"); Assert.Equal("open", cashStatus.RootElement.GetProperty("status").GetString());
+        using var cashStatus = await Json(host, "GET", operational + $"/cash-sessions/{cashId:D}");
+        Assert.Equal("open", cashStatus.RootElement.GetProperty("status").GetString());
+        Assert.Equal(cashId, cashStatus.RootElement.GetProperty("cashSessionId").GetGuid());
+        Assert.Equal(branchId, cashStatus.RootElement.GetProperty("branchId").GetGuid());
+        Assert.Equal(current.RootElement.GetProperty("session").GetProperty("membershipId").GetGuid(),
+            cashStatus.RootElement.GetProperty("membershipId").GetGuid());
+        Assert.Equal(JsonValueKind.Null, cashStatus.RootElement.GetProperty("expectedCashAmount").ValueKind);
         using var draft = await Json(host, "POST", operational + "/sales", new { }, csrf, 201);
         var saleId = draft.RootElement.GetProperty("saleId").GetGuid(); Assert.Equal(1u, draft.RootElement.GetProperty("version").GetUInt32());
         using var cart = await Json(host, "PUT", operational + $"/sales/{saleId:D}/lines", new { expectedVersion = 1u, lines = new[] { new { businessProductId = productId, productUnitId = unitId, quantity = 2m, priceKind = "retail" } } }, csrf);

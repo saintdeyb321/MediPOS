@@ -62,8 +62,24 @@ it('paginates and filters on the server, preserves details on reload and treats 
 })
 it('does not infer source authority from destination, and keeps cashier approval, dispatch and receipt blocked', async () => {
   const fake = transferServer(); fake.state.records = [transfer]; fake.state.access.set(other.id, { isAllowed: false, code: 'access.branch_not_assigned', context: null })
-  const view = mountTransfers(fake, <TransfersPage />); await open(); expect(screen.getByRole('button', { name: 'Aprobar solicitud' })).toBeDisabled()
-  expect(fake.fetcher.mock.calls.some(([path]) => String(path).includes(`/access?branchId=${other.id}`))).toBe(true)
+  const fetch = fake.fetcher.getMockImplementation()!
+  const isOriginRead = (path: string, method?: string) =>
+    method === 'GET' && path.endsWith(`/access?branchId=${other.id}`)
+  let completeOrigin!: () => void
+  const origin = new Promise<void>(resolve => { completeOrigin = resolve })
+  fake.fetcher.mockImplementation(async (path, init) => {
+    if (isOriginRead(String(path), init?.method)) await origin
+    return fetch(path, init)
+  })
+  const view = mountTransfers(fake, <TransfersPage />); await open()
+  const checking = 'Verificando acceso operacional en origen y destino…'
+  await screen.findByText(checking)
+  await waitFor(() => expect(fake.fetcher.mock.calls.some(([path, init]) => isOriginRead(String(path), init?.method))).toBe(true))
+  expect(screen.getByRole('button', { name: 'Aprobar solicitud' })).toBeDisabled()
+  completeOrigin()
+  await waitFor(() => expect(screen.queryByText(checking)).not.toBeInTheDocument())
+  expect(screen.getByRole('button', { name: 'Aprobar solicitud' })).toBeDisabled()
+  expect(fake.writes()).toHaveLength(0)
   view.unmount(); const cashier = { ...workspace, access: { ...workspace.access, role: 'cashier' as const } }; fake.state.access.set(other.id, allowed(other.id, 'cashier')); fake.state.access.set(workspace.branchId, allowed(workspace.branchId, 'cashier'))
   mountTransfers(fake, <TransfersPage />, '', cashier); await open()
   expect(screen.queryByRole('combobox', { name: 'Sucursal de consulta' })).not.toBeInTheDocument(); expect(screen.getByRole('button', { name: 'Aprobar solicitud' })).toBeDisabled()

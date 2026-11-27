@@ -41,6 +41,8 @@ Con `InventoryDirectoryReader` y `ProductLookup` registrar tamaño de página, I
 
 ## L-05 · Repetibilidad y evidencia CI (UC-TRA-08, UC-PLA-07/17)
 
+**Candidato local, CI pendiente.** Los dos casos F-006 sincronizan las respuestas controladas. El resumen de CI puede mostrar hasta diez identificadores validados contra el checkout, con anonimización de los restantes nombres inseguros. [RUN-12](VALIDATION.md#run-12).
+
 Contrastar `TransfersPage.test.tsx:66` y `PlatformPage.test.tsx:275` con el estado de carga que RUN-03 observó y RUN-05 superó en serie. Obtener **solo nombre de archivo, caso y aserción saneada** del fallo frontend en el informe disponible del operador. Si no existe, solicitar posteriormente una ejecución que produzca ese dato. No asignarlo a uno de esos dos tests por similitud. Caracterizar el caso identificado de modo focalizado; si es una espera, observar transición visible y comprobar que acciones siguen protegidas durante la carga. Si es fallo funcional, registrar causa propia antes de tocar producto. Gate: regresión focalizada y suite del candidato sin omisiones, sin ampliar timeouts para silenciar un fallo.
 
 ## L-06 · Validar lo conservado en nueve familias

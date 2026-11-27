@@ -1,5 +1,22 @@
 # RFA2 · Validación conductual y persistencia
 
+<a id="run-12"></a>
+## RUN-12 · RFA4 / L-05, L-01 y F-001
+
+Baseline `bc36ecc5b7b9e2e0cd4c52d6c8b9f00ab7790b76`. Resultados locales del candidato.
+
+| Verificación | Selección y resultado |
+|---|---|
+| Vitest E2 · F-006 | Desde frontend, `npm.cmd run test -- src/features/transfers/TransfersPage.test.tsx src/features/platform/PlatformPage.test.tsx`. Antes: **44 PASS / 0 FAIL / 0 SKIP**. Primera corrida posterior, con compilación y comprobaciones simultáneas: **39 PASS / 5 FAIL / 0 SKIP**. Ambos casos modificados pasaron. Fallaron otros casos de mercadería multilote, revocación 403 con lista 503, alta con Gmail y dos de recuperación de alta. Repetición acotada sin compilación simultánea, mismo comando: **44 PASS / 0 FAIL / 0 SKIP**. La causa de los cinco fallos no queda atribuida y el fallo histórico de CI sigue sin nombre. |
+| ESLint y tipos | ESLint de ambos archivos de pruebas y `tsc.cmd -b`: PASS. |
+| HTTP E2 · L-01 | `dotnet tests/MediPOS.UnitTests/obj/rfa4a-bin/Debug/net10.0/MediPOS.UnitTests.dll -filterVSTest "FullyQualifiedName~RealCookieOnboardingPurchaseMixedSaleTicketCashCloseAndOwnerReportUseExistingHandlers"`. Primer intento: socket loopback bloqueado antes de iniciar sesión. Ejecución autorizada del mismo test: **1 PASS / 0 FAIL / 0 SKIP**. HTTP 200, ID caja/sede/membresía correctos, open y propiedad JSON null presente. Persistencia con dobles. |
+| Compilación .NET | `dotnet build tests/MediPOS.UnitTests --no-restore -p:BaseOutputPath=obj/rfa4a-bin/ -m:1 --disable-build-servers` y mismo comando con `tests/MediPOS.IntegrationTests`. Ambos PASS, cero errores y advertencias. |
+| Diagnóstico CI | YAML válido. Comparación estructural igual al retirar el cuerpo del único paso editado. Python ejecutó ambos cuerpos sobre 11 entradas sintéticas con igual código de salida y veredicto: aprobado, caso y suite fallidos, informe inválido, nombre dinámico y hostil, ruta externa, ruta con controles, archivo sin rastrear, truncamiento y lint fallido con pruebas aprobadas. La salida excluyó detalles dinámicos, mensajes de fallo y rutas absolutas. |
+
+**F-006.** Transferencias mantiene pendiente el GET de origen hasta comprobar el bloqueo, espera el fin de la verificación y comprueba nuevamente el botón deshabilitado. Plataforma mantiene pendiente la ficha del destinatario hasta observar carga, conserva los conteos exactos y espera el correo y su acción habilitada antes de salir del panel. Ambos casos conservan cero escrituras donde corresponde.
+
+**PostgreSQL NOT_RUN.** Docker ausente. En CI del candidato deben ejecutarse `OpenStatusReturnsPersistedIdentityAndNullClosingExpectedAmount` y `ClosingEmptyCashFromOneHundredToTenPersistsShortageAndIsRecoverableById`. Este último caracteriza acuse, fila, diferencia −90, auditoría única, rechazo de segundo cierre, ausencia en activas y consulta del arqueo por ID en scope independiente. Sin atribución al incidente DEV. La comprobación HTTP contra PostgreSQL y E4 siguen pendientes según [RUN-11](#run-11).
+
 <a id="run-11"></a>
 ## RUN-11 · RFA4A / L-01 · Candidato Sencillo
 

@@ -1,5 +1,11 @@
 # Checkpoint RFA
 
+## RFA4 · L-05 y evidencia de Caja
+
+- HEAD de entrada `bc36ecc5b7b9e2e0cd4c52d6c8b9f00ab7790b76`. L-05 queda como candidato local. Los dos casos F-006 modificados pasan, con 44/44 en la repetición acotada. Se conservan los cinco fallos de otros casos de la primera corrida posterior y el fallo histórico sin nombre. Diagnóstico CI acotado validado con 11 fixtures. [RUN-12](VALIDATION.md#run-12).
+- L-01 sigue `L01_CANDIDATO_PENDIENTE_CONTRATO_REAL`: HTTP del host con dobles PASS, prueba PostgreSQL NOT_RUN. F-001 exacto 100→10 compilado, NOT_RUN. E4 y causa DEV pendientes.
+- Próxima acción del operador: revisar y publicar manualmente el candidato combinado y disparar **una ejecución nueva** de `Backend validation - PostgreSQL 18` sobre el SHA publicado. Reconciliar el resultado de ambas pruebas PostgreSQL y del job frontend. Luego acreditar el GET respaldado por PostgreSQL en aislamiento. L-02 requiere una decisión separada sobre alcance y permisos de historial.
+
 ## RFA4A · L-01
 
 - Baseline `50b97a2c451a15ac59a21d06c11d266b81a77a68`; solo dos MD del operador sin rastrear al iniciar. Docker ausente. RED focalizado: caja abierta con esperado nulo dejó deshabilitado el botón en `toBeEnabled()`.

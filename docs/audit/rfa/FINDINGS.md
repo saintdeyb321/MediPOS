@@ -19,11 +19,15 @@ La evidencia de ejecución se vincula al [registro RFA2](VALIDATION.md). E2 se l
 
 ## F-001 · Una caja cerrada deja de aparecer en activas
 
+**RFA4 · Caso exacto preparado.** La prueba PostgreSQL de [RUN-12](VALIDATION.md#run-12) fija apertura 100 y conteo 10 sin actividad, comprueba un único cierre con diferencia −90 y relee el arqueo por ID desde otro scope. Compilada, NOT_RUN. El incidente DEV sigue sin atribuir.
+
 **RFA2 · CONFIRMADO_EN_EJECUCION E2 para la reentrada, BLOCKED en E3/E4.** SC-01 / RUN-07 envió contado 10 una sola vez, mostró el faltante 90 de la respuesta simulada, vio activas vacías con URL limpia y recuperó el arqueo original por GET al volver con su dirección. RUN-01 verificó lecturas fallidas y respuestas inciertas. Fila, auditoría, importes calculados por el servidor y reentrada en navegador real requieren E3/E4. El incidente DEV permanece sin atribución.
 
 - UC-CAJ-05/06/07/16/17. FR-CASH-002/003/005. Evidencia E1 corroborada por la revisión externa del baseline 939ad83. P2 provisional por descubrimiento del arqueo. Un cierre con 100 inicial y 10 contado, sin movimientos, debe registrar −90. `CashCloseTransaction.cs:59–72` confirma el registro, mientras `CashSessionReader.cs:34` filtra open. La URL `cash` permite recuperar y la entrada limpia carece de historial. No hay evidencia sobre si el caso del operador se guardó. Comparar ambos GET, actor/sede y acuse según [receta Caja](flows/01-caja-pos.md). PENDIENTE_RFA2.
 
 ## F-002 · Sencillo exige saldo esperado en una caja abierta
+
+**RFA4 · Evidencia HTTP E2.** El host efímero con dobles devolvió 200 y JSON null presente para el esperado de cierre de la caja abierta correspondiente al actor y sede. Quedan la prueba de aplicación con PostgreSQL y la comprobación del GET contra esa persistencia. [RUN-12](VALIDATION.md#run-12).
 
 **RFA4A · Corrección local provisional.** [RUN-11](VALIDATION.md#run-11) reproduce el bloqueo en el baseline y verifica la alternativa A con dobles HTTP. El importe se valida localmente por formato, rango y positividad. El saldo viene del ledger bajo bloqueo al ejecutar el despacho. El rechazo definitivo por fondos insuficientes mantiene importe y destino editables. Una respuesta incierta conserva la intención original. Pendientes el GET real de caja abierta y CI del candidato.
 
@@ -52,5 +56,7 @@ La evidencia de ejecución se vincula al [registro RFA2](VALIDATION.md). E2 se l
 - UC-COM-03/04. E1 del circuito. P2 provisional. `InventoryDirectoryReader.cs:9–22` proyecta IDs. `ProductLookup.tsx:10–23` resuelve nombre con caché scoped por ID. Comparar cantidad de GET con caché fría, caliente y paginación. Hipótesis de coste en operación real, pendiente de medición. PENDIENTE_RFA2.
 
 ## F-006 · Repetibilidad de dos aserciones DOM bajo carga
+
+**RFA4 · Sincronización ajustada.** Los dos casos esperan la transición que verifican. Transferencias controla el GET de origen y verifica el bloqueo antes y después de la denegación. Plataforma mantiene pendiente la lectura del destinatario y verifica la ficha antes y después de recibirlo. Los dos casos pasaron antes y después en esta sesión. El fallo histórico de CI sigue sin identificar. [RUN-12](VALIDATION.md#run-12).
 
 **CONFIRMADO_EN_EJECUCION para el runner, P2 provisional.** RUN-03 falló en `TransfersPage.test.tsx:66` al consultar de inmediato si se había emitido el GET de acceso y en `PlatformPage.test.tsx:275` mientras el destinatario seguía cargando. Ambos casos pasaron serializados en RUN-05. El fallo de repetibilidad dificulta interpretar el gate. La espera/aserción de lectura es la causa inmediata observada. La causa de calendario exacta y un fallo equivalente de producto siguen sin demostrar. Para una aceptación posterior, medir llegada del estado y comprobar que las acciones permanecen cerradas durante la espera. UC-TRA-08, UC-PLA-07 y UC-PLA-17.
