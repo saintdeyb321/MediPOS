@@ -17,6 +17,8 @@ Ruta comercial `/boticas/:tenantId/sucursales/:branchId/caja` o gestión dentro 
 
 ### Reporte S/100 → S/10 → lista vacía
 
+**RUN-13 · E3.** El caso exacto sintético confirmó −90, una auditoría, rechazo del segundo cierre, exclusión de activas y arqueo por ID en otro scope. La reentrada en navegador y la causa del incidente DEV permanecen abiertas. [Evidencia](../VALIDATION.md#run-13).
+
 Con cero pagos netos en efectivo y cero sencillo, `CashReconciliation.ExpectedCash` suma apertura + efectivo neto + recibido − enviado (`CashReconciliation.cs:104–111`). `CashSession.Close` guarda contado − esperado (`CashSession.cs:54–60`). La expectativa es **100 esperado, 10 contado, −90**. El filtro de activas admite solo open (`CashSessionReader.cs:26–45`); la ausencia tras cerrar es compatible con una fila cerrada preservada. El cierre actualiza la fila bloqueada y registra `CashSessionClosed` en una transacción (`CashCloseTransaction.cs:15–32,59–72`). El indexado por ID y el query string `cash` permiten volver al arqueo mientras se conserva la dirección. Entrar con URL limpia pierde el acceso directo de esta UI; no se identificó un historial general en las rutas de caja inventariadas. La caché se invalida al verificar el cierre; un vacío solo no distingue lectura vigente, cambio de sede, permiso, otra versión del build o resultado no conciliado en el incidente real.
 
 **Receta para RFA2.** En destino autorizado aislado, anotar SHA/build, rol, sede y un ID sintético. Abrir 100 sin movimientos, confirmar GET actual/activas, cerrar 10, guardar estado HTTP, acuse y registro. Consultar por ID, conciliación y auditoría. Comparar navegación con URL retenida y limpia. Repetir con pérdida de respuesta y leer antes de reenviar. Contrastar otra sede y una membresía ajena. La ejecución y el incidente del operador siguen NOT_RUN en esta fase.
@@ -56,11 +58,13 @@ GET `/api/tenants/{tenantId}/branches/{branchId}/cash-sessions/current` · `back
 
 ## UC-CAJ-04
 
+**RUN-13 · E3.** `StatusAsync` leyó una caja abierta persistida con `ExpectedCashAmount` nulo. Pendiente observar ese resultado por HTTP con PostgreSQL. [Evidencia](../VALIDATION.md#run-13).
+
 **RUN-12, HTTP E2.** El host con dobles devuelve 200, los ID de la caja/sede/membresía, estado `open` y la propiedad `expectedCashAmount` presente con valor JSON null. El GET respaldado por PostgreSQL sigue pendiente. [Evidencia](../VALIDATION.md#run-12).
 
 **L-01.** Se preparó `CashSessionPersistenceTests.OpenStatusReturnsPersistedIdentityAndNullClosingExpectedAmount` para la lectura por ID desde un nuevo scope. Queda pendiente de ejecución con PostgreSQL y de probar la respuesta HTTP real. [RUN-11](../VALIDATION.md#run-11).
 
-GET `/api/tenants/{tenantId}/branches/{branchId}/cash-sessions/{cashSessionId}` · `backend/src/MediPOS.Api/Tenant/PosEndpoints.cs:32`. **E2 · IMPLEMENTADO · BLOCKED**. 1. Seleccionar caja en directorio autorizado o conservar cash en URL. 2. Consultar antes de cerrar o de leer arqueo. CashSessionStatusQueries.cs:18–28 y CashReconciliationAccess.cs:10–16 validan ámbito. expectedCashAmount refleja valor persistido, nulo en una caja abierta. Consulta sin escritura. Requisito FR-CASH-002. Indicio F-002.
+GET `/api/tenants/{tenantId}/branches/{branchId}/cash-sessions/{cashSessionId}` · `backend/src/MediPOS.Api/Tenant/PosEndpoints.cs:32`. **E3 · IMPLEMENTADO · BLOCKED**. 1. Seleccionar caja en directorio autorizado o conservar cash en URL. 2. Consultar antes de cerrar o de leer arqueo. CashSessionStatusQueries.cs:18–28 y CashReconciliationAccess.cs:10–16 validan ámbito. expectedCashAmount refleja valor persistido, nulo en una caja abierta. Consulta sin escritura. Requisito FR-CASH-002. Indicio F-002.
 
 ## UC-CAJ-05
 

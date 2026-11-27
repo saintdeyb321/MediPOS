@@ -1,5 +1,12 @@
 # Checkpoint RFA
 
+## RFA4 · L-05B y cobertura global
+
+- HEAD `e2ffd12f577234c943237e71361a8ee0716a8eb8`, rama `ci/postgres-diagnostics-8bc6b4c`. RUN-13 importado del MD. PostgreSQL 18.7 acredita el caso exacto F-001 y el estado L-01 por `StatusAsync`. Pendientes GET respaldado por PostgreSQL y B-02/E4. CI frontend 645/646.
+- Compras 1/1 focalizado y 27/27 en su archivo. FAIL CI NOT_REPRODUCED, aserción fallida desconocida. Sin ajuste de prueba ni atribución al producto.
+- RFA2 parcial, 155 UC, 119 E3 / 33 E2 / 3 E1 / 0 E4. L-06A–I definidos en ROADMAP, con L-02/03/04 incorporados a sus cortes y un habilitador común B-02 pendiente de autorización.
+- Próximo paso exacto: revisar RUN-13 y recuperar solo la aserción fallida sanitizada del caso Compras si existe. El operador decide si combina un CI nuevo con el siguiente lote autorizado y si encarga B-02. Producción NO-GO.
+
 ## RFA4 · L-05 y evidencia de Caja
 
 - HEAD de entrada `bc36ecc5b7b9e2e0cd4c52d6c8b9f00ab7790b76`. L-05 queda como candidato local. Los dos casos F-006 modificados pasan, con 44/44 en la repetición acotada. Se conservan los cinco fallos de otros casos de la primera corrida posterior y el fallo histórico sin nombre. Diagnóstico CI acotado validado con 11 fixtures. [RUN-12](VALIDATION.md#run-12).

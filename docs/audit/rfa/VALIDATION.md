@@ -1,5 +1,30 @@
 # RFA2 · Validación conductual y persistencia
 
+<a id="run-13"></a>
+## RUN-13 · CI y diagnóstico local de Compras
+
+[Run 45915477001](https://github.com/saintdeyb321/MediPOS/actions/runs/45915477001), intento 1, `e2ffd12f577234c943237e71361a8ee0716a8eb8`, rama `ci/postgres-diagnostics-8bc6b4c`. Importado del extracto saneado del encargo. Duración 18 min 58 s. El run terminó en failure.
+
+| Job | Evidencia suministrada |
+|---|---|
+| Backend 140233528093 | PASS. Restore/audit, build, diagnóstico, formato, contenedores, publicación y limpieza completados. 2694 unitarias, 8 arquitectura y 907 integraciones PASS, 0 FAIL y 0 SKIP. PostgreSQL 18.7. |
+| Frontend 140233527873 | Build y lint PASS. 645 PASS, 1 FAIL, 0 SKIP. Test y publicación del gate fallidos. Identificado `PurchasesPage.test.tsx:82`, caso de confirmación con revisión obsoleta. La aserción fallida no figura en el resumen. |
+
+El paso PostgreSQL ejecuta el proyecto de integración completo sin filtro. Las clases `CashClosePersistenceTests` (43/43) y `CashSessionPersistenceTests` (9/9) incluyen los siguientes métodos en ese SHA.
+
+- **F-001, UC-CAJ-05/06/07, E3.** `ClosingEmptyCashFromOneHundredToTenPersistsShortageAndIsRecoverableById` verifica esperado 100, contado 10, diferencia −90, cero ventas/pagos/préstamos, fila cerrada y exactamente una auditoría de cierre con actor e ID. Un segundo cierre recibe `AlreadyClosed`. Desde otro scope autorizado, el cierre desaparece de activas y el arqueo por ID coincide con el acuse. El incidente DEV y la reentrada en navegador sin URL siguen pendientes.
+- **L-01, UC-CAJ-04, E3 de aplicación.** `OpenStatusReturnsPersistedIdentityAndNullClosingExpectedAmount` abre una caja sintética, cambia de scope y observa el mismo ID/sede/membresía, estado open, monto inicial, cierre nulo y esperado nulo vía `StatusAsync`. RUN-12 acredita HTTP 200 y JSON null con dobles. El GET respaldado por PostgreSQL dentro de un mismo recorrido y la aceptación E4 siguen pendientes. `L01_CANDIDATO_PENDIENTE_CONTRATO_REAL`.
+- **UC-COM-11, E3 de aplicación.** El paso integral incluye `ConcurrentLineEditorsCannotConfirmAReviewWhoseLinesWereReplaced`. Una edición gana, la confirmación con revisión vieja recibe `purchasing.receipt_changed` y no se crean lotes ni movimientos. Esta aserción cubre la precondición del backend, mientras el FAIL CI ocurre en una prueba DOM.
+- **F-006.** Los dos casos modificados en L-05 pasaron en este run. El único FAIL identificado en RUN-13 es de Compras. El nombre del fallo de RUN-10 sigue desconocido y los cinco fallos de RUN-12 permanecen en el histórico.
+
+### Reproducción local de Compras · NOT_REPRODUCED
+
+En frontend, `npm.cmd run test -- src/features/purchasing/PurchasesPage.test.tsx -t 'rejects confirmation under the server precondition'` obtuvo 1 PASS, 0 FAIL, 26 excluidos por filtro. Inmediatamente después, el mismo comando sin `-t` obtuvo 27 PASS, 0 FAIL, 0 SKIP. Sin compilaciones simultáneas. Ambas ejecuciones usan dobles HTTP.
+
+El test carga el borrador, espera productos válidos y cambia las líneas en el doble tras la revisión. `operations.tsx` compara `expectedRevision` con la revisión nueva y responde 409. La prueba exige un único POST, borrador intacto y botón deshabilitado al observar el error. `usePurchaseReceipt.run` conserva busy durante el GET de conciliación, bloquea otro envío y lee la misma compra. Tras cargar la revisión vigente, el botón puede habilitarse para una nueva acción explícita. Existe la hipótesis de que el error y el estado del botón se observaron en renders distintos. El resumen suministrado no distingue esa hipótesis de un fallo de preparación o producto. Se conserva el test sin cambios y se requiere la aserción fallida saneada para atribuir la causa.
+
+**Gate.** RFA2 sigue parcial. 155 UC: 3 E1, 33 E2, 119 E3, 0 E4. Se conservan los veredictos acumulados (19 PASS, 1 FAIL histórico del baseline de Sencillo, 133 BLOCKED, 1 NOT_RUN, 1 N/A). Los PASS de CI y de la prueba local de Compras describen fronteras distintas del gate comercial. [Cobertura futura y habilitador B-02](ROADMAP.md#l-06--aceptación-funcional-por-familia).
+
 <a id="run-12"></a>
 ## RUN-12 · RFA4 / L-05, L-01 y F-001
 

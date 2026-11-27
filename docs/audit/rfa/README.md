@@ -2,7 +2,7 @@
 
 ## Corte vigente · 26/11/2026
 
-**RFA2 PARCIAL.** 155/155 UC en nueve familias: 3 E1, 34 E2, 118 E3 y 0 E4. Veredictos: 19 PASS, 1 FAIL, 133 BLOCKED, 1 NOT_RUN y 1 N/A. El fallo comercial corresponde al despacho de sencillo en React. [RUN-10 y límites](VALIDATION.md#run-10) · [Resumen CI original](evidence/CI_RUN_45891472332_SANITIZED.md).
+**RFA2 PARCIAL.** 155/155 UC en nueve familias, con 3 E1, 33 E2, 119 E3 y 0 E4. Veredictos acumulados: 19 PASS, 1 FAIL del baseline de Sencillo, 133 BLOCKED, 1 NOT_RUN y 1 N/A. PostgreSQL acredita el caso exacto de Caja y el estado abierto de Sencillo por aplicación. CI frontend sigue en 645/646 por un fallo de Compras no reproducido localmente. [RUN-13](VALIDATION.md#run-13) · [Aceptación por familia](ROADMAP.md#l-06--aceptación-funcional-por-familia).
 
 **RFA3 COMPLETA para revisión documental.** [Recorridos y decisión principal de cada UC](TO_BE.md) · [Lotes y criterios de aceptación](ROADMAP.md) · [Seis hallazgos](FINDINGS.md) · [Próxima acción](CHECKPOINT.md). Solo L-01 tiene recomendación inicial de corrección condicionada. El operador conserva la aprobación por lote. Producción NO-GO.
 

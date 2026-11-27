@@ -52,6 +52,8 @@ PUT `/api/tenants/{tenantId}/purchases/{purchaseId}/lines` · `backend/src/MediP
 
 ## UC-COM-11
 
+**RUN-13.** PostgreSQL acredita que una revisión obsoleta rechaza la confirmación sin escribir lotes ni movimientos. El caso DOM correspondiente falló en CI y pasó en las dos selecciones locales. La sincronización exacta que falló en CI sigue sin identificar. [Evidencia](../VALIDATION.md#run-13).
+
 POST `/api/tenants/{tenantId}/purchases/{purchaseId}/confirm` · `backend/src/MediPOS.Api/Tenant/PurchasingEndpoints.cs:37`. **E3 · IMPLEMENTADO · BLOCKED**. Confirmar recepción desde el resumen revisado. ConfirmPurchaseHandler.cs:21–56 valida revisión dentro del ámbito transaccional, valida líneas/catálogo, confirma y guarda auditoría y stock; PurchasingStore.cs:43–44,76 y usePurchaseReceipt.ts:67–103 enlazan candado y acuse. Si acuse incierto se consulta la misma recepción; draft temprano no prueba rollback.
 
 ## UC-COM-12
