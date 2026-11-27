@@ -122,6 +122,95 @@ it('does not expose Owner active-cash queries to a cashier', async () => {
   expect(fake.fetcher.mock.calls.some(([path]) => String(path).includes('/active?'))).toBe(false)
   expect(fake.posts()).toHaveLength(0)
 })
+it('finds a closure from a clean entry, pages and applies dates without issuing a write', async () => {
+  const fake = server()
+  fake.state.closed = true
+  const established = fake.fetcher.getMockImplementation()!
+  const row = { cashSessionId: cashId, displayName: 'Empleado unitario', closedAt: timestamp,
+    expectedCashAmount: n('5'), countedCashAmount: n('4.9999'), cashDifference: n('-0.0001') }
+  fake.fetcher.mockImplementation((path, init) => {
+    const url = new URL(String(path), 'https://unit.test')
+    if (!url.pathname.endsWith('/cash-sessions/closed')) return established(path, init)
+    if (url.searchParams.get('from') === '2026-01-01') return Promise.resolve(json({ items: [], hasMore: false }))
+    return Promise.resolve(json(url.searchParams.get('offset') === '0'
+      ? { items: Array.from({ length: 50 }, (_, i) => ({ ...row, cashSessionId: id(String(100 + i)), displayName: 'Operador ' + i })), hasMore: true }
+      : { items: [row], hasMore: false }))
+  })
+  mount(fake, '', 'cashier')
+  expect(fake.fetcher.mock.calls.some(([path]) => String(path).includes('/closed?'))).toBe(false)
+  fireEvent.click(screen.getByRole('button', { name: 'Cierres' }))
+  const next = await screen.findByRole('button', { name: 'Página siguiente' })
+  fireEvent.click(next)
+  const detail = await screen.findByRole('button', { name: 'Ver arqueo de Empleado unitario' })
+  expect(screen.getByText('S/ -0.0001')).toBeInTheDocument()
+  fireEvent.click(detail)
+  await screen.findByRole('region', { name: 'Arqueo registrado' })
+  expect(screen.getByTestId('location')).toHaveTextContent('cash=' + cashId)
+  expect(screen.queryByRole('button', { name: 'Confirmar cierre de caja' })).not.toBeInTheDocument()
+  fireEvent.click(screen.getByRole('button', { name: 'Cerrar Consultar arqueo' }))
+  fireEvent.change(screen.getByLabelText('Desde (Lima)'), { target: { value: '2026-01-01' } })
+  fireEvent.change(screen.getByLabelText('Hasta (Lima)'), { target: { value: '2026-01-30' } })
+  fireEvent.click(screen.getByRole('button', { name: 'Consultar cierres' }))
+  await screen.findByText('No hay cierres para este intervalo y página.')
+  expect(fake.fetcher.mock.calls.some(([path]) => String(path).includes('from=2026-01-01&to=2026-01-30&offset=0'))).toBe(true)
+  expect(fake.posts()).toHaveLength(0)
+})
+it('shows a directory error without presenting it as an empty or authorized page', async () => {
+  const fake = server()
+  const established = fake.fetcher.getMockImplementation()!
+  fake.fetcher.mockImplementation((path, init) => String(path).includes('/cash-sessions/closed?')
+    ? Promise.resolve(json({ code: 'access.membership_missing' }, 403)) : established(path, init))
+  mount(fake)
+  fireEvent.click(screen.getByRole('button', { name: 'Cierres' }))
+  await screen.findByText('No pudimos consultar los cierres')
+  expect(screen.queryByText('No hay cierres para este intervalo y página.')).not.toBeInTheDocument()
+  expect(fake.posts()).toHaveLength(0)
+})
+it('keeps the opening dialog intact, asks once about edits and closes after confirmed opening', async () => {
+  const fake = server()
+  fake.state.closed = true
+  const established = fake.fetcher.getMockImplementation()!
+  fake.fetcher.mockImplementation((path, init) => {
+    if (init?.method !== 'POST' || !String(path).endsWith('/cash-sessions')) return established(path, init)
+    fake.state.closed = false
+    return Promise.resolve(json(session, 201))
+  })
+  mount(fake)
+  const open = await screen.findByRole('button', { name: 'Abrir caja' })
+  const title = 'Abrir caja en esta sucursal'
+  const field = () => screen.getByLabelText('Monto inicial de caja (S/)')
+  fireEvent.click(open)
+  fireEvent.click(screen.getByRole('button', { name: 'Cerrar ' + title }))
+  expect(screen.queryByRole('dialog', { name: title })).not.toBeInTheDocument()
+  fireEvent.click(open)
+  fireEvent.change(field(), { target: { value: '0.0000' } })
+  fireEvent.click(screen.getByRole('button', { name: 'Cerrar ' + title }))
+  expect(screen.getAllByText('¿Salir del formulario?')).toHaveLength(1)
+  fireEvent.click(screen.getByRole('button', { name: 'Seguir editando' }))
+  expect(field()).toHaveValue('0.0000')
+  fireEvent.submit(screen.getByRole('button', { name: 'Confirmar apertura' }).closest('form')!)
+  await screen.findByText('Caja abierta')
+  await waitFor(() => expect(screen.queryByRole('dialog', { name: title })).not.toBeInTheDocument())
+  expect(fake.posts()).toHaveLength(1)
+})
+it('dismisses an untouched closing form and asks once before discarding a counted amount', async () => {
+  const fake = server()
+  mount(fake)
+  const start = await screen.findByRole('button', { name: 'Preparar cierre de mi caja' })
+  const dismiss = () => fireEvent.click(screen.getByRole('button', { name: 'Cerrar Cerrar y cuadrar caja' }))
+  fireEvent.click(start)
+  await screen.findByRole('form', { name: 'Cierre de caja' })
+  dismiss()
+  expect(screen.queryByText('¿Salir del formulario?')).not.toBeInTheDocument()
+  fireEvent.click(start)
+  const amount = await screen.findByLabelText('Efectivo físico contado (S/)')
+  fireEvent.change(amount, { target: { value: '10' } })
+  dismiss()
+  expect(screen.getAllByText('¿Salir del formulario?')).toHaveLength(1)
+  fireEvent.click(screen.getByRole('button', { name: 'Descartar cambios' }))
+  expect(screen.queryByRole('form', { name: 'Cierre de caja' })).not.toBeInTheDocument()
+  expect(fake.posts()).toHaveLength(0)
+})
 it.each([401, 403, 404, 429, 503])('keeps the same closure pending when status GET returns %i after an unverifiable POST response', async status => {
   const fake = server(); await prepare(fake); fake.state.wrongAckActor = true; fake.state.statusFailure = status
   fireEvent.click(screen.getByRole('button', { name: 'Confirmar cierre de caja' }))

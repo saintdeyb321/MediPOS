@@ -7,10 +7,13 @@ namespace MediPOS.Application.Modules.Cash;
 
 internal static class CashReconciliationAccess
 {
+    public static Guid? RestrictedMembership(AccessContext access) =>
+        access.Role == TenantRole.Owner ? null : access.MembershipId;
+
     public static void Require(CashSession session, AccessContext access, bool closing)
     {
         if (session.TenantId != access.TenantId || session.BranchId != access.BranchId) throw new ApplicationErrorException(CashSessionErrors.NotFound);
-        if (access.Role != TenantRole.Owner && session.MembershipId != access.MembershipId)
+        if (RestrictedMembership(access) is Guid member && member != session.MembershipId)
             throw new ApplicationErrorException(closing ? CashSessionErrors.ForbiddenClose : CashSessionErrors.ForbiddenReconciliation);
     }
 

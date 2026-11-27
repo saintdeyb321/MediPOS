@@ -117,6 +117,7 @@ Supplier creation affects the shared tenant catalog and requires Owner; branch p
 - **FR-CASH-003 P0** Totals by payment method.
 - **FR-CASH-004 P0** Linked/audited cash-change loan between branches/cash desks.
 - **FR-CASH-005 P0** Owner sees active cash sessions.
+- **FR-CASH-006** Read-only closure directory for the selected authorized branch. Owners see that branch, and other authorized roles see only their current membership. Filter by Lima closure dates (default 30 calendar days, at most 90), page in descending closure time and ID, and open the existing reconciliation by ID.
 
 ### Transfers
 - **FR-TRF-001..006 P0** Request, origin approval, batch-preserving dispatch, destination receipt, full state history, server stock validation at dispatch.

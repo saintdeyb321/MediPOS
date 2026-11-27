@@ -27,9 +27,11 @@ report="$run_dir/b02.log"
 trap 'rm -f -- "$report"' EXIT
 code=0
 dotnet tests/MediPOS.E2E/bin/Debug/net10.0/MediPOS.E2E.dll -showLiveOutput >"$report" 2>&1 || code=$?
-grep -Eo 'B02 (SHA [a-f0-9]{40} BUILD [a-f0-9]{64}|POSTGRES 18[0-9]{4} ORIGIN https://localhost:[0-9]{1,5} ROLE medipos_test_runtime|P[0-3] START|P[0-2] PASS|P3 PASS F001_CLEAN_ENTRY_GAP_OBSERVED)$' "$report" || true
+grep -Eo 'B02 (SHA [a-f0-9]{40} BUILD [a-f0-9]{64}|POSTGRES 18[0-9]{4} ORIGIN https://localhost:[0-9]{1,5} ROLE medipos_test_runtime|P[0-4] START|P[0-2] PASS|P3 PASS CASH_HISTORY_AND_RECOVERY|P4 PASS POS_PAY_TICKET_VOID)$' "$report" || true
 test "$code" -eq 0
-grep -q 'B02 P3 PASS F001_CLEAN_ENTRY_GAP_OBSERVED$' "$report"
+for phase in 0 1 2; do grep -q "B02 P$phase PASS$" "$report"; done
+grep -q 'B02 P3 PASS CASH_HISTORY_AND_RECOVERY$' "$report"
+grep -q 'B02 P4 PASS POS_PAY_TICKET_VOID$' "$report"
 ```
 
 Los hitos identifican SHA, manifiesto SHA-256 (rutas ordenadas y hashes), versión PostgreSQL, origen y última fase completada. El workflow solo publica esos hitos. Al investigar localmente, mantener cualquier salida de fallo bajo control del operador. Borrar el build de la carpeta temporal una vez registrada la evidencia.
@@ -38,7 +40,7 @@ Los hitos identifican SHA, manifiesto SHA-256 (rutas ordenadas y hashes), versi�
 
 - El fixture selecciona un Docker local explícito, crea BD y contenedor propios con credenciales aleatorias y publica PostgreSQL en un puerto efímero ligado a loopback. Antes de migrar valida contenedor, destino, BD y motor. Formula el runtime desde la misma conexión y comprueba sus privilegios antes del seed. Infraestructura productiva conserva interceptor y RLS.
 - API en HTTPS loopback y recursos privados temporales. Chromium usa contextos nuevos, bloqueo de WebSocket/service workers y proxy local sin salida, además de filtro de solicitudes por origen exacto. La confianza del TLS de prueba queda en esos contextos. El host corta el backchannel Google y los clientes HTTP registrados, y parte de configuración privada explícita en un content root nuevo. Plataforma y scheduler apagados. El fixture elimina su contenedor y el host elimina navegador, certificado y keyring propios.
-- El seed usa tres Owners sintéticos en dos tenants y tres sedes. P0 comprueba React compilado, sesión, 401, 403 y CSRF sin escrituras. P1 abre caja desde React, comprueba 200/open/null y compara la fila con PostgreSQL y negativas por sede/tenant.
-- P2 comprueba falta de fondos, edición preservada, despacho exacto con acuse perdido después del commit, constancia original, recepción con otra sesión y conciliación de ambos saldos. P3 comprueba el caso 100→10, arqueo por URL, un cierre, una auditoría y ausencia en activas. El marcador `F001_CLEAN_ENTRY_GAP_OBSERVED` representa la brecha de descubrimiento al entrar con URL limpia. El PASS de P3 acredita las aserciones del piloto, incluida la observación de esa brecha.
+- El seed usa tres Owners y un Cajero sintéticos en dos tenants y tres sedes. P0 comprueba React compilado, sesión, 401, 403 y CSRF sin escrituras. P1 abre caja desde React, comprueba 200/open/null y compara la fila con PostgreSQL y negativas por sede/tenant.
+- P2 comprueba falta de fondos, pérdida de acuse, constancia y recepción con otra sesión. P3 exige 100→10 con pérdida de acuse de cierre, arqueo por URL y desde Cierres con entrada limpia, una auditoría y ausencia en Activas. P4 cubre POS móvil con teclado/touch, borrador y versión obsoleta, venta mixta con pérdida de acuse, ticket/impresión, anulación, reversiones y negativas/paginación de Cierres.
 
 Para añadir recorridos L-06A–I, reutilizar `BrowserHost` y los escenarios de seed mínimos del fixture, y verificar las filas pertinentes desde otro scope runtime. Probar permisos con contextos e identidades distintos. Los escenarios de service worker de L-06I requieren extender el aislamiento del navegador antes de habilitar workers; el piloto actual cubre conexión real y recuperación con recarga. B-03 conserva la aprobación independiente de integraciones externas.

@@ -2,7 +2,7 @@
 
 ## Corte vigente · 26/11/2026
 
-**RFA2 PARCIAL.** 155/155 UC en nueve familias, con 3 E1, 33 E2, 119 E3 y 0 E4. Veredictos acumulados: 19 PASS, 1 FAIL del baseline de Sencillo, 133 BLOCKED, 1 NOT_RUN y 1 N/A. PostgreSQL acredita el caso exacto de Caja y el estado abierto de Sencillo por aplicación. CI frontend sigue en 645/646 por un fallo de Compras no reproducido localmente. [RUN-13](VALIDATION.md#run-13) · [Aceptación por familia](ROADMAP.md#l-06--aceptación-funcional-por-familia).
+**RFA2 PARCIAL.** 156 UC en nueve familias, con 3 E1, 33 E2, 111 E3 y 9 E4. Veredictos acumulados: 19 PASS, 135 BLOCKED, 1 NOT_RUN y 1 N/A. B-02 está validado para el baseline, con Sencillo Owner y F-001 observados en navegador. El historial agrega UC-CAJ-19. L-06A queda como candidato. Frontend integral sigue en 645/646. [RUN-15](VALIDATION.md#run-15) · [RUN-16](VALIDATION.md#run-16) · [Aceptación por familia](ROADMAP.md#l-06--aceptación-funcional-por-familia).
 
 **RFA3 COMPLETA para revisión documental.** [Recorridos y decisión principal de cada UC](TO_BE.md) · [Lotes y criterios de aceptación](ROADMAP.md) · [Seis hallazgos](FINDINGS.md) · [Próxima acción](CHECKPOINT.md). Solo L-01 tiene recomendación inicial de corrección condicionada. El operador conserva la aprobación por lote. Producción NO-GO.
 

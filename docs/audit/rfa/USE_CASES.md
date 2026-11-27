@@ -141,6 +141,7 @@ Fuente [navigation.ts](../../../frontend/src/app/navigation.ts#L7-L19). Visibili
 - [UC-CAJ-05](flows/01-caja-pos.md#uc-caj-05) · GET `/api/tenants/{tenantId}/branches/{branchId}/cash-sessions/{cashSessionId}/reconciliation`
 - [UC-CAJ-06](flows/01-caja-pos.md#uc-caj-06) · POST `/api/tenants/{tenantId}/branches/{branchId}/cash-sessions/{cashSessionId}/close`
 - [UC-CAJ-07](flows/01-caja-pos.md#uc-caj-07) · GET `/api/tenants/{tenantId}/cash-sessions/active`
+- [UC-CAJ-19](flows/01-caja-pos.md#uc-caj-19) · GET `/api/tenants/{tenantId}/branches/{branchId}/cash-sessions/closed` (adición L-06A).
 - [UC-CAJ-08](flows/01-caja-pos.md#uc-caj-08) · POST `/api/tenants/{tenantId}/branches/{branchId}/sales`
 - [UC-CAJ-09](flows/01-caja-pos.md#uc-caj-09) · GET `/api/tenants/{tenantId}/branches/{branchId}/sales/{saleId}/draft`
 - [UC-CAJ-10](flows/01-caja-pos.md#uc-caj-10) · PUT `/api/tenants/{tenantId}/branches/{branchId}/sales/{saleId}/lines`

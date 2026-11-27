@@ -1,5 +1,11 @@
 # Checkpoint RFA
 
+## RFA4 · L-06A
+
+- Base `c26ee5090ebbc2d48a27bb25b8817554f6ec7adf`. [RUN-15](VALIDATION.md#run-15) reconcilia el CI B-02 45933239638 P0–P3 con PostgreSQL 18.7 y navegador real. L-01 acreditado para Owner. F-001 demuestra brecha de entrada limpia y persistencia por ID. DEV sigue sin atribución.
+- **L-06A_CANDIDATO.** GET y pestaña Cierres (nuevo UC-CAJ-19), protección del borrador vaciado y pilotos P3/P4. [RUN-16](VALIDATION.md#run-16) incluye tabla de 19 UC, RED/GREEN, pruebas focalizadas y alcance pendiente. P3/P4 del candidato están NOT_RUN por Docker ausente. RFA2 parcial y gate frontend 645/646.
+- Acción exacta del operador: revisar y publicar en `ci/postgres-diagnostics-8bc6b4c` con los cambios del arnés. El push debe ejecutar B-02 en el SHA del candidato. Conciliar marcadores nuevos de P3/P4, ejecutar el gate completo cuando se acuerde y decidir apertura de L-06B. Producción NO-GO.
+
 ## RFA4 · B-02
 
 - Baseline `781277c0032e8d4f364893191137254b3e024c2e`. Composición reutilizable implementada en `backend/tests/MediPOS.E2E`. Reutiliza fixture, seed, host y cookie/CSRF. Pilotos secuenciales P0→P3 preparados. [RUN-14](VALIDATION.md#run-14).

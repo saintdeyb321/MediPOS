@@ -42,6 +42,7 @@ public sealed partial class TenantCommercialContractTests
             ("GET", "/branches/{branchId}/operational-categories"),
             ("PUT", "/products/{productId}/local-data"),
             ("GET", "/branches/{branchId}/operations/{requestId}"),
+            ("GET", "/branches/{branchId}/cash-sessions/closed"),
             ("POST", "/product-imports/{importJobId}/recover-interrupted"),
         ];
         Assert.Equal(95 + additions.Length, endpoints.Length);

@@ -8,7 +8,7 @@ Los números son los sufijos del prefijo UC de cada fila. KEEP conserva el compo
 
 | Familia y ficha | KEEP | Corregir o simplificar | Brecha por decidir | Validar antes de aceptar |
 |---|---|---|---|---|
-| [CAJ · Caja y POS](flows/01-caja-pos.md) | 01–03,07–13 | — | 17 | 04–06,14–16,18 |
+| [CAJ · Caja y POS](flows/01-caja-pos.md) | 01–03,07–09,11–13 | 10,17,19 | — | 04–06,14–16,18 |
 | [CAT · Catálogo](flows/02-catalogo.md) | 03–05,07–19,22 | — | 06,20 | 01–02,21 |
 | [COM · Compras e inventario](flows/03-compras-inventario.md) | 01–02,05–08,10–11,15 | — | 09,12 | 03–04,13–14 |
 | [TRA · Transferencias](flows/04-transferencias.md) | 02–07,09–11 | 01 | — | 08,12–13 |
@@ -22,7 +22,7 @@ Los números son los sufijos del prefijo UC de cada fila. KEEP conserva el compo
 
 1. El cajero abre su caja y trabaja en su sede. Al cerrar cuenta el efectivo físico. Revisa esperado del servidor, contado y diferencia con signo. Yape, Plin y tarjeta conservan sus totales por separado.
 2. Si el cierre está en curso, esperar. Si se pierde el acuse, volver a la misma caja y consultar. Un error de lectura o una lectura todavía abierta conserva la intención. Un estado cerrado confirma el cierre aunque todavía falte el detalle del arqueo.
-3. Hoy la caja sale de **Activas**. Con la dirección original se puede leer el arqueo; al entrar sin ella falta una forma de encontrarlo. Propuesta sujeta a aprobación: **Cierres** por fecha y sede, por defecto propios; Owner según alcance autorizado. Elegir una fila abre el arqueo existente sin copiar un UUID. Si se elige conservar solo el enlace, indicar esta limitación en la aceptación.
+3. La caja sale de **Activas**. Desde **Cierres**, el usuario consulta los cierres de la sede por fecha y abre el arqueo existente. Owner consulta todos los autorizados en la sede y el personal operativo solo los propios. La reentrada desde una URL limpia está implementada y pendiente de comprobación en P3 del candidato.
 4. En POS, conservar presentación y precio del servidor, borrador versionado, cobro mixto, ticket interno y anulación compensatoria. Al salir de un carrito local con cambios, ofrecer conservar o descartar según la protección existente. Un borrador persistido sin cambios debe poder cerrarse y recuperarse. Caracterizar también vaciar todas las líneas de un borrador guardado. Durante un envío o una respuesta incierta, conservar su identidad y bloquear la repetición. El motivo para pedir confirmación es la pérdida de edición real. `useSaleDraft.ts` ya compara líneas guardadas; verificar antes de proponer cualquier refactor.
 
 | Estado comprobado | Acción permitida | Efecto financiero |

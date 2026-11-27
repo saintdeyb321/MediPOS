@@ -19,6 +19,8 @@ La evidencia de ejecución se vincula al [registro RFA2](VALIDATION.md). E2 se l
 
 ## F-001 · Una caja cerrada deja de aparecer en activas
 
+**RUN-15 · E4 anterior al historial.** El cierre 100→10 persistió −90 con una auditoría. El navegador recuperó el arqueo por URL y la entrada limpia no ofrecía cómo encontrarlo. El último hecho confirma la brecha de descubrimiento. L-06A añade Cierres para la sede autorizada. Su aceptación en el piloto nuevo y la causa del incidente DEV siguen pendientes. [Evidencia](VALIDATION.md#run-15).
+
 **RUN-13 · E3 del caso exacto.** PostgreSQL confirma apertura 100, contado 10, −90, auditoría única, rechazo del segundo cierre, exclusión de activas y arqueo por ID desde otro scope. Reentrada en navegador aislado e incidente DEV permanecen abiertos. [Aserciones](VALIDATION.md#run-13).
 
 **RFA4 · Caso exacto preparado.** La prueba PostgreSQL de [RUN-12](VALIDATION.md#run-12) fija apertura 100 y conteo 10 sin actividad, comprueba un único cierre con diferencia −90 y relee el arqueo por ID desde otro scope. Compilada, NOT_RUN. El incidente DEV sigue sin atribuir.
@@ -28,6 +30,8 @@ La evidencia de ejecución se vincula al [registro RFA2](VALIDATION.md). E2 se l
 - UC-CAJ-05/06/07/16/17. FR-CASH-002/003/005. Evidencia E1 corroborada por la revisión externa del baseline 939ad83. P2 provisional por descubrimiento del arqueo. Un cierre con 100 inicial y 10 contado, sin movimientos, debe registrar −90. `CashCloseTransaction.cs:59–72` confirma el registro, mientras `CashSessionReader.cs:34` filtra open. La URL `cash` permite recuperar y la entrada limpia carece de historial. No hay evidencia sobre si el caso del operador se guardó. Comparar ambos GET, actor/sede y acuse según [receta Caja](flows/01-caja-pos.md). PENDIENTE_RFA2.
 
 ## F-002 · Sencillo exige saldo esperado en una caja abierta
+
+**RUN-15 · E4 Owner.** GET de estado abierto con esperado null en HTTP+PostgreSQL. Despacho y recepción entre sedes, pérdida de acuse y consulta de constancia con un único efecto acreditados por navegador. El rechazo por fondos insuficientes no escribió. Aceptación por demás roles y gate general pendientes. [Evidencia](VALIDATION.md#run-15).
 
 **RUN-13 · E3 de aplicación.** `StatusAsync` leyó en PostgreSQL la caja abierta con esperado nulo. RUN-12 ya verificó HTTP con dobles. Falta el GET respaldado por PostgreSQL y el despacho desde navegador aislado. [Aserciones](VALIDATION.md#run-13).
 

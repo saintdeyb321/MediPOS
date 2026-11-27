@@ -212,6 +212,49 @@ public sealed class CashSessionUseCaseTests
         Assert.Null(setup.Active.Query);
     }
 
+    [Theory]
+    [InlineData(TenantRole.Owner)]
+    [InlineData(TenantRole.Cashier)]
+    [InlineData(TenantRole.Pharmacist)]
+    public async Task ClosedDirectoryBindsScopeAndUsesThirtyLimaDays(TenantRole role)
+    {
+        var setup = new Setup(role);
+        var reader = new ClosedReader();
+        var result = await new GetClosedCashSessionsHandler(setup.Resolver, reader, new Clock())
+            .HandleAsync(new(setup.TenantId, setup.BranchId, Offset: 50), TestContext.Current.CancellationToken);
+        Assert.Same(reader.Page, result);
+        Assert.Equal((setup.TenantId, setup.BranchId, role == TenantRole.Owner ? null : (Guid?)setup.Membership.Id,
+                new DateTimeOffset(2026, 9, 7, 5, 0, 0, TimeSpan.Zero), new DateTimeOffset(2026, 10, 7, 5, 0, 0, TimeSpan.Zero), 50, 50),
+            reader.Request);
+        Assert.Equal(2, setup.Access.Reads);
+    }
+
+    [Fact]
+    public async Task ClosedDirectoryDiscardsRowsWhenAssignmentIsRevokedDuringRead()
+    {
+        var setup = new Setup(TenantRole.Cashier);
+        var reader = new ClosedReader { OnRead = () => setup.Access.Snapshot = setup.Access.Snapshot with { BranchAssigned = false } };
+        var handler = new GetClosedCashSessionsHandler(setup.Resolver, reader, new Clock());
+        var failure = await Assert.ThrowsAsync<ApplicationErrorException>(() =>
+            handler.HandleAsync(new(setup.TenantId, setup.BranchId), TestContext.Current.CancellationToken));
+        Assert.Equal("access.branch_unassigned", failure.Error.Code);
+        Assert.Equal(2, setup.Access.Reads);
+    }
+
+    private sealed class ClosedReader : IClosedCashSessionsReader
+    {
+        public ClosedCashSessionPage Page { get; } = new([new(Guid.NewGuid(), "Operador", Now, 100m, 10m, -90m)], false);
+        public Action? OnRead { get; init; }
+        public (Guid Tenant, Guid Branch, Guid? Membership, DateTimeOffset Start, DateTimeOffset End, int Offset, int Limit) Request { get; private set; }
+        public Task<ClosedCashSessionPage> ReadClosedAsync(Guid tenantId, Guid branchId, Guid? membershipId, DateTimeOffset start,
+            DateTimeOffset endExclusive, int offset, int limit, CancellationToken cancellationToken)
+        {
+            Request = (tenantId, branchId, membershipId, start, endExclusive, offset, limit);
+            OnRead?.Invoke();
+            return Task.FromResult(Page);
+        }
+    }
+
     private sealed class Setup
     {
         public Setup(TenantRole role = TenantRole.Cashier)
@@ -224,9 +267,9 @@ public sealed class CashSessionUseCaseTests
             Access = new AccessReader(new(true, Membership,
                 License.Create(TenantId, Now.AddDays(-1), Now.AddMonths(1), 3, LicenseStatus.Active, UserId, Now.AddDays(-1)),
                 true, true, [WorkSchedule.Create(TenantId, Membership.Id, TenantId, DayOfWeek.Tuesday, new(9, 0), new(18, 0))]));
-            var resolver = new ResolveAccessContextHandler(Session, Access, new TenantDataContext());
-            Open = new(resolver, Writer, new Clock());
-            List = new(resolver, Active, new Clock());
+            Resolver = new(Session, Access, new TenantDataContext());
+            Open = new(Resolver, Writer, new Clock());
+            List = new(Resolver, Active, new Clock());
         }
 
         public Guid TenantId { get; set; }
@@ -237,6 +280,7 @@ public sealed class CashSessionUseCaseTests
         public AccessReader Access { get; }
         public Writer Writer { get; } = new();
         public ActiveReader Active { get; } = new();
+        public ResolveAccessContextHandler Resolver { get; }
         public OpenCashSessionHandler Open { get; }
         public GetActiveCashSessionsHandler List { get; }
     }

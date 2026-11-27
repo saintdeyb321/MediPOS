@@ -7,6 +7,7 @@ on:
       - ci/postgres-diagnostics-8bc6b4c
     paths:
       - .github/workflows/b02-browser-pilot.yml
+      - 'backend/tests/MediPOS.E2E/**'
 
 permissions:
   contents: read
@@ -70,9 +71,10 @@ jobs:
           awk '
             match($0, /B02 SHA [a-fA-F0-9]{40} BUILD [a-f0-9]{64}$/) ||
             match($0, /B02 POSTGRES 18[0-9]{4} ORIGIN https:\/\/localhost:[0-9]{1,5} ROLE medipos_test_runtime$/) ||
-            match($0, /B02 P[0-3] START$/) ||
+            match($0, /B02 P[0-4] START$/) ||
             match($0, /B02 P[0-2] PASS$/) ||
-            match($0, /B02 P3 PASS F001_CLEAN_ENTRY_GAP_OBSERVED$/) { print substr($0, RSTART, RLENGTH) }
+            match($0, /B02 P3 PASS CASH_HISTORY_AND_RECOVERY$/) ||
+            match($0, /B02 P4 PASS POS_PAY_TICKET_VOID$/) { print substr($0, RSTART, RLENGTH) }
           ' "$report" | tee -a "$GITHUB_STEP_SUMMARY"
           if [[ "$code" -ne 0 ]]; then
             printf '%s\n' 'B-02 failed or was incomplete. Unreported phases are unverified.' | tee -a "$GITHUB_STEP_SUMMARY"
@@ -83,4 +85,5 @@ jobs:
           for phase in 0 1 2; do
             grep -Fxq "B02 P$phase PASS" "$GITHUB_STEP_SUMMARY"
           done
-          grep -Fxq 'B02 P3 PASS F001_CLEAN_ENTRY_GAP_OBSERVED' "$GITHUB_STEP_SUMMARY"
+          grep -Fxq 'B02 P3 PASS CASH_HISTORY_AND_RECOVERY' "$GITHUB_STEP_SUMMARY"
+          grep -Fxq 'B02 P4 PASS POS_PAY_TICKET_VOID' "$GITHUB_STEP_SUMMARY"

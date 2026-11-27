@@ -125,10 +125,14 @@ internal sealed class BrowserHost : IAsyncDisposable
         });
     }
 
-    internal async Task<IBrowserContext> NewBrowserContextAsync()
+    internal async Task<IBrowserContext> NewBrowserContextAsync(bool touch = false)
     {
         if (_browser is null) throw new InvalidOperationException("Browser has not started.");
-        var context = await _browser.NewContextAsync(new() { IgnoreHTTPSErrors = true, ServiceWorkers = ServiceWorkerPolicy.Block });
+        var context = await _browser.NewContextAsync(new()
+        {
+            IgnoreHTTPSErrors = true, ServiceWorkers = ServiceWorkerPolicy.Block, HasTouch = touch,
+            ViewportSize = touch ? new() { Width = 390, Height = 844 } : null,
+        });
         await context.RouteAsync("**/*", route => IsTestOrigin(route.Request.Url) ? route.ContinueAsync() : route.AbortAsync());
         await context.RouteWebSocketAsync("**/*", route => route.CloseAsync());
         return context;

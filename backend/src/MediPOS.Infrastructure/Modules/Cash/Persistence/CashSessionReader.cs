@@ -8,7 +8,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace MediPOS.Infrastructure.Modules.Cash.Persistence;
 
-internal sealed class CashSessionReader(MediPosDbContext context) : IFindOpenCashSession, IActiveCashSessionsReader
+internal sealed class CashSessionReader(MediPosDbContext context) : IFindOpenCashSession, IActiveCashSessionsReader, IClosedCashSessionsReader
 {
     public async Task<OpenCashSessionDetails?> FindAsync(
         Guid tenantId, Guid branchId, Guid membershipId, CancellationToken cancellationToken)
@@ -42,5 +42,24 @@ internal sealed class CashSessionReader(MediPosDbContext context) : IFindOpenCas
                            context.Sales.Where(sale => sale.TenantId == session.TenantId && sale.CashSessionId == session.Id && sale.Status == SaleStatus.Confirmed)
                                .Sum(sale => (decimal?)sale.TotalAmount) ?? 0m);
         return await sessions.Skip(query.Offset).Take(query.Limit).ToListAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<ClosedCashSessionPage> ReadClosedAsync(Guid tenantId, Guid branchId, Guid? membershipId,
+        DateTimeOffset start, DateTimeOffset endExclusive, int offset, int limit, CancellationToken cancellationToken)
+    {
+        context.SelectTenant(tenantId);
+        var sessions = from session in context.CashSessions.AsNoTracking()
+                       where session.TenantId == tenantId && session.BranchId == branchId &&
+                           session.Status == CashSessionStatus.Closed && session.ClosedAt >= start && session.ClosedAt < endExclusive &&
+                           (!membershipId.HasValue || session.MembershipId == membershipId)
+                       join membership in context.Memberships on new { session.TenantId, Id = session.MembershipId } equals new { membership.TenantId, membership.Id }
+                       join user in context.Users on membership.UserId equals user.Id
+                       orderby session.ClosedAt descending, session.Id descending
+                       select new ClosedCashSessionDetails(session.Id, user.DisplayName, session.ClosedAt!.Value,
+                           session.ExpectedCashAmount!.Value, session.CountedCashAmount!.Value, session.CashDifference!.Value);
+        var rows = await sessions.Skip(offset).Take(limit + 1).ToListAsync(cancellationToken).ConfigureAwait(false);
+        var hasMore = rows.Count > limit;
+        if (hasMore) rows.RemoveAt(limit);
+        return new(rows, hasMore);
     }
 }

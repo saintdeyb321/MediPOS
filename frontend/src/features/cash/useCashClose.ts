@@ -45,6 +45,7 @@ export function useCashClose() {
     mark(selected, false)
     void client.invalidateQueries({ queryKey: scopedKey({ tenantId, branchId }, 'current-cash') })
     void client.invalidateQueries({ queryKey: scopedKey({ tenantId, branchId }, 'active-cash') })
+    void client.invalidateQueries({ queryKey: scopedKey({ tenantId, branchId }, 'closed-cash') })
   }
   async function consult(selected = id) {
     const unresolved = latest.current.has('closingCash')

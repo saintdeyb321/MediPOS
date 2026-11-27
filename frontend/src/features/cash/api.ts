@@ -1,5 +1,5 @@
 import { ApiError, HttpClient } from '../../shared/api/http'
-import { array, branchPath, decimal, nullable, object, oneOf, requireScope, text, utc, uuid } from '../../shared/api/contracts'
+import { array, boolean, branchPath, decimal, nullable, object, oneOf, requireScope, text, utc, uuid } from '../../shared/api/contracts'
 import type { BranchScope } from '../../shared/api/contracts'
 import type { JsonNumber } from '../../shared/api/exactJson'
 
@@ -33,6 +33,10 @@ const reconciliation = object<CashReconciliation>({ cashSessionId: uuid, tenantI
 })
 export interface ActiveCash { cashSessionId: string; branchId: string; branchName: string; membershipId: string; userId: string; displayName: string; openingAmount: JsonNumber; openedAt: string; accumulatedSales: JsonNumber }
 const activeCash = array(object<ActiveCash>({ cashSessionId: uuid, branchId: uuid, branchName: text, membershipId: uuid, userId: uuid, displayName: text, openingAmount: decimal, openedAt: utc, accumulatedSales: decimal }))
+const closedCash = object({
+  items: array(object({ cashSessionId: uuid, displayName: text, closedAt: utc, expectedCashAmount: decimal,
+    countedCashAmount: decimal, cashDifference: decimal })), hasMore: boolean,
+})
 function decodeReconciliation(data: unknown, scope: BranchScope, id: string) {
   const result = reconciliation(data)
   requireScope({ tenantId: result.tenantId, branchId: result.employeeBranch.branchId }, scope)
@@ -41,6 +45,12 @@ function decodeReconciliation(data: unknown, scope: BranchScope, id: string) {
 }
 export function cashApi(http: HttpClient) {
   return {
+    async closed(scope: BranchScope, from: string, to: string, offset: number, signal?: AbortSignal) {
+      const params = new URLSearchParams({ from, to, offset: String(offset), limit: '50' })
+      const page = closedCash(await http.request(`${branchPath(scope)}/cash-sessions/closed?${params}`, { signal, exactNumbers: true }))
+      if (page.items.length > 50 || (page.hasMore && page.items.length !== 50)) throw new ApiError(0, 'client.unexpected_response')
+      return page
+    },
     async active(scope: BranchScope, offset = 0, signal?: AbortSignal) {
       if (!Number.isInteger(offset) || offset < 0 || offset > 100000) throw new RangeError('Invalid offset')
       const result = activeCash(await http.request(`/api/tenants/${uuid(scope.tenantId)}/cash-sessions/active?${new URLSearchParams({ branchId: uuid(scope.branchId), offset: String(offset), limit: '50' })}`, { signal, exactNumbers: true }))

@@ -29,6 +29,12 @@ public static partial class TenantEndpoints
         }).Accepts<OpenCashRequest>("application/json").Produces<OpenCashSessionDetails>(201).WithName("tenant.cash.open");
         branches.MapGet("/cash-sessions/current", async (HttpContext c, CashSessionStatusQueries queries) => TenantHttp.Response(await queries.CurrentAsync(TenantHttp.Tenant(c), TenantHttp.Branch(c), c.RequestAborted)))
             .Produces<CurrentCashSession>().WithName("tenant.cash.current");
+        branches.MapGet("/cash-sessions/closed", async (HttpContext c, GetClosedCashSessionsHandler handler) =>
+            TenantHttp.Response(await handler.HandleAsync(new(TenantHttp.Tenant(c), TenantHttp.Branch(c),
+                TenantHttp.Query(c, "from") is null ? null : TenantHttp.Date(c, "from"),
+                TenantHttp.Query(c, "to") is null ? null : TenantHttp.Date(c, "to"),
+                TenantHttp.Offset(c), TenantHttp.Limit(c)), c.RequestAborted)))
+            .Produces<ClosedCashSessionPage>().WithQuery<TenantOpenApi.CashClosures>().WithName("tenant.cash.closed");
         branches.MapGet("/cash-sessions/{cashSessionId}", async (HttpContext c, CashSessionStatusQueries queries) => TenantHttp.Response(await queries.StatusAsync(TenantHttp.Tenant(c), TenantHttp.Branch(c), TenantHttp.Id(c, "cashSessionId"), c.RequestAborted)))
             .Produces<CashSessionStatusDetails>().WithName("tenant.cash.status");
         branches.MapGet("/cash-sessions/{cashSessionId}/reconciliation", async (HttpContext c, GetCashSessionReconciliationHandler handler) =>

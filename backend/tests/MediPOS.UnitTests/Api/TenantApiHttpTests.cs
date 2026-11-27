@@ -111,6 +111,15 @@ public sealed class TenantApiHttpTests
         using var close = await Json(host, "POST", operational + $"/cash-sessions/{cashId:D}/close", new { countedCashAmount = 12m }, csrf);
         Assert.Equal(12m, close.RootElement.GetProperty("expectedCashAmount").GetDecimal()); Assert.Equal(0m, close.RootElement.GetProperty("cashDifference").GetDecimal());
         using var reconciled = await Json(host, "GET", operational + $"/cash-sessions/{cashId:D}/reconciliation"); Assert.Equal(12m, reconciled.RootElement.GetProperty("expectedCashAmount").GetDecimal());
+        var auditCount = state.Audits.Count;
+        using var history = await Json(host, "GET", operational + "/cash-sessions/closed");
+        var closure = Assert.Single(history.RootElement.GetProperty("items").EnumerateArray());
+        Assert.Equal(cashId, closure.GetProperty("cashSessionId").GetGuid());
+        Assert.Equal(12m, closure.GetProperty("expectedCashAmount").GetDecimal());
+        Assert.False(history.RootElement.GetProperty("hasMore").GetBoolean());
+        using var invalidHistory = await Send(host, "GET", operational + "/cash-sessions/closed?from=2026-01-01&to=2026-04-01");
+        Assert.Equal(HttpStatusCode.BadRequest, invalidHistory.StatusCode);
+        Assert.Equal(auditCount, state.Audits.Count);
         using var report = await Json(host, "GET", tenant + $"/reports/overview?from={DateTimeOffset.UtcNow:yyyy-MM-dd}&to={DateTimeOffset.UtcNow:yyyy-MM-dd}");
         Assert.Equal(4m, report.RootElement.GetProperty("consolidatedTotals").GetProperty("netSalesAmount").GetDecimal());
         Assert.All(state.Audits, audit => Assert.Equal(state.User.Id, audit.ActorId));

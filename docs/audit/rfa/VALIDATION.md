@@ -1,5 +1,57 @@
 # RFA2 · Validación conductual y persistencia
 
+<a id="run-16"></a>
+## RUN-16 · L-06A candidato
+
+Base `c26ee5090ebbc2d48a27bb25b8817554f6ec7adf`. RED focalizado en `PosPage.test.tsx` confirmó que vaciar un borrador dejaba el registro dirty en false. GREEN con la protección local corregida. Las dos pruebas de descarte de Caja verifican una confirmación tras editar, cierre ordinario sin cambios y apertura confirmada. El cierre del diálogo de apertura se verifica después de limpiar su marca, pues la caja puede aparecer abierta durante la transición.
+
+| Verificación | Comando / selección | Resultado |
+|---|---|---|
+| Vitest RED / GREEN | Desde frontend, `npm.cmd run test -- src/features/pos/PosPage.test.tsx -t 'protects removal of the last persisted draft line'`, después `npm.cmd run test -- src/features/cash/CashPage.test.tsx src/features/pos/PosPage.test.tsx`. | RED 1 FAIL esperado, 42 excluidos. GREEN 57 PASS, 0 FAIL, 0 SKIP. Dos caracterizaciones de diálogos agregadas después, 1/1 cada una por filtro. Tras pasar el detalle histórico a solo lectura, 2/2 comprobaciones focalizadas. |
+| HTTP con dobles | xUnit en proceso sobre `MediPOS.UnitTests.dll` con `-filterVSTest` para `RealCookieOnboardingPurchaseMixedSaleTicketCashCloseAndOwnerReportUseExistingHandlers` y `EveryPublishedTenantRouteRequiresNativeAuthenticationAndNoOtherDomainIsMapped`. | 2 PASS. Historial, rango 400, auditoría inalterada y 401 anónimo. |
+| Aplicación con puertos dobles | `dotnet tests/MediPOS.UnitTests/obj/b02-bin/Debug/net10.0/MediPOS.UnitTests.dll -filterVSTest "FullyQualifiedName~ClosedDirectory"`. | 4 PASS. Lima semiabierto, alcance por rol y denegación tras revocar la asignación durante lectura. |
+| Compilación y análisis | `dotnet build tests/MediPOS.E2E/MediPOS.E2E.csproj --no-restore -p:BaseOutputPath=obj/b02-bin/ -m:1 --disable-build-servers` y mismo comando para `tests/MediPOS.UnitTests`. ESLint de archivos tocados y `npm.cmd run build -- --outDir node_modules/.cache/medipos-l06a-build`. | PASS. Vite advierte un chunk mayor de 500 kB. |
+| Formato y workflow | `dotnet format whitespace --verify-no-changes --no-restore --include <archivos C# modificados>`, lectura YAML y cotejo de alcance con el baseline, `git diff --check`. | PASS. Los cuatro archivos C# editados que quedaron con CRLF se guardaron en LF, como sus blobs del baseline. |
+| PostgreSQL y navegador del candidato | [Guía](../../../backend/tests/MediPOS.E2E/README.md), workflow B-02 con P3 `CASH_HISTORY_AND_RECOVERY` y P4 `POS_PAY_TICKET_VOID`. | NOT_RUN. Docker ausente. P0–P2 conservados. |
+
+| UC | Decisión | Evidencia o aserción |
+|---|---|---|
+| CAJ-01 | KEEP | DOM lee la venta original tras acuse perdido. P4 exige el mismo ID confirmado. |
+| CAJ-02 | KEEP | P1 histórico abre desde UI; P4 añade apertura decimal y rechazo duplicado. |
+| CAJ-03 | KEEP | Lectura actual existente; P4 exige importe inicial exacto por sesión. |
+| CAJ-04 | KEEP | P1 histórico 200/open/null con negativas por sede y tenant. |
+| CAJ-05 | KEEP | P3 histórico arqueo autoritativo por ID. P3 candidato lo abre desde historial. |
+| CAJ-06 | KEEP | P3 histórico 100→10 y conflicto al repetir. DOM verifica edición, cierre y protección. |
+| CAJ-07 | KEEP | P3 histórico excluye cerradas de Activas y P3 candidato conserva esta aserción. |
+| CAJ-08 | KEEP | Vitest recupera la constancia del borrador original. P4 cuenta una sola venta. |
+| CAJ-09 | KEEP | DOM recupera líneas/versiones tras recarga. P4 exige lectura del borrador real antes del cobro. |
+| CAJ-10 | FIX | RED/GREEN para vaciar borrador sin perder la edición local al salir; P4 exige 409 con versión anterior. |
+| CAJ-11 | KEEP | Vitest cubre cobro incierto y una sola escritura. P4 induce pérdida tras commit real y controla efectivo/Yape y stock. |
+| CAJ-12 | KEEP | DOM y E3 existentes. P4 identifica venta, presentación y estado en ticket. |
+| CAJ-13 | KEEP | Reversión existente y negativa DOM. P4 exige dos reversiones de pago, restitución de lote y auditoría. |
+| CAJ-14 | KEEP | Vitest cubre búsqueda, selección y edición. P4 prepara teclado y touch en viewport de 390 px. |
+| CAJ-15 | KEEP | DOM y P4 verifican imprimir opcional y volver sin imprimir. P4 intercepta solo la llamada local a impresión y comprueba cero escrituras al usarla. |
+| CAJ-16 | VALIDATE | Vitest verifica GET fallido/open/closed tras pérdida. P3 candidato pierde acuse de un cierre confirmado y verifica arqueo sin segundo POST UI. |
+| CAJ-17 | FIX | Brecha del baseline en RUN-15. Vitest verifica entrada limpia a Cierres, arqueo por ID y cero POST. P3 real pendiente. |
+| CAJ-18 | KEEP | Vitest distingue vendedor de la membresía, montos y pagos. P4 verifica vendedor autorizado y el efectivo neto tras anulación. |
+| CAJ-19 | FIX · capacidad aditiva | GET Cierres por sede, membresía, días de Lima, orden y página. HTTP con dobles y DOM PASS. P3/P4 deben verificar la consulta real. |
+
+Variantes físicas de impresión, vistas adicionales y aceptación del operador siguen pendientes. Sin cambios en lógica financiera. Estado `L-06A_CANDIDATO`, gate frontend integral pendiente y RFA2 parcial.
+
+<a id="run-15"></a>
+## RUN-15 · B-02 acreditado del baseline
+
+[CI 45933239638](https://github.com/saintdeyb321/MediPOS/actions/runs/45933239638), intento 1, push, job browser 140290452309, todos los pasos PASS (180 s). SHA `c26ee5090ebbc2d48a27bb25b8817554f6ec7adf`, manifiesto `fd2acf2f5191c7b7d25baae58e8c4c006db56209e5ca4c1135d3cf636cb83c23`, PostgreSQL 18.7 (180007), runtime `medipos_test_runtime`, puerto efímero 43297. Evidencia saneada del MD del operador.
+
+| Fase | Aserción del SHA ejecutado |
+|---|---|
+| P0 PASS | React compilado, ACC-15/17 identidad sintética y directorio, INT-02 readiness, 401 sin sesión, 403 de otro tenant, CSRF 400 y cero cajas en ambos tenants. |
+| P1 PASS | CAJ-02 apertura por UI y CAJ-04 HTTP 200 con ID/sede/membresía, open y JSON null, fila real y negativas. |
+| P2 PASS | TRA-01/03/04/13 rechazo de fondos sin efecto, despacho de 1.0001, acuse perdido después del commit, GET de la constancia, sesión destino distinta, una recepción, detalle y dos auditorías. LEDGER verificado por cierre API. |
+| P3 PASS | CAJ-05/06/07/17 cierre 100→10 y diferencia −90, fila y auditoría única, ausencia en activas, reconsulta por URL, segundo cierre rechazado. `F001_CLEAN_ENTRY_GAP_OBSERVED` acredita la brecha de descubrimiento en la entrada limpia del baseline. P3 en este SHA recibió el acuse normal. |
+
+B-02 validado para estos escenarios y SHA. L-01 acredita corrección E4 para Owner, con variantes restantes por rol y gate general pendientes. F-001 demuestra persistencia y la brecha en navegador aislado; incidente DEV sin atribuir. La matriz alcanza 156 casos con el nuevo UC-CAJ-19. 3 E1, 33 E2, 111 E3 y 9 E4. 19 PASS, 135 BLOCKED, 1 NOT_RUN y 1 N/A. El FAIL histórico de Sencillo conserva su evidencia E2 y su variante Owner ya verificada pasa a BLOCKED por alcance residual. Frontend conserva 645/646 de RUN-13.
+
 <a id="run-14"></a>
 ## RUN-14 · B-02 · Candidato local
 

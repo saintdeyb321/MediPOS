@@ -104,6 +104,7 @@ public static class TenantOpenApi
     public sealed class ProductPage : Page { public Guid? ProductId { get; init; } }
     public sealed class BranchPage : Page { public Guid? BranchId { get; init; } }
     public sealed class CashTransfers : Page { public Guid? DestinationBranchId { get; init; } }
+    public sealed class CashClosures : Page { public DateOnly? From { get; init; } public DateOnly? To { get; init; } }
     public sealed class Transfers : Page { public Guid? BranchId { get; init; } public MediPOS.Domain.Modules.Transfers.TransferStatus? Status { get; init; } }
     public sealed class Notifications : Page { public Guid? BranchId { get; init; } public bool? OnlyUnread { get; init; } }
     public sealed class AuditHistory : Page { public Guid? EntityId { get; init; } public DateTimeOffset? FromUtc { get; init; } public DateTimeOffset? ToUtc { get; init; } }

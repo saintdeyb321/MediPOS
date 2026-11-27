@@ -182,7 +182,8 @@ export function useSaleDraft(lines: CartLine[], replaceCart: (lines: CartLine[])
     } catch (failure) { if (!operation.current.signal.aborted) { setError(failure); setPhase('blocked') } }
     finally { busy.current = false }
   }
-  useNavigationProtection({ dirty: lines.length > 0 && (!server || dirty), busy: preparing || ['creating', 'saving', 'loading'].includes(phase), pending: creationUnknown || checkoutPending })
+  useNavigationProtection({ dirty: server ? server.status === 'draft' && dirty : lines.length > 0,
+    busy: preparing || ['creating', 'saving', 'loading'].includes(phase), pending: creationUnknown || checkoutPending })
   return { recoverCreation, canRecoverCreation: isUuid(parameters.get('draftPending') ?? ''), server, phase, error, notice, seller, cashMatches, locked, dirty, creationUnknown, create, save, refresh, resolve, recover, hasKnownId: isUuid(saleId),
     prepare, preparing, nextSale, canPrepare: writable && !creationUnknown && lines.length > 0,
     checkoutPending, voidPending, markCheckout: (pending: boolean, kind: 'confirm' | 'void' = 'confirm') =>

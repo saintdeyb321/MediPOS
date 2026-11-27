@@ -50,7 +50,7 @@ GET `/api/tenants/{tenantId}/branches/{branchId}/sales/{saleId}` · `backend/src
 
 ## UC-CAJ-02
 
-POST `/api/tenants/{tenantId}/branches/{branchId}/cash-sessions` · `backend/src/MediPOS.Api/Tenant/PosEndpoints.cs:25`. **E3 · IMPLEMENTADO · PASS**. 1. Abrir caja y escribir monto inicial. 2. Confirmar apertura. 3. Consultar su estado en la misma sede. CashSessionPanel.tsx:16–47 → useCashSession.ts:42–62 → DTO openingAmount en cash/api.ts:57–59 → OpenCashSessionHandler.cs:20–41. OpenCashSessionWriter.cs:15–26 persiste sesión y auditoría en la misma transacción. Índice parcial único de apertura en CashSessionConfiguration.cs:12,48. El acuse se valida para el actor y actualiza current-cash. Si la respuesta es incierta, consultar la actual antes de repetir. Requisito FR-CASH-001.
+POST `/api/tenants/{tenantId}/branches/{branchId}/cash-sessions` · `backend/src/MediPOS.Api/Tenant/PosEndpoints.cs:25`. **E4 · IMPLEMENTADO · PASS**. 1. Abrir caja y escribir monto inicial. 2. Confirmar apertura. 3. Consultar su estado en la misma sede. CashSessionPanel.tsx:16–47 → useCashSession.ts:42–62 → DTO openingAmount en cash/api.ts:57–59 → OpenCashSessionHandler.cs:20–41. OpenCashSessionWriter.cs:15–26 persiste sesión y auditoría en la misma transacción. Índice parcial único de apertura en CashSessionConfiguration.cs:12,48. El acuse se valida para el actor y actualiza current-cash. Si la respuesta es incierta, consultar la actual antes de repetir. Requisito FR-CASH-001.
 
 ## UC-CAJ-03
 
@@ -68,15 +68,15 @@ GET `/api/tenants/{tenantId}/branches/{branchId}/cash-sessions/{cashSessionId}` 
 
 ## UC-CAJ-05
 
-GET `/api/tenants/{tenantId}/branches/{branchId}/cash-sessions/{cashSessionId}/reconciliation` · `backend/src/MediPOS.Api/Tenant/PosEndpoints.cs:34`. **E3 · IMPLEMENTADO · BLOCKED**. 1. Abrir cierre guardado. 2. Revisar esperado, contado, diferencia y pagos. GetCashSessionReconciliationHandler.cs:14–32 valida closed y ledger; CashSessionReconciliationReader.cs:10–37 consulta sesión/ventas/pagos/reversiones y transferencias. Si el ledger contradice lo guardado, falla. CashPage.tsx:69–82 usa exclusivamente la conciliación decodificada. Requisito FR-CASH-002;FR-CASH-003. Indicio F-001. Prueba existente: `backend/tests/MediPOS.IntegrationTests/Modules/Cash/CashClosePersistenceTests.cs:60`.
+GET `/api/tenants/{tenantId}/branches/{branchId}/cash-sessions/{cashSessionId}/reconciliation` · `backend/src/MediPOS.Api/Tenant/PosEndpoints.cs:34`. **E4 · IMPLEMENTADO · BLOCKED**. 1. Abrir cierre guardado. 2. Revisar esperado, contado, diferencia y pagos. GetCashSessionReconciliationHandler.cs:14–32 valida closed y ledger; CashSessionReconciliationReader.cs:10–37 consulta sesión/ventas/pagos/reversiones y transferencias. Si el ledger contradice lo guardado, falla. CashPage.tsx:69–82 usa exclusivamente la conciliación decodificada. Requisito FR-CASH-002;FR-CASH-003. Indicio F-001. Prueba existente: `backend/tests/MediPOS.IntegrationTests/Modules/Cash/CashClosePersistenceTests.cs:60`.
 
 ## UC-CAJ-06
 
-POST `/api/tenants/{tenantId}/branches/{branchId}/cash-sessions/{cashSessionId}/close` · `backend/src/MediPOS.Api/Tenant/PosEndpoints.cs:37`. **E3 · IMPLEMENTADO · BLOCKED**. 1. Leer estado abierto. 2. Introducir efectivo físico. 3. Activar Confirmar cierre. cash/api.ts:53–55 envía countedCashAmount exacto. CloseCashSessionHandler.cs:19–49 valida acceso, calcula ledger y cierra; CashCloseTransaction.cs:24,59–70 bloquea y confirma junto a auditoría. La UI verifica actor, membresía y conteo antes de aceptar el acuse e invalidar current/active. Cerrada impide repetir. Requisito FR-CASH-002;FR-CASH-003. Indicio F-001. Prueba existente: `backend/tests/MediPOS.IntegrationTests/Modules/Cash/CashClosePersistenceTests.cs:140`.
+POST `/api/tenants/{tenantId}/branches/{branchId}/cash-sessions/{cashSessionId}/close` · `backend/src/MediPOS.Api/Tenant/PosEndpoints.cs:37`. **E4 · IMPLEMENTADO · BLOCKED**. 1. Leer estado abierto. 2. Introducir efectivo físico. 3. Activar Confirmar cierre. cash/api.ts:53–55 envía countedCashAmount exacto. CloseCashSessionHandler.cs:19–49 valida acceso, calcula ledger y cierra; CashCloseTransaction.cs:24,59–70 bloquea y confirma junto a auditoría. La UI verifica actor, membresía y conteo antes de aceptar el acuse e invalidar current/active. Cerrada impide repetir. Requisito FR-CASH-002;FR-CASH-003. Indicio F-001. Prueba existente: `backend/tests/MediPOS.IntegrationTests/Modules/Cash/CashClosePersistenceTests.cs:140`.
 
 ## UC-CAJ-07
 
-GET `/api/tenants/{tenantId}/cash-sessions/active` · `backend/src/MediPOS.Api/Tenant/PosEndpoints.cs:42`. **E3 · IMPLEMENTADO · BLOCKED**. 1. Entrar como Owner en la sede. 2. Consultar Cajas activas y elegir Revisar. CashPage.tsx:37–41,97–111 query scoped y paginada. GetActiveCashSessionsHandler autoriza explícitamente a Owner. CashSessionReader.cs:26–45 filtra abiertas por tenant/sede y proyecta ventas confirmadas. Al cerrar se invalida la lista. Requisito FR-CASH-005. Indicio F-001. Prueba existente: `backend/tests/MediPOS.IntegrationTests/Modules/Cash/CashClosePersistenceTests.cs:60`.
+GET `/api/tenants/{tenantId}/cash-sessions/active` · `backend/src/MediPOS.Api/Tenant/PosEndpoints.cs:42`. **E4 · IMPLEMENTADO · BLOCKED**. 1. Entrar como Owner en la sede. 2. Consultar Cajas activas y elegir Revisar. CashPage.tsx:37–41,97–111 query scoped y paginada. GetActiveCashSessionsHandler autoriza explícitamente a Owner. CashSessionReader.cs:26–45 filtra abiertas por tenant/sede y proyecta ventas confirmadas. Al cerrar se invalida la lista. Requisito FR-CASH-005. Indicio F-001. Prueba existente: `backend/tests/MediPOS.IntegrationTests/Modules/Cash/CashClosePersistenceTests.cs:60`.
 
 ## UC-CAJ-08
 
@@ -116,7 +116,7 @@ Recuperar cierre incierto. **E2 · IMPLEMENTADO · BLOCKED**. 1. Ante respuesta 
 
 ## UC-CAJ-17
 
-Relocalizar caja cerrada tras recarga. **E2 · NO_EXPUESTO · BLOCKED**. 1. Con la URL que contiene cash, volver a Consultar cierre guardado. 2. Al abrir Caja con URL limpia, solo buscar activas. CashPage.tsx:41–56 y useCashClose.ts:22–28 distinguen dirección y memoria. Búsqueda por fecha/operador de cerradas no queda expuesta en el router comercial. Requisito FR-CASH-002;FR-CASH-005. Indicio F-001.
+Relocalizar caja cerrada tras recarga. **E4 · IMPLEMENTADO · BLOCKED**. 1. Con la URL que contiene cash, volver a Consultar cierre guardado. 2. Al abrir Caja con URL limpia, elegir Cierres, filtrar y seleccionar el arqueo. CashPage.tsx:41–56 y useCashClose.ts:22–28 distinguen dirección y memoria. RUN-15 reprodujo la entrada limpia sin historial del baseline. El candidato añade UC-CAJ-19. Requisito FR-CASH-002;FR-CASH-005. Indicio F-001.
 
 ## UC-CAJ-18
 
@@ -163,3 +163,7 @@ Elegir vendedor y preparar cobro mixto. **E2 · IMPLEMENTADO · BLOCKED**. Selec
 - [ReplaceSaleLinesHandler.cs](../../../../backend/src/MediPOS.Application/Modules/SalesPos/ReplaceSaleLines/ReplaceSaleLinesHandler.cs)
 - [GetInternalTicketHandler.cs](../../../../backend/src/MediPOS.Application/Modules/SalesPos/GetInternalTicket/GetInternalTicketHandler.cs)
 - [InternalTicketReader.cs](../../../../backend/src/MediPOS.Infrastructure/Modules/SalesPos/Persistence/InternalTicketReader.cs)
+
+## UC-CAJ-19
+
+GET `/api/tenants/{tenantId}/branches/{branchId}/cash-sessions/closed`. **E2 · IMPLEMENTADO · BLOCKED**. En Caja, elegir Cierres, ajustar las fechas Lima y abrir el arqueo de una fila. Owner ve su sede autorizada y otro rol habilitado solo su membresía. El handler revalida tras la lectura y el lector aplica ámbito y fechas antes de paginar. Devuelve importes persistidos y abre el arqueo autoritativo sin operación de cierre. Requisito FR-CASH-006. [Pruebas locales y piloto pendiente](../VALIDATION.md#run-16).

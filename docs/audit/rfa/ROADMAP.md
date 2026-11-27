@@ -14,7 +14,7 @@ Baseline `5d38898`. Los lotes son propuestas. La columna de decisión de los [15
 
 ## L-01 · Sencillo (UC-TRA-01–04/13, UC-CAJ-04)
 
-**Estado vigente: `L01_CANDIDATO_PENDIENTE_CONTRATO_REAL`.** Alternativa A implementada. RUN-11 acredita RED/GREEN con dobles HTTP, RUN-12 acredita el contrato HTTP con dobles y RUN-13 acredita `StatusAsync` en PostgreSQL 18.7. Quedan el GET contra PostgreSQL, E4 y el gate frontend. [Evidencia](VALIDATION.md#run-13).
+**Estado vigente.** Alternativa A implementada. [RUN-15](VALIDATION.md#run-15) acredita el GET real de caja abierta y el despacho y la recepción por Owner en dos sedes. Quedan las variantes E4 de los demás roles y el gate frontend.
 
 **Resultado esperado:** el cajero puede presentar un despacho válido aun cuando la caja abierta no tenga arqueo final. `CashTransfersPage.tsx:63,98–101` condiciona la acción a ese campo. `CashSessionStatusQueries.StatusAsync` expone el esperado persistido; `DispatchCashTransferHandler`, `CashTransferAccess.Expected` y `CashTransferTransaction.DispatchScope` recalculan bajo bloqueo y revalidan actor. RUN-02 reproduce el bloqueo DOM y RUN-10 acredita ledger, concurrencia y constancia. La prioridad se justifica por cero envíos válidos con el contrato observado en el código.
 
@@ -24,6 +24,8 @@ Baseline `5d38898`. Los lotes son propuestas. La columna de decisión de los [15
 4. **Gate.** Un despacho y una recepción con dos sedes; saldo insuficiente y revocación no escriben. Dos solicitudes compiten por el último efectivo. Perder acuse permite GET de la intención original y produce exactamente un efecto. Estado abierto/lectura fallida no desbloquean un nuevo POST pendiente. Contrastar ledger, constancia y las dos auditorías con DOM; E4 requiere B-02. No cambiar confirmación de venta, cálculo contable ni candados.
 
 ## L-02 · Caja (UC-CAJ-02–07/16/17)
+
+**L-06A_CANDIDATO.** Autorizado e implementado el historial aditivo de la sede con alcance por membresía y FR-CASH-006. UC-CAJ-19 identifica ese GET nuevo. P3 del candidato exige reentrada por Cierres y recuperación tras perder el acuse. [RUN-15](VALIDATION.md#run-15) preserva la brecha del baseline.
 
 **Primero evidencia.** Con apertura 100 y contado 10 sin movimientos, verificar acuse, fila cerrada (100, 10, −90), auditoría única, salida de activas, lectura de arqueo por ID y reentrada con y sin URL. Revocar acceso y cambiar de sede para comprobar denegación. Tras POST confirmado y GET 404/503 no debe enviarse otro cierre; GET closed seguido de error de detalle permite reconsultar solo el arqueo.
 
@@ -51,24 +53,24 @@ La [matriz](MATRIX.csv) y el [TO-BE](TO_BE.md) definen el inventario y sus decis
 
 | Corte | Casos | Recorrido y criterio de aceptación | Dependencia o decisión |
 |---|---|---|---|
-| **L-06A · Caja/POS** | UC-CAJ-01–18 (18) | Cajero abre, recupera borrador, elige presentación, cobra mixto, imprime ticket, anula y arquea. Conciliar stock, efectivo, diferencias y auditoría. Salir con borrador intacto, editado o vaciado y recuperar sin duplicar escrituras. | Incorporar aquí la reentrada de L-02. Historial solo si se aprueban ámbito y permisos. |
+| **L-06A · Caja/POS** | UC-CAJ-01–19 (19) | Cajero abre, recupera borrador, elige presentación, cobra mixto, imprime ticket, anula y arquea. Conciliar stock, efectivo, diferencias y auditoría. Salir con borrador intacto, editado o vaciado y recuperar sin duplicar escrituras. | Candidato local. L-02 incorporado, P3/P4 y aceptación pendientes. |
 | **L-06B · Catálogo** | UC-CAT-01–22 (22) | Owner da de alta/asocia, edita precio, estado y unidades versionadas. Personal busca dentro de su alcance. Importar con resultados parciales y recuperar intención/trabajo. El alta no crea stock. | Si se aprueba búsqueda ampliada de mantenimiento, verificar su variante L-03 aquí. |
 | **L-06C · Compras e inventario** | UC-COM-01–15 (15) | Owner/Pharmacist autorizado elige proveedor, prepara recepción, revisa, confirma y vuelve a ella. Si otro editor cambia líneas, un POST con versión revisada retorna conflicto y preserva borrador y stock. Confirmación válida genera lotes, saldos, caducidad y movimientos exactos. | Incorporar descubrimiento L-03 si se aprueba. Medir coste de nombres según L-04 antes de proponer cambios. Incluir el caso CI identificado en RUN-13. |
-| **L-06D · Transferencias** | UC-TRA-01–13 (13) | Owner/roles habilitados prueban Sencillo y mercadería por estado. Comprobar solicitud, aprobación, despacho, recepción completa/parcial según contrato, cancelación permitida, concurrencia, origen/destino y constancia original. | L-01 sigue pendiente del GET con PostgreSQL y de la aceptación del despacho en navegador. |
+| **L-06D · Transferencias** | UC-TRA-01–13 (13) | Owner/roles habilitados prueban Sencillo y mercadería por estado. Comprobar solicitud, aprobación, despacho, recepción completa/parcial según contrato, cancelación permitida, concurrencia, origen/destino y constancia original. | RUN-15 acredita Sencillo con Owner. Variantes pendientes según matriz. |
 | **L-06E · Reportes y comisiones** | UC-REP-01–17 (17) | Owner filtra y contrasta pantalla/exportación con ventas, anulaciones y ledger. Cambiar regla y comprobar que la reversión compensa el importe original. Reposición según contrato interno. | Reutilizar datos conciliados de A/C/D. |
 | **L-06F · Avisos y auditoría** | UC-AVI-01–07 (7) | Operador abre aviso y navega a detalle permitido. Lectura personal y repetida conserva el estado del otro miembro y del riesgo. Owner verifica metadatos y visibilidad. | Reutilizar lote con riesgo de C y efectos auditados del resto. |
 | **L-06G · Acceso y estructura** | UC-ACC-01–27 (27) | Owner y personal ejercitan onboarding, invitación, roles, sedes y horarios. Cambiar contexto, verificar expiración y revocación, proteger el último Owner y los pendientes del ámbito original. | Identidades sintéticas separadas y variantes de licencia/membresía antes de los flujos que las usan. |
 | **L-06H · Plataforma** | UC-PLA-01–18 (18) | Operador administra tenants, invitación inicial, licencias, catálogo y consultas de soporte. Verificar recuperación y separación de autoridad comercial. Purga solo con datos sintéticos y autorización específica. | Vincular con G para comprobar que la designación y el rol comercial no otorgan acceso de plataforma. |
 | **L-06I · Contingencia e integraciones** | UC-INT-01–18 (18) | Operador prepara dispositivo, trabaja offline, reentra y sincroniza el mismo lote/UUID. Conciliar conflictos, caja cerrada, cambio de identidad y caché PWA. Usar integraciones simuladas dentro de su contrato. | Componer con A/B/G. Decisiones B-03 separadas para servicios externos y fiscales. |
 
-### Habilitador común B-02 · encargo futuro
+### Habilitador común B-02
 
-**Candidato implementado.** [Guía del arnés y ejecución manual](../../../backend/tests/MediPOS.E2E/README.md) · [RUN-14](VALIDATION.md#run-14). El piloto está NOT_RUN. Acreditar P0/P1 y al menos un piloto E4 antes de declarar B-02 validado. L-06A–I conservan su aprobación individual.
+**Habilitador validado para P0–P3 del baseline.** [RUN-15](VALIDATION.md#run-15) · [Guía del arnés](../../../backend/tests/MediPOS.E2E/README.md). La ampliación P3/P4 de L-06A queda pendiente de ejecución en el SHA del candidato. Cada lote conserva su aprobación individual.
 
 Solicitar una sola aprobación para preparar y reutilizar navegador, API y PostgreSQL efímero con autenticación sintética. El preflight debe acreditar SHA/build, identidad del contenedor/BD, roles mínimos con RLS, sesiones de prueba y dos tenants/sedes. Usar puertos y perfil exclusivos, impedir conexión a DEV o producción y tráfico hacia OAuth, CPE u otros servicios reales. Limitar la purga a una prueba sintética específicamente autorizada. Registrar alcance y evidencias saneadas y limpiar solo recursos del fixture. Reutilizar la misma composición para los nueve cortes; su diseño e implementación requieren un encargo propio.
 
 ## L-07 · Cierre de evidencia y decisión de release
 
-Conciliar los 155 UC y cualquier caso nuevo justificado con decisión, implementación aprobada cuando aplique, prueba acorde al riesgo y pendientes explícitos. Exigir E4 para recorridos críticos y E5 para aceptación del operador. Nombrar el SHA y build verificados. Producción permanece NO-GO mientras falle un gate requerido, exista un P0/P1 de release abierto o haya datos sin conciliar.
+Conciliar los 156 UC vigentes y cualquier caso nuevo justificado con decisión, implementación aprobada cuando aplique, prueba acorde al riesgo y pendientes explícitos. Exigir E4 para recorridos críticos y E5 para aceptación del operador. Nombrar el SHA y build verificados. Producción permanece NO-GO mientras falle un gate requerido, exista un P0/P1 de release abierto o haya datos sin conciliar.
 
-**Siguiente decisión.** Revisar RUN-13 y obtener la aserción fallida sanitizada de Compras si está disponible. El operador decide si agrupa un nuevo CI con el siguiente lote autorizado. Para abrir aceptación real, aprobar el habilitador común B-02 y seleccionar el primer corte. L-02/03/04 y los nueve cortes quedan sujetos a aprobación.
+**Siguiente paso.** Revisar el diff de L-06A y ejecutar B-02 para el SHA exacto del candidato. Incorporar solo la evidencia de las aserciones observadas, conservar el gate frontend independiente y esperar la autorización del siguiente lote.

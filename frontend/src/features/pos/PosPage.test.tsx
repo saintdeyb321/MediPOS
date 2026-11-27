@@ -18,6 +18,7 @@ import type { OpenCashSession } from '../cash'
 import type { SaleLineInput, SaleState, SalePaymentInput } from './sales.api'
 import type { InternalTicket } from './tickets.api'
 import { PosPage } from './PosPage'
+import { NavigationRegistry } from '../../shared/ui/NavigationProtection'
 
 // Synthetic component/transport tests only; real PostgreSQL/Google acceptance is separate.
 const id = (last: string) => `019a0162-0000-7000-8000-${last.padStart(12, '0')}`
@@ -130,6 +131,20 @@ async function select(quantity = '2', unitId?: string) {
   fireEvent.change(choice.getByRole('textbox', { name: /Cantidad a agregar/ }), { target: { value: quantity } })
   fireEvent.click(button)
 }
+it('protects removal of the last persisted draft line and leaves the stored draft untouched', async () => {
+  const fake = server(); fake.state.sale = withLines()
+  const registry = { entries: new Map(), notify: vi.fn() }
+  const runtime = { service: createPreviewService('owner'), http: new HttpClient(fake.fetcher), preview: false }
+  render(<RuntimeProvider runtime={runtime}><MemoryRouter initialEntries={['/ventas?sale=' + saleId]}>
+    <WorkspaceContext.Provider value={context()}><NavigationRegistry.Provider value={registry}><PosPage /></NavigationRegistry.Provider></WorkspaceContext.Provider>
+  </MemoryRouter></RuntimeProvider>)
+  const remove = await screen.findByRole('button', { name: /Quitar.*Tableta/ })
+  expect([...registry.entries.values()].some(state => state.dirty)).toBe(false)
+  fireEvent.click(remove)
+  expect([...registry.entries.values()].some(state => state.dirty)).toBe(true)
+  expect(fake.state.sale?.lines).toHaveLength(1)
+  expect(fake.writes()).toHaveLength(0)
+})
 async function openCashForm() {
   fireEvent.click(await screen.findByRole('button', { name: 'Abrir caja' }))
   return screen.getByRole('button', { name: 'Confirmar apertura' })

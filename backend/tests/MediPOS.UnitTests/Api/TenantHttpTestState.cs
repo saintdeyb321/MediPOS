@@ -90,7 +90,7 @@ public sealed partial class TenantHttpTestState
             typeof(IPurchasingStore), typeof(IPurchaseReceiptWriter), typeof(IPurchaseDirectoryReader), typeof(IInventoryDirectoryReader), typeof(IProductSearchStore),
             typeof(IOpenCashSessionWriter), typeof(IFindOpenCashSession), typeof(ISaleDraftStore), typeof(ISaleCheckoutTransaction), typeof(IInternalTicketReader),
             typeof(ICashCloseTransaction), typeof(ICashSessionReconciliationReader), typeof(IOwnerBranchOverviewReader), typeof(ISaleVoidTransaction),
-            typeof(IIdentityAccessStore), typeof(IEmployeeDirectoryReader), typeof(IProductImportStore), typeof(IStockAdjustmentTransaction), typeof(IActiveCashSessionsReader),
+            typeof(IIdentityAccessStore), typeof(IEmployeeDirectoryReader), typeof(IProductImportStore), typeof(IStockAdjustmentTransaction), typeof(IActiveCashSessionsReader), typeof(IClosedCashSessionsReader),
             typeof(IOwnerOperationalDashboardReader), typeof(IOwnerSalesReportReader), typeof(IOwnerInventoryRiskReader), typeof(IOwnerProductRotationReader), typeof(IReportExportReader)];
         foreach (var port in ports)
             services.AddScoped(port, _ => { var proxy = DispatchProxy.Create(port, typeof(Port)); ((Port)proxy).State = this; return proxy; });
@@ -281,6 +281,17 @@ public sealed partial class TenantHttpTestState
         }
         if (type == typeof(IOpenCashSessionWriter)) return Save(() => { Cash.Add((CashSession)a[0]!); Audits.Add((AuditLog)a[1]!); });
         if (type == typeof(IActiveCashSessionsReader)) return Task.FromResult<IReadOnlyList<ActiveCashSessionDetails>>(Cash.Where(session => session.Status == CashSessionStatus.Open).Select(session => new ActiveCashSessionDetails(session.Id, session.BranchId, Branches.Single(branch => branch.Id == session.BranchId).Name, session.MembershipId, User.Id, User.DisplayName, session.OpeningAmount, session.OpenedAt, 0m)).ToArray());
+        if (type == typeof(IClosedCashSessionsReader))
+        {
+            var limit = (int)a[6]!;
+            var rows = Cash.Where(session => session.TenantId == (Guid)a[0]! && session.BranchId == (Guid)a[1]! &&
+                (a[2] is null || session.MembershipId == (Guid)a[2]!) && session.Status == CashSessionStatus.Closed &&
+                session.ClosedAt >= (DateTimeOffset)a[3]! && session.ClosedAt < (DateTimeOffset)a[4]!)
+                .OrderByDescending(session => session.ClosedAt).ThenByDescending(session => session.Id).Skip((int)a[5]!).Take(limit + 1)
+                .Select(session => new ClosedCashSessionDetails(session.Id, User.DisplayName, session.ClosedAt!.Value,
+                    session.ExpectedCashAmount!.Value, session.CountedCashAmount!.Value, session.CashDifference!.Value)).ToArray();
+            return Task.FromResult(new ClosedCashSessionPage(rows.Take(limit).ToArray(), rows.Length > limit));
+        }
         if (type == typeof(IFindOpenCashSession)) return Task.FromResult(Cash.SingleOrDefault(value => value.BranchId == (Guid)a[1]! && value.MembershipId == (Guid)a[2]! && value.Status == CashSessionStatus.Open) is { } session ? OpenCashSessionDetails.From(session) : null);
         if (type == typeof(ISaleDraftStore))
         {

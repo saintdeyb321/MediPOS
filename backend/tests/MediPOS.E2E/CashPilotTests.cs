@@ -15,7 +15,7 @@ using static Microsoft.Playwright.Assertions;
 
 namespace MediPOS.E2E;
 
-public sealed class CashPilotTests(ITestOutputHelper output)
+public sealed partial class CashPilotTests(ITestOutputHelper output)
 {
     private static CancellationToken Token => TestContext.Current.CancellationToken;
 
@@ -47,8 +47,11 @@ public sealed class CashPilotTests(ITestOutputHelper output)
         await P2Async(host, browser, page, receiver, database, origin, destination, cash);
         output.WriteLine("B02 P2 PASS");
         output.WriteLine("B02 P3 START");
-        await P3Async(host, foreign, stranger, database, other);
-        output.WriteLine("B02 P3 PASS F001_CLEAN_ENTRY_GAP_OBSERVED");
+        await P3Async(host, foreign, stranger, database, other, browser);
+        output.WriteLine("B02 P3 PASS CASH_HISTORY_AND_RECOVERY");
+        output.WriteLine("B02 P4 START");
+        await P4Async(host, database, origin, destination.BranchId, browser, foreign);
+        output.WriteLine("B02 P4 PASS POS_PAY_TICKET_VOID");
     }
 
     private static async Task<(IdentityAccessTestSetup.Setup Origin, IdentityAccessTestSetup.Setup Destination, IdentityAccessTestSetup.Setup Other)> SeedAsync(PostgreSqlFixture database)
@@ -218,7 +221,8 @@ public sealed class CashPilotTests(ITestOutputHelper output)
         Assert.Equal(1.0001m, destinationLedger.GetProperty("cashTransfers").GetProperty("incoming").GetDecimal());
     }
 
-    private static async Task P3Async(BrowserHost host, IBrowserContext browser, IPage page, PostgreSqlFixture database, IdentityAccessTestSetup.Setup actor)
+    private static async Task P3Async(BrowserHost host, IBrowserContext browser, IPage page, PostgreSqlFixture database,
+        IdentityAccessTestSetup.Setup actor, IBrowserContext outsideTenant)
     {
         var url = host.Origin + Workspace(actor) + "/caja";
         await GoToAsync(page, url);
@@ -226,9 +230,8 @@ public sealed class CashPilotTests(ITestOutputHelper output)
         var path = BranchApi(actor) + $"/cash-sessions/{cash:D}";
         await Button(page, "Preparar cierre de mi caja").ClickAsync();
         await page.GetByLabel("Efectivo físico contado (S/)").FillAsync("10");
-        var closed = await ResponseAsync(page, path + "/close", Button(page, "Confirmar cierre de caja").ClickAsync);
-        Assert.Equal(200, closed.Status);
-        VerifyShortage((await closed.JsonAsync())!.Value);
+        var closeWrites = await LosePostAfterCommitAsync(page, host.Origin + path + "/close",
+            Button(page, "Confirmar cierre de caja"), VerifyShortage);
         var reconciliation = page.GetByRole(AriaRole.Region, new() { Name = "Arqueo registrado" });
         await Expect(reconciliation).ToBeVisibleAsync();
         await Expect(reconciliation).ToContainTextAsync("Faltan");
@@ -243,7 +246,16 @@ public sealed class CashPilotTests(ITestOutputHelper output)
 
         await GoToAsync(page, url);
         await Expect(page.GetByText("No hay cajas en esta página.")).ToBeVisibleAsync();
-        await Expect(Button(page, "Consultar cierre guardado")).ToHaveCountAsync(0);
+        var history = BranchApi(actor) + "/cash-sessions/closed";
+        await GetAsync(host, outsideTenant, history, 403);
+        await GetAsync(host, browser, history + "?from=2026-01-01&to=2026-05-01", 400);
+        Assert.Empty((await GetAsync(host, browser, history + "?from=2020-01-01&to=2020-01-31"))
+            .GetProperty("items").EnumerateArray());
+        await Button(page, "Cierres").ClickAsync();
+        await page.GetByRole(AriaRole.Button, new() { NameRegex = new("^Ver arqueo de ") }).ClickAsync();
+        await Expect(reconciliation).ToBeVisibleAsync();
+        Assert.Equal(cash.ToString("D"), Microsoft.AspNetCore.WebUtilities.QueryHelpers.ParseQuery(new Uri(page.Url).Query)["cash"].ToString());
+        Assert.Equal(1, closeWrites());
         await using var verify = database.CreateContext(actor.TenantId);
         var row = await verify.CashSessions.SingleAsync(Token);
         Assert.Equal((cash, CashSessionStatus.Closed, 100m, 10m, -90m),

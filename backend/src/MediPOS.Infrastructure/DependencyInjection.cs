@@ -181,6 +181,8 @@ public static class DependencyInjection
         services.AddScoped<IOpenCashSessionWriter, OpenCashSessionWriter>();
         services.AddScoped<IFindOpenCashSession, CashSessionReader>();
         services.AddScoped<IActiveCashSessionsReader, CashSessionReader>();
+        services.AddScoped<IClosedCashSessionsReader, CashSessionReader>();
+        services.AddScoped<GetClosedCashSessionsHandler>();
         services.AddScoped<ICashCloseTransaction, CashCloseTransaction>();
         services.AddScoped<ICashSessionReconciliationReader, CashSessionReconciliationReader>();
         services.AddScoped<ICashTransferReader, CashTransferReader>();

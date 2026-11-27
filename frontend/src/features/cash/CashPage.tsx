@@ -24,6 +24,7 @@ import { CashAge } from './CashAge'
 import { MetricGrid } from '../../shared/ui/MetricCard'
 import { BarChart } from '../../shared/ui/BarChart'
 import { CashDifference } from './CashDifference'
+import { CashClosures } from './CashClosures'
 
 export function CashPage() {
   const w = useWorkspace()
@@ -38,13 +39,19 @@ export function CashManagement({ cash, embedded = false, blocked = false }: { ca
   const close = useCashClose()
   const [amount, setAmount] = useState(''); const [offset, setOffset] = useState(0)
   const [closing, setClosing] = useState(false)
+  const [viewingHistory, setViewingHistory] = useState(false)
   const [managing, setManaging] = useState(false)
+  const [directory, setDirectory] = useState<'active' | 'closed'>('active')
+  const directoryBlocked = blocked || close.busy || close.pending || cash.pending || cash.uncertain
   const active = useQuery({ queryKey: scopedKey(w, 'active-cash', w.session.userId, w.access.membershipId, offset),
-    queryFn: ({ signal }) => cashApi(http!).active(w, offset, signal), enabled: Boolean(http && w.access.role === 'owner' && !embedded), retry: false, staleTime: 0,
+    queryFn: ({ signal }) => cashApi(http!).active(w, offset, signal), enabled: Boolean(http && w.access.role === 'owner' && !embedded && directory === 'active'), retry: false, staleTime: 0,
   })
-  const pick = (id: string) => { setAmount(''); setManaging(false); setClosing(true); void close.consult(id) }
+  const pick = (id: string, readOnly = false) => {
+    if (directoryBlocked) return
+    setAmount(''); setManaging(false); setViewingHistory(readOnly); setClosing(true); void close.consult(id)
+  }
   const valid = decimalInput(amount, maximumMoney, 4, true)
-  const canClose = !close.denied && close.status?.status === 'open' && (w.access.role === 'owner' || close.status.membershipId === w.access.membershipId)
+  const canClose = !viewingHistory && !close.denied && close.status?.status === 'open' && (w.access.role === 'owner' || close.status.membershipId === w.access.membershipId)
   const closeAction = <Button variant="secondary" disabled={!cash.session || close.busy || close.pending || blocked}
     onClick={() => { if (cash.session) pick(cash.session.cashSessionId) }}>Preparar cierre de mi caja</Button>
   return <>
@@ -55,7 +62,7 @@ export function CashManagement({ cash, embedded = false, blocked = false }: { ca
       {close.id && <Button data-recovery-focus variant="quiet" disabled={close.busy} onClick={() => { setClosing(true); void close.consult() }}>Consultar cierre guardado</Button>}
       {close.busy && <p role="status">Consultando caja…</p>}
     </div></Panel>}
-      <Modal open={closing} title="Cerrar y cuadrar caja" onClose={() => { setClosing(false); setAmount('') }} onRecoveryClose={() => setClosing(false)} dirty={Boolean(canClose && amount)} busy={close.busy} recovery={close.pending}>
+      <Modal open={closing} title={viewingHistory ? 'Consultar arqueo' : 'Cerrar y cuadrar caja'} onClose={() => { setClosing(false); setAmount('') }} onRecoveryClose={() => setClosing(false)} dirty={Boolean(canClose && amount)} busy={close.busy} recovery={close.pending}>
         <div className="pos-section-body">
         {close.error != null && <ApiErrorState error={close.error} title="Revisa el resultado del cierre" />}
         {close.pending && <><Notice tone="warning">Cierre pendiente de verificar. No se enviará otra solicitud.</Notice><Button disabled={close.busy} onClick={() => void close.consult()}>Consultar esta misma caja</Button></>}
@@ -88,7 +95,11 @@ export function CashManagement({ cash, embedded = false, blocked = false }: { ca
         {!close.pending && <Link className="text-link" to={w.base + '/caja'}>Consultar arqueos y cajas autorizadas</Link>}
       </div>
     </Drawer>
-    {!embedded && w.access.role === 'owner' && <DataSection className="active-cash-directory" tabs={<h2>Cajas activas</h2>}
+    {!embedded && <><div className="operation-actions" role="group" aria-label="Directorio de cajas">
+      {w.access.role === 'owner' && <Button variant="quiet" aria-pressed={directory === 'active'} disabled={directoryBlocked} onClick={() => setDirectory('active')}>Activas</Button>}
+      <Button variant="quiet" aria-pressed={directory === 'closed'} disabled={directoryBlocked} onClick={() => setDirectory('closed')}>Cierres</Button>
+    </div>{directory === 'closed' && <CashClosures blocked={directoryBlocked} select={id => pick(id, true)} />}</>}
+    {!embedded && directory === 'active' && w.access.role === 'owner' && <DataSection className="active-cash-directory" tabs={<h2>Cajas activas</h2>}
       footer={<PageControls size={50} offset={offset} count={active.isError ? undefined : active.data?.length} busy={active.isFetching} change={setOffset} maxOffset={100000} />}>
       {active.isPending && <p>Consultando cajas activas…</p>}
       {active.isError && <ApiErrorState error={active.error} title="No pudimos consultar las cajas activas" retry={() => void active.refetch()} />}
