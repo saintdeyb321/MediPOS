@@ -1,5 +1,21 @@
 # RFA2 · Validación conductual y persistencia
 
+<a id="run-22"></a>
+## RUN-22 · F-008 · candidato diagnóstico local
+
+RFA3 aprobada documentalmente sobre `e1df3ec9e9fb1b346118a1b168450cf832862801`. [RUN-21](#run-21) sigue siendo la última ejecución del piloto en Chromium/API/PostgreSQL. **RFA4A_CANDIDATO**. CAT-09 E3/BLOCKED y CAT-21 E2/BLOCKED. Causa de F-008 indeterminada.
+
+| Frontera en [el piloto de Catálogo](../../../backend/tests/MediPOS.E2E/CashPilotTests.Catalog.cs) | Qué permitirá concluir la ejecución |
+|---|---|
+| Antes de crear | Un contexto nuevo con el runtime del tenant verifica que el código está libre y que el tenant sembrado carece de lotes y movimientos. Los observadores de solicitud del navegador y de intercepción de la ruta exacta se instalan antes de abrir el formulario. En revisión se exige formulario válido, un botón visible y habilitado, intención libre y ambos contadores a cero. |
+| Clic y red | Un único clic normal. Se distinguen el retorno del clic, los POST observados y los interceptados. Ante timeout tras el clic, NO_POST se refiere a la URL exacta; NO_INTERCEPTION significa que el navegador sí emitió esa solicitud. Si el callback sigue en curso, la clasificación es INDETERMINADA. |
+| Acuse y guarda | Se distingue categoría de estado upstream, validez del ID, aborto y descarte del recurso. La espera de 20 s termina con el resultado del callback tras su limpieza. Se conserva el primer error y se informa por separado un fallo de limpieza. Un 201 upstream no fue recibido por React si el aborto terminó. Se exige recuperación visible y habilitada con Guardar deshabilitado, y el código original antes y después de reentrar. |
+| Conciliación y persistencia | Se contrasta el GET de detalle del mismo ID y código, el desbloqueo y la retirada del marcador. Se vuelve a contar POST e intercepciones. Una lectura runtime nueva, en snapshot repetible, contrasta producto, auditoría de creación del mismo ID y usuario, lotes y movimientos. Ante error de UI se obtiene la lectura por separado conservando la primera excepción. INCONCLUSIVE advierte que aún puede haber una operación en vuelo. Los conteos se publican como 0, 1 o MANY. Una fila por sí sola no acredita recuperación. |
+
+**Comprobaciones locales.** SDK 10.0.401, desde `backend/`: `dotnet restore tests/MediPOS.E2E/MediPOS.E2E.csproj --locked-mode` y `dotnet build tests/MediPOS.E2E/MediPOS.E2E.csproj --no-restore -p:BaseOutputPath=obj/b02-bin/ -m:1 --disable-build-servers`. Build PASS, cero errores y advertencias. YAML analizado y AWK real contra entradas sintéticas. RED del filtro anterior: faltaban 64 de 71 líneas esperadas. GREEN: 71/71 reproducidas sin prefijo y 10/10 entradas inválidas o con información adicional omitidas. La única modificación del workflow amplía su filtro de salida.
+
+**Piloto local NOT_RUN** por ausencia de Docker. Sin RED/GREEN funcional atribuible al producto. El operador publica el candidato en la rama actual. El push activa B-02 una sola vez. Revisar SHA/build, P0–P5, primera frontera fallida y lectura independiente en el resumen saneado. Si falla una etapa posterior, detener la aceptación en esa etapa. Frontend histórico 645/646, E5 y DEV conservan sus límites. Producción NO-GO.
+
 <a id="run-21"></a>
 ## RUN-21 · Primera frontera fallida de P5
 

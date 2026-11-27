@@ -42,7 +42,7 @@ GET `/api/tenants/{tenantId}/branches/{branchId}/products/search` · [CatalogEnd
 
 ## UC-CAT-09
 
-POST `/api/tenants/{tenantId}/products/local` · `backend/src/MediPOS.Api/Tenant/CatalogEndpoints.cs:48`. **E3 · IMPLEMENTADO · BLOCKED**. Como Owner, abre Nuevo producto, completa datos locales y guarda. CatalogEndpoints.cs:48–53 recibe LocalProductRequest. CreateLocalBusinessProductHandler.cs:15–48 verifica administración/licencia y categoría, construye datos de negocio y agrega producto y auditoría por BusinessProductStore; 201 devuelve identificador. Si se pierde respuesta, useCatalogWrite.ts conserva intención/código para contrastar con ficha, sin repetir alta. [RUN-21](../VALIDATION.md#run-21): CREATE FAIL POST_LOST_ACK; envío y commit sin confirmar.
+POST `/api/tenants/{tenantId}/products/local` · `backend/src/MediPOS.Api/Tenant/CatalogEndpoints.cs:48`. **E3 · IMPLEMENTADO · BLOCKED**. Como Owner, abre Nuevo producto, completa datos locales y guarda. CatalogEndpoints.cs:48–53 recibe LocalProductRequest. CreateLocalBusinessProductHandler.cs:15–48 verifica administración/licencia y categoría, construye datos de negocio y agrega producto y auditoría por BusinessProductStore; 201 devuelve identificador. Si se pierde respuesta, useCatalogWrite.ts conserva intención/código para contrastar con ficha, sin repetir alta. [RUN-21](../VALIDATION.md#run-21): CREATE FAIL POST_LOST_ACK; envío y commit sin confirmar. [RUN-22](../VALIDATION.md#run-22) · contraste del POST con producto, auditoría y stock preparado; NOT_RUN.
 
 ## UC-CAT-10
 
@@ -90,7 +90,7 @@ Cambiar vista y aplicar filtros sobre Mis productos. **E4 · IMPLEMENTADO · BLO
 
 ## UC-CAT-21
 
-Recuperar escritura de producto. **E2 · IMPLEMENTADO · BLOCKED**. Tras alta incierta la persona vuelve a Mis productos, busca y verifica la ficha del código almacenado por identidad, tenant, sede y membresía. Tras una edición incierta verifica el ID original. Otra ficha conserva el bloqueo aunque se marque el checkbox. Las altas previas sin identificador verificable requieren soporte. El flujo no reenvía escrituras. F-007, [RUN-18](../VALIDATION.md#run-18). [RUN-21](../VALIDATION.md#run-21): REENTRY y RECONCILIATION no alcanzadas; F-007 conserva RED/GREEN local.
+Recuperar escritura de producto. **E2 · IMPLEMENTADO · BLOCKED**. Tras alta incierta la persona vuelve a Mis productos, busca y verifica la ficha del código almacenado por identidad, tenant, sede y membresía. Tras una edición incierta verifica el ID original. Otra ficha conserva el bloqueo aunque se marque el checkbox. Las altas previas sin identificador verificable requieren soporte. El flujo no reenvía escrituras. F-007, [RUN-18](../VALIDATION.md#run-18). [RUN-21](../VALIDATION.md#run-21): REENTRY y RECONCILIATION no alcanzadas; F-007 conserva RED/GREEN local. [RUN-22](../VALIDATION.md#run-22) · guarda estable, reentrada y conciliación del mismo ID preparadas; NOT_RUN.
 
 ## UC-CAT-22
 

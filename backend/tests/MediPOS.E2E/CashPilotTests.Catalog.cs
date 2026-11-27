@@ -65,7 +65,7 @@ public sealed partial class CashPilotTests
             .EnumerateArray()).GetProperty("id").GetGuid());
         trace.Pass();
         trace.Start("CREATE", "FORM");
-        var product = await CatalogCreateFromUiAsync(host, page, workspace, directory, category, trace);
+        var product = await CatalogCreateFromUiAsync(host, database, owner, page, workspace, directory, category, trace);
         trace.Pass();
         trace.Start("EDIT", "METADATA");
         await VerifyCatalogWritesAsync(host, browser, page, owner, workspace, directory, category, product, reference, trace);
@@ -189,8 +189,45 @@ public sealed partial class CashPilotTests
         await Expect(Button(page, "Ver " + firstProduct)).ToBeVisibleAsync();
     }
 
-    private static async Task<Guid> CatalogCreateFromUiAsync(BrowserHost host, IPage page, string workspace, string directory, Guid category, CatalogPilotTrace trace)
+    private static async Task<Guid> CatalogCreateFromUiAsync(BrowserHost host, PostgreSqlFixture database, IdentityAccessTestSetup.Setup owner,
+        IPage page, string workspace, string directory, Guid category, CatalogPilotTrace trace)
     {
+        var endpoint = host.Origin + directory + "/local";
+        var probe = new CreatePostProbe(endpoint, trace);
+        trace.Step("PREFLIGHT");
+        await CheckCatalogSnapshotAsync(database, owner, probe, trace, before: true);
+        page.Request += probe.ObserveRequest;
+        try
+        {
+            // Observe the whole form: even advancing a step must not submit a write.
+            await page.RouteAsync(endpoint, probe.InterceptAsync);
+            try
+            {
+                await ExerciseCatalogCreateAsync(host, owner, page, workspace, category, probe, trace);
+            }
+            catch
+            {
+                try { await CheckCatalogSnapshotAsync(database, owner, probe, trace, observeOnly: true); }
+                catch { trace.Create("READ FAILED"); }
+                throw;
+            }
+            trace.Step("PERSISTENCE");
+            await CheckCatalogSnapshotAsync(database, owner, probe, trace);
+            trace.Step("COUNTS");
+            probe.AssertSinglePost();
+            return probe.Product;
+        }
+        finally
+        {
+            page.Request -= probe.ObserveRequest;
+            probe.ReportCounts();
+        }
+    }
+
+    private static async Task ExerciseCatalogCreateAsync(BrowserHost host, IdentityAccessTestSetup.Setup owner, IPage page,
+        string workspace, Guid category, CreatePostProbe probe, CatalogPilotTrace trace)
+    {
+        trace.Step("FORM");
         await Button(page, "Nuevo producto").ClickAsync();
         var form = page.GetByRole(AriaRole.Form, new() { Name = "Crear producto local" });
         await form.GetByLabel("Código interno").FillAsync(CatalogCode);
@@ -201,28 +238,49 @@ public sealed partial class CashPilotTests
         await form.GetByLabel("Marca o laboratorio documentado").FillAsync("Marca P5");
         await form.GetByLabel("Precio minorista por unidad base (S/)").FillAsync("1.2345");
         await form.GetByRole(AriaRole.Button, new() { Name = "Continuar" }).ClickAsync();
-        trace.Step("POST_LOST_ACK");
-        var product = Guid.Empty;
-        var writes = await LosePostAfterCommitAsync(page, host.Origin + directory + "/local",
-            form.GetByRole(AriaRole.Button, new() { Name = "Guardar producto" }),
-            response => product = response.GetProperty("id").GetGuid(), 201);
-        await Expect(form.GetByRole(AriaRole.Button, new() { Name = "Guardar producto" })).ToBeDisabledAsync();
+        trace.Step("REVIEW");
+        var key = $"medipos-catalog-creation/{owner.UserId:D}/{owner.TenantId:D}/{owner.BranchId:D}/{owner.MembershipId:D}";
+        var save = form.GetByRole(AriaRole.Button, new() { Name = "Guardar producto", Exact = true });
+        await Expect(form.GetByRole(AriaRole.Heading, new() { Name = CatalogCreated, Exact = true })).ToBeVisibleAsync();
+        await Expect(save).ToHaveCountAsync(1);
+        await Expect(save).ToBeVisibleAsync();
+        await Expect(save).ToBeEnabledAsync();
+        Assert.True(await form.EvaluateAsync<bool>("form => form.matches(':valid')"));
+        Assert.Null(await page.EvaluateAsync<string?>("key => sessionStorage.getItem(key)", key));
+        Assert.False(QueryHelpers.ParseQuery(new Uri(page.Url).Query).ContainsKey("catalogPending"));
+        probe.AssertNoPost();
+        trace.Step("CLICK");
+        await save.ClickAsync();
+        trace.Create("CLICK DONE");
+        await probe.WaitForDiscardAsync();
+        trace.Step("UI_PENDING");
+        var consult = Button(page, "Consultar producto de la operación");
+        await Expect(consult).ToBeVisibleAsync();
+        await Expect(consult).ToBeEnabledAsync(); // pending and no longer busy
+        await Expect(save).ToBeDisabledAsync();
+        Assert.Equal(CatalogCode, await page.EvaluateAsync<string>("key => sessionStorage.getItem(key)", key));
+        trace.Create("GUARD PENDING");
         trace.Step("REENTRY");
         await GoToAsync(page, workspace + "/productos");
         await Expect(Button(page, "Nuevo producto")).ToBeDisabledAsync();
+        Assert.Equal(CatalogCode, await page.EvaluateAsync<string>("key => sessionStorage.getItem(key)", key));
         await page.GetByRole(AriaRole.Searchbox).FillAsync(CatalogCode);
         await Button(page, "Aplicar filtros").ClickAsync();
         await Button(page, "Ver " + CatalogCreated).ClickAsync();
         await Button(page, "Cerrar Detalle del producto").ClickAsync();
         trace.Step("RECONCILIATION");
-        await Button(page, "Consultar producto de la operación").ClickAsync();
+        var detail = await page.RunAndWaitForResponseAsync(() => consult.ClickAsync(),
+            response => response.Request.Method == "GET" && response.Url == host.Origin + BranchApi(owner) + $"/products/{probe.Product:D}");
+        Assert.Equal(200, detail.Status);
+        var recovered = (await detail.JsonAsync())!.Value.GetProperty("product");
+        Assert.Equal(probe.Product, recovered.GetProperty("id").GetGuid());
+        Assert.Equal(CatalogCode, recovered.GetProperty("internalCode").GetString());
         await page.GetByLabel("Código interno de la solicitud original").FillAsync(CatalogCode);
         await page.GetByRole(AriaRole.Checkbox, new() { NameRegex = new("^Verifiqué el código") }).CheckAsync();
         await Button(page, "Continuar tras conciliación verificada").ClickAsync();
         await Expect(Button(page, "Nuevo producto")).ToBeEnabledAsync();
-        Assert.NotEqual(Guid.Empty, product);
-        Assert.Equal(1, writes());
-        return product;
+        Assert.Null(await page.EvaluateAsync<string?>("key => sessionStorage.getItem(key)", key));
+        probe.AssertSinglePost();
     }
 
     private static async Task VerifyCatalogWritesAsync(BrowserHost host, IBrowserContext browser, IPage page, IdentityAccessTestSetup.Setup owner,
@@ -356,6 +414,142 @@ public sealed partial class CashPilotTests
         return job;
     }
 
+    private static string CountBand(int count) => count switch { 0 => "0", 1 => "1", _ => "MANY" };
+
+    private static async Task CheckCatalogSnapshotAsync(PostgreSqlFixture database, IdentityAccessTestSetup.Setup owner,
+        CreatePostProbe probe, CatalogPilotTrace trace, bool before = false, bool observeOnly = false)
+    {
+        // Fresh runtime connection and a consistent tenant snapshot, including on the failure path.
+        var settled = probe.ReceivedResponse;
+        var replyId = probe.Product;
+        await using var db = database.CreateContext(owner.TenantId);
+        await using var snapshot = await db.Database.BeginTransactionAsync(System.Data.IsolationLevel.RepeatableRead, Token);
+        var products = db.BusinessProducts.Where(row => row.InternalCode == CatalogCode).Select(row => row.Id);
+        var ids = await products.ToListAsync(Token);
+        var created = db.AuditLogs.Where(row => row.Action == AuditAction.BusinessProductCreated &&
+            (products.Contains(row.EntityId) || row.EntityId == replyId));
+        var audits = await created.CountAsync(Token);
+        var byOwner = await created.CountAsync(row => row.ActorId == owner.UserId, Token);
+        // This isolated tenant starts with no lots or movements, including for the other seeded products.
+        var lots = await db.InventoryLots.CountAsync(Token);
+        var moves = await db.StockMovements.CountAsync(Token);
+        var matches = replyId == Guid.Empty ? "UNKNOWN" : ids.Count == 1 && ids[0] == replyId ? "YES" : "NO";
+        var timing = before ? "BEFORE" : settled ? "AFTER_RESPONSE" : "INCONCLUSIVE";
+        trace.Create($"READ {timing} PRODUCTS {CountBand(ids.Count)} AUDIT {CountBand(audits)} OWNER {CountBand(byOwner)} " +
+            $"LOTS {CountBand(lots)} MOVES {CountBand(moves)} MATCH {matches}");
+        if (observeOnly) return;
+        Assert.Equal(before ? 0 : 1, ids.Count);
+        Assert.Equal(before ? 0 : 1, audits);
+        Assert.Equal(audits, byOwner);
+        Assert.Equal(0, lots);
+        Assert.Equal(0, moves);
+        if (!before) Assert.Equal("YES", matches);
+    }
+
+    // CREATE only. The independent browser event and route counter remain active through re-entry.
+    private sealed class CreatePostProbe(string endpoint, CatalogPilotTrace trace)
+    {
+        private readonly TaskCompletionSource<string?> _finished = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private int _posts;
+        private int _intercepts;
+        private volatile string? _validId;
+        private volatile bool _receivedResponse;
+        public Guid Product => Guid.TryParse(_validId, out var id) ? id : Guid.Empty;
+        public bool ReceivedResponse => _receivedResponse;
+
+        public void ObserveRequest(object? sender, IRequest request)
+        {
+            if (request.Method == "POST" && request.Url == endpoint)
+                Interlocked.Increment(ref _posts);
+        }
+
+        public async Task InterceptAsync(IRoute route)
+        {
+            if (route.Request.Method != "POST") { await route.FallbackAsync(); return; }
+            if (Interlocked.Increment(ref _intercepts) != 1)
+            {
+                // Never forward a duplicate, even after the first receipt was discarded.
+                try { await route.AbortAsync(); }
+                catch { trace.Create("ABORT FAILED"); }
+                return;
+            }
+
+            string? failure = null;
+            IAPIResponse? response = null;
+            try
+            {
+                response = await route.FetchAsync(new() { MaxRedirects = 0, MaxRetries = 0 });
+                _receivedResponse = true;
+                var status = response.Status;
+                var band = status switch
+                {
+                    201 => "201", 400 => "400", 401 => "401", 403 => "403", 409 => "409", 429 => "429",
+                    >= 500 and < 600 => "5XX", _ => "OTHER",
+                };
+                trace.Create("UPSTREAM " + band);
+                if (status != 201)
+                    failure = status >= 400 ? "UPSTREAM_REJECT" : "RESPONSE_CONTRACT";
+                else
+                {
+                    var body = await response.JsonAsync();
+                    var id = body!.Value.GetProperty("id").GetGuid();
+                    if (id == Guid.Empty) throw new FormatException();
+                    _validId = id.ToString("D");
+                    trace.Create("ID VALID");
+                }
+            }
+            catch
+            {
+                failure = response is null ? "INDETERMINADA" : "RESPONSE_CONTRACT";
+                if (response?.Status == 201) trace.Create("ID INVALID");
+            }
+            try
+            {
+                await route.AbortAsync();
+                trace.Create("ABORT DONE");
+            }
+            catch
+            {
+                trace.Create("ABORT FAILED");
+                failure ??= "ACK_ABORT";
+            }
+            if (response is not null)
+            {
+                try { await response.DisposeAsync(); }
+                catch { trace.Create("DISPOSE FAILED"); failure ??= "INDETERMINADA"; }
+            }
+            _finished.SetResult(failure);
+        }
+
+        public async Task WaitForDiscardAsync()
+        {
+            string? failure;
+            try { failure = await _finished.Task.WaitAsync(TimeSpan.FromSeconds(20), Token); }
+            catch (TimeoutException)
+            {
+                trace.Step(Volatile.Read(ref _intercepts) > 0 ? "INDETERMINADA" :
+                    Volatile.Read(ref _posts) == 0 ? "NO_POST" : "NO_INTERCEPTION");
+                throw;
+            }
+            if (failure is not null)
+            {
+                trace.Step(failure);
+                throw new InvalidOperationException("The catalog lost-ack boundary failed.");
+            }
+            trace.Step("COUNTS");
+            AssertSinglePost();
+        }
+
+        public void AssertNoPost() => AssertCounts(0);
+        public void AssertSinglePost() => AssertCounts(1);
+        private void AssertCounts(int expected)
+        {
+            Assert.Equal(expected, Volatile.Read(ref _posts));
+            Assert.Equal(expected, Volatile.Read(ref _intercepts));
+        }
+        public void ReportCounts() => trace.Create($"POST {CountBand(Volatile.Read(ref _posts))} INTERCEPT {CountBand(Volatile.Read(ref _intercepts))}");
+    }
+
     // Only test-authored identifiers cross the diagnostics boundary.
     private sealed class CatalogPilotTrace(ITestOutputHelper output)
     {
@@ -370,6 +564,7 @@ public sealed partial class CashPilotTests
         }
 
         public void Step(string check) => _check = check;
+        public void Create(string observation) => output.WriteLine($"B02 P5 CREATE {observation}");
         public void Pass() => output.WriteLine($"B02 P5 DIAG {_scenario} PASS");
         public void Fail() => output.WriteLine($"B02 P5 DIAG {_scenario} FAIL {_check}");
     }

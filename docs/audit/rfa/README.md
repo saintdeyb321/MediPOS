@@ -2,7 +2,7 @@
 
 ## Corte vigente · 27/11/2026
 
-**RFA3_CANDIDATO_CIERRE** sobre `1deb4dae9ce5f11c4f9fc0f374837c5d67e1d1d4`, aplicación `52a5ced168dbef2e80145b4e9d115113f0a63755`. RFA0–RFA1 inventariados. **RFA2_CIERRE_CON_LIMITACIONES**, cobertura funcional parcial. Los 156 UC en nueve familias tienen 2 E1, 25 E2, 103 E3, 26 E4 y 0 E5. Veredictos: 19 PASS, 135 BLOCKED, 1 NOT_RUN y 1 N/A. [Evidencia por familia](VALIDATION.md#run-20) · [Conciliación posterior](VALIDATION.md#run-21)
+**RFA4A_CANDIDATO** para F-008, pendiente de un CI aislado. RFA3 aprobada documentalmente en `e1df3ec9e9fb1b346118a1b168450cf832862801`, aplicación `52a5ced168dbef2e80145b4e9d115113f0a63755`. RFA0–RFA1 inventariados. **RFA2_CIERRE_CON_LIMITACIONES**, cobertura funcional parcial. Los 156 UC en nueve familias tienen 2 E1, 25 E2, 103 E3, 26 E4 y 0 E5. Veredictos: 19 PASS, 135 BLOCKED, 1 NOT_RUN y 1 N/A. [Evidencia por familia](VALIDATION.md#run-20) · [Evidencia real](VALIDATION.md#run-21) · [Candidato](VALIDATION.md#run-22)
 
 **Gates independientes.** P0–P4 y P5 SEED/SEARCH PASS en RUN-21. P5 global FAIL en CREATE/POST_LOST_ACK, causa indeterminada. Frontend integral 645/646, E5 pendiente y producción NO-GO. [RUN-21](VALIDATION.md#run-21) · [Checkpoint](CHECKPOINT.md)
 

@@ -1,5 +1,11 @@
 # Checkpoint RFA
 
+## RFA4A · candidato F-008
+
+RFA3 aprobada en `e1df3ec9e9fb1b346118a1b168450cf832862801`. **RFA4A_CANDIDATO** sobre ese HEAD en `ci/postgres-diagnostics-8bc6b4c`. [RUN-22](VALIDATION.md#run-22) registra la compilación, la validación del filtro y el alcance del arnés. Chromium/API/PostgreSQL NOT_RUN local por ausencia de Docker. Los 156 UC conservan sus niveles y veredictos. F-008 sigue abierto.
+
+**Siguiente acción del operador.** Publicar el candidato en esa rama. El push de los cambios del arnés activa B-02 una sola vez. Revisar el resumen saneado del SHA publicado, desde P0 hasta P5, incluidos el recuento de POST y la lectura runtime. Detenerse en la primera frontera fallida. RFA4B, L-06C–I y producción quedan fuera de este intento.
+
 ## RFA3 · Candidato de cierre
 
 - **RFA3_CANDIDATO_CIERRE.** Rama `ci/postgres-diagnostics-8bc6b4c`, HEAD `1deb4dae9ce5f11c4f9fc0f374837c5d67e1d1d4`. El diff desde `c521e9c5019b25371d45b9a661bb90588554e389` tiene 15 archivos de arnés y documentos. Sin cambios de aplicación frente a `52a5ced168dbef2e80145b4e9d115113f0a63755`. El MD de encargo preexistente sigue aparte.

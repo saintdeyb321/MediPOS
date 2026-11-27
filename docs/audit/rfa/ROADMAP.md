@@ -6,7 +6,7 @@ Reconciliación sobre `1deb4dae9ce5f11c4f9fc0f374837c5d67e1d1d4`, aplicación `5
 |---|---|---|
 | RFA0–RFA1 | Gobierno, inventario, trazabilidad AS-IS y exclusiones | Cierre documental, 156 UC vigentes incluidos los 155 originales. |
 | RFA2 | Acreditar comportamiento, persistencia, recuperación y aislamiento | Cierre de investigación con limitaciones. Cobertura funcional parcial. [RUN-21](VALIDATION.md#run-21) |
-| RFA3 | Hallazgos, TO-BE, dependencias y priorización | Candidato de cierre para revisión. [Hallazgos](FINDINGS.md) · [TO-BE](TO_BE.md) |
+| RFA3 | Hallazgos, TO-BE, dependencias y priorización | Aprobada documentalmente en `e1df3ec`. [Hallazgos](FINDINGS.md) · [TO-BE](TO_BE.md) |
 | RFA4A · Astra Alto | Correcciones focalizadas de defectos e invariantes | L-01, L-02/L-06A y L-05 ejecutados en los alcances acreditados. Priorizar la frontera de alta P5 de L-06B. L-05 conserva el fallo histórico de Compras sin causa. |
 | RFA4B · Sol Alto | Simplificaciones, refactor y cambios de flujo aprobados | Pendiente. L-06 agrupa variantes por familia. L-03 Compras (F-004) y medir L-04 (F-005) antes de proponer cambios. El saldo informativo de L-01 y la optimización de nombres son opcionales. |
 | RFA5A · Sol Medio | Certificación técnica aislada | Pendiente. L-07 exige builds, suites, PostgreSQL, E4 y seguridad del SHA final exacto. Completar concurrencia, dinero/stock, offline, permisos y aislamiento. |
@@ -22,6 +22,8 @@ Los lotes L-01–07 y los cortes L-06A–I organizan trabajo dentro de estas fas
 4. **RFA5A/B · L-07.** Tras cerrar los bloqueos críticos, medir integridad y operación en destino aislado, ejecutar los gates integrales y documentar restauración, rendimiento y externos. Obtener E5 del operador antes de decidir release.
 
 ### Primer encargo RFA4A
+
+**Estado del encargo.** Intento autorizado. Candidato F-008 compilado, pendiente de publicación del operador y de la única ejecución B-02 por push. Los requisitos de aceptación siguientes siguen vigentes. [RUN-22](VALIDATION.md#run-22)
 
 - **Alcance:** solo [F-008](FINDINGS.md#f-008--el-piloto-de-alta-local-falla-en-la-pérdida-inducida-del-acuse), CAT-09/21, FR-CAT-001/003/007. El fallo acreditado es del piloto y aún falta causa. Aprobar un intento B-02 controlado, fixture efímero de PostgreSQL 18, Chromium y runner aislado, SHA/build fijados y Owner sintético con sesión, categoría y código nuevo. P0–P4 y SEARCH sirven como controles. No abrir L-06C–I.
 - **Prueba discriminante mínima:** justo antes del único clic, comprobar formulario revisado y botón accionable y observar el POST exacto independientemente de `RouteAsync`. Dentro del helper, marcar intercepción, categoría HTTP permitida (201, 400, 401, 403, 409, 429, 5xx u otra), ID válido y conclusión del aborto por separado. Después, distinguir botón y marcador pendiente. Publicar solo marcadores estáticos y estado permitido. Mantener timeout, aserciones y error del runner. Conservar la primera frontera fallida aun si una comprobación independiente también falla.
