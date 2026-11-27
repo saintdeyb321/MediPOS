@@ -1,5 +1,11 @@
 # Checkpoint RFA
 
+## RFA4B · candidato de cierre
+
+**RFA4B_CANDIDATO_CIERRE** sobre `f5dbea241e8e73d9b2e4cf9356c5db412b096bf2` en `ci/postgres-diagnostics-8bc6b4c`. [RUN-27](VALIDATION.md#run-27) cierra el encargo prioritario RFA4A con pendientes y conserva P5 FAIL en EDIT/UNITS. [RUN-28](VALIDATION.md#run-28) acredita la simplificación local del panel de conciliación. POS KEEP y cambios comerciales opcionales DEFER. Se conservan 156 UC y sus veredictos.
+
+El operador revisa el candidato. La siguiente fase se inicia con los [gates RFA5A](ROADMAP.md#gates-rfa5a), empezando por identificar la aserción fallida de UNITS sobre un SHA y build acreditados. Frontend integral histórico 645/646, E5 y producción NO-GO.
+
 ## RFA4A · candidato de conciliación CAT-21
 
 **RFA4A_CONCILIACION_CANDIDATA** sobre `55de01125954154f0a67ad61ff5ca812e760f14b`. [RUN-25](VALIDATION.md#run-25) acredita F-008 corregido en el alta local y CAT-21 hasta reentrada. [RUN-26](VALIDATION.md#run-26) registra la caracterización local y las etiquetas acotadas. CAT-21 E4 parcial/BLOCKED. Los 156 UC conservan sus veredictos.

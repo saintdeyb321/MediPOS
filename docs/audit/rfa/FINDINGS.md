@@ -2,7 +2,7 @@
 
 ## Hallazgos y seguimiento
 
-Los IDs F-001–008 se conservan. F-008 registra el alta prematura del producto local. [Validación](VALIDATION.md) · [Aceptación por lote](ROADMAP.md).
+Los IDs F-001–008 se conservan. F-009 registra la frontera de certificación de unidades. [Validación](VALIDATION.md) · [Aceptación por lote](ROADMAP.md).
 
 | ID · tipo · prioridad | Actor y expectativa | Causa, confianza y alcance | Decisión mínima, prueba y riesgo de regresión |
 |---|---|---|---|
@@ -12,8 +12,9 @@ Los IDs F-001–008 se conservan. F-008 registra el alta prematura del producto 
 | F-004 · descubrimiento de compra · P2 | Operador intenta reabrir recepción sin referencia. FR-PUR-004 pide buscar el documento/referencia y FR-PUR-002 protege la recepción. | Alta en coincidencia exacta y recuperación por ID. RUN-04 lo observa en DOM. E3 contrasta dos compras por la misma referencia, detalle de la sede y exclusión de ajenas. No se ha demostrado pérdida de la compra. | L-03. Decidir si el operador requiere recientes sin documento. Probar salida, entrada limpia, dos referencias iguales y una ausente. Riesgo: usar referencia duplicada como clave para rehacer compra. |
 | F-005 · coste de lectura · P2 provisional | Personal de inventario cambia de existencias a lotes y necesita nombres legibles de su sede. FR-INV-001/FR-TEN-003 son invariantes, sin objetivo de latencia acordado. | Alta en la cuenta DOM 3/0/3 de RUN-09. Coste de red y demora percibida desconocidos. E3 verifica ámbito y cantidades de las lecturas, sin cronometrar el navegador. | L-04. Medir y acordar presupuesto antes de ampliar DTO. Eliminar lecturas solo si se conserva nombre, ámbito y paginación. Riesgo: reutilizar etiquetas de otra sede. |
 | F-006 · repetibilidad de pruebas · P2 provisional | QA navega por Transferencias o Plataforma. El control debe esperar el resultado de acceso o la carga del destinatario. Sin requisito FR de sincronización de tests. | Alta para los dos resultados discordantes RUN-03/05; causa de temporización específica y efecto en producto sin demostrar. RUN-10 tiene un FAIL frontend sin nombre. | L-05. Identificar el caso de CI y caracterizar las transiciones observables antes de ajustar esperas. Riesgo: esconder una carrera de autorización o duplicar el diagnóstico de un fallo desconocido. |
-| F-007 · recuperación de un alta · P2 | Owner vuelve después de perder el acuse de un alta. La conciliación debe conservar la intención original. | E2. El código interno quedaba solo en memoria y, tras recargar, se podía cerrar la recuperación con otra ficha del mismo tenant. | L-06B conserva el código en el contexto de la sesión del navegador. Otro producto mantiene el bloqueo. Se conserva la revisión humana del original. |
-| F-008 · envío prematuro · P2 | El Owner avanza a revisión y el alta local ya se registra. CAT-09/21 y regresión del formulario compartido CAT-10. FR-CAT-001/003/007. | RUN-23 confirma un POST prematuro, 201, producto y auditoría persistidos. RUN-24 demuestra la reutilización del botón y el clic sin cancelar en DOM. | RFA4A_CORRECCION_CANDIDATA. Confirmación separada y CI aislado pendiente. |
+| F-007 · recuperación de un alta · P2 | Owner vuelve después de perder el acuse de un alta. La conciliación conserva la intención original. | RUN-27 acredita el original en E4. La negativa de ficha ajena conserva E2. | Revisar el original sin reenviar, con el código conservado en la sesión de pestaña. |
+| F-008 · envío prematuro · P2 | El Owner avanza a revisión y el alta local ya se registra. CAT-09/21 y regresión del formulario compartido CAT-10. FR-CAT-001/003/007. | RUN-23 confirma el POST prematuro. RUN-24 caracteriza la reutilización del botón. RUN-27 acredita cero envíos antes de Guardar y un alta deliberada. | Corrección acreditada en alta local. Asociación CAT-10 pendiente de B-02. |
+| F-009 · gate UNITS | Owner lee y guarda presentaciones con versión, CAT-13/14. | RUN-27 termina en EDIT/UNITS, entre GET de configuración, PUT versionado y negativa 409. Aserción y causa indeterminadas. | RFA5A debe identificar la frontera y comprobar versión, unidades, auditoría, stock e historial. Bloqueo de certificación. |
 
 La evidencia de ejecución se vincula al [registro RFA2](VALIDATION.md). E2 se limita a las fronteras indicadas. Los diagnósticos originales siguen abajo.
 
@@ -83,7 +84,9 @@ La evidencia de ejecución se vincula al [registro RFA2](VALIDATION.md). E2 se l
 
 ## F-007 · Conciliación de alta con un producto distinto tras recarga
 
-**Estado vigente.** RUN-25 acredita guarda y reentrada con la intención original. El bloque de conciliación final falla sin aserción individual conocida. RUN-26 verifica con dobles que la ficha ajena y una lectura de detalle en vuelo mantienen el bloqueo, y que revisar el original permite conciliar sin otro POST. La aceptación real de la conciliación sigue pendiente. [RUN-25](VALIDATION.md#run-25) · [RUN-26](VALIDATION.md#run-26)
+**Recorrido acreditado.** RUN-27 confirma consulta del original, revisión, desbloqueo y limpieza sin repetir el POST. La variante de ficha ajena conserva E2 y la pérdida del storage de sesión sigue fuera de la evidencia real. [RUN-27](VALIDATION.md#run-27)
+
+**Evidencia anterior.** RUN-25 acredita guarda y reentrada con la intención original. El bloque de conciliación final falla sin aserción individual conocida. RUN-26 verifica con dobles que la ficha ajena y una lectura de detalle en vuelo mantienen el bloqueo, y que revisar el original permite conciliar sin otro POST. La aceptación real de la conciliación sigue pendiente. [RUN-25](VALIDATION.md#run-25) · [RUN-26](VALIDATION.md#run-26)
 
 RUN-21 delimita el fallo a `CREATE/POST_LOST_ACK`, antes de la reentrada. F-007 conserva su RED/GREEN local. La evidencia del piloto no permite atribuir este fallo a F-007. [RUN-21](VALIDATION.md#run-21)
 
@@ -91,7 +94,9 @@ RUN-21 delimita el fallo a `CREATE/POST_LOST_ACK`, antes de la reentrada. F-007 
 
 ## F-008 · El piloto de alta local falla en la pérdida inducida del acuse
 
-**Corrección acreditada en alta local.** RUN-25 comprueba cero POST en revisión, un 201 deliberado, aborto del acuse, una auditoría Owner y cero stock. El fallo restante pertenece al bloque final de CAT-21. Asociación global y P5 completo siguen pendientes. [RUN-25](VALIDATION.md#run-25)
+**RFA4A · CIERRE_CON_PENDIENTES.** RUN-27 acredita también la conciliación y la lectura independiente durante CREATE. El encargo prioritario se cierra para el recorrido ejecutado. CAT-10 y el gate global P5 quedan pendientes en RFA5A. [RUN-27](VALIDATION.md#run-27)
+
+**Primera acreditación del alta local.** RUN-25 comprueba cero POST en revisión, un 201 deliberado, aborto del acuse, una auditoría Owner y cero stock. En ese run falló el bloque final de CAT-21. Asociación global y P5 completo siguen pendientes. [RUN-25](VALIDATION.md#run-25)
 
 **Candidato anterior.** RFA4A_CORRECCION_CANDIDATA. RUN-23 constató que el POST local se ejecutó antes de Guardar. La escritura y su auditoría concuerdan con el único 201 observado y el inventario no registró lotes ni movimientos. El RED en DOM de RUN-24 mostró que React reutiliza el botón Continuar como submit durante el clic al entrar en revisión. El correctivo cancela esa activación y monta un botón distinto para la confirmación. Queda pendiente acreditar el resultado en Chromium y PostgreSQL. [RUN-23](VALIDATION.md#run-23) · [RUN-24](VALIDATION.md#run-24)
 

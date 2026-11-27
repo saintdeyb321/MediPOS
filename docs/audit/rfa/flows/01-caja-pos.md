@@ -88,7 +88,7 @@ GET `/api/tenants/{tenantId}/branches/{branchId}/sales/{saleId}/draft` · `backe
 
 ## UC-CAJ-10
 
-PUT `/api/tenants/{tenantId}/branches/{branchId}/sales/{saleId}/lines` · `backend/src/MediPOS.Api/Tenant/PosEndpoints.cs:53`. **E4 · IMPLEMENTADO · BLOCKED**. Guardar líneas del borrador con versión desde useSaleDraft.ts:123–151. ReplaceSaleLinesHandler.cs:16–60 verifica contexto, caja, disponibilidad de productos/unidades y versión. SaleDraftStore.cs:48–73 actualiza venta borrador filtrada y líneas dentro de transacción. Releer la revisión del mismo ID antes de cobrar. Requisito FR-POS-004. [RUN-17](../VALIDATION.md#run-17): P4 cantidad base 10, total 21.25, revisión vieja 409. Vaciado pendiente E4.
+PUT `/api/tenants/{tenantId}/branches/{branchId}/sales/{saleId}/lines` · `backend/src/MediPOS.Api/Tenant/PosEndpoints.cs:53`. **E4 · IMPLEMENTADO · BLOCKED**. Guardar líneas del borrador con versión desde useSaleDraft.ts:123–151. ReplaceSaleLinesHandler.cs:16–60 verifica contexto, caja, disponibilidad de productos/unidades y versión. SaleDraftStore.cs:48–73 actualiza venta borrador filtrada y líneas dentro de transacción. Releer la revisión del mismo ID antes de cobrar. Requisito FR-POS-004. [RUN-17](../VALIDATION.md#run-17): P4 cantidad base 10, total 21.25, revisión vieja 409. Vaciado pendiente E4. RUN-28: KEEP por protección de edición real y vaciado de RUN-16 y recuperación por GET existente.
 
 ## UC-CAJ-11
 

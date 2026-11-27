@@ -1,5 +1,34 @@
 # RFA2 · Validación conductual y persistencia
 
+<a id="run-28"></a>
+## RUN-28 · Candidato de cierre RFA4B
+
+Baseline `f5dbea241e8e73d9b2e4cf9356c5db412b096bf2`. Aplicados los principios ub-mode fijados en RUN-20. El CI de [RUN-27](#run-27) corresponde al código publicado antes de esta simplificación.
+
+| Decisión | Evidencia y alcance |
+|---|---|
+| **SIMPLIFY · CAT-09/10/21** | RED local en alta y edición. El DOM tenía dos paneles montados cuando un modal estaba abierto. `ProductsPage.tsx` monta uno en página, alta o edición según la superficie activa y conserva revisión, código, errores y solicitudes en sus propietarios existentes. Los formularios y las primitivas de foco y cierre conservan su ciclo. En GREEN, volver al directorio y reabrir conserva el borrador, el marcador y el estado de revisión. Las pruebas conservan un solo POST de alta, el bloqueo por ficha ajena, código erróneo y GET 503, y la posibilidad de conciliar el original sin reenviar. Se cubren además alta deliberada, revisión de medicamento y asociación global en DOM. |
+| **KEEP · POS** | `matchesSaved` compara cantidad de líneas, producto, presentación, tipo de precio y cantidad exacta con lo persistido. El borrador limpio no marca dirty y vaciar todas las líneas sí lo marca. Ante save incierto, la versión y el ID identifican el borrador y la fase impide otro guardado hasta consultarlo. Se reutiliza la evidencia previa de RUN-16/17 y las aserciones existentes de fallo de lectura y recuperación por GET. No se reejecutó POS al conservar el código. |
+| **DEFER** | F-004 requiere decisión sobre un directorio reciente. F-005 requiere medición representativa y presupuesto antes de optimizar. El saldo informativo de Sencillo y las demás ampliaciones comerciales quedan como propuestas. |
+
+Las pruebas de RUN-28 usan DOM y dobles HTTP. B-02, navegador real y PostgreSQL del candidato quedan **NOT_RUN**. Los [gates RFA5A](ROADMAP.md#gates-rfa5a) concentran UNITS, P5 completo, suites integrales y escenarios críticos. RFA5B conserva E5 y la decisión de producción.
+
+**Comprobaciones locales.** Vitest en `ProductsPage.test.tsx`. RED 2 FAIL esperados por panel duplicado y 16 casos fuera del filtro. GREEN 5 PASS y 13 fuera del filtro. Tras ajustar los localizadores de prueba a los tipos de Testing Library, las dos regresiones modificadas volvieron a pasar (2 PASS, 16 fuera del filtro). ESLint sobre página y prueba PASS. `npm.cmd run build -- --outDir node_modules/.cache/rfa4b-build` PASS con aviso de tamaño del bundle. `git diff --check` PASS.
+
+<a id="run-27"></a>
+## RUN-27 · Alta y recuperación acreditadas, P5 falla en UNITS
+
+[CI B-02 46061727689](https://github.com/saintdeyb321/MediPOS/actions/runs/46061727689), intento 1, job 140717347226, 27/11/2026 20:09:58–20:13:26 UTC (208 s). SHA `f5dbea241e8e73d9b2e4cf9356c5db412b096bf2`, build `bf5bf4ff882cc0d02ef6fb973652d5d88f30b86b55e4738dbbad6770f7c4e30d` idéntico al de RUN-25. PostgreSQL 18.7 (180007), runtime `medipos_test_runtime`. Preparación PASS, workflow FAIL, salida 1.
+
+| Frontera | Evidencia y límite |
+|---|---|
+| P0–P4 y P5 SEED/SEARCH | PASS en los recorridos ejecutados. |
+| P5 CREATE · CAT-09/21 | PASS en navegador, API y PostgreSQL. Revisión con cero POST e intención, un POST explícito con 201, aborto, guarda, reentrada, GET del original con ID y código correctos, revisión y desbloqueo, marcador eliminado y un POST total. Lectura independiente confirma una fila, una auditoría del Owner y cero lotes y movimientos. F-008 acreditado en alta local. La negativa de ficha ajena de F-007 conserva E2. El PASS de CREATE no identifica la aserción de conciliación que falló en RUN-25 ni prueba recuperación tras pérdida de storage. |
+| P5 EDIT · CAT-13/14 | FAIL en UNITS. Según el orden del arnés, antes superó corrección de datos, rechazo 409 de revisión obsoleta y PUT de precios. UNITS abarca GET de configuración, lectura de versión, PUT de base 1 y presentación 10.125, y reenvío de versión obsoleta con 409 esperado. La aserción, el status y la causa exactos quedan por determinar. Persistencia final de precios y efectos de unidades quedan pendientes de RFA5A. |
+| Resto P5 | LEGACY_UNITS, STATUS, ASSOCIATION, IMPORT y PERSISTENCE final NOT_RUN. CAT-10 sigue pendiente en B-02. |
+
+RFA4A **CIERRE_CON_PENDIENTES** del encargo prioritario F-008/CAT-21. P5 completo sigue FAIL. CAT-09/21 conservan E4 y el veredicto global BLOCKED por variantes pendientes, incluida la dependencia de sesión de pestaña.
+
 <a id="run-26"></a>
 ## RUN-26 · Candidato de conciliación CAT-21
 

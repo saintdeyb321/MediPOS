@@ -75,6 +75,7 @@ function CatalogWorkspace() {
   function openCreate(reference: GlobalProduct | null) { setTask(null); setTaskOpen(false); setGlobal(reference); setDirty(false); setFormEpoch(value => value + 1); setCreateOpen(true) }
   function edit(value: ProductTask) { setDetailOpen(false); setDirty(false); setEditSnapshot(detail.data ?? null); setEditEpoch(epoch => epoch + 1); setTask(value); setTaskOpen(true) }
   const taskDetail = editSnapshot ?? detail.data
+  const recoverySurface = createOpen ? 'create' : taskOpen && task !== null ? 'task' : 'page'
   const recovery = write.pending && <Panel><div className="catalog-body"><h2>Operación pendiente de conciliación</h2><p>No reenvíes la solicitud. Conserva el código original; una consulta sin cambios no demuestra que la escritura falló.</p>
     {!write.originalIdentified && <Notice tone="warning">Esta solicitud anterior no conservó su identificador original. Solicita a soporte que la verifique antes de continuar.</Notice>}
     <Button variant="secondary" disabled={write.busy} onClick={() => { setReviewed(false); void write.consult(selected || undefined) }}>Consultar producto de la operación</Button>
@@ -92,11 +93,11 @@ function CatalogWorkspace() {
     {!http && <Notice tone="warning">Esta pantalla requiere conexión HTTPS real con MediPOS.</Notice>}
     {write.error != null && <ApiErrorState error={write.error} title="No pudimos completar la operación de catálogo" />}
     {write.notice && <p role="status">{write.notice}</p>}
-    {!createOpen && !taskOpen && recovery}
-    {write.pending && !createOpen && !taskOpen && <Button data-recovery-focus variant="secondary" disabled={write.busy} onClick={() => { if (task) setTaskOpen(true); else setCreateOpen(true) }}>Revisar solicitud pendiente sin reenviar</Button>}
+    {recoverySurface === 'page' && recovery}
+    {write.pending && recoverySurface === 'page' && <Button data-recovery-focus variant="secondary" disabled={write.busy} onClick={() => { if (task) setTaskOpen(true); else setCreateOpen(true) }}>Revisar solicitud pendiente sin reenviar</Button>}
     {categories.isError && <ApiErrorState error={categories.error} title="No pudimos consultar las categorías" retry={() => void categories.refetch()} />}
     <Modal open={createOpen} wide title={global ? 'Añadir referencia a mi botica' : 'Nuevo producto'} description="Registra sus datos, revisa los precios y configura las presentaciones después de guardar." onClose={closeCreate} onRecoveryClose={() => setCreateOpen(false)} dirty={dirty} busy={write.busy} recovery={write.pending}>
-      <div className="catalog-body">{write.error != null && <ApiErrorState error={write.error} />}{recovery}
+      <div className="catalog-body">{write.error != null && <ApiErrorState error={write.error} />}{recoverySurface === 'create' && recovery}
         {categories.isPending ? <p>Consultando categorías…</p> : categories.data && !categories.isError && <CreateProductForm key={`${global?.id ?? 'local'}/${formEpoch}`} categories={categories.data} global={global} write={write} onDirty={setDirty} />}
         {categories.isError && <ApiErrorState error={categories.error} retry={() => void categories.refetch()} />}
         {write.notice && selected && <Button disabled={write.locked} onClick={() => { closeCreate(); edit('units') }}>Configurar presentaciones del producto guardado</Button>}
@@ -165,7 +166,7 @@ function CatalogWorkspace() {
     </Drawer>
     <Modal open={taskOpen && task !== null} wide={task === 'units'} title={task === 'metadata' ? 'Corregir datos locales' : task === 'prices' ? 'Editar precios' : task === 'units' ? 'Configurar presentaciones' : 'Cambiar estado del producto'} onClose={() => { setTaskOpen(false); setTask(null); setDirty(false) }} onRecoveryClose={() => setTaskOpen(false)} dirty={dirty} busy={write.busy} recovery={write.pending}>
       <div className="catalog-body">
-        {write.error != null && <ApiErrorState error={write.error} />}{recovery}{write.notice && <p role="status">{write.notice}</p>}
+        {write.error != null && <ApiErrorState error={write.error} />}{recoverySurface === 'task' && recovery}{write.notice && <p role="status">{write.notice}</p>}
         {taskDetail && <>
           {task === 'metadata' && <EditLocalProduct key={editEpoch} detail={taskDetail} categories={categories.data ?? []} write={write} onDirty={setDirty} />}
           {task === 'prices' && <EditPrices key={editEpoch} detail={taskDetail} write={write} onDirty={setDirty} />}
