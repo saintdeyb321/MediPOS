@@ -83,13 +83,17 @@ La evidencia de ejecución se vincula al [registro RFA2](VALIDATION.md). E2 se l
 
 ## F-007 · Conciliación de alta con un producto distinto tras recarga
 
+**Estado vigente.** RUN-25 acredita guarda y reentrada con la intención original. El bloque de conciliación final falla sin aserción individual conocida. RUN-26 verifica con dobles que la ficha ajena y una lectura de detalle en vuelo mantienen el bloqueo, y que revisar el original permite conciliar sin otro POST. La aceptación real de la conciliación sigue pendiente. [RUN-25](VALIDATION.md#run-25) · [RUN-26](VALIDATION.md#run-26)
+
 RUN-21 delimita el fallo a `CREATE/POST_LOST_ACK`, antes de la reentrada. F-007 conserva su RED/GREEN local. La evidencia del piloto no permite atribuir este fallo a F-007. [RUN-21](VALIDATION.md#run-21)
 
 **RUN-18 · E2 RED/GREEN.** El código original vivía en el estado del hook. El marcador URL seguía presente después de recargar y quedaba vacía la comparación del código. La regresión observó el botón de conciliación habilitado con otra ficha. El candidato conserva el código original en `sessionStorage` por identidad, membresía, tenant y sede. Exige coincidencia y revisión explícita, conserva un único POST y deja bloqueadas las solicitudes anteriores sin un identificador verificable. Los endpoints de alta carecen de constancia transaccional por solicitud. [Aserciones y límites](VALIDATION.md#run-18).
 
 ## F-008 · El piloto de alta local falla en la pérdida inducida del acuse
 
-**Estado vigente.** RFA4A_CORRECCION_CANDIDATA. RUN-23 constató que el POST local se ejecutó antes de Guardar. La escritura y su auditoría concuerdan con el único 201 observado y el inventario no registró lotes ni movimientos. El RED en DOM de RUN-24 mostró que React reutiliza el botón Continuar como submit durante el clic al entrar en revisión. El correctivo cancela esa activación y monta un botón distinto para la confirmación. Queda pendiente acreditar el resultado en Chromium y PostgreSQL. [RUN-23](VALIDATION.md#run-23) · [RUN-24](VALIDATION.md#run-24)
+**Corrección acreditada en alta local.** RUN-25 comprueba cero POST en revisión, un 201 deliberado, aborto del acuse, una auditoría Owner y cero stock. El fallo restante pertenece al bloque final de CAT-21. Asociación global y P5 completo siguen pendientes. [RUN-25](VALIDATION.md#run-25)
+
+**Candidato anterior.** RFA4A_CORRECCION_CANDIDATA. RUN-23 constató que el POST local se ejecutó antes de Guardar. La escritura y su auditoría concuerdan con el único 201 observado y el inventario no registró lotes ni movimientos. El RED en DOM de RUN-24 mostró que React reutiliza el botón Continuar como submit durante el clic al entrar en revisión. El correctivo cancela esa activación y monta un botón distinto para la confirmación. Queda pendiente acreditar el resultado en Chromium y PostgreSQL. [RUN-23](VALIDATION.md#run-23) · [RUN-24](VALIDATION.md#run-24)
 
 **Historial.** RUN-21 delimitó el fallo a `POST_LOST_ACK`. El probe de RUN-22 separó las fronteras y localizó en RUN-23 el envío durante REVIEW, antes de la confirmación deliberada.
 

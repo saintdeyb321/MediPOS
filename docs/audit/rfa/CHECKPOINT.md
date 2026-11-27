@@ -1,5 +1,11 @@
 # Checkpoint RFA
 
+## RFA4A · candidato de conciliación CAT-21
+
+**RFA4A_CONCILIACION_CANDIDATA** sobre `55de01125954154f0a67ad61ff5ca812e760f14b`. [RUN-25](VALIDATION.md#run-25) acredita F-008 corregido en el alta local y CAT-21 hasta reentrada. [RUN-26](VALIDATION.md#run-26) registra la caracterización local y las etiquetas acotadas. CAT-21 E4 parcial/BLOCKED. Los 156 UC conservan sus veredictos.
+
+El operador publica una sola vez en `ci/postgres-diagnostics-8bc6b4c` para activar B-02. Revisar el resumen del SHA y parar en la primera frontera fallida o presentar P5 completo para revisión. Producción NO-GO.
+
 ## RFA4A · corrección candidata F-008
 
 **RFA4A_CORRECCION_CANDIDATA** sobre `2248381ffcd808533f2f8204ff8aeece4ce028cd` en `ci/postgres-diagnostics-8bc6b4c`. [RUN-23](VALIDATION.md#run-23) acredita el alta prematura. [RUN-24](VALIDATION.md#run-24) documenta el RED/GREEN de identidad de botón, confirmación y recuperación. Los 156 UC conservan sus veredictos. CAT-09 sube a E4 por el fallo real del baseline, con el candidato aún BLOCKED. CAT-21 permanece E2/BLOCKED.

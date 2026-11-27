@@ -1,5 +1,32 @@
 # RFA2 · Validación conductual y persistencia
 
+<a id="run-26"></a>
+## RUN-26 · Candidato de conciliación CAT-21
+
+**RFA4A_CONCILIACION_CANDIDATA** sobre `55de01125954154f0a67ad61ff5ca812e760f14b`. El GET de la ficha y el GET de Consultar usan la misma ruta. La ficha actualiza su consulta de TanStack Query. Solo la consulta explícita actualiza `observed` y habilita la revisión del resultado. La API y el cliente comparten la forma `{ product, units, revision }`. La guarda exige la intención original, el código observado y la revisión explícita.
+
+El escenario focalizado separa una lectura de ficha en vuelo de una consulta explícita con 503. Mantiene el bloqueo y el código original hasta consultar y verificar correctamente la ficha. Comprueba además la ficha ajena, el código erróneo, el checkbox, la limpieza de URL y storage y un POST total.
+
+La caracterización DOM mostró varias copias del texto y de la etiqueta de revisión en los diálogos cerrados. Se acotó el arnés al texto visible y al campo accesible por rol. Esta ambigüedad del selector se comprobó localmente. La aserción exacta que falló en RUN-25 sigue sin identificar.
+
+El arnés conserva el probe y las aserciones, con once etiquetas estáticas para distinguir clic de consulta, espera de GET, estado HTTP, ID/código, resultado visible, entrada, checkbox, confirmación, desbloqueo, storage y conteo. Espera el resultado de revisión visible antes de completar el formulario. El filtro publica solo esas etiquetas y el runner conserva la excepción original. La espera de respuesta de Playwright aún filtra método y URL. Una respuesta en vuelo puede coincidir con ese filtro y por eso se comprueba también el estado observado por la UI.
+
+**Comprobaciones locales.** Vitest focalizado en `ProductsPage.test.tsx -t 'retains uncertain creation'`. El selector de texto sin acotar falló por tres coincidencias en DOM. Con alcance al panel activo, 1 PASS, 0 FAIL, 17 excluidas por filtro. ESLint del archivo de prueba, build frontend y build E2E PASS. El build frontend conservó el aviso de tamaño del bundle. YAML válido, AWK admitió 11/11 etiquetas previstas y rechazó 6/6 entradas inválidas. `git diff --check` PASS.
+
+P0–P5 **NOT_RUN local** por ausencia de Docker. El operador publica una vez en la rama diagnóstica. El push activa B-02. Revisar el primer fallo saneado o el PASS completo de P5 para el nuevo SHA.
+
+<a id="run-25"></a>
+## RUN-25 · F-008 corregido en alta local y frontera CAT-21 pendiente
+
+[CI B-02 46042456650](https://github.com/saintdeyb321/MediPOS/actions/runs/46042456650), job 140653339521, intento 1, 27/11/2026 17:31:04–17:34:29 UTC (205 s). SHA `55de01125954154f0a67ad61ff5ca812e760f14b`, build `bf5bf4ff882cc0d02ef6fb973652d5d88f30b86b55e4738dbbad6770f7c4e30d`. Chromium/API aislados, PostgreSQL 18.7 y runtime `medipos_test_runtime`. Preparación PASS, workflow FAIL, salida 1.
+
+| Frontera | Evidencia |
+|---|---|
+| P0–P4 y P5 SEED/SEARCH | PASS en las fronteras de los pilotos ejecutados. |
+| CAT-09 / F-008 | Cero POST e intención antes del clic Guardar. Un POST deliberado, 201 e ID válido, aborto completado y bloqueo comprobado. La lectura runtime confirma una fila del mismo ID, una auditoría Owner y cero lotes y movimientos. |
+| CAT-21 | Se acredita guarda y reentrada con código original. El bloque RECONCILIATION falla antes de terminar la verificación. La aserción exacta y la causa siguen indeterminadas. |
+| Gate P5 | FAIL. CAT-10, EDIT, IMPORT y PERSISTENCE final NOT_RUN. El frontend integral histórico 645/646, CAT-19, E5 y las variantes por rol siguen pendientes. |
+
 <a id="run-24"></a>
 ## RUN-24 · Corrección candidata F-008
 

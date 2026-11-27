@@ -268,18 +268,35 @@ public sealed partial class CashPilotTests
         await Button(page, "Aplicar filtros").ClickAsync();
         await Button(page, "Ver " + CatalogCreated).ClickAsync();
         await Button(page, "Cerrar Detalle del producto").ClickAsync();
-        trace.Step("RECONCILIATION");
-        var detail = await page.RunAndWaitForResponseAsync(() => consult.ClickAsync(),
+        trace.Step("RECONCILIATION_CONSULT");
+        var detail = await page.RunAndWaitForResponseAsync(async () =>
+        {
+            await consult.ClickAsync();
+            trace.Step("RECONCILIATION_GET");
+        },
             response => response.Request.Method == "GET" && response.Url == host.Origin + BranchApi(owner) + $"/products/{probe.Product:D}");
+        trace.Step("RECONCILIATION_HTTP");
         Assert.Equal(200, detail.Status);
+        trace.Step("RECONCILIATION_ID_CODE");
         var recovered = (await detail.JsonAsync())!.Value.GetProperty("product");
         Assert.Equal(probe.Product, recovered.GetProperty("id").GetGuid());
         Assert.Equal(CatalogCode, recovered.GetProperty("internalCode").GetString());
-        await page.GetByLabel("Código interno de la solicitud original").FillAsync(CatalogCode);
+        trace.Step("RECONCILIATION_OBSERVED");
+        await Expect(page.GetByText($"Producto consultado: {CatalogCreated} · Código {CatalogCode}.", new() { Exact = false })
+            .Filter(new() { Visible = true })).ToBeVisibleAsync();
+        trace.Step("RECONCILIATION_INPUT");
+        await page.GetByRole(AriaRole.Textbox, new() { Name = "Código interno de la solicitud original", Exact = true }).FillAsync(CatalogCode);
+        trace.Step("RECONCILIATION_CHECKBOX");
         await page.GetByRole(AriaRole.Checkbox, new() { NameRegex = new("^Verifiqué el código") }).CheckAsync();
-        await Button(page, "Continuar tras conciliación verificada").ClickAsync();
+        var confirm = Button(page, "Continuar tras conciliación verificada");
+        trace.Step("RECONCILIATION_CONFIRM");
+        await Expect(confirm).ToBeEnabledAsync();
+        await confirm.ClickAsync();
+        trace.Step("RECONCILIATION_UNLOCK");
         await Expect(Button(page, "Nuevo producto")).ToBeEnabledAsync();
+        trace.Step("RECONCILIATION_STORAGE");
         Assert.Null(await page.EvaluateAsync<string?>("key => sessionStorage.getItem(key)", key));
+        trace.Step("RECONCILIATION_COUNTS");
         probe.AssertSinglePost();
     }
 

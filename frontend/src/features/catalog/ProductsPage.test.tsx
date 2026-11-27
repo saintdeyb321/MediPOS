@@ -272,10 +272,63 @@ it('retains uncertain creation across reload and never resends it automatically'
     return screen.getByRole('button', { name: 'Continuar tras conciliación verificada' })
   }
   expect(await reconcile('Producto unitario', 'UNIT')).toBeDisabled()
-  const original = await reconcile('Nuevo producto unitario', 'UNIT-NEW')
+  const detailPath = `/api/tenants/${tenantId}/branches/${branchId}/products/${id('20')}`
+  const defaultFetch = fake.fetcher.getMockImplementation()!
+  let resolveDetail!: () => void
+  let failConsult!: (response: Response) => void
+  const detailInFlight = new Promise<void>(resolve => { resolveDetail = resolve })
+  const consultInFlight = new Promise<Response>(resolve => { failConsult = resolve })
+  let reads = 0
+  fake.fetcher.mockImplementation(async (input, init) => {
+    if (String(input) === detailPath && init?.method === 'GET') {
+      reads++
+      if (reads === 1) await detailInFlight
+      if (reads === 2) return consultInFlight
+    }
+    return defaultFetch(input, init)
+  })
+  fireEvent.click(screen.getByRole('button', { name: 'Ver Nuevo producto unitario' }))
+  await waitFor(() => expect(reads).toBe(1))
+  fireEvent.click(screen.getByRole('button', { name: 'Cerrar Detalle del producto' }))
+  const consult = screen.getByRole('button', { name: 'Consultar producto de la operación' })
+  const create = screen.getByRole('button', { name: 'Nuevo producto' })
+  const storageKey = `medipos-catalog-creation/${workspace.session.userId}/${tenantId}/${branchId}/${workspace.access.membershipId}`
+  const reviewedProduct = /Producto consultado: Nuevo producto unitario · Código UNIT-NEW/
+  fireEvent.click(consult)
+  await waitFor(() => expect(reads).toBe(2))
+  await act(async () => { resolveDetail(); await detailInFlight })
+  expect(screen.queryByText(reviewedProduct)).not.toBeInTheDocument()
+  expect(consult).toBeDisabled()
+  expect(create).toBeDisabled()
+  expect(sessionStorage.getItem(storageKey)).toBe('UNIT-NEW')
+  failConsult(json({ code: 'server.unavailable' }, 503))
+  await screen.findByText('No pudimos completar la operación de catálogo')
+  expect(screen.queryByText(reviewedProduct)).not.toBeInTheDocument()
+  expect(create).toBeDisabled()
+  expect(sessionStorage.getItem(storageKey)).toBe('UNIT-NEW')
+
+  fireEvent.click(consult)
+  const recoveryPanel = within(consult.parentElement!)
+  await recoveryPanel.findByText(reviewedProduct)
+  expect(reads).toBe(3)
+  const original = screen.getByRole('button', { name: 'Continuar tras conciliación verificada' })
+  const codeLabel = 'Código interno de la solicitud original'
+  // The closed dialogs keep copies of the recovery form in the DOM.
+  expect(screen.getAllByLabelText(codeLabel).length).toBeGreaterThan(1)
+  const code = screen.getByRole('textbox', { name: codeLabel })
+  const reviewed = screen.getByRole('checkbox', { name: /Verifiqué el código/ })
+  fireEvent.change(code, { target: { value: 'UNIT' } })
+  fireEvent.click(reviewed)
+  expect(original).toBeDisabled()
+  fireEvent.change(code, { target: { value: 'UNIT-NEW' } })
+  expect(original).toBeDisabled()
+  fireEvent.click(reviewed)
   expect(original).toBeEnabled()
+  expect(sessionStorage.getItem(storageKey)).toBe('UNIT-NEW')
   fireEvent.click(original)
-  await waitFor(() => expect(screen.getByRole('button', { name: 'Nuevo producto' })).toBeEnabled())
+  await waitFor(() => expect(create).toBeEnabled())
+  expect(sessionStorage.getItem(storageKey)).toBeNull()
+  expect(screen.getByTestId('location')).not.toHaveTextContent('catalogPending')
   expect(fake.writes()).toHaveLength(1)
 })
 it('updates prices and status through their official endpoints, refetching actual detail', async () => {
