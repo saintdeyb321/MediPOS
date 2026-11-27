@@ -305,12 +305,13 @@ public sealed partial class CashPilotTests(ITestOutputHelper output)
         return json;
     }
 
-    private static async Task<JsonElement> GetAsync(BrowserHost host, IBrowserContext browser, string path, int expected = 200)
+    private static async Task<JsonElement> GetAsync(BrowserHost host, IBrowserContext browser, string path, int expected = 200, Action<int>? observeStatus = null)
     {
         var response = await browser.APIRequest.GetAsync(host.Origin + path, new()
         {
             Headers = new Dictionary<string, string> { ["Origin"] = host.Origin }, MaxRedirects = 0,
         });
+        observeStatus?.Invoke(response.Status);
         Assert.Equal(expected, response.Status);
         var result = path.StartsWith("/health", StringComparison.Ordinal) ? default : (await response.JsonAsync())!.Value.Clone();
         await response.DisposeAsync();

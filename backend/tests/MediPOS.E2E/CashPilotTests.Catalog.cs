@@ -68,7 +68,7 @@ public sealed partial class CashPilotTests
         var product = await CatalogCreateFromUiAsync(host, database, owner, page, workspace, directory, category, trace);
         trace.Pass();
         trace.Start("EDIT", "METADATA");
-        await VerifyCatalogWritesAsync(host, browser, page, owner, workspace, directory, category, product, reference, trace);
+        await VerifyCatalogWritesAsync(host, database, browser, page, owner, workspace, directory, category, product, reference, trace);
         trace.Pass();
         trace.Start("IMPORT", "TEMPLATE");
         var importJob = await VerifyCatalogImportAsync(host, browser, foreign, page, owner, workspace, category, trace);
@@ -300,7 +300,7 @@ public sealed partial class CashPilotTests
         probe.AssertSinglePost();
     }
 
-    private static async Task VerifyCatalogWritesAsync(BrowserHost host, IBrowserContext browser, IPage page, IdentityAccessTestSetup.Setup owner,
+    private static async Task VerifyCatalogWritesAsync(BrowserHost host, PostgreSqlFixture database, IBrowserContext browser, IPage page, IdentityAccessTestSetup.Setup owner,
         string workspace, string directory, Guid category, Guid product, Guid reference, CatalogPilotTrace trace)
     {
         var detailPath = BranchApi(owner) + $"/products/{product:D}";
@@ -320,20 +320,13 @@ public sealed partial class CashPilotTests
             new { expectedRevision = revision, name = "Revisión obsoleta", categoryId = category, brandOrLaboratory = "Marca P5" }, 409, "catalog.concurrent_change");
         trace.Step("PRICES");
         await PutCatalogAsync(host, browser, target + "/prices", new { retailPrice = 2.5678m, wholesalePrice = 1.2345m });
-        trace.Step("UNITS");
-        var config = await GetAsync(host, browser, target + "/unit-configuration");
         var units = new[]
         {
             new { name = "Base P5", conversionToBase = 1m, isBaseUnit = true, isActive = true },
             new { name = "Caja P5", conversionToBase = 10.125m, isBaseUnit = false, isActive = true },
         };
-        var payload = new
-        {
-            expectedVersion = config.GetProperty("version").GetUInt32(),
-            units = units.Select(unit => new { id = (Guid?)null, unit.name, unit.conversionToBase, unit.isBaseUnit, unit.isActive }),
-        };
-        await PutCatalogAsync(host, browser, target + "/unit-configuration", payload);
-        await PutCatalogAsync(host, browser, target + "/unit-configuration", payload, 409, "catalog.concurrent_change");
+        var newUnits = units.Select(unit => new { id = (Guid?)null, unit.name, unit.conversionToBase, unit.isBaseUnit, unit.isActive }).ToArray();
+        await VerifyVersionedUnitsAsync(host, database, browser, owner, product, target + "/unit-configuration", newUnits, trace);
         trace.Step("LEGACY_UNITS");
         await PutCatalogAsync(host, browser, target + "/units", new { units });
         await PutCatalogAsync(host, browser, target + "/units", new { units = units.Take(1) }, 409, "catalog.units_legacy_write_blocked");
@@ -351,6 +344,86 @@ public sealed partial class CashPilotTests
         var linkedId = await AssociateCatalogReferenceAsync(host, page, directory, reference, trace);
         await PutCatalogAsync(host, browser, directory + $"/{linkedId:D}/local-data",
             new { expectedRevision = "0", name = "No permitido", categoryId = category, brandOrLaboratory = "Marca P5" }, 409, "catalog.global_reference_locked");
+    }
+
+    private static async Task VerifyVersionedUnitsAsync(BrowserHost host, PostgreSqlFixture database, IBrowserContext browser,
+        IdentityAccessTestSetup.Setup owner, Guid product, string path, object units, CatalogPilotTrace trace)
+    {
+        trace.Step("UNITS_READ_BEFORE");
+        var before = await ReadUnitsSnapshotAsync(database, owner, product);
+        trace.UnitsRead("BEFORE", before, before);
+        try
+        {
+            trace.Step("UNITS_GET");
+            var config = await GetAsync(host, browser, path, observeStatus: status => trace.UnitsStatus("GET", status));
+            trace.Step("UNITS_VERSION");
+            var version = config.GetProperty("version").GetUInt32();
+            Assert.NotEqual(0u, version);
+            Assert.Equal(before.Version, version);
+            var payload = new { expectedVersion = version, units };
+
+            trace.Step("UNITS_PUT");
+            await PutCatalogAsync(host, browser, path, payload, unitsTrace: trace);
+            trace.Step("UNITS_READ_AFTER_PUT");
+            var saved = await ReadUnitsSnapshotAsync(database, owner, product);
+            trace.UnitsRead("AFTER_PUT", saved, before);
+            trace.Step("UNITS_PERSISTED_VERSION");
+            Assert.NotEqual(before.Version, saved.Version);
+            trace.Step("UNITS_PERSISTED_ROWS");
+            Assert.Equal(2, saved.Units.Length);
+            Assert.All(saved.Units, unit => { Assert.NotEqual(Guid.Empty, unit.Id); Assert.True(unit.Active); });
+            var baseUnit = Assert.Single(saved.Units, unit => unit.Base);
+            var box = Assert.Single(saved.Units, unit => !unit.Base);
+            Assert.Equal(("Base P5", 1m), (baseUnit.Name, baseUnit.Factor));
+            Assert.Equal(("Caja P5", 10.125m), (box.Name, box.Factor));
+            Assert.All(before.Units, unit => Assert.Contains(saved.Units, row => row.Id == unit.Id && row.Factor == unit.Factor && row.Base == unit.Base));
+            trace.Step("UNITS_AUDIT");
+            var audit = Assert.Single(saved.Audits.Except(before.Audits));
+            Assert.Equal(before.Audits.Length + 1, saved.Audits.Length);
+            Assert.Equal(owner.UserId, audit.Actor);
+            trace.Step("UNITS_EFFECTS");
+            Assert.Equal(before.Effects, saved.Effects);
+
+            trace.Step("UNITS_STALE");
+            await PutCatalogAsync(host, browser, path, payload, 409, "catalog.concurrent_change", trace);
+            trace.Step("UNITS_READ_AFTER_STALE");
+            var afterConflict = await ReadUnitsSnapshotAsync(database, owner, product);
+            trace.UnitsRead("AFTER_STALE", afterConflict, saved);
+            trace.Step("UNITS_CONFLICT_STATE");
+            Assert.Equal(saved.Version, afterConflict.Version);
+            Assert.Equal(saved.Units, afterConflict.Units);
+            Assert.Equal(saved.Audits, afterConflict.Audits);
+            Assert.Equal(saved.Effects, afterConflict.Effects);
+        }
+        catch
+        {
+            // A snapshot on failure can be taken while a write is still settling.
+            try { trace.UnitsRead("INCONCLUSIVE", await ReadUnitsSnapshotAsync(database, owner, product), before); }
+            catch { trace.UnitsReadFailed(); }
+            throw;
+        }
+    }
+
+    private sealed record UnitsSnapshot(uint Version, (Guid Id, string Name, decimal Factor, bool Base, bool Active)[] Units,
+        (Guid Id, Guid Actor)[] Audits, (int Lots, int Moves, int Sales, int Purchases, int Transfers) Effects);
+
+    private static async Task<UnitsSnapshot> ReadUnitsSnapshotAsync(PostgreSqlFixture database, IdentityAccessTestSetup.Setup owner, Guid product)
+    {
+        await using var db = database.CreateContext(owner.TenantId);
+        await using var snapshot = await db.Database.BeginTransactionAsync(System.Data.IsolationLevel.RepeatableRead, Token);
+        var version = await db.BusinessProducts.Where(row => row.Id == product)
+            .Select(row => EF.Property<uint>(row, "Version")).SingleAsync(Token);
+        var units = await db.ProductUnits.Where(row => row.BusinessProductId == product).OrderBy(row => row.Id)
+            .Select(row => new { row.Id, row.Name, row.ConversionToBase, row.IsBaseUnit, row.IsActive }).ToArrayAsync(Token);
+        var audits = await db.AuditLogs.Where(row => row.EntityId == product && row.Action == AuditAction.BusinessProductUnitsChanged)
+            .OrderBy(row => row.Id).Select(row => new { row.Id, row.ActorId }).ToArrayAsync(Token);
+        return new(version, units.Select(row => (row.Id, row.Name, row.ConversionToBase, row.IsBaseUnit, row.IsActive)).ToArray(),
+            audits.Select(row => (row.Id, row.ActorId)).ToArray(),
+            (await db.InventoryLots.CountAsync(row => row.BusinessProductId == product, Token),
+                await db.StockMovements.CountAsync(row => row.BusinessProductId == product, Token),
+                await db.SaleLines.CountAsync(row => row.BusinessProductId == product, Token),
+                await db.PurchaseLines.CountAsync(row => row.BusinessProductId == product, Token),
+                await db.TransferLines.CountAsync(row => row.BusinessProductId == product, Token)));
     }
 
     private static async Task<Guid> AssociateCatalogReferenceAsync(BrowserHost host, IPage page, string directory, Guid reference, CatalogPilotTrace trace)
@@ -393,7 +466,8 @@ public sealed partial class CashPilotTests
         }
     }
 
-    private static async Task PutCatalogAsync(BrowserHost host, IBrowserContext browser, string path, object payload, int status = 200, string? code = null)
+    private static async Task PutCatalogAsync(BrowserHost host, IBrowserContext browser, string path, object payload, int status = 200,
+        string? code = null, CatalogPilotTrace? unitsTrace = null)
     {
         var response = await browser.APIRequest.PutAsync(host.Origin + path, new()
         {
@@ -402,8 +476,13 @@ public sealed partial class CashPilotTests
         });
         try
         {
+            unitsTrace?.UnitsStatus(code is null ? "PUT" : "STALE", response.Status);
             Assert.Equal(status, response.Status);
-            if (code is not null) Assert.Equal(code, (await response.JsonAsync())!.Value.GetProperty("code").GetString());
+            if (code is not null)
+            {
+                unitsTrace?.Step("UNITS_CODE");
+                Assert.Equal(code, (await response.JsonAsync())!.Value.GetProperty("code").GetString());
+            }
         }
         finally { await response.DisposeAsync(); }
     }
@@ -610,6 +689,19 @@ public sealed partial class CashPilotTests
 
         public void Step(string check) => _check = check;
         public void Create(string observation) => output.WriteLine($"B02 P5 CREATE {observation}");
+        public void UnitsStatus(string request, int status)
+        {
+            var band = status switch
+            {
+                200 => "200", 400 => "400", 401 => "401", 403 => "403", 404 => "404", 409 => "409", 429 => "429",
+                >= 500 and < 600 => "5XX", _ => "OTHER",
+            };
+            output.WriteLine($"B02 P5 UNITS {request} HTTP {band}");
+        }
+        public void UnitsRead(string phase, UnitsSnapshot state, UnitsSnapshot baseline) =>
+            output.WriteLine($"B02 P5 UNITS READ {phase} VERSION {(state.Version == baseline.Version ? "SAME" : "CHANGED")} " +
+                $"ROWS {CountBand(state.Units.Length)} AUDIT {CountBand(state.Audits.Length)} EFFECTS {(state.Effects == baseline.Effects ? "SAME" : "CHANGED")}");
+        public void UnitsReadFailed() => output.WriteLine("B02 P5 UNITS READ INCONCLUSIVE FAILED");
         public void Pass() => output.WriteLine($"B02 P5 DIAG {_scenario} PASS");
         public void Fail() => output.WriteLine($"B02 P5 DIAG {_scenario} FAIL {_check}");
     }

@@ -1,5 +1,11 @@
 # Checkpoint RFA
 
+## RFA5A · candidato de validación integral
+
+**RFA5A_CANDIDATO_VALIDACION** sobre `70a084d4493d2be2cfcc10e79dfd22133a22cf84` en `ci/postgres-diagnostics-8bc6b4c`. [RUN-29](VALIDATION.md#run-29) prepara el diagnóstico de F-009 y conserva los 156 UC y sus veredictos. Docker ausente, P0–P5 y gates integrales locales NOT_RUN.
+
+El operador publica una sola vez y verifica el SHA final. El push del arnés activa B-02. En paralelo hace un único dispatch de Backend validation - PostgreSQL 18 sobre la misma rama y el mismo SHA. [Gates y acciones exactas](ROADMAP.md#gates-rfa5a). RUN-30 se reserva para el resultado externo. Si algún gate falla, la ronda cierra con bloqueos explícitos para RFA5B. Producción NO-GO.
+
 ## RFA4B · candidato de cierre
 
 **RFA4B_CANDIDATO_CIERRE** sobre `f5dbea241e8e73d9b2e4cf9356c5db412b096bf2` en `ci/postgres-diagnostics-8bc6b4c`. [RUN-27](VALIDATION.md#run-27) cierra el encargo prioritario RFA4A con pendientes y conserva P5 FAIL en EDIT/UNITS. [RUN-28](VALIDATION.md#run-28) acredita la simplificación local del panel de conciliación. POS KEEP y cambios comerciales opcionales DEFER. Se conservan 156 UC y sus veredictos.

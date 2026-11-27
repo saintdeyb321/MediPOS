@@ -9,7 +9,7 @@ Reconciliación sobre `1deb4dae9ce5f11c4f9fc0f374837c5d67e1d1d4`, aplicación `5
 | RFA3 | Hallazgos, TO-BE, dependencias y priorización | Aprobada documentalmente en `e1df3ec`. [Hallazgos](FINDINGS.md) · [TO-BE](TO_BE.md) |
 | RFA4A · Astra Alto | Correcciones focalizadas de defectos e invariantes | CIERRE_CON_PENDIENTES de F-008 y CAT-21 en el recorrido de alta local. RUN-27 acredita CREATE. P5 y variantes pendientes pasan a RFA5A. |
 | RFA4B · Sol Alto | Simplificaciones, refactor y cambios de flujo aprobados | RFA4B_CANDIDATO_CIERRE. Catálogo SIMPLIFY, POS KEEP y cambios opcionales DEFER. [RUN-28](VALIDATION.md#run-28) |
-| RFA5A · Sol Medio | Certificación técnica aislada | Pendiente. [Gates RFA5A](#gates-rfa5a) sobre el SHA final exacto. |
+| RFA5A · Sol Medio | Certificación técnica aislada | RFA5A_CANDIDATO_VALIDACION. Una ronda pendiente sobre el SHA final exacto. [Gates RFA5A](#gates-rfa5a) |
 | RFA5B · Astra Alto | Aceptación del operador y decisión de puesta en marcha | Pendiente. L-07 exige E5, revisión arquitectónica y operativa, gates externos, backup/restore probado, rendimiento representativo y límites operativos antes de decidir. Producción NO-GO. |
 
 Los lotes L-01–07 y los cortes L-06A–I organizan trabajo dentro de estas fases. Los cambios ejecutados y los escenarios acreditados conservan su propio alcance.
@@ -110,4 +110,6 @@ Ejecutar sobre un SHA final publicado por el operador y un build identificado, c
 3. **Integridad y aislamiento.** Gates backend, arquitectura y PostgreSQL 18 real. Priorizar dinero, stock, concurrencia, roles, revocación y RLS multiempresa, offline y recuperación según las variantes de la matriz. Reutilizar evidencia por aserción. E4 se exige en los recorridos críticos.
 4. **Frontend integral.** Builds, lint y suite completa. Mantener el antecedente 645/646 de otro SHA y aislar el test de Compras si vuelve a fallar, preservando la revisión obsoleta, el borrador y el bloqueo de escrituras.
 
-**Siguiente decisión del operador.** Revisar el candidato RFA4B y decidir si abre RFA5A. RFA5B conserva E5, restauración, rendimiento y gates externos para decidir producción. [Checkpoint](CHECKPOINT.md)
+**Ejecución coordinada.** Publicar una vez en `ci/postgres-diagnostics-8bc6b4c` y verificar el SHA final. El push activa B-02 por los cambios del arnés y workflow. Usar dispatch de B-02 solo si el push no lo activó. En paralelo, seleccionar esa rama en Backend validation - PostgreSQL 18 y hacer un único dispatch. Ambos runs deben indicar el mismo SHA. El gate integral exige PostgreSQL 18 real, builds, formato, suites backend y arquitectura y el job frontend completo. Registrar resultados PASS/FAIL/SKIP y los marcadores de aprobación solo si los emiten los workflows.
+
+Reservar RUN-30 para SHA, build, runs, intentos, resultados y alcance por aserción. Si falla algún gate, registrar RFA5A_CIERRE_CON_BLOQUEOS y transferirlo a RFA5B. RFA5B conserva E5, restauración, rendimiento y gates externos para decidir producción. [Checkpoint](CHECKPOINT.md)

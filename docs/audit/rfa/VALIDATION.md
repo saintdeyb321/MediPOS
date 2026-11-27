@@ -1,5 +1,18 @@
 # RFA2 · Validación conductual y persistencia
 
+<a id="run-29"></a>
+## RUN-29 · Preparación de la validación integral RFA5A
+
+**RFA5A_CANDIDATO_VALIDACION** sobre el baseline `70a084d4493d2be2cfcc10e79dfd22133a22cf84`. RFA4B aprobada en su alcance. RFA4A cierra su encargo prioritario con pendientes. [RUN-27](#run-27) y [RUN-28](#run-28) conservan sus SHA y alcances históricos.
+
+Para F-009, el arnés distingue GET, versión recibida, primer PUT, 409 y código del conflicto, además de las aserciones de persistencia. Cada snapshot utiliza un contexto runtime nuevo del tenant y una transacción de lectura consistente. El primero compara la versión HTTP con la de PostgreSQL. Tras el PUT se comprueban versión nueva, identidades y factores exactos, y una auditoría adicional del Owner. Tras el 409 se cotejan versión, unidades y auditoría contra el snapshot del PUT. Lotes, movimientos y recuentos de líneas históricas del producto se contrastan en los tres snapshots. La comprobación de referencias históricas preexistentes sigue a cargo de la integración PostgreSQL.
+
+El resumen solo publica etiquetas y categorías enumeradas, conteos acotados y comparaciones. Una lectura tras excepción se publica como INCONCLUSIVE y conserva el fallo primario. AWK real admitió 187/187 entradas sintéticas válidas y omitió 8/8 inválidas. YAML válido y diferencia limitada a cuatro reglas del filtro.
+
+**Validación local.** `dotnet restore tests/MediPOS.E2E/MediPOS.E2E.csproj --locked-mode` PASS tras ejecutar fuera del sandbox. El intento dentro del sandbox terminó con código 1 tras anunciar el inicio de restore. `dotnet build tests/MediPOS.E2E/MediPOS.E2E.csproj --no-restore -p:BaseOutputPath=obj/b02-bin/ -m:1 --disable-build-servers` PASS con cero errores y advertencias. `git diff --check` PASS. El gate frontend integral corresponde al CI coordinado.
+
+**NOT_RUN local** para B-02 y PostgreSQL real por ausencia de Docker. La causa de EDIT/UNITS en RUN-27 sigue indeterminada. El arnés conserva P0–P5, el primer fallo y los gates. Se reserva RUN-30 para los dos resultados reales sobre el mismo SHA publicado. [Gates y acciones del operador](ROADMAP.md#gates-rfa5a)
+
 <a id="run-28"></a>
 ## RUN-28 · Candidato de cierre RFA4B
 
