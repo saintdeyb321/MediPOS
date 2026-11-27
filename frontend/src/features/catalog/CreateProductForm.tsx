@@ -73,8 +73,12 @@ export function CreateProductForm({ categories, global, write, onDirty }: { cate
     </div>
     <FormFooter>
       {step > 0 && <Button variant="secondary" disabled={write.locked} onClick={() => setStep(step - 1)}>Anterior</Button>}
-      {step < reviewStep ? <Button disabled={write.locked || (step === 0 && !global ? !identificationValid : !identificationValid || !attributesValid || !priceInput)} onClick={() => setStep(step + 1)}>Continuar</Button>
-        : <Button type="submit" pending={write.busy} disabled={write.locked || saved || !valid || (requiresSourceReview && !reviewed)}>{saved ? 'Producto guardado' : global ? 'Asociar al negocio' : 'Guardar producto'}</Button>}
+      {step < reviewStep ? <Button key="advance" type="button" disabled={write.locked || (step === 0 && !global ? !identificationValid : !identificationValid || !attributesValid || !priceInput)} onClick={event => {
+        // This activation must end before the review submit can be activated.
+        event.preventDefault()
+        setStep(step + 1)
+      }}>Continuar</Button>
+        : <Button key="confirm" type="submit" pending={write.busy} disabled={write.locked || saved || !valid || (requiresSourceReview && !reviewed)}>{saved ? 'Producto guardado' : global ? 'Asociar al negocio' : 'Guardar producto'}</Button>}
     </FormFooter>
     {write.notice && <p role="status">{write.notice}</p>}
   </form>

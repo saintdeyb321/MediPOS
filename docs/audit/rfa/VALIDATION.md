@@ -1,5 +1,33 @@
 # RFA2 · Validación conductual y persistencia
 
+<a id="run-24"></a>
+## RUN-24 · Corrección candidata F-008
+
+**RFA4A_CORRECCION_CANDIDATA** sobre `2248381ffcd808533f2f8204ff8aeece4ce028cd`. En `CreateProductForm`, Continuar cancela su acción por defecto antes de cambiar el paso. Conserva `type="button"` y una identidad DOM distinta de Guardar/Asociar, que siguen siendo controles submit nativos. La validación de los datos, revisión documental de medicamentos y recuperación de la intención se conservan.
+
+| UC | Caso verificado |
+|---|---|
+| CAT-09 | RED en DOM previo al correctivo. El mismo elemento de Continuar cambia a submit durante el clic y la acción por defecto queda sin cancelar. GREEN local. Nodos distintos, clic cancelado, avance y retroceso sin escritura ni marcador, un POST deliberado, CSRF y decimal exacto. Medicamento mantiene Guardar inactivo hasta su revisión documental y después despacha un POST. |
+| CAT-10 | Mismo RED/GREEN de identidad y cancelación en asociación global. Enter sobre Continuar permite revisar sin crear intención y Enter sobre Asociar despacha una sola escritura en DOM con transporte doble. P5 comprueba el POST real de ruta exacta, desde antes de abrir el formulario, cero en revisión, un 201 tras la confirmación con Enter y el vínculo y la restricción de editar la referencia. |
+| CAT-21 | El doble de transporte pierde el acuse tras registrar el alta. La recarga conserva el bloqueo. Otra ficha no permite conciliar. La ficha original habilita el cierre con un solo POST total. P5 conserva el probe, la lectura independiente por código y las aserciones de reentrada y conciliación. |
+
+**Límite del RED/GREEN.** Las pruebas DOM caracterizan la reutilización y cancelación del evento y usan dobles HTTP. [RUN-23](#run-23) acredita el alta prematura real. El orden nativo de activación en Chromium queda como explicación respaldada por esas dos observaciones, pendiente de confirmar el comportamiento corregido en el siguiente B-02.
+
+**Comprobaciones locales.** `npm.cmd run test -- src/features/catalog/ProductsPage.test.tsx src/features/catalog/CatalogDirtyState.test.tsx` obtuvo 21 PASS, 0 FAIL, 0 SKIP en GREEN. El filtro `-t 'creates a local general product|associates a selected reference'` obtuvo 2 FAIL esperados en RED y 2 PASS finales, con 16 excluidos por filtro en cada ejecución. ESLint focalizado sobre formulario y prueba PASS. `npm.cmd run build -- --outDir node_modules/.cache/rfa4a-f008-build` PASS, con advertencia de tamaño de chunk. El primer build detectó un error de tipos en la prueba y se corrigió. `dotnet build tests/MediPOS.E2E/MediPOS.E2E.csproj --no-restore -p:BaseOutputPath=obj/b02-bin/ -m:1 --disable-build-servers` desde `backend/` PASS con 0 errores y 0 advertencias.
+
+**P0–P5 del candidato NOT_RUN local** por ausencia de Docker. El operador publica una vez en la rama diagnóstica. B-02 debe acreditar primero la frontera de F-008 y después las restantes etapas de P5. El gate integral frontend 645/646, E5 y producción NO-GO siguen independientes.
+
+<a id="run-23"></a>
+## RUN-23 · Alta prematura antes de Guardar
+
+[CI B-02 46019645382](https://github.com/saintdeyb321/MediPOS/actions/runs/46019645382), job 140575642581, intento 1, push del 27/11/2026 14:51:17–14:54:33 UTC (196 s). SHA `2248381ffcd808533f2f8204ff8aeece4ce028cd`, build `e40191caae1b9b7295a27b34b2b3c9489d4a61cc1484178ae3d73c17d0985203`. Chromium/API en HTTPS aislado, PostgreSQL 18.7 (180007) y runtime `medipos_test_runtime`. Preparación PASS, workflow **FAIL**, salida 1.
+
+| Frontera | Evidencia real |
+|---|---|
+| P0–P4 / P5 SEED y SEARCH | PASS en las fronteras ya descritas en RUN-21. |
+| P5 CREATE / REVIEW · CAT-09 E4 histórico | Lectura previa con cero producto, auditoría, lotes y movimientos. Antes de `CLICK` se observó un POST y una intercepción, 201 upstream, ID válido y aborto completado. La lectura runtime posterior confirma una fila con ese ID, una auditoría de creación por el Owner y cero lotes y movimientos. El formulario había escrito antes del clic Guardar. La aserción individual de REVIEW queda sin identificar. |
+| CAT-21 y CAT-10 | REENTRY y RECONCILIATION no alcanzadas. EDIT, ASSOCIATION, IMPORT y PERSISTENCE final se mantienen NOT_RUN. El resultado real acredita el defecto del alta local. La aceptación de su corrección y de la recuperación aún está pendiente. |
+
 <a id="run-22"></a>
 ## RUN-22 · F-008 · candidato diagnóstico local
 

@@ -331,21 +331,49 @@ public sealed partial class CashPilotTests
         trace.Start("ASSOCIATION", "FORM");
         await GoToAsync(page, workspace + "/productos");
         await Button(page, "Catálogo global").ClickAsync();
-        await Button(page, "Añadir " + ReferenceName + " a mi botica").ClickAsync();
-        var link = page.GetByRole(AriaRole.Form, new() { Name = "Asociar producto global" });
-        await link.GetByLabel("Código interno").FillAsync("P5-REFERENCE");
-        await link.GetByLabel("Precio minorista por unidad base (S/)").FillAsync("4.1234");
-        await link.GetByRole(AriaRole.Button, new() { Name = "Continuar" }).ClickAsync();
-        trace.Step("POST");
-        var linked = await page.RunAndWaitForResponseAsync(() => link.GetByRole(AriaRole.Button, new() { Name = "Asociar al negocio" }).ClickAsync(),
-            response => response.Request.Method == "POST" && new Uri(response.Url).AbsolutePath == directory + "/from-global");
-        Assert.Equal(201, linked.Status);
-        var linkedRow = (await linked.JsonAsync())!.Value;
-        Assert.Equal(reference, linkedRow.GetProperty("globalProductId").GetGuid());
-        trace.Step("READ_ONLY_REFERENCE");
-        await Expect(link.GetByRole(AriaRole.Button, new() { Name = "Producto guardado", Exact = true })).ToBeDisabledAsync();
-        await PutCatalogAsync(host, browser, directory + $"/{linkedRow.GetProperty("id").GetGuid():D}/local-data",
+        var linkedId = await AssociateCatalogReferenceAsync(host, page, directory, reference, trace);
+        await PutCatalogAsync(host, browser, directory + $"/{linkedId:D}/local-data",
             new { expectedRevision = "0", name = "No permitido", categoryId = category, brandOrLaboratory = "Marca P5" }, 409, "catalog.global_reference_locked");
+    }
+
+    private static async Task<Guid> AssociateCatalogReferenceAsync(BrowserHost host, IPage page, string directory, Guid reference, CatalogPilotTrace trace)
+    {
+        var endpoint = host.Origin + directory + "/from-global";
+        var posts = 0;
+        bool IsAssociation(IRequest request) => request.Method == "POST" && request.Url == endpoint;
+        void ObserveAssociation(object? sender, IRequest request)
+        {
+            if (IsAssociation(request)) Interlocked.Increment(ref posts);
+        }
+
+        page.Request += ObserveAssociation;
+        try
+        {
+            await Button(page, "Añadir " + ReferenceName + " a mi botica").ClickAsync();
+            var link = page.GetByRole(AriaRole.Form, new() { Name = "Asociar producto global" });
+            await link.GetByLabel("Código interno").FillAsync("P5-REFERENCE");
+            await link.GetByLabel("Precio minorista por unidad base (S/)").FillAsync("4.1234");
+            await link.GetByRole(AriaRole.Button, new() { Name = "Continuar", Exact = true }).ClickAsync();
+            var confirm = link.GetByRole(AriaRole.Button, new() { Name = "Asociar al negocio", Exact = true });
+            await Expect(link.GetByRole(AriaRole.Heading, new() { Name = ReferenceName, Exact = true })).ToBeVisibleAsync();
+            await Expect(confirm).ToBeEnabledAsync();
+            Assert.False(QueryHelpers.ParseQuery(new Uri(page.Url).Query).ContainsKey("catalogPending"));
+            Assert.Equal(0, Volatile.Read(ref posts));
+
+            trace.Step("POST");
+            var linked = await page.RunAndWaitForResponseAsync(() => confirm.PressAsync("Enter"), response => IsAssociation(response.Request));
+            Assert.Equal(201, linked.Status);
+            var linkedRow = (await linked.JsonAsync())!.Value;
+            Assert.Equal(reference, linkedRow.GetProperty("globalProductId").GetGuid());
+            trace.Step("READ_ONLY_REFERENCE");
+            await Expect(link.GetByRole(AriaRole.Button, new() { Name = "Producto guardado", Exact = true })).ToBeDisabledAsync();
+            Assert.Equal(1, Volatile.Read(ref posts));
+            return linkedRow.GetProperty("id").GetGuid();
+        }
+        finally
+        {
+            page.Request -= ObserveAssociation;
+        }
     }
 
     private static async Task PutCatalogAsync(BrowserHost host, IBrowserContext browser, string path, object payload, int status = 200, string? code = null)

@@ -1,5 +1,11 @@
 # Checkpoint RFA
 
+## RFA4A · corrección candidata F-008
+
+**RFA4A_CORRECCION_CANDIDATA** sobre `2248381ffcd808533f2f8204ff8aeece4ce028cd` en `ci/postgres-diagnostics-8bc6b4c`. [RUN-23](VALIDATION.md#run-23) acredita el alta prematura. [RUN-24](VALIDATION.md#run-24) documenta el RED/GREEN de identidad de botón, confirmación y recuperación. Los 156 UC conservan sus veredictos. CAT-09 sube a E4 por el fallo real del baseline, con el candidato aún BLOCKED. CAT-21 permanece E2/BLOCKED.
+
+**Siguiente acción del operador.** Publicar el candidato una vez en la rama diagnóstica. El push de la prueba E2E activa B-02. Revisar el resumen del nuevo SHA y conciliar por separado F-008 y el gate global de P5. RFA4B y L-06C–I siguen pendientes. Producción NO-GO.
+
 ## RFA4A · candidato F-008
 
 RFA3 aprobada en `e1df3ec9e9fb1b346118a1b168450cf832862801`. **RFA4A_CANDIDATO** sobre ese HEAD en `ci/postgres-diagnostics-8bc6b4c`. [RUN-22](VALIDATION.md#run-22) registra la compilación, la validación del filtro y el alcance del arnés. Chromium/API/PostgreSQL NOT_RUN local por ausencia de Docker. Los 156 UC conservan sus niveles y veredictos. F-008 sigue abierto.

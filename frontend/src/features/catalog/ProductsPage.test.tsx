@@ -1,4 +1,5 @@
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { beforeEach, expect, it, vi } from 'vitest'
 import { MemoryRouter, useLocation } from 'react-router'
 import { RuntimeProvider } from '../../app/providers/runtime'
@@ -100,11 +101,11 @@ async function openTask(task: 'prices' | 'units' | 'status') {
   fireEvent.click(detail.getByRole('button', { name: { prices: 'Editar precios', units: 'Configurar presentaciones', status: 'Desactivar producto' }[task] }))
 }
 function nextStep(form: ReturnType<typeof within>) { fireEvent.click(form.getByRole('button', { name: 'Continuar' })) }
-function fillPrice(form: ReturnType<typeof within>, value: string) {
+function fillPrice(form: ReturnType<typeof within>, value: string, advance = true) {
   fireEvent.change(form.getByRole('textbox', { name: 'Precio minorista por unidad base (S/)' }), { target: { value } })
-  nextStep(form)
+  if (advance) nextStep(form)
 }
-async function fillLocal(type: 'retail' | 'medicine' = 'retail') {
+async function fillLocal(type: 'retail' | 'medicine' = 'retail', advance = true) {
   const button = screen.getByRole('button', { name: 'Nuevo producto' })
   await waitFor(() => expect(button).toBeEnabled()); fireEvent.click(button)
   const form = within(await screen.findByRole('form', { name: 'Crear producto local' }))
@@ -114,8 +115,27 @@ async function fillLocal(type: 'retail' | 'medicine' = 'retail') {
   nextStep(form)
   fireEvent.change(form.getByRole('combobox', { name: 'Categoría' }), { target: { value: id('8') } })
   fireEvent.change(form.getByRole('textbox', { name: 'Marca o laboratorio documentado' }), { target: { value: 'Marca documentada unitaria' } })
-  if (type === 'retail') fillPrice(form, '1.2345')
+  if (type === 'retail') fillPrice(form, '1.2345', advance)
   return form
+}
+function expectNoCreationIntent(fake: ReturnType<typeof server>) {
+  expect(fake.writes()).toHaveLength(0)
+  expect(screen.getByTestId('location')).not.toHaveTextContent('catalogPending')
+  expect(sessionStorage.getItem(`medipos-catalog-creation/${workspace.session.userId}/${tenantId}/${branchId}/${workspace.access.membershipId}`)).toBeNull()
+}
+function reviewWithoutSubmitting(form: ReturnType<typeof within>, confirm: string) {
+  const advance = form.getByRole('button', { name: 'Continuar' })
+  const click = new MouseEvent('click', { bubbles: true, cancelable: true, button: 0 })
+  expect(advance).toHaveAttribute('type', 'button')
+  fireEvent(advance, click)
+  const submit = form.getByRole('button', { name: confirm })
+  expect({
+    cancelled: click.defaultPrevented,
+    sameNode: submit === advance,
+    advanceTypeAfterClick: advance.getAttribute('type'),
+    submitType: submit.getAttribute('type'),
+  }).toEqual({ cancelled: true, sameNode: false, advanceTypeAfterClick: 'button', submitType: 'submit' })
+  return submit
 }
 it('lists real-shaped records without inventing stock and reads presentations/prices from the scoped detail', async () => {
   const fake = server(); mount(fake)
@@ -168,9 +188,15 @@ it('finds products beyond the original page, combines server filters and resets 
   expect(fake.writes()).toHaveLength(0)
 })
 it('creates a local general product only after review, serializes exact prices and refreshes the selected product once', async () => {
-  const fake = server(); mount(fake); const form = await fillLocal()
-  const button = form.getByRole('button', { name: 'Guardar producto' })
-  expect(button).toBeEnabled(); expect(fake.writes()).toHaveLength(0)
+  const fake = server(); mount(fake); const form = await fillLocal('retail', false)
+  reviewWithoutSubmitting(form, 'Guardar producto')
+  expectNoCreationIntent(fake)
+  fireEvent.click(form.getByRole('button', { name: 'Anterior' }))
+  expect(form.getByRole('textbox', { name: 'Precio minorista por unidad base (S/)' })).toHaveValue('1.2345')
+  expectNoCreationIntent(fake)
+  const button = reviewWithoutSubmitting(form, 'Guardar producto')
+  expect(button).toBeEnabled()
+  expectNoCreationIntent(fake)
   fireEvent.click(button); fireEvent.click(button)
   await screen.findAllByText(/Operación guardada y producto consultado/)
   expect(fake.writes()).toHaveLength(1)
@@ -189,9 +215,12 @@ it('requires structured documented medicine fields and preserves microgram/spell
   fireEvent.change(form.getByRole('textbox', { name: 'Forma farmacéutica' }), { target: { value: 'Forma de prueba' } })
   fillPrice(form, '1.2345')
   expect(form.getByRole('button', { name: 'Guardar producto' })).toBeDisabled()
+  expectNoCreationIntent(fake)
   fireEvent.click(form.getByRole('checkbox', { name: /Verifiqué los atributos del medicamento/ }))
+  expectNoCreationIntent(fake)
   fireEvent.click(form.getByRole('button', { name: 'Guardar producto' }))
   await screen.findAllByText(/Operación guardada y producto consultado/)
+  expect(fake.writes()).toHaveLength(1)
   expect(fake.writes()[0]?.[1]?.body).toContain('"components":[{"ingredient":"Ingrediente sintético de prueba","strengthNormalized":"25 µg"}]')
 })
 it('shows an empty global catalog honestly and associates a selected reference without inventory writes', async () => {
@@ -206,9 +235,19 @@ it('shows an empty global catalog honestly and associates a selected reference w
   expect(businessReads()).toBe(before)
   const form = within(screen.getByRole('form', { name: 'Asociar producto global' }))
   fireEvent.change(form.getByRole('textbox', { name: 'Código interno' }), { target: { value: 'GLOBAL-UNIT' } })
-  fillPrice(form, '2.00')
-  expect(fake.writes()).toHaveLength(0)
-  fireEvent.click(form.getByRole('button', { name: 'Asociar al negocio' }))
+  fillPrice(form, '2.00', false)
+  reviewWithoutSubmitting(form, 'Asociar al negocio')
+  expectNoCreationIntent(fake)
+  fireEvent.click(form.getByRole('button', { name: 'Anterior' }))
+  expectNoCreationIntent(fake)
+  const user = userEvent.setup()
+  form.getByRole('button', { name: 'Continuar' }).focus()
+  await user.keyboard('{Enter}')
+  const confirm = form.getByRole('button', { name: 'Asociar al negocio' })
+  expect(confirm).toBeEnabled()
+  expectNoCreationIntent(fake)
+  confirm.focus()
+  await user.keyboard('{Enter}')
   await screen.findAllByText(/Operación guardada y producto consultado/)
   expect(fake.writes()).toHaveLength(1)
   expect(String(fake.writes()[0]?.[0])).toMatch(/\/products\/from-global$/)
