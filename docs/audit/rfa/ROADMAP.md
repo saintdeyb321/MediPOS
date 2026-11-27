@@ -1,6 +1,18 @@
-# RFA3 · Backlog para aprobación por lote
+# Hoja de ruta RFA · fases y lotes subordinados
 
-Baseline `5d38898`. Los lotes son propuestas. La columna de decisión de los [155 casos](TO_BE.md) cubre también los circuitos que deben conservarse. [RUN-10](VALIDATION.md#run-10) aporta PostgreSQL 18.7 y un fallo de frontend aún sin identificar. Ningún lote habilita datos de DEV ni cambios fiscales.
+Cierre documental sobre `52a5ced168dbef2e80145b4e9d115113f0a63755`. La [decisión de los 156 casos](TO_BE.md) incluye los circuitos que deben conservarse.
+
+| Fase | Propósito | Estado |
+|---|---|---|
+| RFA0–RFA1 | Gobierno, inventario, trazabilidad AS-IS y exclusiones | Cierre documental, 156 UC vigentes incluidos los 155 originales. |
+| RFA2 | Acreditar comportamiento, persistencia, recuperación y aislamiento | PARCIAL. [Evidencias](VALIDATION.md) por frontera. |
+| RFA3 | Hallazgos, TO-BE, dependencias y priorización | Consolidada para revisión. [Hallazgos](FINDINGS.md) · [TO-BE](TO_BE.md) |
+| RFA4A | Correcciones focalizadas de defectos e invariantes | Suspendida. L-01, L-02/L-06A y L-05 ejecutados en los alcances acreditados. L-03 Catálogo/L-06B publicado, gate P5 fallido. |
+| RFA4B | Simplificaciones, refactor y cambios de flujo aprobados | Pendiente. L-06 agrupa variantes por familia. Compras de L-03 y la medición de L-04 requieren encargo. El saldo informativo de L-01 y la optimización de nombres son opcionales. |
+| RFA5A | Certificación técnica aislada | Pendiente. L-07 concilia builds, suites, PostgreSQL, E4, seguridad, backup/restore y rendimiento del SHA que se pretenda liberar. |
+| RFA5B | Aceptación del operador y decisión de puesta en marcha | Pendiente. L-07 recoge E5 y la decisión posterior a los gates técnicos y operativos. Producción NO-GO. |
+
+Los lotes L-01–07 y los cortes L-06A–I organizan trabajo dentro de estas fases. Los cambios ejecutados y los escenarios acreditados conservan su propio alcance.
 
 | Orden | Tipo / prioridad | Dependencia y decisión del operador | Tamaño · riesgo · esfuerzo orientativo |
 |---|---|---|---|
@@ -49,12 +61,12 @@ Contrastar `TransfersPage.test.tsx:66` y `PlatformPage.test.tsx:275` con el esta
 
 ## L-06 · Aceptación funcional por familia
 
-La [matriz](MATRIX.csv) y el [TO-BE](TO_BE.md) definen el inventario y sus decisiones iniciales. KEEP conserva la operación y aún requiere aceptación. Los nueve cortes son futuros y se aprueban por separado. Cada corte registra actor, tarea, pasos y estados AS-IS, requisito, evidencia, fricción o defecto, decisión KEEP/FIX/SIMPLIFY/BRECHA/VALIDATE y prueba de aceptación. Justificar KEEP, los bloqueos y N/A. Un escenario puede cubrir varios UC con aserciones explícitas. Incluir errores, espera, permisos, reentrada y pérdida de respuesta cuando apliquen. Medir clics o solicitudes cuando informen una decisión y conservar Blue Studio/UAX e invariantes con cambios y regresiones focalizados.
+La [matriz](MATRIX.csv) y el [TO-BE](TO_BE.md) definen el inventario y sus decisiones iniciales. KEEP conserva la operación y aún requiere aceptación. A tiene evidencia ejecutada, B queda como candidato con gate fallido y C–I están suspendidos. Cada corte registra actor, tarea, pasos y estados AS-IS, requisito, evidencia, fricción o defecto, decisión KEEP/FIX/SIMPLIFY/BRECHA/VALIDATE y prueba de aceptación. Justificar KEEP, los bloqueos y N/A. Un escenario puede cubrir varios UC con aserciones explícitas. Incluir errores, espera, permisos, reentrada y pérdida de respuesta cuando apliquen. Medir clics o solicitudes cuando informen una decisión y conservar Blue Studio/UAX e invariantes con cambios y regresiones focalizados.
 
 | Corte | Casos | Recorrido y criterio de aceptación | Dependencia o decisión |
 |---|---|---|---|
 | **L-06A · Caja/POS** | UC-CAJ-01–19 (19) | Apertura, borrador, pagos mixtos, ticket, anulación y arqueo. Pérdida de acuse, reentrada y efectos persistidos. | B-02 P0–P4 PASS en RUN-17. Variantes y E5 pendientes. |
-| **L-06B · Catálogo** | UC-CAT-01–22 (22) | Filtrar, dar de alta/asociar, editar precio, estado y unidades versionadas. Importar parcialmente y recuperar la intención original. | L-06B_CANDIDATO, L-03 Catálogo incorporado. P5 y E5 pendientes. |
+| **L-06B · Catálogo** | UC-CAT-01–22 (22) | Filtrar, dar de alta/asociar, editar precio, estado y unidades versionadas. Importar parcialmente y recuperar la intención original. | Publicado. L-03 Catálogo incorporado. P5 FAIL de causa desconocida en [RUN-19](VALIDATION.md#run-19). E5 pendiente. |
 | **L-06C · Compras e inventario** | UC-COM-01–15 (15) | Owner/Pharmacist autorizado elige proveedor, prepara recepción, revisa, confirma y vuelve a ella. Si otro editor cambia líneas, un POST con versión revisada retorna conflicto y preserva borrador y stock. Confirmación válida genera lotes, saldos, caducidad y movimientos exactos. | Incorporar descubrimiento L-03 si se aprueba. Medir coste de nombres según L-04 antes de proponer cambios. Incluir el caso CI identificado en RUN-13. |
 | **L-06D · Transferencias** | UC-TRA-01–13 (13) | Owner/roles habilitados prueban Sencillo y mercadería por estado. Comprobar solicitud, aprobación, despacho, recepción completa/parcial según contrato, cancelación permitida, concurrencia, origen/destino y constancia original. | RUN-15 acredita Sencillo con Owner. Variantes pendientes según matriz. |
 | **L-06E · Reportes y comisiones** | UC-REP-01–17 (17) | Owner filtra y contrasta pantalla/exportación con ventas, anulaciones y ledger. Cambiar regla y comprobar que la reversión compensa el importe original. Reposición según contrato interno. | Reutilizar datos conciliados de A/C/D. |
@@ -65,7 +77,7 @@ La [matriz](MATRIX.csv) y el [TO-BE](TO_BE.md) definen el inventario y sus decis
 
 ### Habilitador común B-02
 
-**Habilitador validado para P0–P4 de L-06A.** [RUN-17](VALIDATION.md#run-17) · [Guía del arnés](../../../backend/tests/MediPOS.E2E/README.md). P5 queda pendiente en el SHA de L-06B. Cada lote conserva su aprobación individual.
+**Habilitador validado para P0–P4 de L-06A.** [RUN-17](VALIDATION.md#run-17) · [Guía del arnés](../../../backend/tests/MediPOS.E2E/README.md). P5 falló en el SHA de L-06B sin aserción identificada. [RUN-19](VALIDATION.md#run-19). Cada lote conserva su aprobación individual.
 
 Solicitar una sola aprobación para preparar y reutilizar navegador, API y PostgreSQL efímero con autenticación sintética. El preflight debe acreditar SHA/build, identidad del contenedor/BD, roles mínimos con RLS, sesiones de prueba y dos tenants/sedes. Usar puertos y perfil exclusivos, impedir conexión a DEV o producción y tráfico hacia OAuth, CPE u otros servicios reales. Limitar la purga a una prueba sintética específicamente autorizada. Registrar alcance y evidencias saneadas y limpiar solo recursos del fixture. Reutilizar la misma composición para los nueve cortes; su diseño e implementación requieren un encargo propio.
 
@@ -73,4 +85,4 @@ Solicitar una sola aprobación para preparar y reutilizar navegador, API y Postg
 
 Conciliar los 156 UC vigentes y cualquier caso nuevo justificado con decisión, implementación aprobada cuando aplique, prueba acorde al riesgo y pendientes explícitos. Exigir E4 para recorridos críticos y E5 para aceptación del operador. Nombrar el SHA y build verificados. Producción permanece NO-GO mientras falle un gate requerido, exista un P0/P1 de release abierto o haya datos sin conciliar.
 
-**Siguiente paso.** El operador revisa y publica L-06B en la rama diagnóstica. El push del arnés activa B-02. Importar P0–P5 del SHA exacto, incluyendo `CATALOG_SEARCH_WRITE_IMPORT`, antes de decidir si se abre L-06C. El gate frontend sigue independiente.
+**Siguiente decisión del operador.** Revisar el cierre documental. Retomar diagnóstico o lotes únicamente mediante nueva instrucción explícita. [Checkpoint](CHECKPOINT.md)

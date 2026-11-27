@@ -61,11 +61,11 @@ POST `/api/employee-invitations/accept` · `backend/src/MediPOS.Api/Tenant/Emplo
 
 ## UC-ACC-12
 
-GET `/auth/csrf` · `backend/src/MediPOS.Api/Authentication/GoogleAuthenticationRegistration.cs:186`. **E2 · IMPLEMENTADO · BLOCKED**. Cliente obtiene token antes de mutación (frontend/src/shared/api/http.ts:81–90,140–143); GoogleAuthenticationRegistration.cs:186–187 emite respuesta. Es control de transporte, sin modificación comercial.
+GET `/auth/csrf` · `backend/src/MediPOS.Api/Authentication/GoogleAuthenticationRegistration.cs:186`. **E2 · IMPLEMENTADO · BLOCKED**. Cliente obtiene token antes de mutación (frontend/src/shared/api/http.ts:81–90,140–143); GoogleAuthenticationRegistration.cs:186–187 emite respuesta. Es control de transporte, sin modificación comercial. El token de solicitud se entrega al cliente junto con el estado antiforgery del navegador. Puede volver a pedirse antes de un envío. Esta lectura no autoriza por sí misma la mutación ni confirma una anterior. Falta emisión y uso en navegador aislado.
 
 ## UC-ACC-13
 
-POST `/auth/login` · `backend/src/MediPOS.Api/Authentication/GoogleAuthenticationRegistration.cs:188`. **E2 · IMPLEMENTADO · BLOCKED**. Pulsar Continuar con Google. HttpClient.login crea formulario top-level con CSRF y GoogleAuthenticationRegistration.cs:188–195 inicia challenge. Callback UC-ACC-14.
+POST `/auth/login` · `backend/src/MediPOS.Api/Authentication/GoogleAuthenticationRegistration.cs:188`. **E2 · IMPLEMENTADO · BLOCKED**. Pulsar Continuar con Google. HttpClient.login crea formulario top-level con CSRF y GoogleAuthenticationRegistration.cs:188–195 inicia challenge. Callback UC-ACC-14. La frontera valida CSRF y el retorno permitido, revoca la sesión anterior antes del challenge y deja al callback crear una sesión nueva. Si el ingreso queda incompleto, el usuario puede iniciar un nuevo ingreso. El test local no acredita OAuth real.
 
 ## UC-ACC-14
 

@@ -4,7 +4,7 @@
 
 [Validación RFA2](../VALIDATION.md) · SC-05 / SC-06. E2 identifica la frontera con dobles o pruebas locales. BLOCKED indica una frontera esencial sin evidencia aislada.
 
-RUN-09 amplía F-005 para UC-COM-03/04. Con tres IDs, se observan tres GET de detalle en frío, cero al abrir Lotes con caché vigente y tres tras cambiar de sede. [Prueba con doble HTTP](../VALIDATION.md#continuación-02b--5d38898).
+RUN-09 amplía F-005 para UC-COM-03/04. Con tres IDs, se observan tres GET de detalle en frío, cero al abrir Lotes con caché vigente y tres tras cambiar de sede. [Prueba con doble HTTP](../VALIDATION.md#corte-anterior--continuación-02b--5d38898).
 
 Compras e Inventario requieren Owner o Pharmacist en las páginas (`PurchasesPage.tsx:25–29`, `InventoryPage.tsx:29–33`). Mínimo es Owner. Líneas con revisión, lote/vencimiento y costo exacto. La autorización se reevalúa en servidor; escritura con constancia pasa por las operaciones comunes de UC-ACC-24. Ver el [recorrido propuesto](../TO_BE.md).
 

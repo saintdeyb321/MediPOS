@@ -16,6 +16,8 @@ Los seis IDs originales se conservan. F-007 registra el defecto encontrado duran
 
 La evidencia de ejecución se vincula al [registro RFA2](VALIDATION.md). E2 se limita a las fronteras indicadas. Los diagnósticos originales siguen abajo.
 
+**Correcciones demostradas fuera de los siete IDs.** UC-CAJ-10 documenta que quitar la última línea de un borrador guardado dejaba la navegación sin protección. El RED/GREEN y la corrección local de ese estado están en [RUN-16](VALIDATION.md#run-16). P4 acredita el guardado versionado, pero la variante de vaciado conserva evidencia DOM. Los resultados de P5 y del test frontend de Compras siguen siendo incidencias de ejecución sin causa de producto establecida. [RUN-19](VALIDATION.md#run-19) · [RUN-13](VALIDATION.md#run-13).
+
 ## F-001 · Una caja cerrada deja de aparecer en activas
 
 **RUN-17 · E4 del historial.** La caja 100→10 conserva −90 y una auditoría. Tras perder el acuse, la UI recupera el mismo arqueo por URL y desde Cierres con entrada limpia. Activas excluye el cierre. Incidente DEV sin atribución. [Aserciones y variantes](VALIDATION.md#run-17).
@@ -45,6 +47,8 @@ La evidencia de ejecución se vincula al [registro RFA2](VALIDATION.md). E2 se l
 - UC-TRA-01, UC-CAJ-04, FR-CASH-004. E1 de cableado corroborada por la revisión externa del baseline 939ad83. P1 provisional para despacho por UI. `CashTransfersPage.tsx:63,98–101` exige esperado no nulo. `CashSessionStatusQueries.cs:18–28` entrega el valor persistido y `CashSession.cs:54–60` lo establece al cerrar. `CashTransferTransaction.cs:90–96` calcula el saldo vigente al despachar. El doble `cash.test.support.tsx:13` devuelve un esperado en open; su existencia no acredita funcionamiento del circuito real. En RFA2 comparar respuesta de estado y disponibilidad del botón con caja válida y saldo inicial positivo. PENDIENTE_RFA2.
 
 ## F-003 · El filtro de mantenimiento es por página
+
+**Estado al cierre.** La búsqueda ampliada está en el baseline publicado y conserva la verificación local. P5 falló sin identificar qué aserción llegó a ejercitarse. El hallazgo histórico y la evidencia local siguen vigentes. [RUN-19](VALIDATION.md#run-19).
 
 **RUN-18 · Solución aprobada, candidato.** Mis productos combina filtros de texto, categoría y estado en SQL antes de paginar. La prueba con dobles encuentra la fila que antes quedaba en página 2 y verifica un nuevo GET desde offset cero. La comprobación real con PostgreSQL y navegador está preparada en P5. [Aserciones](VALIDATION.md#run-18).
 

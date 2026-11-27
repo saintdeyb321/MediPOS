@@ -1,6 +1,6 @@
 # RFA3 · Cómo debería operar MediPOS
 
-Corte del 26/11/2026 sobre `5d38898`. Esta es la propuesta para el operador. La [matriz](MATRIX.csv) conserva el estado observado y [RUN-10](VALIDATION.md#run-10) distingue las aserciones en PostgreSQL de las pruebas DOM. Las decisiones que cambian el producto están en el [backlog](ROADMAP.md).
+Corte del 26/11/2026 sobre `5d38898`. Estas son las decisiones de diseño y su evolución posterior. La clasificación conserva la intención y no adjudica PASS. La [matriz](MATRIX.csv) conserva el estado observado y [RUN-10](VALIDATION.md#run-10) distingue las aserciones en PostgreSQL de las pruebas DOM. Las decisiones que cambian el producto están en el [backlog](ROADMAP.md).
 
 ## Decisión principal por caso
 
@@ -22,7 +22,7 @@ Los números son los sufijos del prefijo UC de cada fila. KEEP conserva el compo
 
 1. El cajero abre su caja y trabaja en su sede. Al cerrar cuenta el efectivo físico. Revisa esperado del servidor, contado y diferencia con signo. Yape, Plin y tarjeta conservan sus totales por separado.
 2. Si el cierre está en curso, esperar. Si se pierde el acuse, volver a la misma caja y consultar. Un error de lectura o una lectura todavía abierta conserva la intención. Un estado cerrado confirma el cierre aunque todavía falte el detalle del arqueo.
-3. La caja sale de **Activas**. Desde **Cierres**, el usuario consulta los cierres de la sede por fecha y abre el arqueo existente. Owner consulta todos los autorizados en la sede y el personal operativo solo los propios. La reentrada desde una URL limpia está implementada y pendiente de comprobación en P3 del candidato.
+3. La caja sale de **Activas**. Desde **Cierres**, el usuario consulta los cierres de la sede por fecha y abre el arqueo existente. Owner consulta todos los autorizados en la sede y el personal operativo solo los propios. La reentrada desde una URL limpia está implementada y acreditada en RUN-17 P3 para el alcance ejecutado.
 4. En POS, conservar presentación y precio del servidor, borrador versionado, cobro mixto, ticket interno y anulación compensatoria. Al salir de un carrito local con cambios, ofrecer conservar o descartar según la protección existente. Un borrador persistido sin cambios debe poder cerrarse y recuperarse. Caracterizar también vaciar todas las líneas de un borrador guardado. Durante un envío o una respuesta incierta, conservar su identidad y bloquear la repetición. El motivo para pedir confirmación es la pérdida de edición real. `useSaleDraft.ts` ya compara líneas guardadas; verificar antes de proponer cualquier refactor.
 
 | Estado comprobado | Acción permitida | Efecto financiero |
@@ -30,12 +30,12 @@ Los números son los sufijos del prefijo UC de cada fila. KEEP conserva el compo
 | Abierta, sin intento pendiente | Enviar cierre con el conteo revisado | Una transacción de cierre |
 | Envío incierto, GET abierto o fallido | Consultar el ID inicial | Ninguna escritura |
 | Cerrada, arqueo indisponible | Reconsultar arqueo | Cierre permanece confirmado |
-| Cerrada, directorio vacío | Verificar ámbito y buscar en Cierres si se aprueba | Solo lectura |
+| Cerrada, directorio vacío | Verificar ámbito y buscar en Cierres | Solo lectura |
 
 ### Catálogo · encontrar y mantener un producto
 
 1. Personal operativo busca en su sede; el Owner abre mantenimiento para alta local o asociación global. Comprueba tipo, composición cuando corresponda, presentaciones, estado y precio. Cambia unidades con la versión leída. Una colisión requiere abrir la configuración vigente antes de otra edición.
-2. En Mis productos, Owner aplica texto, categoría y estado. El servidor filtra todo el catálogo privado antes de paginar. Cambiar filtros vuelve a la primera página y conserva lista/tarjetas. El buscador POS sigue su propio alcance de sede, surtido y permisos.
+2. En Mis productos, Owner aplica texto, categoría y estado. El servidor filtra todo el catálogo privado antes de paginar. Cambiar filtros vuelve a la primera página y conserva lista/tarjetas. RUN-18 aporta verificación local. P5 falló sin aserción identificada en [RUN-19](VALIDATION.md#run-19). El buscador POS sigue su propio alcance de sede, surtido y permisos.
 3. Tras un alta incierta, volver al directorio, buscar y contrastar el producto con la intención original conservada en esa sesión del navegador. Tras editar se recupera el mismo ID. Un producto publicado globalmente aún requiere asociación local y el alta no crea stock. Importar Excel conserva la constancia y resultados por fila. Un trabajo interrumpido solo se recupera con la autorización y los bloqueos vigentes. Borrado físico CAT-22 permanece fuera de alcance.
 
 ### Compras e inventario · reencontrar una recepción y seguir el lote
@@ -46,7 +46,7 @@ Los números son los sufijos del prefijo UC de cada fila. KEEP conserva el compo
 
 ### Transferencias · enviar y recibir sencillo o mercadería
 
-1. Para sencillo, el usuario habilitado elige caja abierta de origen, sede destino válida e importe positivo exacto. Hoy `expectedCashAmount` nulo bloquea incluso el envío al servidor. Propuesta mínima: permitir pedir el despacho al completar esos datos. Mostrar el importe a entregar. Si se necesita visualizar saldo antes de confirmar, aprobar aparte una **lectura informativa** de disponible con hora de cálculo. Ni apertura ni cero representan ese disponible.
+1. Para sencillo, el usuario habilitado elige caja abierta de origen, sede destino válida e importe positivo exacto. En el AS-IS histórico, un esperado de cierre nulo bloqueaba el envío. La corrección L-01 permite solicitar el despacho al completar los datos y RUN-15 la acredita con Owner. Otras variantes quedan pendientes. Mostrar el importe a entregar. Si se necesita visualizar saldo antes de confirmar, aprobar aparte una **lectura informativa** de disponible con hora de cálculo. Ni apertura ni cero representan ese disponible.
 2. El servidor vuelve a validar actor, sede, estado y saldo bajo bloqueo. Efectivo insuficiente deja editable el importe con el error preciso. Un resultado incierto conserva requestId, origen y monto; solo consultar la constancia. Tras un acuse válido se puede consultar el envío **en tránsito**. El destino elige otra caja abierta compatible y recibe una sola vez. El enviado cuenta en origen y el recibido en destino en sus instantes respectivos.
 3. En mercadería se mantienen solicitud, aprobación de origen, despacho por lotes y recepción total/parcial con diferencia documentada. Cancelar solo en estado permitido. El destino consulta el mismo expediente e incorpora stock vendible únicamente al recibir. Reconsultar tras revocación, conflicto o pérdida de respuesta conserva permisos y el ID original.
 

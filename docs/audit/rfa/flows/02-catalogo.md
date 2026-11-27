@@ -1,6 +1,6 @@
 # Catálogo
 
-**Corte vigente.** [RUN-18](../VALIDATION.md#run-18) agrega el candidato L-06B y delimita las pruebas por UC. [RUN-17](../VALIDATION.md#run-17) acredita la búsqueda POS por código dentro de P4. [Decisiones de diseño](../TO_BE.md).
+**Corte vigente.** [RUN-18](../VALIDATION.md#run-18) agrega el candidato L-06B y delimita las pruebas por UC. [RUN-19](../VALIDATION.md#run-19) registra P5 fallido sin aserción atribuible a un UC. Se conserva la evidencia local y quedan pendientes la sesión perdida, CAT-19 con writer drain y E5. [RUN-17](../VALIDATION.md#run-17) acredita la búsqueda POS por código dentro de P4. [Decisiones de diseño](../TO_BE.md).
 
 [Validación RFA2](../VALIDATION.md) · SC-04. E2 identifica la frontera con dobles o pruebas locales. BLOCKED indica una frontera esencial sin evidencia aislada.
 

@@ -1,5 +1,18 @@
 # RFA2 · Validación conductual y persistencia
 
+<a id="run-19"></a>
+## RUN-19 · B-02 del candidato L-06B
+
+[CI 45938999412](https://github.com/saintdeyb321/MediPOS/actions/runs/45938999412), job 140308706593, intento 1, 183 segundos. Extracto sanitizado suministrado por el operador. SHA `52a5ced168dbef2e80145b4e9d115113f0a63755`, build `e40191caae1b9b7295a27b34b2b3c9489d4a61cc1484178ae3d73c17d0985203`, PostgreSQL 18.7 y rol `medipos_test_runtime`. Conclusión **failure**, código de salida **1**.
+
+| Frontera | Resultado e impacto en la matriz |
+|---|---|
+| P0–P4 | PASS. Corrobora los recorridos ya vinculados en [RUN-15](#run-15) y [RUN-17](#run-17). Se conservan los límites por aserción y rol. |
+| P5 `CATALOG_SEARCH_WRITE_IMPORT` | START sin PASS. Aserción fallida desconocida y sin artefacto recuperable. **FAIL del piloto**. Sus aserciones individuales son **no acreditadas**. |
+| L-06B | Mantiene la evidencia local de [RUN-18](#run-18). No se promueve ningún UC de Catálogo por P5 ni se atribuye un fallo al producto, a F-003 o a F-007. |
+
+La matriz conserva 156 UC. Las variantes de CAT-19 con writer drain, recuperación de altas sin la sesión original y E5 siguen pendientes. El gate frontend integral de RUN-13 (645/646) es independiente. Fase RFA2 parcial, correcciones suspendidas y producción NO-GO.
+
 <a id="run-18"></a>
 ## RUN-18 · L-06B candidato
 

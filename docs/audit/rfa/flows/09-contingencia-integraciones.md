@@ -10,7 +10,7 @@ PWA usa caché y cola local scoped; un pendiente local no acredita venta ni pago
 
 ## UC-INT-01
 
-GET `/health` · `backend/src/MediPOS.Api/Observability/ObservabilityRegistration.cs:66`. **E2 · IMPLEMENTADO · PASS**. Observabilidad expone liveness. ObservabilityRegistration.cs:66 usa predicado false; no indica PostgreSQL listo. Uso operativo.
+GET `/health` · `backend/src/MediPOS.Api/Observability/ObservabilityRegistration.cs:66`. **E2 · IMPLEMENTADO · PASS**. Observabilidad expone liveness. ObservabilityRegistration.cs:66 usa predicado false; no indica PostgreSQL listo. Uso operativo. El operador o monitor consulta GET en la superficie de observabilidad. Puede repetir la lectura tras caída del host. No requiere un tenant ni consulta datos comerciales. Para readiness con base usar UC-INT-02.
 
 ## UC-INT-02
 

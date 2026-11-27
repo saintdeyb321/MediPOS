@@ -46,15 +46,15 @@ GET `/api/tenants/{tenantId}/reports/sales` · `backend/src/MediPOS.Api/Tenant/R
 
 ## UC-REP-10
 
-GET `/api/tenants/{tenantId}/reports/stock-risk` · `backend/src/MediPOS.Api/Tenant/ReportEndpoints.cs:24`. **E3 · IMPLEMENTADO · BLOCKED**. Existencias críticas. GetOwnerOperationalReportsHandlers.cs:41–55 usa ReadOwnerAsync; OperationalReportReaders.cs:52–62 consulta ámbito/stock y opción de mínimo crítico, devuelve página. No crea ajustes. Requisito FR-RPT-003.
+GET `/api/tenants/{tenantId}/reports/stock-risk` · `backend/src/MediPOS.Api/Tenant/ReportEndpoints.cs:24`. **E3 · IMPLEMENTADO · BLOCKED**. Existencias críticas. GetOwnerOperationalReportsHandlers.cs:41–55 usa ReadOwnerAsync; OperationalReportReaders.cs:52–62 consulta ámbito/stock y opción de mínimo crítico, devuelve página. No crea ajustes. Requisito FR-RPT-003. Owner selecciona Stock crítico en ReportsPage, aplica sede y filtros de producto/mínimo. Cambiar página conserva la consulta aplicada. Si falla, reconsultar con esos filtros. SC-08/RUN-10 no acreditan aceptación en navegador real.
 
 ## UC-REP-11
 
-GET `/api/tenants/{tenantId}/reports/expirations` · `backend/src/MediPOS.Api/Tenant/ReportEndpoints.cs:27`. **E3 · IMPLEMENTADO · BLOCKED**. Lotes próximos a vencer. GetOwnerOperationalReportsHandlers.cs:57–71 valida rango y Owner; OperationalReportReaders.cs:64–78 proyecta vencimientos por sede. UI muestra vigencia del filtro aplicado. Requisito FR-RPT-003.
+GET `/api/tenants/{tenantId}/reports/expirations` · `backend/src/MediPOS.Api/Tenant/ReportEndpoints.cs:27`. **E3 · IMPLEMENTADO · BLOCKED**. Lotes próximos a vencer. GetOwnerOperationalReportsHandlers.cs:57–71 valida rango y Owner; OperationalReportReaders.cs:64–78 proyecta vencimientos por sede. UI muestra vigencia del filtro aplicado. Requisito FR-RPT-003. Owner elige Vencimientos, aplica rango y sede y navega páginas del resultado. Puede volver a ejecutar el mismo GET tras un error sin cambiar el lote. Falta verificación E4.
 
 ## UC-REP-12
 
-GET `/api/tenants/{tenantId}/reports/inventory-capital` · `backend/src/MediPOS.Api/Tenant/ReportEndpoints.cs:30`. **E3 · IMPLEMENTADO · BLOCKED**. Capital de inventario. GetOwnerOperationalReportsHandlers.cs:73–84 valida Owner y ámbito. OperationalReportReaders.cs:80–95 computa capital de lotes bajo ámbito, no desde una página parcial. Requisito FR-RPT-003.
+GET `/api/tenants/{tenantId}/reports/inventory-capital` · `backend/src/MediPOS.Api/Tenant/ReportEndpoints.cs:30`. **E3 · IMPLEMENTADO · BLOCKED**. Capital de inventario. GetOwnerOperationalReportsHandlers.cs:73–84 valida Owner y ámbito. OperationalReportReaders.cs:80–95 computa capital de lotes bajo ámbito, no desde una página parcial. Requisito FR-RPT-003. Owner elige Capital en inventario y aplica el ámbito. La pantalla usa los importes del servidor y permite repetir la lectura. Sin escrituras ni cálculo del total a partir de filas de otra página. Falta verificación E4.
 
 ## UC-REP-13
 

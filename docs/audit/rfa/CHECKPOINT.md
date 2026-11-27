@@ -1,10 +1,17 @@
 # Checkpoint RFA
 
-## RFA4 · L-06B
+## Cierre documental RFA0–RFA3 · 27/11/2026
+
+- **RADIOGRAFÍA_DOCUMENTAL_CONSOLIDADA.** Rama `ci/postgres-diagnostics-8bc6b4c`, HEAD `52a5ced168dbef2e80145b4e9d115113f0a63755`. Se conserva el MD de L-06C aportado por el operador fuera de la carpeta de trabajo documental. [Entrada canónica](README.md).
+- RFA0–RFA1 inventariados y RFA3 consolidada. RFA2 **PARCIAL**: 156/156 UC, nueve familias, 3 E1 / 27 E2 / 103 E3 / 23 E4 / 0 E5. Veredictos: 19 PASS / 135 BLOCKED / 1 NOT_RUN / 1 N/A. El cotejo documental con Python verificó los IDs de índice/matriz/fichas, estados, clasificación TO-BE, lotes asociados, F-001–007 y 631 enlaces locales. `git diff --check` PASS.
+- [RUN-19](VALIDATION.md#run-19) acredita P0–P4 del SHA publicado. P5 falló sin aserción identificada. Frontend integral 645/646, DEV sin atribución, variantes por rol y E5 pendientes. Producción **NO-GO**.
+- **Reanudación:** esperar instrucción explícita del operador que identifique fase, UC y alcance. Para investigar P5, pedir solo evidencia saneada de la primera aserción fallida o una reproducción aislada autorizada con SHA/build comprobados. No iniciar diagnóstico ni abrir L-06C–I con este cierre.
+
+## RFA4 · L-06B · corte local previo a RUN-19
 
 - Gate de entrada satisfecho con GO explícito, resumen sanitizado y HEAD `5a94de91a17592d5d3739426db8ec08223976758`. [RUN-17](VALIDATION.md#run-17) concilia P0–P4 por UC. L-06A acreditado para el recorrido ejecutado. Frontend integral y DEV siguen pendientes.
 - **L-06B_CANDIDATO.** Filtros de texto, categoría y estado en servidor antes de paginar, recuperación de alta con el código original y P5 preparado. [RUN-18](VALIDATION.md#run-18) registra los 22 UC, F-003/F-007, verificaciones y variantes pendientes.
-- Siguiente acción del operador: revisar y publicar en `ci/postgres-diagnostics-8bc6b4c`. Conciliar P0–P5 del mismo SHA, con `B02 P5 START` y `B02 P5 PASS CATALOG_SEARCH_WRITE_IMPORT`. No iniciar L-06C sin revisión. El gate frontend 645/646, E5 y DEV permanecen independientes. Producción NO-GO.
+- El operador publicó el candidato. El resultado posterior quedó registrado en RUN-19 y las acciones operativas quedaron suspendidas.
 
 ## RFA4 · L-06A · corte local anterior a RUN-17
 

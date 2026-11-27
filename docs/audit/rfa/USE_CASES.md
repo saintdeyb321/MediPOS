@@ -1,8 +1,6 @@
 # Inventario transversal
 
-**Corte RFA3.** Los 155 identificadores del inventario siguen siendo la clave estable. [Decisión operativa por familia e ID](TO_BE.md), [frontera acreditada en CI](VALIDATION.md#run-10) y [orden de aceptación](ROADMAP.md).
-
-Los 155 IDs conservan su alcance AS-IS. Para evidencia y veredicto de la revisión conductual, consultar la [matriz acumulativa](MATRIX.csv) y los [escenarios RFA2](VALIDATION.md).
+**Inventario consolidado.** Los 155 IDs AS-IS conservan su alcance histórico. El historial de Cierres incorpora UC-CAJ-19, para 156 casos en nueve familias. La captura de router y jobs conserva el corte histórico. Para localizar el actor, entrada, estado y prueba de cada ID, consultar su fila en la [matriz acumulativa](MATRIX.csv). [Decisión por familia](TO_BE.md) · [Evidencia por SHA](VALIDATION.md) · [Fases y lotes](ROADMAP.md)
 
 ## Router
 
