@@ -1,26 +1,40 @@
 # Hoja de ruta RFA · fases y lotes subordinados
 
-Cierre documental sobre `52a5ced168dbef2e80145b4e9d115113f0a63755`. La [decisión de los 156 casos](TO_BE.md) incluye los circuitos que deben conservarse.
+Reconciliación sobre `1deb4dae9ce5f11c4f9fc0f374837c5d67e1d1d4`, aplicación `52a5ced168dbef2e80145b4e9d115113f0a63755`. La [decisión de los 156 casos](TO_BE.md) incluye los circuitos que deben conservarse.
 
 | Fase | Propósito | Estado |
 |---|---|---|
 | RFA0–RFA1 | Gobierno, inventario, trazabilidad AS-IS y exclusiones | Cierre documental, 156 UC vigentes incluidos los 155 originales. |
-| RFA2 | Acreditar comportamiento, persistencia, recuperación y aislamiento | PARCIAL. [Evidencias](VALIDATION.md) por frontera. |
-| RFA3 | Hallazgos, TO-BE, dependencias y priorización | Consolidada para revisión. [Hallazgos](FINDINGS.md) · [TO-BE](TO_BE.md) |
-| RFA4A | Correcciones focalizadas de defectos e invariantes | Suspendida. L-01, L-02/L-06A y L-05 ejecutados en los alcances acreditados. L-03 Catálogo/L-06B publicado, gate P5 fallido. |
-| RFA4B | Simplificaciones, refactor y cambios de flujo aprobados | Pendiente. L-06 agrupa variantes por familia. Compras de L-03 y la medición de L-04 requieren encargo. El saldo informativo de L-01 y la optimización de nombres son opcionales. |
-| RFA5A | Certificación técnica aislada | Pendiente. L-07 concilia builds, suites, PostgreSQL, E4, seguridad, backup/restore y rendimiento del SHA que se pretenda liberar. |
-| RFA5B | Aceptación del operador y decisión de puesta en marcha | Pendiente. L-07 recoge E5 y la decisión posterior a los gates técnicos y operativos. Producción NO-GO. |
+| RFA2 | Acreditar comportamiento, persistencia, recuperación y aislamiento | Cierre de investigación con limitaciones. Cobertura funcional parcial. [RUN-21](VALIDATION.md#run-21) |
+| RFA3 | Hallazgos, TO-BE, dependencias y priorización | Candidato de cierre para revisión. [Hallazgos](FINDINGS.md) · [TO-BE](TO_BE.md) |
+| RFA4A · Astra Alto | Correcciones focalizadas de defectos e invariantes | L-01, L-02/L-06A y L-05 ejecutados en los alcances acreditados. Priorizar la frontera de alta P5 de L-06B. L-05 conserva el fallo histórico de Compras sin causa. |
+| RFA4B · Sol Alto | Simplificaciones, refactor y cambios de flujo aprobados | Pendiente. L-06 agrupa variantes por familia. L-03 Compras (F-004) y medir L-04 (F-005) antes de proponer cambios. El saldo informativo de L-01 y la optimización de nombres son opcionales. |
+| RFA5A · Sol Medio | Certificación técnica aislada | Pendiente. L-07 exige builds, suites, PostgreSQL, E4 y seguridad del SHA final exacto. Completar concurrencia, dinero/stock, offline, permisos y aislamiento. |
+| RFA5B · Astra Alto | Aceptación del operador y decisión de puesta en marcha | Pendiente. L-07 exige E5, revisión arquitectónica y operativa, gates externos, backup/restore probado, rendimiento representativo y límites operativos antes de decidir. Producción NO-GO. |
 
 Los lotes L-01–07 y los cortes L-06A–I organizan trabajo dentro de estas fases. Los cambios ejecutados y los escenarios acreditados conservan su propio alcance.
 
-| Orden | Tipo / prioridad | Dependencia y decisión del operador | Tamaño · riesgo · esfuerzo orientativo |
+### Cola de decisiones
+
+1. **RFA4A · obligatorio para cerrar el gate.** Acotar P5/F-008. Reparar solo la causa demostrada. Conservar las correcciones ejecutadas de Sencillo (L-01), Cierres y borrador (L-02/L-06A), F-006 (L-05) y la búsqueda acreditada de L-06B. Sus variantes monetarias, de aislamiento y recuperación conservan prioridad de validación.
+2. **RFA4A/RFA5A · fallo histórico.** L-05 conserva Compras 645/646 como gate pendiente. La precondición de revisión obsoleta tiene evidencia PostgreSQL y el fallo frontend sigue sin atribución. Aislar solo si aparece una aserción específica o vuelve a fallar en RFA5A.
+3. **RFA4B · opcionales y KEEP.** Priorizar por riesgo las variantes de L-06 sobre flujo vigente. F-004 requiere decidir si se necesita un directorio de recepciones recientes. F-005 requiere medición representativa y equivalencia antes de optimizar. El saldo informativo de Sencillo y otros refactors requieren aprobación propia.
+4. **RFA5A/B · L-07.** Tras cerrar los bloqueos críticos, medir integridad y operación en destino aislado, ejecutar los gates integrales y documentar restauración, rendimiento y externos. Obtener E5 del operador antes de decidir release.
+
+### Primer encargo RFA4A
+
+- **Alcance:** solo [F-008](FINDINGS.md#f-008--el-piloto-de-alta-local-falla-en-la-pérdida-inducida-del-acuse), CAT-09/21, FR-CAT-001/003/007. El fallo acreditado es del piloto y aún falta causa. Aprobar un intento B-02 controlado, fixture efímero de PostgreSQL 18, Chromium y runner aislado, SHA/build fijados y Owner sintético con sesión, categoría y código nuevo. P0–P4 y SEARCH sirven como controles. No abrir L-06C–I.
+- **Prueba discriminante mínima:** justo antes del único clic, comprobar formulario revisado y botón accionable y observar el POST exacto independientemente de `RouteAsync`. Dentro del helper, marcar intercepción, categoría HTTP permitida (201, 400, 401, 403, 409, 429, 5xx u otra), ID válido y conclusión del aborto por separado. Después, distinguir botón y marcador pendiente. Publicar solo marcadores estáticos y estado permitido. Mantener timeout, aserciones y error del runner. Conservar la primera frontera fallida aun si una comprobación independiente también falla.
+- **Lectura independiente y aceptación:** en scope runtime del mismo tenant consultar por el código sintético y contar producto, auditoría `BusinessProductCreated` y efectos de stock. Separar ausencia de solicitud, rechazo definitivo, 201 con commit y fallo de descarte o guarda UI. Si llega al caso feliz, exigir un solo POST, una fila, una auditoría del mismo ID y actor, cero stock, bloqueo al perder el acuse y recuperación del mismo ID sin reenviar. Ausencia de fila en una lectura temprana no prueba rechazo.
+- **Corrección y reversión:** si la causa es el arnés, limitar el cambio a esa frontera y conservar los demás pilotos. Si se demuestra defecto de producto, RED/GREEN solo sobre el símbolo responsable, con permisos, RLS, exactitud, auditoría y contrato actual. El diagnóstico debe poder retirarse sin cambiar persistencia ni contratos. Cambios de contrato, reglas o constancia durable requieren autorización separada. Sin evidencia suficiente, registrar el bloqueo exacto y detener el intento sin abrir otra ronda automática.
+
+| Lote subordinado | Tipo / prioridad | Dependencia y decisión del operador | Tamaño · riesgo · esfuerzo orientativo |
 |---|---|---|---|
-| L-01 · Despachar sencillo | Bugfix P1, F-002 | Primero. Aprobar alternativa A y destino aislado para comprobar contrato. B solo si el operador necesita saldo visible. | S para A, M para B · alto, dinero · Astra High |
-| L-02 · Relocalizar arqueos | Brecha de recuperación P2, F-001 | Independiente de L-01. Elegir enlace actual o historial con alcance explícito. | M · alto, privacidad/dinero · Astra High |
-| L-03 · Localizar compras y productos | Capacidades opcionales P2, F-003/004 | Dos decisiones independientes de búsqueda. Reutilizar criterio de paginación/scope de L-02 cuando coincida. | M · medio · Sol High |
+| L-01 · Despachar sencillo | Bugfix P1, F-002 | A ejecutada y acreditada para Owner. Variantes de rol pendientes. B opcional si se requiere saldo visible. | S para A, M para B · alto, dinero · Astra High |
+| L-02 · Relocalizar arqueos | Brecha de recuperación P2, F-001 | Cierres ejecutado y recorrido acreditado en L-06A. Variantes de actor/periodo pendientes. | M · alto, privacidad/dinero · Astra High |
+| L-03 · Localizar compras y productos | Brechas P2, F-003/004 | Catálogo SEARCH acreditado. Recepciones recientes es capacidad opcional y requiere decisión explícita. | M · medio · Sol High |
 | L-04 · Coste de existencias/lotes | Medición, F-005 | Requiere página representativa y presupuesto de latencia acordado. Puede terminar sin cambio. | S medir, M proyectar · medio, aislamiento · Sol High |
-| L-05 · Repetibilidad | Calidad de tests, F-006 y fallo CI sin atribuir | Puede investigarse en paralelo a L-01. Necesita identificación saneada del test de CI. Requisito para L-07. | S si es sincronización del test · medio · Sol High |
+| L-05 · Repetibilidad | Calidad de tests, F-006 y fallo CI sin atribuir | Sincronización y reporte saneado ejecutados. Aserción de Compras aún ausente. Revalidarla en gate final o antes si aparece evidencia específica. | S si es sincronización del test · medio · Sol High |
 | L-06 · Continuidad de operaciones conservadas | Validación y posible simplificación puntual | Tras acordar qué propuestas de L-01–04 entran. Requiere B-02 para aceptación transversal. | M · alto, pérdida de intención/permiso · Astra High |
 | L-07 · Cierre de evidencia | Gate, sin capacidad nueva | L-01, L-05, L-06 y los lotes opcionales aceptados. Autorización del operador por ejecución. | M · alto · Astra High |
 
@@ -46,7 +60,7 @@ Los lotes L-01–07 y los cortes L-06A–I organizan trabajo dentro de estas fas
 ## L-03 · Descubrimiento (UC-COM-09/12/13/14, UC-CAT-06/20)
 
 - **Compras.** Si una compra sin referencia debe encontrarse desde una entrada limpia, aprobar listado acotado por tenant, sede, permiso, estado y periodo. `PurchaseLookup`, `PurchasingStore`, lectores de compra y contrato de directorio. Contrastar dos compras con igual referencia, una sin referencia, paginación, permisos revocados y otro tenant. Elegir una fila abre el ID existente. Recuperar escritura sigue usando la clave original; la búsqueda nunca identifica una intención por nombre/documento.
-- **Catálogo.** El operador autorizó la búsqueda en todo Mis productos. L-06B implementa filtros previos a paginar con respuesta compatible y conserva la búsqueda POS. P5 y recuperación quedan en [RUN-18](VALIDATION.md#run-18).
+- **Catálogo.** El operador autorizó la búsqueda en todo Mis productos. L-06B implementa filtros previos a paginar con respuesta compatible y conserva la búsqueda POS. SEARCH acreditado en [RUN-21](VALIDATION.md#run-21). La recuperación del alta queda bajo F-008 y F-007.
 - **Entrega reversible.** Lecturas optativas y UI después. Volver al consumidor anterior sin modificar filas. Cualquier índice/migración exigiría medición, plan SQL y aprobación propios.
 
 ## L-04 · Inventario (UC-COM-01/03/04)
@@ -66,7 +80,7 @@ La [matriz](MATRIX.csv) y el [TO-BE](TO_BE.md) definen el inventario y sus decis
 | Corte | Casos | Recorrido y criterio de aceptación | Dependencia o decisión |
 |---|---|---|---|
 | **L-06A · Caja/POS** | UC-CAJ-01–19 (19) | Apertura, borrador, pagos mixtos, ticket, anulación y arqueo. Pérdida de acuse, reentrada y efectos persistidos. | B-02 P0–P4 PASS en RUN-17. Variantes y E5 pendientes. |
-| **L-06B · Catálogo** | UC-CAT-01–22 (22) | Filtrar, dar de alta/asociar, editar precio, estado y unidades versionadas. Importar parcialmente y recuperar la intención original. | Publicado. L-03 Catálogo incorporado. P5 FAIL de causa desconocida en [RUN-19](VALIDATION.md#run-19). E5 pendiente. |
+| **L-06B · Catálogo** | UC-CAT-01–22 (22) | Filtrar, dar de alta/asociar, editar precio, estado y unidades versionadas. Importar parcialmente y recuperar la intención original. | Publicado. SEARCH acreditado. P5 CREATE/POST_LOST_ACK FAIL con causa desconocida en [RUN-21](VALIDATION.md#run-21). E5 pendiente. |
 | **L-06C · Compras e inventario** | UC-COM-01–15 (15) | Owner/Pharmacist autorizado elige proveedor, prepara recepción, revisa, confirma y vuelve a ella. Si otro editor cambia líneas, un POST con versión revisada retorna conflicto y preserva borrador y stock. Confirmación válida genera lotes, saldos, caducidad y movimientos exactos. | Incorporar descubrimiento L-03 si se aprueba. Medir coste de nombres según L-04 antes de proponer cambios. Incluir el caso CI identificado en RUN-13. |
 | **L-06D · Transferencias** | UC-TRA-01–13 (13) | Owner/roles habilitados prueban Sencillo y mercadería por estado. Comprobar solicitud, aprobación, despacho, recepción completa/parcial según contrato, cancelación permitida, concurrencia, origen/destino y constancia original. | RUN-15 acredita Sencillo con Owner. Variantes pendientes según matriz. |
 | **L-06E · Reportes y comisiones** | UC-REP-01–17 (17) | Owner filtra y contrasta pantalla/exportación con ventas, anulaciones y ledger. Cambiar regla y comprobar que la reversión compensa el importe original. Reposición según contrato interno. | Reutilizar datos conciliados de A/C/D. |
@@ -77,7 +91,7 @@ La [matriz](MATRIX.csv) y el [TO-BE](TO_BE.md) definen el inventario y sus decis
 
 ### Habilitador común B-02
 
-**Habilitador validado para P0–P4 de L-06A.** [RUN-17](VALIDATION.md#run-17) · [Guía del arnés](../../../backend/tests/MediPOS.E2E/README.md). P5 falló en el SHA de L-06B sin aserción identificada. [RUN-19](VALIDATION.md#run-19). Cada lote conserva su aprobación individual.
+**Habilitador validado para P0–P4 de L-06A.** [RUN-17](VALIDATION.md#run-17) · [Guía del arnés](../../../backend/tests/MediPOS.E2E/README.md). RUN-19 localizó P5. [RUN-21](VALIDATION.md#run-21) localizó CREATE/POST_LOST_ACK. Cada lote conserva su aprobación individual.
 
 Solicitar una sola aprobación para preparar y reutilizar navegador, API y PostgreSQL efímero con autenticación sintética. El preflight debe acreditar SHA/build, identidad del contenedor/BD, roles mínimos con RLS, sesiones de prueba y dos tenants/sedes. Usar puertos y perfil exclusivos, impedir conexión a DEV o producción y tráfico hacia OAuth, CPE u otros servicios reales. Limitar la purga a una prueba sintética específicamente autorizada. Registrar alcance y evidencias saneadas y limpiar solo recursos del fixture. Reutilizar la misma composición para los nueve cortes; su diseño e implementación requieren un encargo propio.
 
@@ -85,4 +99,4 @@ Solicitar una sola aprobación para preparar y reutilizar navegador, API y Postg
 
 Conciliar los 156 UC vigentes y cualquier caso nuevo justificado con decisión, implementación aprobada cuando aplique, prueba acorde al riesgo y pendientes explícitos. Exigir E4 para recorridos críticos y E5 para aceptación del operador. Nombrar el SHA y build verificados. Producción permanece NO-GO mientras falle un gate requerido, exista un P0/P1 de release abierto o haya datos sin conciliar.
 
-**Siguiente decisión del operador.** Revisar el cierre documental. Retomar diagnóstico o lotes únicamente mediante nueva instrucción explícita. [Checkpoint](CHECKPOINT.md)
+**Siguiente decisión del operador.** Revisar el cierre RFA3 y decidir si autoriza el primer encargo RFA4A. [Checkpoint](CHECKPOINT.md)

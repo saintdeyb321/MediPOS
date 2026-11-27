@@ -2,9 +2,9 @@
 
 ## Corte vigente · 27/11/2026
 
-**RADIOGRAFÍA_DOCUMENTAL_CONSOLIDADA** sobre `52a5ced168dbef2e80145b4e9d115113f0a63755`, rama `ci/postgres-diagnostics-8bc6b4c`. RFA0–RFA1 inventariados y RFA3 consolidada. **RFA2_CANDIDATO_CIERRE**, todavía parcial. Los 156 UC en nueve familias tienen 2 E1, 28 E2, 103 E3, 23 E4 y 0 E5. Veredictos acumulados: 19 PASS, 135 BLOCKED, 1 NOT_RUN y 1 N/A. [Evidencia por familia](VALIDATION.md#run-20)
+**RFA3_CANDIDATO_CIERRE** sobre `1deb4dae9ce5f11c4f9fc0f374837c5d67e1d1d4`, aplicación `52a5ced168dbef2e80145b4e9d115113f0a63755`. RFA0–RFA1 inventariados. **RFA2_CIERRE_CON_LIMITACIONES**, cobertura funcional parcial. Los 156 UC en nueve familias tienen 2 E1, 25 E2, 103 E3, 26 E4 y 0 E5. Veredictos: 19 PASS, 135 BLOCKED, 1 NOT_RUN y 1 N/A. [Evidencia por familia](VALIDATION.md#run-20) · [Conciliación posterior](VALIDATION.md#run-21)
 
-**Gates independientes.** P0–P4 PASS en el baseline. P5 FAIL sin causa identificada y un candidato diagnóstico compilado pendiente de CI. Frontend integral 645/646, E5 pendiente y producción NO-GO. [RUN-19](VALIDATION.md#run-19) · [Checkpoint](CHECKPOINT.md)
+**Gates independientes.** P0–P4 y P5 SEED/SEARCH PASS en RUN-21. P5 global FAIL en CREATE/POST_LOST_ACK, causa indeterminada. Frontend integral 645/646, E5 pendiente y producción NO-GO. [RUN-21](VALIDATION.md#run-21) · [Checkpoint](CHECKPOINT.md)
 
 ## Cómo usar esta radiografía
 
@@ -19,7 +19,7 @@
 | Estado | Alcance |
 |---|---|
 | Correcciones acreditadas en recorridos concretos | L-01 Sencillo con Owner y L-06A Caja/POS, incluido Cierres. L-05 estabilizó dos pruebas y añadió identificación saneada. Conservan las variantes pendientes. |
-| Candidato publicado | L-06B incluye filtros de Mis productos y recuperación local del alta. RUN-18 acredita los casos locales. P5 falló en RUN-19 y el resultado del producto en ese recorrido queda sin determinar. |
+| Candidato publicado | L-06B incluye filtros de Mis productos acreditados en SEARCH y recuperación local del alta acreditada con dobles. Falta distinguir envío, respuesta, descarte y bloqueo en el piloto del alta. [F-008](FINDINGS.md#f-008--el-piloto-de-alta-local-falla-en-la-pérdida-inducida-del-acuse) |
 | Backlog | Compras/Inventario y los demás cortes L-06C–I, medición F-005, gate integral y E5. Las propuestas no cambian el contrato vigente. [Fases y lotes](ROADMAP.md) |
 
 ### Referencias históricas del AS-IS

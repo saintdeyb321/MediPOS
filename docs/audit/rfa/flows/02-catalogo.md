@@ -1,6 +1,6 @@
 # Catálogo
 
-**Corte vigente.** [RUN-18](../VALIDATION.md#run-18) agrega el candidato L-06B y delimita las pruebas por UC. [RUN-19](../VALIDATION.md#run-19) registra P5 fallido sin aserción atribuible a un UC. Se conserva la evidencia local y quedan pendientes la sesión perdida, CAT-19 con writer drain y E5. [RUN-17](../VALIDATION.md#run-17) acredita la búsqueda POS por código dentro de P4. [Decisiones de diseño](../TO_BE.md).
+**Corte vigente.** [RUN-18](../VALIDATION.md#run-18) agrega el candidato L-06B y delimita las pruebas por UC. [RUN-21](../VALIDATION.md#run-21) acredita SEARCH y sitúa el FAIL del piloto en CREATE/POST_LOST_ACK. No atribuye causa al alta ni a F-007. Se conserva la evidencia local y quedan pendientes la sesión perdida, CAT-19 con writer drain y E5. [RUN-17](../VALIDATION.md#run-17) acredita la búsqueda POS por código dentro de P4. [Decisiones de diseño](../TO_BE.md).
 
 [Validación RFA2](../VALIDATION.md) · SC-04. E2 identifica la frontera con dobles o pruebas locales. BLOCKED indica una frontera esencial sin evidencia aislada.
 
@@ -10,7 +10,7 @@ Productos es Owner (`frontend/src/features/catalog/ProductsPage.tsx:32–49`); P
 
 ## UC-CAT-01
 
-GET `/api/tenants/{tenantId}/branches/{branchId}/operational-products` · `backend/src/MediPOS.Api/Tenant/CatalogEndpoints.cs:18`. **E2 · IMPLEMENTADO · BLOCKED**. En POS abrir catálogo. Catálogo operativo de sucursal recibe filtros de consulta. OperationalCatalogQueries.cs:12–17 valida ProductSearch en la sede antes y después de leer; OperationalCatalogReader.cs:9–19 filtra productos activos por tenant, término/categoría y pagina. La respuesta sirve la grilla operativa sin escritura. Requisito FR-CAT-001.
+GET `/api/tenants/{tenantId}/branches/{branchId}/operational-products` · `backend/src/MediPOS.Api/Tenant/CatalogEndpoints.cs:18`. **E3 · IMPLEMENTADO · BLOCKED**. En POS abrir catálogo. Catálogo operativo de sucursal recibe filtros de consulta. OperationalCatalogQueries.cs:12–17 valida ProductSearch en la sede antes y después de leer; OperationalCatalogReader.cs:9–19 filtra productos activos por tenant, término/categoría y pagina. La respuesta sirve la grilla operativa sin escritura. Requisito FR-CAT-001. [RUN-21](../VALIDATION.md#run-21): GET real de Cajero excluye inactivo; grilla y stock no ejercitados.
 
 ## UC-CAT-02
 
@@ -22,7 +22,7 @@ PUT `/api/tenants/{tenantId}/products/{productId}/local-data` · `backend/src/Me
 
 ## UC-CAT-04
 
-GET `/api/tenants/{tenantId}/categories` · `backend/src/MediPOS.Api/Tenant/CatalogEndpoints.cs:29`. **E2 · IMPLEMENTADO · BLOCKED**. Cargar categorías en selector de alta/filtro. ProductsPage.tsx:58–65 pagina la consulta. CatalogDirectoryQueries.cs:23–24,47–54 exige Administración antes/después. CatalogDirectoryReader.cs:11–13 proyecta activas paginadas; el selector no modifica datos. Requisito FR-CAT-001.
+GET `/api/tenants/{tenantId}/categories` · `backend/src/MediPOS.Api/Tenant/CatalogEndpoints.cs:29`. **E4 · IMPLEMENTADO · BLOCKED**. Cargar categorías en selector de alta/filtro. ProductsPage.tsx:58–65 pagina la consulta. CatalogDirectoryQueries.cs:23–24,47–54 exige Administración antes/después. CatalogDirectoryReader.cs:11–13 proyecta activas paginadas; el selector no modifica datos. Requisito FR-CAT-001. [RUN-21](../VALIDATION.md#run-21): categoría administrativa usada en selector real; otras variantes sin promoción.
 
 ## UC-CAT-05
 
@@ -30,7 +30,7 @@ GET `/api/tenants/{tenantId}/global-products` · `backend/src/MediPOS.Api/Tenant
 
 ## UC-CAT-06
 
-GET `/api/tenants/{tenantId}/products` · [CatalogEndpoints](../../../../backend/src/MediPOS.Api/Tenant/CatalogEndpoints.cs). **E3 · IMPLEMENTADO · BLOCKED**. Abrir Mis productos, aplicar texto, categoría o estado y consultar páginas del resultado. CatalogDirectoryQueries revalida Administración después de leer. CatalogDirectoryReader aplica tenant, filtros y orden por ID antes de paginar. Sin filtros se conserva el arreglo y orden anterior, con evidencia E3 histórica. El filtro nuevo tiene evidencia local E2 y traducción Npgsql offline. P5 debe acreditar su ejecución real. FR-CAT-001/010, F-003.
+GET `/api/tenants/{tenantId}/products` · [CatalogEndpoints](../../../../backend/src/MediPOS.Api/Tenant/CatalogEndpoints.cs). **E4 · IMPLEMENTADO · BLOCKED**. Abrir Mis productos, aplicar texto, categoría o estado y consultar páginas del resultado. CatalogDirectoryQueries revalida Administración después de leer. CatalogDirectoryReader aplica tenant, filtros y orden por ID antes de paginar. Sin filtros se conserva el arreglo y orden anterior, con evidencia E3 histórica. El filtro nuevo tiene evidencia local E2 y traducción Npgsql offline. RUN-21 acredita el filtro en navegador y sus negativos por API. La revocación dinámica conserva evidencia previa con dobles. FR-CAT-001/010, F-003. [RUN-21](../VALIDATION.md#run-21): 51 filas, paginación, filtro y escape literal, 400/403 y consulta de segundo tenant.
 
 ## UC-CAT-07
 
@@ -42,7 +42,7 @@ GET `/api/tenants/{tenantId}/branches/{branchId}/products/search` · [CatalogEnd
 
 ## UC-CAT-09
 
-POST `/api/tenants/{tenantId}/products/local` · `backend/src/MediPOS.Api/Tenant/CatalogEndpoints.cs:48`. **E3 · IMPLEMENTADO · BLOCKED**. Como Owner, abre Nuevo producto, completa datos locales y guarda. CatalogEndpoints.cs:48–53 recibe LocalProductRequest. CreateLocalBusinessProductHandler.cs:15–48 verifica administración/licencia y categoría, construye datos de negocio y agrega producto y auditoría por BusinessProductStore; 201 devuelve identificador. Si se pierde respuesta, useCatalogWrite.ts conserva intención/código para contrastar con ficha, sin repetir alta.
+POST `/api/tenants/{tenantId}/products/local` · `backend/src/MediPOS.Api/Tenant/CatalogEndpoints.cs:48`. **E3 · IMPLEMENTADO · BLOCKED**. Como Owner, abre Nuevo producto, completa datos locales y guarda. CatalogEndpoints.cs:48–53 recibe LocalProductRequest. CreateLocalBusinessProductHandler.cs:15–48 verifica administración/licencia y categoría, construye datos de negocio y agrega producto y auditoría por BusinessProductStore; 201 devuelve identificador. Si se pierde respuesta, useCatalogWrite.ts conserva intención/código para contrastar con ficha, sin repetir alta. [RUN-21](../VALIDATION.md#run-21): CREATE FAIL POST_LOST_ACK; envío y commit sin confirmar.
 
 ## UC-CAT-10
 
@@ -86,11 +86,11 @@ POST `/api/tenants/{tenantId}/product-imports/{importJobId}/recover-interrupted`
 
 ## UC-CAT-20
 
-Cambiar vista y aplicar filtros sobre Mis productos. **E2 · IMPLEMENTADO · BLOCKED**. Elegir lista o tarjetas, preparar los filtros y pulsar Aplicar o Enter. Una sola consulta inicia desde offset cero y las siguientes mantienen esos filtros. Limpiar restaura el directorio. El PASS de la antigua vista por página sigue en RUN-04. Falta P5 del alcance ampliado. FR-CAT-010, F-003.
+Cambiar vista y aplicar filtros sobre Mis productos. **E4 · IMPLEMENTADO · BLOCKED**. Elegir lista o tarjetas, preparar los filtros y pulsar Aplicar o Enter. Una sola consulta inicia desde offset cero y las siguientes mantienen esos filtros. Limpiar restaura el directorio. El PASS de la antigua vista por página sigue en RUN-04. El filtro ampliado se acreditó en SEARCH. La vista de tarjetas queda fuera de ese escenario. FR-CAT-010, F-003. [RUN-21](../VALIDATION.md#run-21): filtro y limpieza en navegador real; variante tarjetas no recorrida.
 
 ## UC-CAT-21
 
-Recuperar escritura de producto. **E2 · IMPLEMENTADO · BLOCKED**. Tras alta incierta la persona vuelve a Mis productos, busca y verifica la ficha del código almacenado por identidad, tenant, sede y membresía. Tras una edición incierta verifica el ID original. Otra ficha conserva el bloqueo aunque se marque el checkbox. Las altas previas sin identificador verificable requieren soporte. El flujo no reenvía escrituras. F-007, [RUN-18](../VALIDATION.md#run-18).
+Recuperar escritura de producto. **E2 · IMPLEMENTADO · BLOCKED**. Tras alta incierta la persona vuelve a Mis productos, busca y verifica la ficha del código almacenado por identidad, tenant, sede y membresía. Tras una edición incierta verifica el ID original. Otra ficha conserva el bloqueo aunque se marque el checkbox. Las altas previas sin identificador verificable requieren soporte. El flujo no reenvía escrituras. F-007, [RUN-18](../VALIDATION.md#run-18). [RUN-21](../VALIDATION.md#run-21): REENTRY y RECONCILIATION no alcanzadas; F-007 conserva RED/GREEN local.
 
 ## UC-CAT-22
 

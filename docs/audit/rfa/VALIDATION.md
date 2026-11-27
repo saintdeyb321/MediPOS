@@ -1,5 +1,21 @@
 # RFA2 · Validación conductual y persistencia
 
+<a id="run-21"></a>
+## RUN-21 · Primera frontera fallida de P5
+
+[CI B-02 46015549281](https://github.com/saintdeyb321/MediPOS/actions/runs/46015549281), job 140561621805, intento 1, push del 27/11/2026, 14:23:50–14:27:39 UTC (229 s entre creación y actualización). SHA `1deb4dae9ce5f11c4f9fc0f374837c5d67e1d1d4`, build `e40191caae1b9b7295a27b34b2b3c9489d4a61cc1484178ae3d73c17d0985203`, PostgreSQL 18.7 (180007), origen HTTPS efímero y runtime `medipos_test_runtime`. Checkout, herramientas, React, restore/build E2E y Chromium completados. **Failure**, exit 1 en `Run preflight and P0–P5`. El build coincide con RUN-19. El SHA y las fronteras se registran por ejecución.
+
+| Frontera | Evidencia y aplicación por UC |
+|---|---|
+| P0–P4 PASS | Reiteran las aserciones delimitadas en [RUN-15](#run-15) y [RUN-17](#run-17), incluidos Caja/POS y Sencillo Owner. |
+| P5 SEED PASS | Completó el seed sintético y las sesiones Owner, Cajero y Owner de otro tenant. El alta del seed por handler no acredita el alta del formulario. |
+| P5 SEARCH PASS · CAT-06/20 E4 | Primera página de 50 sin coincidencia y segunda página con la única fila restante. En navegador, ingrediente, categoría y estado inactivo encuentran el producto y limpiar restituye la lista inicial. HTTP real acredita comodines literales, negativos por categoría/estado/offset, status inválido 400, Cajero y otro tenant 403 y lectura del producto propio en el segundo tenant. Lista/tarjetas, otros términos y revocación dinámica conservan sus fronteras previas. |
+| P5 SEARCH PASS · CAT-04 E4, CAT-01 E3 | Selector de categoría administrativa utilizable en navegador. Exclusión de inactivo para Cajero comprobada por GET operativo real, sin recorrido de grilla ni verificación de stock. |
+| P5 CREATE · CAT-09/21 | FORM alcanzado. `CREATE FAIL POST_LOST_ACK` delimita un bloque que incluye clic, solicitud interceptada, comprobación de respuesta, descarte del acuse y guarda posterior. El resumen no acredita envío, HTTP 201, commit, número de escrituras ni estado final de la guarda. Se mantienen E3 histórica del alta y E2 local de F-007. |
+| Resto de P5 | REENTRY y RECONCILIATION no alcanzadas. EDIT, ASSOCIATION, IMPORT y PERSISTENCE **NOT_RUN** en este run, incluida la lectura directa de RLS que omite filtros EF y el cotejo final de auditoría/stock. **P5 global FAIL**. |
+
+**RFA2_CIERRE_CON_LIMITACIONES.** Cierre de la investigación acordada, con cobertura funcional parcial. 156 UC en nueve familias: 2 E1, 25 E2, 103 E3, 26 E4 y 0 E5. Se conservan 19 PASS, 135 BLOCKED, 1 NOT_RUN y 1 N/A. RUN-20 mantiene las 6 Vitest y 17 xUnit con dobles y el límite de AVI-05. CAT-22 E1/N/A e INT-16 E1/NOT_RUN. Frontend integral 645/646 de RUN-13, DEV sin atribución y E5 pendiente. El siguiente diagnóstico pertenece a RFA4A. [Primera tarea propuesta](ROADMAP.md#primer-encargo-rfa4a)
+
 <a id="run-20"></a>
 ## RUN-20 · RFA2_CANDIDATO_CIERRE
 

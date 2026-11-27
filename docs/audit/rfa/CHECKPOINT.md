@@ -1,10 +1,18 @@
 # Checkpoint RFA
 
-## RFA2 · Candidato de cierre
+## RFA3 · Candidato de cierre
+
+- **RFA3_CANDIDATO_CIERRE.** Rama `ci/postgres-diagnostics-8bc6b4c`, HEAD `1deb4dae9ce5f11c4f9fc0f374837c5d67e1d1d4`. El diff desde `c521e9c5019b25371d45b9a661bb90588554e389` tiene 15 archivos de arnés y documentos. Sin cambios de aplicación frente a `52a5ced168dbef2e80145b4e9d115113f0a63755`. El MD de encargo preexistente sigue aparte.
+- **RFA2_CIERRE_CON_LIMITACIONES.** [RUN-21](VALIDATION.md#run-21) concilia P0–P4 y P5 SEED/SEARCH. 156 UC, nueve familias, 2 E1 / 25 E2 / 103 E3 / 26 E4 / 0 E5. Veredictos sin cambios. P5 FAIL en CREATE/POST_LOST_ACK y etapas posteriores no alcanzadas. Aserción individual y causa indeterminadas. F-007 sigue E2.
+- Análisis focalizado del arnés y contrato de alta, con los principios de ub-mode MIT ya leídos en RUN-20 (`3da62bf3fcfd2034de41f30d920d2739e566171f`). Sin instalación, pruebas ejecutadas ni CI. [F-008](FINDINGS.md#f-008--el-piloto-de-alta-local-falla-en-la-pérdida-inducida-del-acuse)
+- **Checks documentales PASS:** índice/matriz/fichas, decisión TO-BE para 156 UC, nueve familias, ocho hallazgos, 668 enlaces locales y `git diff --check`.
+- **Reanudación:** el operador revisa y decide si autoriza [el primer encargo RFA4A](ROADMAP.md#primer-encargo-rfa4a) en un runner aislado. Un solo intento de diagnóstico de alta con contraste de persistencia posterior y conservación de P0–P4. Frontend 645/646 de otro SHA, DEV sin atribución, E5 pendiente y producción NO-GO. L-06C–I siguen sin abrirse.
+
+## RFA2 · Candidato de cierre anterior a RUN-21
 
 - **RFA2_CANDIDATO_CIERRE**, aún parcial. Rama `ci/postgres-diagnostics-8bc6b4c`. HEAD documental `c521e9c5019b25371d45b9a661bb90588554e389`, aplicación `52a5ced168dbef2e80145b4e9d115113f0a63755`. [RUN-20](VALIDATION.md#run-20) detalla nueve familias, alcance, resultados y límites.
 - 156 UC, 2 E1 / 28 E2 / 103 E3 / 23 E4 / 0 E5. AVI-05 sube a E2 en el detalle aislado y mantiene BLOCKED para la validación real. Veredictos acumulados: 19 PASS / 135 BLOCKED / 1 NOT_RUN / 1 N/A. CAT-22 N/A e INT-16 NOT_RUN.
-- Publicar la instrumentación en la rama diagnóstica. Ese push inicia **B-02 isolated browser pilot** una sola vez. Compartir URL, intento y extracto saneado del resumen `Run preflight and P0–P5`, incluidos SHA/build, P0–P5 y DIAG. Esperar conciliación antes de RFA3 o RFA4. RUN-19 conserva FAIL de P5 sin causa, frontend integral 645/646, DEV sin atribución y producción NO-GO.
+- El operador publicó la instrumentación y suministró el resumen del único run. [RUN-21](VALIDATION.md#run-21) registra el resultado y el límite alcanzado.
 
 ## Cierre documental RFA0–RFA3 · 27/11/2026
 

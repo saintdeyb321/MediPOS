@@ -4,7 +4,7 @@ Corte del 26/11/2026 sobre `5d38898`. Estas son las decisiones de diseño y su e
 
 ## Decisión principal por caso
 
-Los números son los sufijos del prefijo UC de cada fila. KEEP conserva el comportamiento; validar exige cerrar una variante antes de aceptarlo. Una brecha necesita una decisión de producto aunque la implementación actual cumpla su contrato. Los cuatro grupos son excluyentes; una decisión KEEP tampoco otorga aceptación comercial.
+Los números son los sufijos del prefijo UC de cada fila. KEEP conserva el comportamiento; validar exige cerrar una variante antes de aceptarlo. Una brecha necesita una decisión de producto aunque la implementación actual cumpla su contrato. Los cuatro grupos son excluyentes; una decisión KEEP tampoco otorga aceptación comercial. Para CAT-06/20, la brecha AS-IS ya se corrigió y SEARCH acredita el alcance ensayado. Para CAT-09/21 falta el diagnóstico del alta, descrito en el backlog.
 
 | Familia y ficha | KEEP | Corregir o simplificar | Brecha por decidir | Validar antes de aceptar |
 |---|---|---|---|---|
@@ -35,8 +35,8 @@ Los números son los sufijos del prefijo UC de cada fila. KEEP conserva el compo
 ### Catálogo · encontrar y mantener un producto
 
 1. Personal operativo busca en su sede; el Owner abre mantenimiento para alta local o asociación global. Comprueba tipo, composición cuando corresponda, presentaciones, estado y precio. Cambia unidades con la versión leída. Una colisión requiere abrir la configuración vigente antes de otra edición.
-2. En Mis productos, Owner aplica texto, categoría y estado. El servidor filtra todo el catálogo privado antes de paginar. Cambiar filtros vuelve a la primera página y conserva lista/tarjetas. RUN-18 aporta verificación local. P5 falló sin aserción identificada en [RUN-19](VALIDATION.md#run-19). El buscador POS sigue su propio alcance de sede, surtido y permisos.
-3. Tras un alta incierta, volver al directorio, buscar y contrastar el producto con la intención original conservada en esa sesión del navegador. Tras editar se recupera el mismo ID. Un producto publicado globalmente aún requiere asociación local y el alta no crea stock. Importar Excel conserva la constancia y resultados por fila. Un trabajo interrumpido solo se recupera con la autorización y los bloqueos vigentes. Borrado físico CAT-22 permanece fuera de alcance.
+2. En Mis productos, Owner aplica texto, categoría y estado. El servidor filtra todo el catálogo privado antes de paginar. Cambiar filtros vuelve a la primera página y conserva lista/tarjetas. [RUN-21](VALIDATION.md#run-21) acredita SEARCH y confirma FAIL posterior en CREATE/POST_LOST_ACK. El buscador POS sigue su propio alcance de sede, surtido y permisos.
+3. Tras un alta incierta, volver al directorio, buscar y contrastar el producto con la intención original conservada en esa sesión del navegador. Tras editar se recupera el mismo ID. Si se pierde la sesión de pestaña y no se puede identificar el alta original, mantener la revisión de soporte. Cualquier constancia durable queda sujeta a decisión aparte. Una lectura vacía no autoriza reenviar. Un producto publicado globalmente aún requiere asociación local y el alta no crea stock. Importar Excel conserva la constancia y resultados por fila. Un trabajo interrumpido solo se recupera con la autorización y los bloqueos vigentes. Borrado físico CAT-22 permanece fuera de alcance.
 
 ### Compras e inventario · reencontrar una recepción y seguir el lote
 

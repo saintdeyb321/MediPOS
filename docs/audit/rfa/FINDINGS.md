@@ -2,7 +2,7 @@
 
 ## Hallazgos y seguimiento
 
-Los seis IDs originales se conservan. F-007 registra el defecto encontrado durante L-06B. Los párrafos bajo la tabla distinguen los resultados vigentes de la caracterización anterior. [Validación](VALIDATION.md) · [Aceptación por lote](ROADMAP.md).
+Los IDs F-001–007 se conservan. F-008 registra un bloqueo de verificación del alta. Los párrafos bajo la tabla distinguen resultados vigentes de caracterización histórica. [Validación](VALIDATION.md) · [Aceptación por lote](ROADMAP.md).
 
 | ID · tipo · prioridad | Actor y expectativa | Causa, confianza y alcance | Decisión mínima, prueba y riesgo de regresión |
 |---|---|---|---|
@@ -13,6 +13,7 @@ Los seis IDs originales se conservan. F-007 registra el defecto encontrado duran
 | F-005 · coste de lectura · P2 provisional | Personal de inventario cambia de existencias a lotes y necesita nombres legibles de su sede. FR-INV-001/FR-TEN-003 son invariantes, sin objetivo de latencia acordado. | Alta en la cuenta DOM 3/0/3 de RUN-09. Coste de red y demora percibida desconocidos. E3 verifica ámbito y cantidades de las lecturas, sin cronometrar el navegador. | L-04. Medir y acordar presupuesto antes de ampliar DTO. Eliminar lecturas solo si se conserva nombre, ámbito y paginación. Riesgo: reutilizar etiquetas de otra sede. |
 | F-006 · repetibilidad de pruebas · P2 provisional | QA navega por Transferencias o Plataforma. El control debe esperar el resultado de acceso o la carga del destinatario. Sin requisito FR de sincronización de tests. | Alta para los dos resultados discordantes RUN-03/05; causa de temporización específica y efecto en producto sin demostrar. RUN-10 tiene un FAIL frontend sin nombre. | L-05. Identificar el caso de CI y caracterizar las transiciones observables antes de ajustar esperas. Riesgo: esconder una carrera de autorización o duplicar el diagnóstico de un fallo desconocido. |
 | F-007 · recuperación de un alta · P2 | Owner vuelve después de perder el acuse de un alta. La conciliación debe conservar la intención original. | E2. El código interno quedaba solo en memoria y, tras recargar, se podía cerrar la recuperación con otra ficha del mismo tenant. | L-06B conserva el código en el contexto de la sesión del navegador. Otro producto mantiene el bloqueo. Se conserva la revisión humana del original. |
+| F-008 · diagnóstico de piloto · P2 | Owner confirma alta local con pérdida controlada del acuse. CAT-09/21, FR-CAT-001/003/007. | RUN-21 confirma el bloque fallido con confianza alta. La primera aserción que falla y la causa siguen indeterminadas. | RFA4A. Un solo intento aislado con señales sanitizadas por frontera y lectura posterior de producto/auditoría. |
 
 La evidencia de ejecución se vincula al [registro RFA2](VALIDATION.md). E2 se limita a las fronteras indicadas. Los diagnósticos originales siguen abajo.
 
@@ -48,6 +49,8 @@ La evidencia de ejecución se vincula al [registro RFA2](VALIDATION.md). E2 se l
 
 ## F-003 · El filtro de mantenimiento es por página
 
+**RUN-21 · SEARCH acreditado.** El filtro administrativo alcanza el producto de la segunda página usando ingrediente, categoría y estado en el navegador, con API respaldada por PostgreSQL. Los negativos de acceso y el escape literal se verifican por HTTP. El fallo posterior ocurre en CREATE. [Aserciones](VALIDATION.md#run-21)
+
 **Estado al cierre.** La búsqueda ampliada está en el baseline publicado y conserva la verificación local. P5 falló sin identificar qué aserción llegó a ejercitarse. El hallazgo histórico y la evidencia local siguen vigentes. [RUN-19](VALIDATION.md#run-19).
 
 **RUN-18 · Solución aprobada, candidato.** Mis productos combina filtros de texto, categoría y estado en SQL antes de paginar. La prueba con dobles encuentra la fila que antes quedaba en página 2 y verifica un nuevo GET desde offset cero. La comprobación real con PostgreSQL y navegador está preparada en P5. [Aserciones](VALIDATION.md#run-18).
@@ -80,6 +83,21 @@ La evidencia de ejecución se vincula al [registro RFA2](VALIDATION.md). E2 se l
 
 ## F-007 · Conciliación de alta con un producto distinto tras recarga
 
-El piloto P5 instrumentado delimitará la frontera de reentrada y conciliación de Catálogo. Aún no hay una aserción observada que vincule el FAIL de RUN-19 con F-007 ni F-003. [RUN-20](VALIDATION.md#run-20)
+RUN-21 delimita el fallo a `CREATE/POST_LOST_ACK`, antes de la reentrada. F-007 conserva su RED/GREEN local. La evidencia del piloto no permite atribuir este fallo a F-007. [RUN-21](VALIDATION.md#run-21)
 
 **RUN-18 · E2 RED/GREEN.** El código original vivía en el estado del hook. El marcador URL seguía presente después de recargar y quedaba vacía la comparación del código. La regresión observó el botón de conciliación habilitado con otra ficha. El candidato conserva el código original en `sessionStorage` por identidad, membresía, tenant y sede. Exige coincidencia y revisión explícita, conserva un único POST y deja bloqueadas las solicitudes anteriores sin un identificador verificable. Los endpoints de alta carecen de constancia transaccional por solicitud. [Aserciones y límites](VALIDATION.md#run-18).
+
+## F-008 · El piloto de alta local falla en la pérdida inducida del acuse
+
+**Hecho.** RUN-21 completó SEED y SEARCH y llegó al formulario Owner. `CatalogCreateFromUiAsync` deja `POST_LOST_ACK` activo desde justo antes de llamar a `LosePostAfterCommitAsync` hasta comprobar que el botón queda deshabilitado. En [el helper](../../../backend/tests/MediPOS.E2E/CashPilotTests.Pos.cs#L173), el clic debe activar un POST de URL exacta, el callback cuenta solicitudes, usa `route.FetchAsync` sin redirección, exige 201, lee el ID y resuelve la espera. El `finally` intenta abortar el acuse y la espera vence a los 20 s. La aserción UI ocurre después del retorno del helper, que puede haberse resuelto antes de finalizar `AbortAsync`. P3/P4 pasaron con el mismo helper en otros contratos con 200. No se conoce el último paso completado en CREATE.
+
+**Contrato.** [CreateProductForm](../../../frontend/src/features/catalog/CreateProductForm.tsx#L32) requiere revisión, validez y acceso para despachar. [useCatalogWrite](../../../frontend/src/features/catalog/useCatalogWrite.ts#L54) conserva la intención por sesión de pestaña y detiene el envío si no logra armarla. [catalogApi](../../../frontend/src/features/catalog/api.ts#L60) valida DTO/ámbito y [HttpClient](../../../frontend/src/shared/api/http.ts#L78) prepara CSRF, envía con cookies same-origin y trata la pérdida de respuesta de una escritura como incertidumbre. [CatalogEndpoints](../../../backend/src/MediPOS.Api/Tenant/CatalogEndpoints.cs#L48) devuelve 201 tras completar [el alta autorizada](../../../backend/src/MediPOS.Application/Modules/Catalog/CreateLocalBusinessProduct/CreateLocalBusinessProductHandler.cs#L19). Producto y auditoría se guardan en ámbito transaccional y el código interno es único por tenant. La unicidad rechaza un duplicado, mientras que la recuperación de F-007 depende de la intención de esa pestaña y carece de constancia durable de idempotencia.
+
+| Orden diagnóstico | Hipótesis por comprobar | Señal que la distingue |
+|---|---|---|
+| 1 | El clic no se ejecuta, la guarda/CSRF impide salir o la URL observada queda fuera de la ruta interceptada. | Separar localizador accionable, clic y evento de solicitud de navegador. Ausencia de POST y presencia sin intercepción son casos distintos. |
+| 2 | El POST llega con una respuesta distinta de 201 o el 201 no tiene ID válido para el helper. Un rechazo de autorización, validación, duplicado o fixture son posibilidades. | Registrar intercepción, categoría HTTP saneada y validación booleana del ID. Comparar con fixture y contrato sin publicar cuerpo ni código de producto. |
+| 3 | Fetch/reenvío o aborto falla. La espera puede resolverse antes de terminar el aborto y un fallo en el callback puede parecer timeout. | Distinguir entrada de callback, resultado upstream, finalización de aborto y timeout. Usar clasificación estática, preservando la excepción y la aserción originales. |
+| 4 | Con 201 y acuse descartado, el botón esperado cambia de nombre o estado, o el bloqueo no persiste. | Distinguir localizador del botón, marcador pendiente observado y estado bloqueado después de confirmar el descarte. Una consulta fixture separada determina si el alta persistió. |
+
+El orden sigue el camino de ejecución y no asigna probabilidades. No se observó pérdida de datos, duplicación ni causa de producto. [Prueba discriminante propuesta](ROADMAP.md#primer-encargo-rfa4a)
