@@ -1,5 +1,11 @@
 # Checkpoint RFA
 
+## RFA2 · Candidato de cierre
+
+- **RFA2_CANDIDATO_CIERRE**, aún parcial. Rama `ci/postgres-diagnostics-8bc6b4c`. HEAD documental `c521e9c5019b25371d45b9a661bb90588554e389`, aplicación `52a5ced168dbef2e80145b4e9d115113f0a63755`. [RUN-20](VALIDATION.md#run-20) detalla nueve familias, alcance, resultados y límites.
+- 156 UC, 2 E1 / 28 E2 / 103 E3 / 23 E4 / 0 E5. AVI-05 sube a E2 en el detalle aislado y mantiene BLOCKED para la validación real. Veredictos acumulados: 19 PASS / 135 BLOCKED / 1 NOT_RUN / 1 N/A. CAT-22 N/A e INT-16 NOT_RUN.
+- Publicar la instrumentación en la rama diagnóstica. Ese push inicia **B-02 isolated browser pilot** una sola vez. Compartir URL, intento y extracto saneado del resumen `Run preflight and P0–P5`, incluidos SHA/build, P0–P5 y DIAG. Esperar conciliación antes de RFA3 o RFA4. RUN-19 conserva FAIL de P5 sin causa, frontend integral 645/646, DEV sin atribución y producción NO-GO.
+
 ## Cierre documental RFA0–RFA3 · 27/11/2026
 
 - **RADIOGRAFÍA_DOCUMENTAL_CONSOLIDADA.** Rama `ci/postgres-diagnostics-8bc6b4c`, HEAD `52a5ced168dbef2e80145b4e9d115113f0a63755`. Se conserva el MD de L-06C aportado por el operador fuera de la carpeta de trabajo documental. [Entrada canónica](README.md).

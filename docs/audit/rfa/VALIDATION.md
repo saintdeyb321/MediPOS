@@ -1,5 +1,34 @@
 # RFA2 · Validación conductual y persistencia
 
+<a id="run-20"></a>
+## RUN-20 · RFA2_CANDIDATO_CIERRE
+
+HEAD documental `c521e9c5019b25371d45b9a661bb90588554e389`, aplicación `52a5ced168dbef2e80145b4e9d115113f0a63755`. El diff entre ambos solo contiene documentos. Se contrastaron los símbolos y tests pendientes frente a sus cortes de evidencia, sin transferir el resultado de una suite a otro SHA. El encargo local preexistente se conservó. Windows, .NET SDK 10.0.401 y Node 24.18.1. Docker no disponible. PostgreSQL, navegador real y DEV no se iniciaron.
+
+Se leyeron directamente [SKILL.md](https://raw.githubusercontent.com/unclebob/ub-mode/3da62bf3fcfd2034de41f30d920d2739e566171f/SKILL.md) y [LICENSE MIT](https://raw.githubusercontent.com/unclebob/ub-mode/3da62bf3fcfd2034de41f30d920d2739e566171f/LICENSE) de ub-mode fijados en `3da62bf3fcfd2034de41f30d920d2739e566171f`. Se aplicaron sus principios autorizados de reproducir antes de atribuir, observar conducta, conservar invariantes y limitar el alcance. Uso por lectura directa, sin instalación persistente ni herramientas auxiliares.
+
+| Familia | Frontera acreditada | Límite prioritario |
+|---|---|---|
+| Caja/POS | RUN-17/19, P1/P3/P4. Cierre 100→10, arqueo y reentrada, pago mixto, reversión de stock y auditoría. | Vaciado de borrador queda E2. Impresión física, otros actores y E5 pendientes. |
+| Catálogo | RUN-18, filtros/escapes, recuperación F-007, versiones e importación por fronteras locales. CAT-22 E1/N/A, borrado fuera de exposición. | P5 FAIL sin aserción (RUN-19). Falta E4 de búsqueda/alta/XLSX, recuperación sin sesión y CAT-19 con writer drain. |
+| Compras/Inventario | RUN-10/13, precondición concurrente, FEFO, constancia y aislamiento persistidos. RUN-20, el lector que devuelve una fila fuera de sede falla cerrado con dobles. | COM-11 sigue NOT_REPRODUCED en el histórico local. Código y prueba de Compras sin diff relevante entre RUN-13 y HEAD. Faltan aserción saneada y E4 financiero. F-004/005 siguen como brecha de consulta y medición, respectivamente. |
+| Transferencias | RUN-15/19 acreditan Sencillo Owner y una sola recuperación. RUN-10 acredita mercadería. RUN-20 valida cancelación con motivo/evento y separación origen/destino con revalidación bajo espera, en dobles. | Recepción parcial y competencia de mercadería en navegador, roles operativos de Sencillo y reentrada cruzada pendientes. |
+| Reportes/Comisiones | RUN-10, cálculo y reversión originales, alcance persistido. RUN-20, cancelar lecturas al cambiar contexto y descartar respuesta antigua en DOM, y revalidar membresía antes de soltar el reporte con dobles. | Falta conciliación E4 de pantalla/exportación y efecto neto entre sedes. |
+| Avisos/Auditoría | RUN-10, lectura por membresía y restricción de metadatos. RUN-20, AVI-05 abre lote/producto de la respuesta asignada, queda no leído, cierra sin GET adicional ni POST. | AVI-05 E2, aislado con doble. Pendiente ver el mismo límite con navegador/API/PostgreSQL y revocación efectiva. |
+| Acceso/estructura | RUN-10/13, último Owner y membresía persistida. RUN-19, sesión sintética/negativas. RUN-20, revalidación de identidad, licencia, membresía, horario y sucursal con dobles. | Reclamo, expiración, cambios de membresía y reentrada reales combinados con operación pendiente. |
+| Plataforma | RUN-10, autoridad separada y constancia del operador. RUN-20, un 503 de lista no oculta la revocación 403 en DOM. | Falta E4 de acciones de plataforma con identidades sintéticas separadas. Purga real fuera de alcance. |
+| Contingencia | RUN-10, constancias/conflictos persistidos. RUN-20, outbox aborta al desmontarse y conserva ámbito, sin mezclar otra sede. Pérdida de acceso al esperar lote bloquea escritura en aplicación con dobles. | INT-16 E1/NOT_RUN. Arranque aislado con PostgreSQL/credenciales sintéticas, PWA real, reconciliación offline y servicios externos pendientes. |
+
+**Ejecuciones focalizadas.**
+
+- Vitest en `frontend/`. `npm.cmd run test -- <caracterización AVI-05> src/features/transfers/TransfersPage.test.tsx src/features/reporting/ReportsPage.test.tsx src/features/platform/PlatformPage.test.tsx src/features/offline/WorkspaceOutboxSync.test.tsx -t 'opens and closes the assigned alert|persistent event|allows only actual endpoints|cancels old report reads|503 list hide|keeps original scope|different branch with the prior scope'`. **6 PASS, 0 FAIL, 50 excluidos por filtro**. La caracterización temporal añadió un solo caso en `src/features/notifications/Rfa2Avi05.temporary.test.tsx`. Reutilizó fixtures y añadió un aviso de otra sede, clic en detalle, lote/producto, estado no leído, cierre y conteo de GET/POST. Primer intento diagnóstico **1 FAIL** del selector exacto, que no encontró texto compartido con la fecha en el mismo párrafo. El selector por fragmento conserva la misma expectativa observable. Se retiró solo ese archivo temporal.
+- .NET con dobles. Build de UnitTests y ejecución del runner en proceso con `-filterVSTest` por `BranchLookupCannotAuthorize`, `RevalidatesIdentityLicense`, `SourceAndDestinationAssignments`, `AccessLostDuringLotWait`, `OwnerMembershipIsRevalidatedAfterTheReportRead` y `AStoreReturningRowsOutsideTheAuthorizedBranch`. **17 PASS, 0 FAIL, 0 SKIP**. Sin conexión a BD.
+- Arnés. El intento `dotnet restore tests/MediPOS.E2E/MediPOS.E2E.csproj --locked-mode` devolvió 1 localmente sin diagnóstico útil en la salida capturada. Se usaron los assets ya disponibles para `dotnet build tests/MediPOS.E2E/MediPOS.E2E.csproj --no-restore -p:BaseOutputPath=obj/b02-bin/ -m:1 --disable-build-servers`. Build PASS con 0 errores/advertencias. El workflow conserva restore bloqueado, preflight y gates. YAML cotejado con HEAD. El awk real aceptó **52** marcadores sintéticos y descartó **8** entradas no permitidas. P5 instrumentado **NOT_RUN** localmente.
+
+**Diagnóstico de un único run posterior.** La salida admite `B02 P5 DIAG <ESCENARIO> START|PASS` y `B02 P5 DIAG <ESCENARIO> FAIL <PUNTO>` para pares enumerados. Los escenarios son SEED, SEARCH, CREATE, EDIT, ASSOCIATION, IMPORT y PERSISTENCE. El último START sin PASS y el par FAIL identifican la primera frontera y el bloque del test. El arnés relanza la excepción original. El resumen publica exclusivamente las líneas saneadas. El gate previo P0–P5 decide el resultado.
+
+**Siguiente acción.** El operador publica el candidato en `ci/postgres-diagnostics-8bc6b4c`. El push activa **B-02 isolated browser pilot** una sola vez. Entregar el extracto de `Run preflight and P0–P5` en el resumen del run con URL/attempt, SHA/build, versión de PostgreSQL, marcadores P0–P5 y DIAG. Si falta un FAIL diagnóstico, registrar la última frontera alcanzada. Conciliar el extracto antes de dar cierre a RFA2. Frontend integral 645/646, E5 pendiente y producción NO-GO.
+
 <a id="run-19"></a>
 ## RUN-19 · B-02 del candidato L-06B
 

@@ -30,7 +30,7 @@ POST `/api/tenants/{tenantId}/commissions/rules/{ruleId}/deactivate` · `backend
 
 ## UC-REP-06
 
-GET `/api/tenants/{tenantId}/reports/commissions` · `backend/src/MediPOS.Api/Tenant/CommissionEndpoints.cs:36`. **E3 · IMPLEMENTADO · PASS**. Comisiones devengadas y reversiones. OwnerCommissionsReportReader.cs:10–24 selecciona ámbito/ventana y pagina por confirmación, venta y línea. GetOwnerCommissionsReportHandler.cs:21–38 revalida Owner y devuelve el total/filas del reader. Consumo por filtro aplicado. Requisito FR-TEN-004.
+GET `/api/tenants/{tenantId}/reports/commissions` · `backend/src/MediPOS.Api/Tenant/CommissionEndpoints.cs:36`. **E3 · IMPLEMENTADO · PASS**. Comisiones devengadas y reversiones. OwnerCommissionsReportReader.cs:10–24 selecciona ámbito/ventana y pagina por confirmación, venta y línea. GetOwnerCommissionsReportHandler.cs:21–38 revalida Owner y devuelve el total/filas del reader. Consumo por filtro aplicado. Requisito FR-TEN-004. [RUN-20](../VALIDATION.md#run-20): revocación de membresía entre lectura y respuesta bloquea la entrega (aplicación con dobles).
 
 ## UC-REP-07
 
@@ -70,7 +70,7 @@ Calcular y revertir comisión durante venta. **E3 · IMPLEMENTADO · PASS**. Sin
 
 ## UC-REP-16
 
-Filtrar consulta, paginar y exportar. **E3 · IMPLEMENTADO · BLOCKED**. 1. Elegir reporte/periodo/sede. 2. Aplicar filtros. 3. Paginar o descargar cuando se admite. ReportsPage.tsx:34–54 separa borrador y filtros aplicados, scoping y exportación del conjunto aplicado, no de la sola página. Errores de consulta/exportación tienen estados separados.
+Filtrar consulta, paginar y exportar. **E3 · IMPLEMENTADO · BLOCKED**. 1. Elegir reporte/periodo/sede. 2. Aplicar filtros. 3. Paginar o descargar cuando se admite. ReportsPage.tsx:34–54 separa borrador y filtros aplicados, scoping y exportación del conjunto aplicado, no de la sola página. Errores de consulta/exportación tienen estados separados. [RUN-20](../VALIDATION.md#run-20): lecturas antiguas canceladas y respuesta de sede previa descartada al cambiar contexto (DOM).
 
 
 ## UC-REP-17

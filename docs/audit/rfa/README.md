@@ -2,9 +2,9 @@
 
 ## Corte vigente · 27/11/2026
 
-**RADIOGRAFÍA_DOCUMENTAL_CONSOLIDADA** sobre `52a5ced168dbef2e80145b4e9d115113f0a63755`, rama `ci/postgres-diagnostics-8bc6b4c`. RFA0–RFA1 inventariados y RFA3 consolidada. RFA2 **PARCIAL**. Los 156 UC en nueve familias tienen 3 E1, 27 E2, 103 E3, 23 E4 y 0 E5. Veredictos acumulados: 19 PASS, 135 BLOCKED, 1 NOT_RUN y 1 N/A.
+**RADIOGRAFÍA_DOCUMENTAL_CONSOLIDADA** sobre `52a5ced168dbef2e80145b4e9d115113f0a63755`, rama `ci/postgres-diagnostics-8bc6b4c`. RFA0–RFA1 inventariados y RFA3 consolidada. **RFA2_CANDIDATO_CIERRE**, todavía parcial. Los 156 UC en nueve familias tienen 2 E1, 28 E2, 103 E3, 23 E4 y 0 E5. Veredictos acumulados: 19 PASS, 135 BLOCKED, 1 NOT_RUN y 1 N/A. [Evidencia por familia](VALIDATION.md#run-20)
 
-**Gates independientes.** P0–P4 PASS en el baseline. P5 FAIL sin causa identificada. Frontend integral 645/646, E5 pendiente y producción NO-GO. Las correcciones futuras están suspendidas. [RUN-19](VALIDATION.md#run-19) · [Checkpoint](CHECKPOINT.md)
+**Gates independientes.** P0–P4 PASS en el baseline. P5 FAIL sin causa identificada y un candidato diagnóstico compilado pendiente de CI. Frontend integral 645/646, E5 pendiente y producción NO-GO. [RUN-19](VALIDATION.md#run-19) · [Checkpoint](CHECKPOINT.md)
 
 ## Cómo usar esta radiografía
 

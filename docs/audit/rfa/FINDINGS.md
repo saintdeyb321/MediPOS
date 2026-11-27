@@ -80,4 +80,6 @@ La evidencia de ejecución se vincula al [registro RFA2](VALIDATION.md). E2 se l
 
 ## F-007 · Conciliación de alta con un producto distinto tras recarga
 
+El piloto P5 instrumentado delimitará la frontera de reentrada y conciliación de Catálogo. Aún no hay una aserción observada que vincule el FAIL de RUN-19 con F-007 ni F-003. [RUN-20](VALIDATION.md#run-20)
+
 **RUN-18 · E2 RED/GREEN.** El código original vivía en el estado del hook. El marcador URL seguía presente después de recargar y quedaba vacía la comparación del código. La regresión observó el botón de conciliación habilitado con otra ficha. El candidato conserva el código original en `sessionStorage` por identidad, membresía, tenant y sede. Exige coincidencia y revisión explícita, conserva un único POST y deja bloqueadas las solicitudes anteriores sin un identificador verificable. Los endpoints de alta carecen de constancia transaccional por solicitud. [Aserciones y límites](VALIDATION.md#run-18).

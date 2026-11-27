@@ -85,7 +85,7 @@ GET `/api/me/tenants` · `backend/src/MediPOS.Api/Tenant/TenantEndpoints.cs:16`.
 
 ## UC-ACC-18
 
-GET `/api/tenants/{tenantId}/access` · `backend/src/MediPOS.Api/Tenant/TenantEndpoints.cs:20`. **E3 · IMPLEMENTADO · BLOCKED**. Al abrir o cambiar botica/sede, verifica acceso antes de entrar. ResolveAccessContextHandler.cs:6–19 usa sesión; OperationalAccessReader.cs:10–40 selecciona tenant y compone membresía, licencia, sede asignada y horario bajo alcance RLS. EvaluateOperationalAccess.cs:36–58 decide causas de rechazo o admisión, incluidas excepciones Owner. React revalida al cambiar contexto.
+GET `/api/tenants/{tenantId}/access` · `backend/src/MediPOS.Api/Tenant/TenantEndpoints.cs:20`. **E3 · IMPLEMENTADO · BLOCKED**. Al abrir o cambiar botica/sede, verifica acceso antes de entrar. ResolveAccessContextHandler.cs:6–19 usa sesión; OperationalAccessReader.cs:10–40 selecciona tenant y compone membresía, licencia, sede asignada y horario bajo alcance RLS. EvaluateOperationalAccess.cs:36–58 decide causas de rechazo o admisión, incluidas excepciones Owner. React revalida al cambiar contexto. [RUN-20](../VALIDATION.md#run-20): prueba de política compartida con cambios de identidad, licencia, membresía, horario y sede (dobles). Alcance de la política, sin verificar contrato HTTP nuevo.
 
 ## UC-ACC-19
 

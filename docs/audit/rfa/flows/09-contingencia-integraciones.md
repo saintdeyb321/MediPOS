@@ -54,7 +54,7 @@ Preparar o bloquear dispositivo PWA. **E2 · IMPLEMENTADO · BLOCKED**. Desde Co
 
 ## UC-INT-12
 
-Encolar venta local, retomar y conciliar. **E3 · IMPLEMENTADO · BLOCKED**. Registra venta provisional offline y luego sincroniza desde la misma identidad. workflow.ts:83–117 serializa evento v1 con UUID y hash y revalida acceso al reconectar; storage.ts:71–110 guarda sobre, acuses por scope, diferimiento y estados. Procesar un rechazo o conflicto no lo vuelve venta confirmada. Reabrir conserva el evento original y aplica UC-INT-06.
+Encolar venta local, retomar y conciliar. **E3 · IMPLEMENTADO · BLOCKED**. Registra venta provisional offline y luego sincroniza desde la misma identidad. workflow.ts:83–117 serializa evento v1 con UUID y hash y revalida acceso al reconectar; storage.ts:71–110 guarda sobre, acuses por scope, diferimiento y estados. Procesar un rechazo o conflicto no lo vuelve venta confirmada. Reabrir conserva el evento original y aplica UC-INT-06. [RUN-20](../VALIDATION.md#run-20): outbox mantiene ámbito y aborta al desmontar; no mezcla sucursales (DOM). Si pierde acceso al esperar lote, no escribe (aplicación con dobles).
 
 ## UC-INT-13
 

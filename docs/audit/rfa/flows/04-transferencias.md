@@ -52,11 +52,11 @@ POST `/api/tenants/{tenantId}/transfers/{transferId}/approve` · `backend/src/Me
 
 ## UC-TRA-09
 
-POST `/api/tenants/{tenantId}/transfers/{transferId}/cancel` · `backend/src/MediPOS.Api/Tenant/TransferEndpoints.cs:34`. **E3 · IMPLEMENTADO · BLOCKED**. Elegir cancelar y motivo antes de despacho. CancelTransferHandler.cs:17–23 admite requested/approved; TransferOperation.cs:22–35 verifica acceso de transición dentro del bloqueo. TransferTransaction.cs:66–79 guarda motivo, evento y auditoría. Tras despachar falta transición cancelar y la API lo niega.
+POST `/api/tenants/{tenantId}/transfers/{transferId}/cancel` · `backend/src/MediPOS.Api/Tenant/TransferEndpoints.cs:34`. **E3 · IMPLEMENTADO · BLOCKED**. Elegir cancelar y motivo antes de despacho. CancelTransferHandler.cs:17–23 admite requested/approved; TransferOperation.cs:22–35 verifica acceso de transición dentro del bloqueo. TransferTransaction.cs:66–79 guarda motivo, evento y auditoría. Tras despachar falta transición cancelar y la API lo niega. [RUN-20](../VALIDATION.md#run-20): cancelación anterior al despacho, con motivo y evento (DOM con doble).
 
 ## UC-TRA-10
 
-POST `/api/tenants/{tenantId}/transfers/{transferId}/dispatch` · `backend/src/MediPOS.Api/Tenant/TransferEndpoints.cs:39`. **E3 · IMPLEMENTADO · BLOCKED**. En origen con aprobación, elegir lotes y confirmar despacho. TransferOperation.cs:22–35 revalida actor de despacho tras bloquear. TransferTransaction.cs:46–67 bloquea lotes y conserva custodias y movimientos. DispatchTransferHandler.cs:18–33 exige approved; acuse in_transit.
+POST `/api/tenants/{tenantId}/transfers/{transferId}/dispatch` · `backend/src/MediPOS.Api/Tenant/TransferEndpoints.cs:39`. **E3 · IMPLEMENTADO · BLOCKED**. En origen con aprobación, elegir lotes y confirmar despacho. TransferOperation.cs:22–35 revalida actor de despacho tras bloquear. TransferTransaction.cs:46–67 bloquea lotes y conserva custodias y movimientos. DispatchTransferHandler.cs:18–33 exige approved; acuse in_transit. [RUN-20](../VALIDATION.md#run-20): el puerto de aplicación vuelve a verificar acceso durante la espera de lotes (dobles).
 
 ## UC-TRA-11
 

@@ -26,7 +26,7 @@ POST `/api/tenants/{tenantId}/notifications/{notificationId}/read` · `backend/s
 
 ## UC-AVI-05
 
-Abrir detalle de aviso. **E1 · IMPLEMENTADO · BLOCKED**. Abrir drawer desde una fila y leer lote, mensaje y riesgo. NotificationsPage.tsx presenta los campos de la respuesta previa; no hay escritura por abrir y el estado accionable no se deduce de leído.
+Abrir detalle de aviso. **E2 · IMPLEMENTADO · BLOCKED**. Abrir drawer desde una fila y leer lote, mensaje y riesgo. NotificationsPage.tsx presenta los campos de la respuesta previa; no hay escritura por abrir y el estado accionable no se deduce de leído. [RUN-20](../VALIDATION.md#run-20): detalle acotado al aviso cargado de sede asignada, abrir/cerrar sin GET adicional ni POST (DOM E2); API, RLS y revocación real pendientes.
 
 ## UC-AVI-06
 

@@ -74,7 +74,7 @@ POST `/platform/catalog/categories` · `backend/src/MediPOS.Api/Platform/Platfor
 
 ## UC-PLA-17
 
-Navegar las seis áreas administrativas. **E2 · IMPLEMENTADO · BLOCKED**. Navegar Inicio/Boticas/Propietarios/Licencias/Catálogo/Mi cuenta. PlatformPage.tsx:24–32,50–105 conserva coordinador; usePlatformConsole.ts:42–53 cancela consultas fuera de área. Pendientes mantienen URL.
+Navegar las seis áreas administrativas. **E2 · IMPLEMENTADO · BLOCKED**. Navegar Inicio/Boticas/Propietarios/Licencias/Catálogo/Mi cuenta. PlatformPage.tsx:24–32,50–105 conserva coordinador; usePlatformConsole.ts:42–53 cancela consultas fuera de área. Pendientes mantienen URL. [RUN-20](../VALIDATION.md#run-20): un 503 de lista no oculta la denegación 403 concurrente (DOM).
 
 ## UC-PLA-18
 

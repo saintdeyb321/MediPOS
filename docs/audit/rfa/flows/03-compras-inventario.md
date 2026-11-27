@@ -58,7 +58,7 @@ POST `/api/tenants/{tenantId}/purchases/{purchaseId}/confirm` · `backend/src/Me
 
 ## UC-COM-12
 
-GET `/api/tenants/{tenantId}/branches/{branchId}/purchases/search` · `backend/src/MediPOS.Api/Tenant/PurchasingEndpoints.cs:42`. **E3 · IMPLEMENTADO · BLOCKED**. Buscar por referencia y abrir fila; no es clave única ni historial. FindPurchasesByDocumentReferenceHandler.cs:11–27 valida permiso Purchasing, trim/paginación y ámbito de resultado antes/después de leer. PurchasingStore.cs:84–90 compara igualdad documental y filtra sede. No hay consulta de historial general en el mapa. Un resultado por referencia no prueba identidad de una operación incierta. Requisito FR-PUR-004. Indicio F-004.
+GET `/api/tenants/{tenantId}/branches/{branchId}/purchases/search` · `backend/src/MediPOS.Api/Tenant/PurchasingEndpoints.cs:42`. **E3 · IMPLEMENTADO · BLOCKED**. Buscar por referencia y abrir fila; no es clave única ni historial. FindPurchasesByDocumentReferenceHandler.cs:11–27 valida permiso Purchasing, trim/paginación y ámbito de resultado antes/después de leer. PurchasingStore.cs:84–90 compara igualdad documental y filtra sede. No hay consulta de historial general en el mapa. Un resultado por referencia no prueba identidad de una operación incierta. Requisito FR-PUR-004. Indicio F-004. [RUN-20](../VALIDATION.md#run-20): filas fuera del ámbito que retorna el puerto provocan fallo cerrado (xUnit con dobles).
 
 ## UC-COM-13
 
