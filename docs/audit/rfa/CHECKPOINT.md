@@ -1,5 +1,11 @@
 # Checkpoint RFA
 
+## RFA4 · B-02
+
+- Baseline `781277c0032e8d4f364893191137254b3e024c2e`. Composición reutilizable implementada en `backend/tests/MediPOS.E2E`. Reutiliza fixture, seed, host y cookie/CSRF. Pilotos secuenciales P0→P3 preparados. [RUN-14](VALIDATION.md#run-14).
+- **B02_CANDIDATO_PENDIENTE_RUNNER.** Restore en modo bloqueado por lockfile, compilaciones y preflight local aprobados. P0–P3 NOT_RUN por Docker ausente. L-01 pendiente GET HTTP+PostgreSQL. F-001 mantiene E3 exacta de RUN-13 y reentrada E4 pendiente. Frontend permanece en 645/646 en RUN-13. RFA2 parcial.
+- Próximo paso del operador: revisar y publicar el candidato. Ejecutar **B-02 isolated browser pilot** sobre su SHA si el workflow ya está registrado en la rama por defecto, o seguir los comandos del [arnés](../../../backend/tests/MediPOS.E2E/README.md) en runner Linux aislado. Reconciliar los hitos y efectos por UC antes de autorizar L-06A.
+
 ## RFA4 · L-05B y cobertura global
 
 - HEAD `e2ffd12f577234c943237e71361a8ee0716a8eb8`, rama `ci/postgres-diagnostics-8bc6b4c`. RUN-13 importado del MD. PostgreSQL 18.7 acredita el caso exacto F-001 y el estado L-01 por `StatusAsync`. Pendientes GET respaldado por PostgreSQL y B-02/E4. CI frontend 645/646.

@@ -29,6 +29,7 @@ public sealed class PostgreSqlFixture : IAsyncLifetime
 
     public string CatalogReviewConnectionString => _catalogReviewConnectionString ?? throw new InvalidOperationException("Fixture has not started.");
     public string CatalogPublicationConnectionString => _catalogPublicationConnectionString ?? throw new InvalidOperationException("Fixture has not started.");
+    internal int BrowserServerVersion { get; private set; }
 
     public MediPosDbContext CreateContext(Guid? tenantId = null) => CreateScopedContext(ConnectionString, tenantId);
 
@@ -44,15 +45,41 @@ public sealed class PostgreSqlFixture : IAsyncLifetime
         return new MediPosDbContext(new DbContextOptionsBuilder<MediPosDbContext>().UseNpgsql(connectionString).Options, tenantContext);
     }
 
-    public async ValueTask InitializeAsync()
+    public ValueTask InitializeAsync() => StartAsync(isolatedBrowser: false);
+
+    internal ValueTask StartForBrowserAsync() => StartAsync(isolatedBrowser: true);
+
+    private async ValueTask StartAsync(bool isolatedBrowser)
     {
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
         timeout.CancelAfter(TimeSpan.FromMinutes(2));
-        _container = new PostgreSqlBuilder("postgres:18-alpine")
-            .WithPassword(Guid.NewGuid().ToString("N"))
-            .Build();
+        var builder = new PostgreSqlBuilder("postgres:18-alpine").WithPassword(Guid.NewGuid().ToString("N"));
+        var database = "medipos_e2e_" + Guid.NewGuid().ToString("N");
+        if (isolatedBrowser)
+        {
+            var endpoint = OperatingSystem.IsWindows() ? "npipe://./pipe/docker_engine" : "unix:///var/run/docker.sock";
+            builder = builder.WithDockerEndpoint(endpoint).WithName(database).WithDatabase(database)
+                .WithCreateParameterModifier(request =>
+                {
+                    var bindings = request.HostConfig?.PortBindings
+                        ?? throw new InvalidOperationException("B-02 requires a local PostgreSQL port binding.");
+                    var binding = bindings["5432/tcp"].Single();
+                    binding.HostIP = "127.0.0.1";
+                });
+        }
+        _container = builder.Build();
         await _container.StartAsync(timeout.Token);
 
+        if (isolatedBrowser)
+        {
+            var target = new NpgsqlConnectionStringBuilder(_container.GetConnectionString());
+            Assert.Matches("^[a-f0-9]{64}$", _container.Id);
+            Assert.Equal(database, target.Database);
+            Assert.True(target.Host is "localhost" or "127.0.0.1");
+            Assert.Equal(_container.GetMappedPublicPort(5432), target.Port);
+            Assert.True(target.Port >= 1024 && target.Port != 5432);
+            await VerifyBrowserTargetAsync(target.ConnectionString, database, runtime: false, timeout.Token);
+        }
         await using (var context = CreateConstraintContext())
         {
             Assert.Empty(await context.Database.GetAppliedMigrationsAsync(timeout.Token));
@@ -119,6 +146,8 @@ public sealed class PostgreSqlFixture : IAsyncLifetime
             Username = "medipos_test_runtime",
             Password = password,
         }.ConnectionString;
+        if (isolatedBrowser)
+            BrowserServerVersion = await VerifyBrowserTargetAsync(_runtimeConnectionString, database, runtime: true, timeout.Token);
         var catalogPassword = Guid.NewGuid().ToString("N");
         command.CommandText = $"CREATE ROLE medipos_test_catalog_platform LOGIN NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE PASSWORD '{catalogPassword}'";
         await command.ExecuteNonQueryAsync(timeout.Token);
@@ -137,6 +166,27 @@ public sealed class PostgreSqlFixture : IAsyncLifetime
         { Username = "medipos_test_catalog_reviewer", Password = reviewPassword }.ConnectionString;
         _catalogPublicationConnectionString = new NpgsqlConnectionStringBuilder(_container.GetConnectionString())
         { Username = "medipos_test_catalog_publisher", Password = publicationPassword }.ConnectionString;
+    }
+
+    private static async Task<int> VerifyBrowserTargetAsync(string connectionString, string database, bool runtime, CancellationToken token)
+    {
+        await using var connection = new NpgsqlConnection(connectionString);
+        await connection.OpenAsync(token);
+        await using var command = connection.CreateCommand();
+        command.CommandText = """
+            SELECT current_database(), current_setting('server_version_num')::integer, current_user,
+                rolsuper, rolbypassrls, rolcreatedb, rolcreaterole
+            FROM pg_roles WHERE rolname = current_user
+            """;
+        await using var row = await command.ExecuteReaderAsync(token);
+        Assert.True(await row.ReadAsync(token));
+        Assert.Equal(database, row.GetString(0));
+        var version = row.GetInt32(1);
+        Assert.InRange(version, 180000, 189999);
+        Assert.Equal(runtime ? "medipos_test_runtime" : "postgres", row.GetString(2));
+        if (runtime)
+            for (var column = 3; column <= 6; column++) Assert.False(row.GetBoolean(column));
+        return version;
     }
 
     public async ValueTask DisposeAsync()

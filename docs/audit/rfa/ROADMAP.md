@@ -63,6 +63,8 @@ La [matriz](MATRIX.csv) y el [TO-BE](TO_BE.md) definen el inventario y sus decis
 
 ### Habilitador común B-02 · encargo futuro
 
+**Candidato implementado.** [Guía del arnés y ejecución manual](../../../backend/tests/MediPOS.E2E/README.md) · [RUN-14](VALIDATION.md#run-14). El piloto está NOT_RUN. Acreditar P0/P1 y al menos un piloto E4 antes de declarar B-02 validado. L-06A–I conservan su aprobación individual.
+
 Solicitar una sola aprobación para preparar y reutilizar navegador, API y PostgreSQL efímero con autenticación sintética. El preflight debe acreditar SHA/build, identidad del contenedor/BD, roles mínimos con RLS, sesiones de prueba y dos tenants/sedes. Usar puertos y perfil exclusivos, impedir conexión a DEV o producción y tráfico hacia OAuth, CPE u otros servicios reales. Limitar la purga a una prueba sintética específicamente autorizada. Registrar alcance y evidencias saneadas y limpiar solo recursos del fixture. Reutilizar la misma composición para los nueve cortes; su diseño e implementación requieren un encargo propio.
 
 ## L-07 · Cierre de evidencia y decisión de release

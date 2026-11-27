@@ -1,5 +1,27 @@
 # RFA2 · Validación conductual y persistencia
 
+<a id="run-14"></a>
+## RUN-14 · B-02 · Candidato local
+
+Baseline `781277c0032e8d4f364893191137254b3e024c2e`. Se implementó [un proyecto E2E opt-in](../../../backend/tests/MediPOS.E2E/README.md) fuera de la solución principal. Reutiliza la API con sus guardas reales y el fixture PostgreSQL 18. El workflow manual separado prepara Chromium y registra SHA, manifiesto, motor, origen, rol y fases.
+
+| Control | Resultado local |
+|---|---|
+| NuGet | `dotnet restore tests/MediPOS.E2E/MediPOS.E2E.csproj --locked-mode`, PASS con lockfile. |
+| Compilación | `dotnet build tests/MediPOS.E2E/MediPOS.E2E.csproj --no-restore -p:BaseOutputPath=obj/b02-bin/ -m:1 --disable-build-servers`, PASS, 0 errores y 0 advertencias. |
+| Preflight local | Runner xUnit en proceso, filtro `FullyQualifiedName~MediPOS.E2E.BrowserPreflightTests`. 9 PASS / 0 FAIL / 0 SKIP. Rechazo de overrides ambientales y admisión de entradas propias. |
+| React | `npm.cmd run build -- --outDir node_modules/.cache/medipos-b02-build`, PASS. Vite avisó que un chunk superó 500 kB después de minificar. |
+| Runner manual | YAML, límites y permisos revisados localmente. Ejecución GitHub pendiente. Se requiere registro en rama por defecto para dispatch, o la alternativa de runner aislado de la guía. |
+
+| Piloto implementado | UC y frontera | Estado |
+|---|---|---|
+| P0 | ACC-15/17, INT-02, sesión real con identidad sintética, React compilado, readiness, 401/403 y CSRF, cero cajas creadas en ambos tenants | NOT_RUN |
+| P1 | CAJ-02/04, apertura desde UI, 200/open/null de la misma caja y fila real, rechazo por sede/tenant | NOT_RUN |
+| P2 | TRA-01/03/04/13, fondos insuficientes sin efecto, acuse perdido inducido, constancia original, única recepción y saldos auditados | NOT_RUN |
+| P3 | CAJ-05/06/07/17, cierre 100→10, −90, rechazo de segundo cierre, una auditoría, reentrada con/sin URL | NOT_RUN |
+
+Docker no está instalado en el host de esta sesión. El piloto necesita el entorno conjunto para iniciar y no aporta una ejecución E3/E4 nueva. Se conservan los niveles/veredictos de la matriz y los resultados de RUN-13. El FAIL de Compras permanece separado, sin resultado de reejecución suministrado. Estado `B02_CANDIDATO_PENDIENTE_RUNNER`.
+
 <a id="run-13"></a>
 ## RUN-13 · CI y diagnóstico local de Compras
 
