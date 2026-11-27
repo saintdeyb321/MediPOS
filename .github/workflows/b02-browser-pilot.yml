@@ -2,6 +2,11 @@ name: B-02 isolated browser pilot
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - ci/postgres-diagnostics-8bc6b4c
+    paths:
+      - .github/workflows/b02-browser-pilot.yml
 
 permissions:
   contents: read
