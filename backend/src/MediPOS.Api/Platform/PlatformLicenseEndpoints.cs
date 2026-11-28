@@ -34,9 +34,14 @@ public static partial class PlatformLicenseEndpoints
         var group = app.MapGroup("/platform/tenants/{tenantId}/licenses/{licenseId}").RequireAuthorization();
         group.MapPost("/renew", (HttpContext context, RenewLicenseHandler handler) => Execute<RenewRequest>(context, async (request, tenant, license, actor, token) =>
         {
-            if (!DateTimeOffset.TryParseExact(request.ExpiresAt, DateFormats, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out var expires))
-                throw new HttpBoundaryException(400, "platform.invalid_json");
-            return await handler.HandleAsync(new(tenant, license, expires, actor), token);
+            if (request.TermMonths is { } months)
+            {
+                if (!LicenseTerm.IsPlan(months) || request.ExpiresAt is not null)
+                    throw new HttpBoundaryException(400, "platform.invalid_json");
+                return await handler.HandleAsync(new(tenant, license, ParseDate(request.ExpectedExpiresAt), actor, months), token);
+            }
+            if (request.ExpectedExpiresAt is not null) throw new HttpBoundaryException(400, "platform.invalid_json");
+            return await handler.HandleAsync(new(tenant, license, ParseDate(request.ExpiresAt), actor), token);
         })).WithName("medipos.platform.license.renew");
         group.MapPost("/suspend", (HttpContext context, SuspendLicenseHandler handler) => Execute<SuspendRequest>(context,
             (_, tenant, license, actor, token) => handler.HandleAsync(new(tenant, license, actor), token)))
@@ -90,15 +95,31 @@ public static partial class PlatformLicenseEndpoints
             throw new HttpBoundaryException(400, "platform.idempotency_key_invalid");
         var request = await Read<CreateRequest>(context);
         if (requireOwner && string.IsNullOrWhiteSpace(request.OwnerEmail)) throw new HttpBoundaryException(400, "platform.owner_email_required");
-        if (!DateTimeOffset.TryParseExact(request.StartsAt, DateFormats, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out var starts) ||
-            !DateTimeOffset.TryParseExact(request.ExpiresAt, DateFormats, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out var expires))
-            throw new HttpBoundaryException(400, "platform.invalid_json");
-        var status = Status(request.Status);
+        var starts = ParseDate(request.StartsAt);
+        DateTimeOffset expires;
+        LicenseStatus status;
+        if (request.TermMonths is { } months)
+        {
+            if (!requireOwner || request.ExpiresAt is not null || request.Status is not null || (months != 0 && !LicenseTerm.IsPlan(months)))
+                throw new HttpBoundaryException(400, "platform.invalid_json");
+            try { expires = LicenseTerm.Expiration(starts, months); }
+            catch (ArgumentException) { throw new HttpBoundaryException(400, "platform.invalid_json"); }
+            status = months == 0 ? LicenseStatus.Trial : LicenseStatus.Active;
+        }
+        else
+        {
+            expires = ParseDate(request.ExpiresAt);
+            status = Status(request.Status);
+        }
         TenantCreationStatusPolicy.RequireAllowed(status);
         var result = await handler.HandleAsync(new(request.TradingName, starts, expires, request.MaxBranches, status, actor, request.OwnerEmail), key, context.RequestAborted);
         context.Response.Headers["Idempotency-Replayed"] = result.Replayed ? "true" : "false";
         return Results.Json(Response(result.License), statusCode: result.Replayed ? 200 : 201);
     }
+
+    private static DateTimeOffset ParseDate(string? value) =>
+        DateTimeOffset.TryParseExact(value, DateFormats, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out var instant)
+            ? instant : throw new HttpBoundaryException(400, "platform.invalid_json");
 
     private static async Task ValidateCsrf(HttpContext context)
     {
@@ -163,11 +184,11 @@ public static partial class PlatformLicenseEndpoints
         LicenseStatus.Purged => "purged",
         _ => throw new InvalidOperationException("Invalid application license status.")
     };
-    private sealed record RenewRequest([property: JsonRequired] string ExpiresAt);
+    private sealed record RenewRequest(string? ExpiresAt = null, int? TermMonths = null, string? ExpectedExpiresAt = null);
     private sealed record CreateRequest([property: JsonRequired] string TradingName, [property: JsonRequired] string StartsAt,
-        [property: JsonRequired] string ExpiresAt, [property: JsonRequired] int MaxBranches, [property: JsonRequired] string Status, string? OwnerEmail = null);
+        [property: JsonRequired] int MaxBranches, string? ExpiresAt = null, string? Status = null, string? OwnerEmail = null, int? TermMonths = null);
     private sealed record CreateWithOwnerRequest([property: JsonRequired] string TradingName, [property: JsonRequired] string StartsAt,
-        [property: JsonRequired] string ExpiresAt, [property: JsonRequired] int MaxBranches, [property: JsonRequired] string Status, [property: JsonRequired] string OwnerEmail);
+        [property: JsonRequired] int MaxBranches, [property: JsonRequired] string OwnerEmail, string? ExpiresAt = null, string? Status = null, int? TermMonths = null);
     private sealed record ReactivateRequest([property: JsonRequired] string Status);
     private sealed record SuspendRequest;
     private sealed record BootstrapOwnerRequest([property: JsonRequired] string UserId);

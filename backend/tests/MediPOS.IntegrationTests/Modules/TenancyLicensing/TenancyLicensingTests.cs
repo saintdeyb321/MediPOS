@@ -226,6 +226,35 @@ public sealed class TenancyLicensingTests(PostgreSqlFixture fixture)
     }
 
     [Fact]
+    public async Task CalendarRenewalStartsAtServerTimeForExpiredLicenseAndRejectsTheOldPrecondition()
+    {
+        var token = TestContext.Current.CancellationToken;
+        var actor = Guid.NewGuid();
+        await using var services = CreateServices();
+        await using var creation = services.CreateAsyncScope();
+        var expired = await creation.ServiceProvider.WithPlatformActor(actor).GetRequiredService<CreateTenantHandler>().HandleAsync(
+            new("Botica", Now.AddMonths(-2), Now.AddMonths(-1), 2, LicenseStatus.Suspended, actor), token);
+        var command = new RenewLicenseCommand(expired.TenantId, expired.LicenseId, expired.ExpiresAt, actor, 1);
+        await using (var scope = services.CreateAsyncScope())
+        {
+            var result = await scope.ServiceProvider.WithPlatformActor(actor).GetRequiredService<RenewLicenseHandler>().HandleAsync(command, token);
+            Assert.Equal(LicenseTerm.Expiration(Now, 1), result.ExpiresAt);
+            Assert.Equal(LicenseStatus.Suspended, result.Status);
+            Assert.Equal(expired.MaxBranches, result.MaxBranches);
+        }
+        await using (var scope = services.CreateAsyncScope())
+        {
+            var error = await Assert.ThrowsAsync<ApplicationErrorException>(() =>
+                scope.ServiceProvider.WithPlatformActor(actor).GetRequiredService<RenewLicenseHandler>().HandleAsync(command, token));
+            Assert.Equal("license.concurrent_change", error.Error.Code);
+        }
+        await AssertStoredStatusAsync(expired, LicenseStatus.Suspended, 2);
+        await using var context = fixture.CreateContext(expired.TenantId);
+        var audit = await context.AuditLogs.SingleAsync(row => row.EntityId == expired.LicenseId && row.Action == AuditAction.LicenseRenewed, token);
+        Assert.Equal(actor, audit.ActorId);
+    }
+
+    [Fact]
     public async Task ConcurrentRenewalCannotOverwriteExpirationOrAppendPartialHistory()
     {
         var actor = Guid.NewGuid();

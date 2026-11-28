@@ -472,7 +472,8 @@ public sealed partial class CashPilotTests
         var staleTrace = code is null ? null : unitsTrace;
         staleTrace?.Step("UNITS_STALE_CSRF");
         Action<int>? observeCsrf = staleTrace is null ? null : httpStatus => staleTrace.UnitsStatus("STALE_CSRF", httpStatus);
-        var csrf = await host.CsrfAsync(browser, observeCsrf);
+        Action? observeReuse = staleTrace is null ? null : () => staleTrace.UnitsCsrfReused();
+        var csrf = await host.CsrfAsync(browser, observeCsrf, observeReuse);
         staleTrace?.Step("UNITS_STALE_REQUEST");
         var response = await browser.APIRequest.PutAsync(host.Origin + path, new()
         {
@@ -482,6 +483,7 @@ public sealed partial class CashPilotTests
         });
         try
         {
+            host.ObserveWriteStatus(browser, response.Status);
             unitsTrace?.UnitsStatus(code is null ? "PUT" : "STALE", response.Status);
             Assert.Equal(status, response.Status);
             if (code is not null)
@@ -702,6 +704,8 @@ public sealed partial class CashPilotTests
 
         public void Step(string check) => _check = check;
         public void Create(string observation) => output.WriteLine($"B02 P5 CREATE {observation}");
+        public void UnitsCsrfReused() => output.WriteLine("B02 P5 UNITS STALE_CSRF REUSED");
+
         public void UnitsStatus(string request, int status)
         {
             var band = status switch

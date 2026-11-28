@@ -1,5 +1,11 @@
 # Checkpoint RFA
 
+## MB01 v1.1 · Control B
+
+**MB01_B_PARCIAL_CON_BLOQUEOS** sobre `caa21a581ed61de34ddbba733dbced382fc5725b`, rama `ci/postgres-diagnostics-8bc6b4c`. RUN-32 acredita F-010 y Compras en la base. B-02 quedó en 429 al adquirir CSRF. El candidato reutiliza CSRF en el arnés, incorpora los periodos de licencia y añade el directorio Owner de categorías. El reclamo preautorizado, la política de sesiones por rol y los precios por presentación siguen pendientes. Sin migraciones nuevas. [RUN-33](VALIDATION.md#run-33)
+
+El operador publica una vez, verifica el SHA y deja que el push inicie B-02. Si no se activa, usa dispatch una vez. En paralelo, ejecuta Backend validation - PostgreSQL 18 una vez en la misma rama. Comprobar ambos SHA y exigir P0–P5, incluido 409 real, y suites unitarias, arquitectura, PG18 y frontend sin fallos u omitidas. Los bloqueos funcionales de B1/B2 requieren diseño y comprobación aislada aun si el candidato pasa. Producción NO-GO.
+
 ## MB01 · Control A
 
 **MB01_A_CANDIDATO_ESTABILIZACION** sobre `3e6c521f84a1d55c8beeb8cf51622e0bad30356e`, rama `ci/postgres-diagnostics-8bc6b4c`. B0.1 corrige F-010 con RED/GREEN. B0.2 estabiliza COM-11 y delimita F-009 con diagnóstico de CSRF y envío del PUT obsoleto. La causa de UNITS_STALE sigue abierta. Sin cambios de contratos o migraciones. [RUN-31](VALIDATION.md#run-31)

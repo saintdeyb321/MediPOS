@@ -10,7 +10,10 @@ const category = object({ id: uuid, name: text, isActive: boolean, createdAt: ut
 const ownerInvitation = object({ invitationId: uuid, email: text, status: oneOf('pending', 'claimed', 'revoked'), createdAt: utc, userId: nullable(uuid) })
 export type InitialOwner = ReturnType<typeof ownerInvitation>
 export type PlatformTenant = ReturnType<typeof details>
-export type TrialInput = { tradingName: string; ownerEmail: string; startsAt: string; expiresAt: string; maxBranches: number; status: 'trial' }
+export const licensePlanMonths = [1, 3, 6, 12] as const
+export type PlanMonths = typeof licensePlanMonths[number]
+export type TenantCreationInput = { tradingName: string; ownerEmail: string; startsAt: string; maxBranches: number; termMonths: 0 | PlanMonths }
+export type LicenseChangeInput = { termMonths: PlanMonths; expectedExpiresAt: string } | { status: 'trial' | 'active' | 'grace' } | Record<string, never>
 export type LicenseAction = 'renew' | 'suspend' | 'reactivate'
 export function platformApi(http: HttpClient) {
   const validLicense = (value: unknown) => { const result = license(value); if (result.maxBranches < 1 || result.maxBranches > 5) throw new ApiError(0, 'client.unexpected_response'); return result }
@@ -45,15 +48,15 @@ export function platformApi(http: HttpClient) {
       if (result.tenant.tenantId !== tenantId || result.license.tenantId !== tenantId) throw new ApiError(0, 'client.unexpected_response')
       if (result.license.maxBranches < 1 || result.license.maxBranches > 5) throw new ApiError(0, 'client.unexpected_response'); return result
     },
-    create: (input: TrialInput, key: string, signal?: AbortSignal) => mutate('/platform/tenants/with-owner', input, validLicense, signal, uuid(key)),
+    create: (input: TenantCreationInput, key: string, signal?: AbortSignal) => mutate('/platform/tenants/with-owner', input, validLicense, signal, uuid(key)),
     async receipt(key: string, signal?: AbortSignal) { return validLicense(await http.request(`/platform/tenant-requests/${uuid(key)}`, { signal, exactNumbers: true })) },
-    change: (tenant: PlatformTenant, action: LicenseAction, input: { expiresAt: string } | { status: 'trial' | 'active' | 'grace' } | Record<string, never>, signal?: AbortSignal) =>
+    change: (tenant: PlatformTenant, action: LicenseAction, input: LicenseChangeInput, signal?: AbortSignal) =>
       mutate(`/platform/tenants/${uuid(tenant.tenant.tenantId)}/licenses/${uuid(tenant.license.licenseId)}/${action}`, input, value => {
         const result = validLicense(value)
         if (result.tenantId !== tenant.tenant.tenantId || result.licenseId !== tenant.license.licenseId ||
           action === 'suspend' && result.status !== 'suspended' ||
           action === 'reactivate' && (!('status' in input) || result.status !== input.status) ||
-          action === 'renew' && (!('expiresAt' in input) || Date.parse(result.expiresAt) !== Date.parse(input.expiresAt))) throw new Error('license response mismatch')
+          action === 'renew' && (!('expectedExpiresAt' in input) || Date.parse(result.expiresAt) <= Date.parse(input.expectedExpiresAt))) throw new Error('license response mismatch')
         return result
       }, signal),
   }

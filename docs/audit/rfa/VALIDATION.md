@@ -1,5 +1,27 @@
 # RFA2 · Validación conductual y persistencia
 
+<a id="run-33"></a>
+## RUN-33 · MB01 v1.1 · candidato local
+
+Sobre `caa21a581ed61de34ddbba733dbced382fc5725b`. Control A conserva B-02 pendiente. Sin migraciones nuevas.
+
+| Frente | Candidato y límite |
+|---|---|
+| F-009 · CAT-14 | Los helpers reutilizan el token emitido para el mismo contexto y las mismas cookies de sesión y antiforgery. P0 compara dos GET reales y una reutilización en dos contextos. P5 distingue reutilización de estado HTTP y conserva el 409, código y snapshots postconflicto. |
+| B1 · ACC-08/09/11/14–16 | La política de ticket solo permite actualizar a `accepted_pending_approval` y el trigger exige una membresía activa para aprobar. El alta directa requiere contrato versionado y una transacción de reclamo, licencia, sedes, horario, membresía y auditoría, más RLS de reclamo separada de las invitaciones antiguas. Las sesiones globales carecen de ámbito de rol y actividad humana comprobada. Sigue vigente la expiración existente y el fin exclusivo del turno por operación. |
+| B1 · PLA-10/14 | Alta y renovación por periodo de calendario, con cambios aditivos y compatibilidad de fechas explícitas. RED HTTP de renovación: 400 ante el nuevo payload. La renovación por periodo exige la expiración observada; una solicitud obsoleta devuelve conflicto. |
+| B2 · CAT-04/06/13/14/21 | Owner dispone de un directorio de categorías con acceso a Mis productos filtrados. POS y offline siguen usando el precio base y factor exacto. Activar precios por presentación exige coordinar los contratos de POS y offline con el almacenamiento, preservando snapshots. CAT-21 conserva la revisión de la intención almacenada. |
+
+**Comprobaciones locales:** Restore bloqueado, build backend y E2E, build/lint frontend y YAML PASS. .NET focal 239 + 129 PASS y arquitectura 8 PASS. Vitest 73/73 catálogo/plataforma con un worker y 70/70 personal/carrito/offline. La primera ejecución concurrente de catálogo/plataforma falló en siete esperas/consultas DOM; la ejecución serial pasó con las mismas aserciones. Formato foco: solución PASS; formato final E2E PASS. `git diff --check` PASS y 156 UC/anclas reconciliados. PG18/E4 **NOT_RUN** por ausencia de Docker. Evidencia del corte anterior en [RUN-32](#run-32).
+
+<a id="run-32"></a>
+## RUN-32 · Control A con B-02 pendiente
+
+Ambas ejecuciones son del SHA `caa21a581ed61de34ddbba733dbced382fc5725b`, intento 1. [Backend validation 46114780469](https://github.com/saintdeyb321/MediPOS/actions/runs/46114780469): job backend 140886035472 y frontend 140886035271, 2701/2701 unitarias, 8/8 arquitectura, 907/907 PostgreSQL 18.7 y 652/652 frontend. Cero fallos u omitidas, 4268 aprobadas. Restore, build, auditoría, formato y lint PASS. F-010 y Compras COM-11 revalidados en esa base.
+
+[B-02 46114622881](https://github.com/saintdeyb321/MediPOS/actions/runs/46114622881) FAIL. Job 140885546212, build `ccfa07ff17ca7a4ea4de7d3739027d6c8ca025eab806c92fddd0d0f63ed79cca`, PostgreSQL 18.7, runtime `medipos_test_runtime` y HTTPS aislado. P0–P4 y P5 SEED/SEARCH/CREATE PASS. GET y primer PUT de unidades 200, versión cambiada, una auditoría y recuentos operativos iguales. `UNITS_STALE_CSRF HTTP 429` antes del segundo PUT. La cuota concreta y el conflicto de versión siguen sin comprobarse. P5 restante NOT_RUN. La relectura INCONCLUSIVE conserva el diagnóstico del primer fallo.
+
+
 <a id="run-31"></a>
 ## RUN-31 · MB01 entrega A
 

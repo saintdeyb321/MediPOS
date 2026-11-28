@@ -39,7 +39,7 @@ export function ProductsPage() {
 function CatalogWorkspace() {
   const w = useWorkspace(); const { http } = useRuntime()
   const [offset, setOffset] = useState(0); const [globalOffset, setGlobalOffset] = useState(0)
-  const [mode, setMode] = useState<'products' | 'global'>('products')
+  const [mode, setMode] = useState<'products' | 'global' | 'categories'>('products')
   const [createOpen, setCreateOpen] = useState(false); const [detailOpen, setDetailOpen] = useState(false)
   const [task, setTask] = useState<ProductTask | null>(null)
   const [taskOpen, setTaskOpen] = useState(false)
@@ -107,6 +107,7 @@ function CatalogWorkspace() {
       tabs={<nav aria-label="Catálogo" className="task-tabs">
         <Button variant="quiet" aria-pressed={mode === 'products'} onClick={() => setMode('products')}>Mis productos</Button>
         <Button variant="quiet" aria-pressed={mode === 'global'} onClick={() => setMode('global')}>Catálogo global</Button>
+        <Button variant="quiet" aria-pressed={mode === 'categories'} onClick={() => setMode('categories')}>Categorías</Button>
       </nav>}
       toolbar={mode === 'products' && <PageToolbar actions={<>
         <Link className="button secondary catalog-import-direct" to={w.base + '/importacion'}>Importar Excel</Link>
@@ -130,7 +131,22 @@ function CatalogWorkspace() {
       </PageToolbar>}
       footer={mode === 'global'
         ? <PageControls size={50} offset={globalOffset} change={setGlobalOffset} count={globals.isError ? undefined : globals.data?.length} busy={globals.isFetching} />
-        : <PageControls size={50} offset={offset} change={setOffset} count={products.isError ? undefined : products.data?.length} busy={products.isFetching} />}>
+        : mode === 'products' && <PageControls size={50} offset={offset} change={setOffset} count={products.isError ? undefined : products.data?.length} busy={products.isFetching} />}>
+    {mode === 'categories' && <section className="catalog-body" aria-labelledby="catalog-categories-title">
+      <h2 id="catalog-categories-title">Categorías globales</h2>
+      {categories.isPending && <p role="status">Consultando categorías…</p>}
+      {categories.isSuccess && categories.data.length === 0 && <p>No hay categorías disponibles.</p>}
+      {categories.isSuccess && categories.data.length > 0 && <ul className="catalog-card-grid">
+        {categories.data.map(category => <li key={category.id}><Panel>
+          <div className="catalog-body"><h3>{category.name}</h3>
+            <Button variant="secondary" onClick={() => {
+              const next = { ...emptyFilters, categoryId: category.id }
+              setFilterInput(next); setFilters(next); setOffset(0); setMode('products')
+            }}>Ver productos de {category.name}</Button>
+          </div>
+        </Panel></li>)}
+      </ul>}
+    </section>}
     {mode === 'global' && <>
       {globals.isPending && <p role="status">Consultando catálogo global…</p>}
       {globals.isError && <ApiErrorState error={globals.error} title="No pudimos consultar el catálogo global" retry={() => void globals.refetch()} />}

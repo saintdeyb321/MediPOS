@@ -162,9 +162,11 @@ public sealed partial class CashPilotTests
     {
         var response = await browser.APIRequest.PutAsync(host.Origin + saleApi + "/lines", new()
         {
-            DataObject = new { expectedVersion = version, lines = Array.Empty<object>() }, MaxRedirects = 0,
+            DataObject = new { expectedVersion = version, lines = Array.Empty<object>() },
+            MaxRedirects = 0,
             Headers = new Dictionary<string, string> { ["Origin"] = host.Origin, ["X-CSRF-TOKEN"] = await host.CsrfAsync(browser) },
         });
+        host.ObserveWriteStatus(browser, response.Status);
         Assert.Equal(409, response.Status);
         Assert.Equal("sale.concurrent_edit", (await response.JsonAsync())!.Value.GetProperty("code").GetString());
         await response.DisposeAsync();

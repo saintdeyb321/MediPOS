@@ -19,6 +19,7 @@ Accepted baseline decisions. Keep this file compact. Add a new ADR only for a du
 | ADR-013 | Stock ledger via movements | Accepted | Auditability and integrity vs direct stock edits. |
 | ADR-014 | No permanent free plan initially | Commercial hypothesis | Prioritize paid validation; keep temporary trial. |
 | ADR-015 | Standard product limit: 5 branches | Initial accepted | Protect cost/support; larger clients require separate capacity review. |
+| ADR-016 | Calendar terms use Lima dates and UTC persistence | MB01 candidate | The server computes expiration. Creation keeps the original receipt. Renewal uses the observed expiration and the existing audited concurrency check. Explicit-date clients and prior license history retain their terms. |
 
 ## Adding a decision
 Append only when approved:

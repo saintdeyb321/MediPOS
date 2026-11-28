@@ -7,9 +7,9 @@ import { Notice } from '../../shared/ui/Notice'
 import { PageHeader } from '../../shared/ui/PageHeader'
 import { Modal } from '../../shared/ui/Modal'
 import { DateText } from '../../shared/ui/DateText'
-import { UtcDateTimeField } from '../../shared/ui/UtcDateTimeField'
 import { licenseLabel } from '../../shared/ui/licenseLabel'
-import type { LicenseAction } from './api'
+import { licensePlanMonths } from './api'
+import type { LicenseAction, LicenseChangeInput, PlanMonths } from './api'
 import { usePlatformAdmission } from './usePlatformAdmission'
 import { categoryNameKey, usePlatformConsole } from './usePlatformConsole'
 import { NewTenantForm } from './NewTenantDialog'
@@ -54,14 +54,14 @@ function PlatformConsole({ http, userId, expiresAt, serverTime, admitted }: { ht
   const [ownerEmail, setOwnerEmail] = useState('')
   const [revoking, setRevoking] = useState(false)
   const [action, setAction] = useState<LicenseAction>('renew')
-  const [expires, setExpires] = useState('')
+  const [termMonths, setTermMonths] = useState<PlanMonths | ''>('')
   const [status, setStatus] = useState<'trial' | 'active' | 'grace'>('active')
   const [categoryName, setCategoryName] = useState('')
 
   function openTask(next: Task) { setTask(next); setTaskHidden(false); setDrawer(false) }
   function dismissCreate() { setTask(null); setTaskHidden(false); setCreateDirty(false); setCreateEpoch(value => value + 1) }
   function created() { dismissCreate(); setDrawer(true) }
-  function operationRecovered() { setTask(null); setTaskHidden(false); setOwnerEmail(''); setExpires(''); setRevoking(false); setDrawer(true) }
+  function operationRecovered() { setTask(null); setTaskHidden(false); setOwnerEmail(''); setTermMonths(''); setRevoking(false); setDrawer(true) }
   function categoryRecovered() { setTask(null); setTaskHidden(false); setCategoryName('') }
   function manage(next: 'owner' | 'license') {
     if (next === 'owner') {
@@ -83,7 +83,7 @@ function PlatformConsole({ http, userId, expiresAt, serverTime, admitted }: { ht
   const canEditOwner = !p.locked && p.data && !p.data.initialOwnerUserId && p.initialOwner.isSuccess && !p.initialOwner.isFetching && owner?.status === 'pending'
   const changedAddress = Boolean(ownerEmail.trim() && ownerEmail.trim().toLowerCase() !== owner?.email.toLowerCase())
   const actions = p.data && licenseActions(p.data.license.status)
-  const canChange = !p.locked && actions?.[action] && (action !== 'renew' || Boolean(expires))
+  const canChange = !p.locked && actions?.[action] && (action !== 'renew' || Boolean(termMonths))
   if (p.denied) return <Notice tone="error">La autoridad de plataforma ya no está disponible. Vuelve a ingresar o solicita su revisión.</Notice>
   return <div className="operations platform-console">
     <PageHeader title={current?.title ?? 'Plataforma'} eyebrow="" icon={current?.icon}
@@ -126,18 +126,27 @@ function PlatformConsole({ http, userId, expiresAt, serverTime, admitted }: { ht
             <div className="form-footer"><Button type="submit" disabled={!canEditOwner || !changedAddress}>Guardar Gmail pendiente</Button><Button variant="secondary" disabled={!canEditOwner} onClick={() => setRevoking(true)}>Revocar asignación pendiente</Button></div></>}
       </form>}
     </Modal>
-    <Modal open={open && task === 'license'} title="Gestionar licencia" onClose={operationRecovered} onRecoveryClose={() => setTaskHidden(true)} dirty={Boolean(expires)} busy={p.busy} recovery={Boolean(p.pending)}>
+    <Modal open={open && task === 'license'} title="Gestionar licencia" onClose={operationRecovered} onRecoveryClose={() => setTaskHidden(true)} dirty={Boolean(termMonths)} busy={p.busy} recovery={Boolean(p.pending)}>
       {relevantError}<PlatformRecovery p={p} kind="operation" recovered={operationRecovered} />
       <PlatformReadError error={p.detail.error} failedAt={p.detail.errorUpdatedAt} fetching={p.detail.isFetching} retry={admitted ? () => void p.detail.refetch() : undefined} />
       {p.data && actions && <form className="operation-body" onSubmit={event => {
         event.preventDefault()
-        if (canChange) void p.change(action, action === 'renew' ? { expiresAt: expires } : action === 'reactivate' ? { status } : {}).then(saved => { if (saved) operationRecovered() })
+        if (!canChange || !p.data) return
+        const input: LicenseChangeInput = action === 'renew' && termMonths ? { termMonths, expectedExpiresAt: p.data.license.expiresAt } : action === 'reactivate' ? { status } : {}
+        void p.change(action, input).then(saved => { if (saved) operationRecovered() })
       }}>
         <div><h3>{p.data.tenant.tradingName}</h3><p>Licencia {licenseLabel(p.data.license.status, p.data.license.expiresAt, serverTime)} · vence <DateText value={p.data.license.expiresAt} /></p></div>
         <label>Operación<select aria-label="Operación de licencia" value={action} disabled={p.locked} onChange={event => setAction(event.target.value as LicenseAction)}>
           <option value="renew" disabled={!actions.renew}>Renovar</option><option value="suspend" disabled={!actions.suspend}>Suspender</option><option value="reactivate" disabled={!actions.reactivate}>Reactivar</option>
         </select></label>
-        {action === 'renew' && <UtcDateTimeField label="Nuevo vencimiento" value={expires} required disabled={p.locked} change={setExpires} />}
+        {action === 'renew' && <><label>Periodo de renovación<select value={termMonths} required disabled={p.locked} onChange={event => {
+          const value = event.target.value
+          setTermMonths(value === '' ? '' : Number(value) as PlanMonths)
+        }}>
+          <option value="">Selecciona un periodo</option>
+          {licensePlanMonths.map(months => <option key={months} value={months}>{months} {months === 1 ? 'mes' : 'meses'}</option>)}
+        </select></label>
+          <p>El periodo se suma desde el vencimiento o desde hoy si ya venció. Renovar conserva el estado de la licencia.</p></>}
         {action === 'reactivate' && <label>Estado al reactivar<select aria-label="Estado al reactivar" value={status} disabled={p.locked} onChange={event => setStatus(event.target.value as typeof status)}><option value="trial">Prueba gratuita</option><option value="active">Activa</option><option value="grace">Periodo de gracia</option></select></label>}
         {action === 'suspend' && <Notice tone="warning">Suspender {p.data.tenant.tradingName} restringe sus operaciones comerciales.</Notice>}
         <Button type="submit" variant={action === 'suspend' ? 'danger' : 'primary'} disabled={!canChange}>{action === 'suspend' ? 'Suspender licencia' : action === 'renew' ? 'Renovar licencia' : 'Reactivar licencia'}</Button>

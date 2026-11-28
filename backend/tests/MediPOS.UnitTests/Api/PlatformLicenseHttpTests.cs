@@ -105,6 +105,28 @@ public sealed class PlatformLicenseHttpTests
     }
 
     [Fact]
+    public async Task CalendarRenewalUsesTheObservedExpirationAndCannotExtendTwice()
+    {
+        var state = new Store();
+        var expiry = new DateTimeOffset(DateTime.UtcNow.Date, TimeSpan.Zero).AddDays(30);
+        state.License = License.Create(state.License.TenantId, expiry.AddDays(-40), expiry, 3, LicenseStatus.Active,
+            Guid.NewGuid(), expiry.AddDays(-40));
+        await using var host = await Host(state, Operator());
+        await Login(host);
+        var csrf = await host.Csrf();
+        using var suspended = await Send(host, state, "suspend", csrf);
+        Assert.Equal(HttpStatusCode.OK, suspended.StatusCode);
+        var payload = JsonSerializer.Serialize(new { termMonths = 3, expectedExpiresAt = expiry });
+        using var renewed = await Send(host, state, "renew", csrf, payload);
+        Assert.Equal(HttpStatusCode.OK, renewed.StatusCode);
+        Assert.Equal(LicenseStatus.Suspended, state.License.Status);
+        Assert.Equal(LicenseTerm.Expiration(expiry, 3), state.License.ExpiresAt);
+        using var replay = await Send(host, state, "renew", csrf, payload);
+        await Problem(replay, HttpStatusCode.Conflict, "license.concurrent_change");
+        Assert.Equal(2, state.Audits.Count);
+    }
+
+    [Fact]
     public async Task MutationsReachExistingHandlersPreserveActorAuditAndDomainRetrySemantics()
     {
         var state = new Store(); var user = Operator(); await using var host = await Host(state, user); await Login(host);

@@ -49,8 +49,11 @@ function fixture() {
       if (state.lost) throw new TypeError('Synthetic lost response'); return json(state.invitation)
     }
     if (method === 'POST' && /\/(suspend|renew|reactivate)$/.test(p!)) {
-      state.status = p?.endsWith('/suspend') ? 'suspended' : 'active'
-      if (p?.endsWith('/renew')) state.expiresAt = (JSON.parse(String(init?.body)) as { expiresAt: string }).expiresAt
+      if (p?.endsWith('/renew')) {
+        const body = JSON.parse(String(init?.body)) as { expectedExpiresAt: string; termMonths: number }
+        if (body.expectedExpiresAt !== state.expiresAt) return json({ code: 'license.concurrent_change' }, 409)
+        state.expiresAt = '2026-12-16T12:00:00Z'
+      } else state.status = p?.endsWith('/suspend') ? 'suspended' : 'active'
       if (state.lost) throw new TypeError('Synthetic lost response'); return json(license())
     }
     throw new Error('Unexpected or retired UI route: ' + p)
@@ -97,8 +100,9 @@ it('creates with Gmail/CSRF/idempotency, closes the confirmed wizard and clears 
   expect(fake.writes()).toHaveLength(1)
   const [path, init] = fake.writes()[0]!; const headers = new Headers(init!.headers)
   expect(path).toBe('/platform/tenants/with-owner'); expect(headers.get('Idempotency-Key')).toMatch(/^[0-9a-f-]{36}$/); expect(headers.get('X-CSRF-TOKEN')).toBe('synthetic-csrf')
-  const body = JSON.parse(String(init!.body)) as { ownerEmail: string; status: string; startsAt: string; expiresAt: string }
-  expect(body.ownerEmail).toBe('future.owner@example.invalid'); expect(body.status).toBe('trial'); expect(Date.parse(body.expiresAt) - Date.parse(body.startsAt)).toBe(30 * 86400000)
+  const body = JSON.parse(String(init!.body)) as { ownerEmail: string; termMonths: number; startsAt: string; expiresAt?: string }
+  expect(body.ownerEmail).toBe('future.owner@example.invalid'); expect(body.termMonths).toBe(0)
+  expect(body.startsAt).toMatch(/Z$/); expect(body.expiresAt).toBeUndefined()
   await waitFor(() => expect(screen.getByTestId('location')).not.toHaveTextContent('creationKey'))
   fireEvent.click(screen.getByRole('button', { name: 'Cerrar Ficha de botica' }))
   fireEvent.click(screen.getByRole('button', { name: 'Nueva botica' }))
@@ -216,13 +220,13 @@ it('keeps a confirmed suspension visible when an explicit subsequent read fails'
 it.each(['renew', 'reactivate'] as const)('closes a confirmed %s and keeps the server license identity', async action => {
   const fake = fixture(); if (action === 'reactivate') fake.state.status = 'suspended'; mount(fake, '?tenant=' + id(2))
   fireEvent.click(await screen.findByRole('button', { name: 'Gestionar licencia' }))
-  if (action === 'renew') fireEvent.change(screen.getByLabelText('Nuevo vencimiento (UTC)'), { target: { value: '2026-12-17T12:00' } })
+  if (action === 'renew') fireEvent.change(screen.getByRole('combobox', { name: 'Periodo de renovación' }), { target: { value: '1' } })
   else fireEvent.change(screen.getByRole('combobox', { name: 'Operación de licencia' }), { target: { value: action } })
   fireEvent.click(screen.getByRole('button', { name: action === 'renew' ? 'Renovar licencia' : 'Reactivar licencia' }))
   await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Gestionar licencia' })).not.toBeInTheDocument())
   expect(fake.writes()).toHaveLength(1)
   expect(fake.writes()[0]![0]).toBe(`/platform/tenants/${id(2)}/licenses/${id(3)}/${action}`)
-  expect(JSON.parse(String(fake.writes()[0]![1]!.body))).toEqual(action === 'renew' ? { expiresAt: '2026-12-17T12:00:00Z' } : { status: 'active' })
+  expect(JSON.parse(String(fake.writes()[0]![1]!.body))).toEqual(action === 'renew' ? { termMonths: 1, expectedExpiresAt: '2026-11-16T12:00:00Z' } : { status: 'active' })
   expect(screen.queryByText('¿Salir del formulario?')).not.toBeInTheDocument()
 })
 it('requires a category read, prevents duplicate creation and closes on confirmed persistence', async () => {

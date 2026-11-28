@@ -1,5 +1,7 @@
 # Estado actual de MediPOS
 
+**MB01 V2 · Control B.** Base `caa21a581ed61de34ddbba733dbced382fc5725b`. Backend y frontend de la base pasaron. B-02 quedó en 429 antes del PUT obsoleto de unidades. El candidato local prepara la corrección del arnés, licencias por plazo calendario y directorio de categorías. Invitación con reclamo directo, sesiones extendidas por rol y precios por presentación siguen pendientes. [Checkpoint](audit/rfa/CHECKPOINT.md) · [Evidencia](audit/rfa/VALIDATION.md#run-33). Producción NO-GO.
+
 Revisión del 25 de noviembre de 2026. Rama `ci/postgres-diagnostics-8bc6b4c`, HEAD local `8b9d2194e1afa788ed6d74dd1c54a5b495cb6f2c`. Frontend Foundation F1–F5 se completó sobre ese SHA con correctivos locales de recuperación. Los hitos anteriores conservan su evidencia por SHA en las secciones correspondientes. [SPEC](SPEC.md), [ARCHITECTURE](ARCHITECTURE.md) y [ADR](ADR.md) definen el producto y sus límites.
 
 - **CODE_READY** indica que el flujo existe en código y puede pasar a verificación.

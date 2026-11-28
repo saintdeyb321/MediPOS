@@ -83,6 +83,18 @@ function server() {
   })
   return { state, fetcher, writes: () => fetcher.mock.calls.filter(([, init]) => init?.method === 'POST' || init?.method === 'PUT') }
 }
+it('opens the read-only category directory and filters private products on the server', async () => {
+  const fake = server()
+  mount(fake)
+  fireEvent.click(screen.getByRole('button', { name: 'Categorías' }))
+  const category = await screen.findByRole('button', { name: 'Ver productos de Categoría unitaria' })
+  fireEvent.click(category)
+  await waitFor(() => expect(fake.fetcher.mock.calls.some(([path]) =>
+    String(path).includes('/products?') && String(path).includes('categoryId=' + id('8')))).toBe(true))
+  expect(fake.writes()).toHaveLength(0)
+  expect(screen.queryByRole('button', { name: /Crear categoría/ })).not.toBeInTheDocument()
+})
+
 function Location() { return <output data-testid="location">{useLocation().search}</output> }
 function mount(fake: ReturnType<typeof server>, search = '', context = workspace) {
   const tree = (current: Workspace) => <RuntimeProvider runtime={{ service: createPreviewService('owner'), http: new HttpClient(fake.fetcher), preview: false }}>

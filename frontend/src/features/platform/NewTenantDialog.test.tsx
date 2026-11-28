@@ -15,11 +15,26 @@ it('asks for the pending Gmail before creation, without a UUID or an invitation 
   expect(create).not.toHaveBeenCalled()
   fireEvent.click(screen.getByRole('button', { name: 'Crear botica y asignación pendiente' }))
   expect(create).toHaveBeenCalledTimes(1)
-  const input = create.mock.calls[0]![0] as { ownerEmail: string; status: string; startsAt: string; expiresAt: string }
-  expect(input.ownerEmail).toBe('future.owner+test@example.invalid'); expect(input.status).toBe('trial')
-  expect(Date.parse(input.expiresAt) - Date.parse(input.startsAt)).toBe(30 * 86400000)
+  expect(create.mock.calls[0]![0]).toEqual({
+    tradingName: 'Synthetic onboarding test', ownerEmail: 'future.owner+test@example.invalid',
+    startsAt: expect.stringMatching(/Z$/), maxBranches: 2, termMonths: 0,
+  })
+  expect(screen.getByText(/Prueba de 7 días/)).toBeInTheDocument()
   expect(screen.queryByLabelText(/Identificador interno/)).not.toBeInTheDocument()
 })
+it('submits the chosen calendar period, without a client-calculated date', () => {
+  const create = vi.fn().mockResolvedValue(undefined)
+  render(<NewTenantForm locked={false} create={create} dirty={vi.fn()} />)
+  fireEvent.change(screen.getByLabelText('Nombre comercial'), { target: { value: 'Synthetic botica' } })
+  fireEvent.change(screen.getByLabelText('Gmail del propietario'), { target: { value: 'owner@example.invalid' } })
+  fireEvent.change(screen.getByRole('combobox', { name: 'Plan de licencia' }), { target: { value: '12' } })
+  fireEvent.click(screen.getByRole('button', { name: 'Crear botica y asignación pendiente' }))
+  expect(create.mock.calls[0]![0]).toEqual({
+    tradingName: 'Synthetic botica', ownerEmail: 'owner@example.invalid',
+    startsAt: expect.stringMatching(/Z$/), maxBranches: 2, termMonths: 12,
+  })
+})
+
 it('does not submit while the original creation is locked for recovery', () => {
   const create = vi.fn()
   render(<NewTenantForm locked create={create} dirty={vi.fn()} />)

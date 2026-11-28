@@ -48,6 +48,8 @@ POST `/platform/tenants/{tenantId}/initial-owner/revoke` · `backend/src/MediPOS
 
 POST `/platform/tenants/{tenantId}/licenses/{licenseId}/renew` · `backend/src/MediPOS.Api/Platform/PlatformLicenseEndpoints.cs:35`. **E3 · IMPLEMENTADO · BLOCKED**. En Licencias, aumenta el vencimiento y confirma. RenewLicenseHandler.cs:13–30 y License.cs:69–91 validan autoridad y que fecha no retroceda ni estado sea terminal; TenancyLicensingStore.cs:20–47 guarda licencia, historial y auditoría. Consulta detalle tras respuesta incierta. [RUN-30](../VALIDATION.md#run-30) · TenancyLicensingTests 8/12; configuración del proveedor bloquea la revalidación de transiciones e historial.
 
+[RUN-33](../VALIDATION.md#run-33) · El candidato añade periodo calendario y precondición de expiración observada. Conserva el contrato de fecha explícita y el estado de licencia.
+
 ## UC-PLA-11
 
 POST `/platform/tenants/{tenantId}/licenses/{licenseId}/suspend` · `backend/src/MediPOS.Api/Platform/PlatformLicenseEndpoints.cs:41`. **E3 · IMPLEMENTADO · BLOCKED**. Confirma suspensión desde la ficha. SuspendLicenseHandler.cs:13–30 y License.cs:93–110 cambian desde estado operativo y agregan historial auditado en TenancyLicensingStore.cs:27–47. License.cs:66–67 excluye suspendida de operación. Si falla la respuesta, verificar licencia original. [RUN-30](../VALIDATION.md#run-30) · TenancyLicensingTests 8/12; configuración del proveedor bloquea la revalidación de transiciones e historial.
@@ -63,6 +65,8 @@ POST `/platform/tenants` · `backend/src/MediPOS.Api/Platform/PlatformLicenseEnd
 ## UC-PLA-14
 
 POST `/platform/tenants/with-owner` · `backend/src/MediPOS.Api/Platform/PlatformLicenseEndpoints.cs:48`. **E3 · IMPLEMENTADO · BLOCKED**. Nueva botica → nombre/Gmail/cupo → confirma trial. NewTenantDialog.tsx fija 30 días; API exige clave (PlatformLicenseEndpoints.cs:82–99). usePlatformConsole.ts:152–173 conserva clave y consulta constancia. CreateTenantIdempotentlyHandler.cs:22,47–54 valida plataforma, reserva por actor/clave/hash, crea tenant/licencia y añade Gmail a la misma operación antes de completar reserva. Acuse comparado por usePlatformConsole.ts:152–173; un fallo al refrescar lista no es rechazo del alta.
+
+[RUN-33](../VALIDATION.md#run-33) · El candidato añade Trial 7 días y planes de 1/3/6/12 meses. Se conserva la creación por fecha explícita y la constancia original.
 
 ## UC-PLA-15
 

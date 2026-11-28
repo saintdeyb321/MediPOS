@@ -26,6 +26,8 @@ PUT `/api/tenants/{tenantId}/products/{productId}/local-data` · `backend/src/Me
 
 GET `/api/tenants/{tenantId}/categories` · `backend/src/MediPOS.Api/Tenant/CatalogEndpoints.cs:29`. **E4 · IMPLEMENTADO · BLOCKED**. Cargar categorías en selector de alta/filtro. ProductsPage.tsx:58–65 pagina la consulta. CatalogDirectoryQueries.cs:23–24,47–54 exige Administración antes/después. CatalogDirectoryReader.cs:11–13 proyecta activas paginadas; el selector no modifica datos. Requisito FR-CAT-001. [RUN-21](../VALIDATION.md#run-21): categoría administrativa usada en selector real; otras variantes sin promoción.
 
+[RUN-33](../VALIDATION.md#run-33) · Directorio de categorías Owner reutiliza el GET y abre el listado privado filtrado por categoría.
+
 ## UC-CAT-05
 
 GET `/api/tenants/{tenantId}/global-products` · `backend/src/MediPOS.Api/Tenant/CatalogEndpoints.cs:31`. **E2 · IMPLEMENTADO · BLOCKED**. Abrir Catálogo global y consultar página. API offset/limit; asociación se escribe por separado. CatalogDirectoryQueries.cs:25–26,47–54 exige Administración. CatalogDirectoryReader.cs:14–16 proyecta referencia global paginada, sin precios ni stock tenant. La asociación es UC-CAT-10. Requisito FR-CAT-001.
@@ -67,6 +69,8 @@ GET `/api/tenants/{tenantId}/products/{productId}/unit-configuration` · `backen
 PUT `/api/tenants/{tenantId}/products/{productId}/unit-configuration` · `backend/src/MediPOS.Api/Tenant/CatalogEndpoints.cs:72`. **E3 · IMPLEMENTADO · BLOCKED**. Edita presentaciones y guarda la versión obtenida al abrir. ProductUnitConfigurationHandler.cs:38–63 autoriza administración, contrasta estado y referencias de unidades; ProductUnitConfigurationStore.cs:23–61 bloquea el producto por tenant, condiciona UPDATE al xmin esperado, persiste unidades y auditoría y devuelve nueva versión. Ante conflicto o pérdida de respuesta, recarga configuración antes de repetir. RUN-27: F-009 EDIT/UNITS FAIL, PUT versionado y negativa 409 sin acreditar en ese run; RFA5A. [RUN-29](../VALIDATION.md#run-29) prepara la relectura de versión, unidades exactas, auditoría y efectos antes del PUT, después del PUT y después del conflicto. [RUN-30](../VALIDATION.md#run-30) · Primer PUT 200, versión nueva, base 1 y caja 10.125 activas, una auditoría Owner; recuentos comerciales iguales. UNITS_STALE sin estado HTTP, sin cotejo tras conflicto. E3.
 
 [RUN-31](../VALIDATION.md#run-31) · Segundo PUT conserva versión/payload obsoletos; se distingue diagnóstico CSRF de envío hasta recepción de status. B-02 NOT_RUN local.
+
+[RUN-33](../VALIDATION.md#run-33) · RUN-32 sitúa la falla en CSRF 429 antes del PUT obsoleto. El candidato reutiliza el token en el arnés. Falta 409 real y relectura postconflicto.
 
 ## UC-CAT-15
 

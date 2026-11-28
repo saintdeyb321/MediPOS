@@ -48,6 +48,8 @@ Priority: P0 MVP mandatory, P1 immediately after/optional integration, P2 later.
 - **FR-LIC-001 P0** Create tenant with configuration and associated license.
 - **FR-LIC-002 P0** Configure start, expiration, state and branch limit; backend enforces license.
 - **FR-LIC-003 P0** Renew/extend license preserving audited history.
+- Term-based creation accepts a 7-day Trial or active plans of 1/3/6/12 calendar months. The server calculates expiration from the submitted start instant. Calendar terms preserve the local time in America/Lima and take the last day of a shorter month. Store the exclusive end in UTC.
+- A term-based renewal uses the greater of current expiration and server time. It requires the observed expiration and preserves status and branch limit. A stale observation produces a conflict. Explicit-date clients and previously issued licenses retain their terms.
 - **FR-LIC-004 P0** Suspend/reactivate license and block disallowed operations.
 - **FR-LIC-005 P0** Controlled tenant purge without private-data orphans.
 - **FR-LIC-006 P1** Superadmin dashboard for tenants/license expiration/state.

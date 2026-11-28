@@ -1,8 +1,10 @@
 using System.Net;
 using System.Text;
 using System.Text.Json;
+using MediPOS.Application.Modules.IdentityAccess.Invitations;
 using MediPOS.Application.Modules.TenancyLicensing;
 using MediPOS.Application.Modules.TenancyLicensing.CreateTenant;
+using MediPOS.Domain.Modules.AuditSupport;
 using MediPOS.Domain.Modules.IdentityAccess;
 using MediPOS.UnitTests.Modules.TenancyLicensing;
 using Microsoft.Extensions.DependencyInjection;
@@ -17,6 +19,39 @@ public sealed class PlatformTenantCreationHttpTests
 {
     private static CancellationToken Token => TestContext.Current.CancellationToken;
     private const string Body = """{"tradingName":"Botica Ñandú","startsAt":"2026-10-01T00:00:00Z","expiresAt":"2027-10-01T00:00:00Z","maxBranches":2,"status":"active"}""";
+
+    [Theory]
+    [InlineData(0, "trial", "2026-02-08T01:00:00+00:00")]
+    [InlineData(1, "active", "2026-03-01T01:00:00+00:00")]
+    public async Task TermBasedCreationUsesLimaDatesAndReplaysTheOriginalOwnerAssignment(int months, string status, string expiry)
+    {
+        var db = new TestDatabase();
+        var ownerStore = new OwnerStore();
+        await using var host = await Host(db, PlatformLicenseHttpTests.Operator(), ownerStore: ownerStore);
+        await PlatformLicenseHttpTests.Login(host);
+        var body = JsonSerializer.Serialize(new
+        {
+            tradingName = "Botica de prueba",
+            ownerEmail = "Owner@example.invalid",
+            startsAt = "2026-02-01T01:00:00Z",
+            termMonths = months,
+            maxBranches = 2
+        });
+        const string path = "/platform/tenants/with-owner";
+        var key = Guid.NewGuid().ToString("D"); var csrf = await host.Csrf();
+        using var created = await Send(host, key, csrf, body, path: path);
+        Assert.Equal(HttpStatusCode.Created, created.StatusCode);
+        var original = await created.Content.ReadAsStringAsync(Token);
+        using var json = JsonDocument.Parse(original);
+        Assert.Equal(status, json.RootElement.GetProperty("status").GetString());
+        Assert.Equal(DateTimeOffset.Parse(expiry, System.Globalization.CultureInfo.InvariantCulture), json.RootElement.GetProperty("expiresAt").GetDateTimeOffset());
+
+        using var replay = await Send(host, key, csrf, body, path: path);
+        Assert.Equal(HttpStatusCode.OK, replay.StatusCode);
+        Assert.Equal(original, await replay.Content.ReadAsStringAsync(Token));
+        Assert.Equal("owner@example.invalid", Assert.Single(ownerStore.Assigned).NormalizedEmail);
+        Assert.Single(db.Committed);
+    }
 
     [Theory]
     [InlineData(null)]
@@ -194,7 +229,7 @@ public sealed class PlatformTenantCreationHttpTests
         using var limited = await Send(host, Guid.NewGuid().ToString("D"), csrf); await Problem(limited, HttpStatusCode.TooManyRequests, "platform.rate_limited"); Assert.Empty(db.Committed);
     }
 
-    private static Task<GoogleHost> Host(TestDatabase db, User user, bool approved = true) => GoogleHost.CreateAsync(
+    private static Task<GoogleHost> Host(TestDatabase db, User user, bool approved = true, OwnerStore? ownerStore = null) => GoogleHost.CreateAsync(
         configure: config =>
         {
             config["PlatformAdministration:Enabled"] = "true"; config["PlatformApi:Enabled"] = "true";
@@ -205,7 +240,23 @@ public sealed class PlatformTenantCreationHttpTests
             services.AddScoped(_ => new TestStore(db));
             services.AddScoped<ITenancyLicensingStore>(provider => provider.GetRequiredService<TestStore>());
             services.AddScoped<ITenantCreationRequests>(provider => provider.GetRequiredService<TestStore>());
+            if (ownerStore is not null) services.AddSingleton<IInitialOwnerInvitationStore>(ownerStore);
         });
+
+    private sealed class OwnerStore : IInitialOwnerInvitationStore
+    {
+        public List<InitialOwnerInvitation> Assigned { get; } = [];
+        public Task AddAsync(InitialOwnerInvitation invitation, AuditLog audit, CancellationToken token)
+        { Assigned.Add(invitation); return Task.CompletedTask; }
+        public Task SetPlatformAsync(Guid actorId, CancellationToken token) => Task.CompletedTask;
+        public Task<IReadOnlyList<Guid>> PendingTenantsAsync(Guid userId, string googleSubject, string normalizedEmail, CancellationToken token) =>
+            Task.FromResult<IReadOnlyList<Guid>>([]);
+        public Task SaveAsync(InitialOwnerInvitation invitation, AuditLog audit, CancellationToken token) => throw new NotSupportedException();
+        public Task SetClaimantAsync(Guid userId, CancellationToken token) => throw new NotSupportedException();
+        public Task<InitialOwnerInvitation?> CurrentAsync(Guid tenantId, CancellationToken token) => throw new NotSupportedException();
+        public Task<InitialOwnerDetails?> ReadAsync(Guid tenantId, Guid actorId, CancellationToken token) => throw new NotSupportedException();
+    }
+
     private static async Task<HttpResponseMessage> Send(GoogleHost host, string? key, string? csrf, string body = Body, string origin = "https://medipos.example.test", string path = "/platform/tenants")
     {
         using var request = new HttpRequestMessage(HttpMethod.Post, path) { Content = new StringContent(body, Encoding.UTF8, "application/json") };

@@ -7,6 +7,20 @@ public sealed class LicenseTests
     private static readonly DateTimeOffset Start = new(2026, 10, 1, 0, 0, 0, TimeSpan.Zero);
     private static readonly Guid Actor = Guid.Parse("018e0100-0000-7000-8000-000000000001");
 
+    [Theory]
+    [InlineData(0, 2, 8)]
+    [InlineData(1, 3, 1)]
+    [InlineData(3, 5, 1)]
+    [InlineData(6, 8, 1)]
+    [InlineData(12, 2, 1)]
+    public void TermsKeepLimaWallTimeAndUseTheLastDayOfShortMonths(int months, int endMonth, int endDay)
+    {
+        // 01:00 UTC on Feb 1 is 20:00 Lima on Jan 31.
+        var starts = new DateTimeOffset(2026, 2, 1, 1, 0, 0, TimeSpan.Zero);
+        Assert.Equal(new DateTimeOffset(months == 12 ? 2027 : 2026, endMonth, endDay, 1, 0, 0, TimeSpan.Zero),
+            LicenseTerm.Expiration(starts, months));
+    }
+
     [Fact]
     public void CreateTenantWithLicenseRecordsInitialValuesAndVersion7Identifiers()
     {

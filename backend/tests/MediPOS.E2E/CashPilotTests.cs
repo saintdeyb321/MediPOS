@@ -84,6 +84,12 @@ public sealed partial class CashPilotTests(ITestOutputHelper output)
         await GetAsync(host, browser, "/api/me/tenants", 401);
         await host.SignInAsync(browser, origin.UserId);
         await host.SignInAsync(foreign, other.UserId);
+        var csrfReads = 0;
+        var csrfReuses = 0;
+        await host.CsrfAsync(browser, _ => csrfReads++, () => csrfReuses++);
+        await host.CsrfAsync(browser, _ => csrfReads++, () => csrfReuses++);
+        await host.CsrfAsync(foreign, _ => csrfReads++, () => csrfReuses++);
+        Assert.Equal((2, 1), (csrfReads, csrfReuses));
         var session = await GetAsync(host, browser, "/auth/me");
         Assert.Equal(origin.UserId, session.GetProperty("userId").GetGuid());
         var mine = await GetAsync(host, browser, "/api/me/tenants");
@@ -309,7 +315,8 @@ public sealed partial class CashPilotTests(ITestOutputHelper output)
     {
         var response = await browser.APIRequest.GetAsync(host.Origin + path, new()
         {
-            Headers = new Dictionary<string, string> { ["Origin"] = host.Origin }, MaxRedirects = 0,
+            Headers = new Dictionary<string, string> { ["Origin"] = host.Origin },
+            MaxRedirects = 0,
         });
         observeStatus?.Invoke(response.Status);
         Assert.Equal(expected, response.Status);
@@ -324,6 +331,7 @@ public sealed partial class CashPilotTests(ITestOutputHelper output)
         Dictionary<string, string> headers = new() { ["Origin"] = host.Origin };
         if (withCsrf) headers.Add("X-CSRF-TOKEN", await host.CsrfAsync(browser));
         var response = await browser.APIRequest.PostAsync(host.Origin + path, new() { Headers = headers, DataObject = body, MaxRedirects = 0 });
+        host.ObserveWriteStatus(browser, response.Status);
         var result = (response.Status, (await response.JsonAsync())!.Value.Clone());
         await response.DisposeAsync();
         return result;

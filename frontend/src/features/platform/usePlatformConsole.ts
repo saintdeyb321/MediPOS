@@ -7,7 +7,7 @@ import { useNavigationProtection } from '../../shared/ui/NavigationProtection'
 import { isUuid } from '../access'
 import { cooldownDeadline, usePlatformCooldown } from './usePlatformCooldown'
 import { platformApi } from './api'
-import type { LicenseAction, TrialInput } from './api'
+import type { LicenseAction, LicenseChangeInput, TenantCreationInput } from './api'
 
 type Page = Awaited<ReturnType<ReturnType<typeof platformApi>['tenants']>>
 type Administration = NonNullable<Page['items'][number]['administration']>
@@ -149,7 +149,7 @@ export function usePlatformConsole(http: HttpClient, userId: string, sessionExpi
     report(message)
     void client.invalidateQueries({ queryKey: listKey })
   }
-  async function create(input: TrialInput) {
+  async function create(input: TenantCreationInput) {
     if (locked || abort.current || latest.current.has('creationKey')) return
     const requestKey = crypto.randomUUID()
     mark({ creationKey: requestKey, platformPending: 'create' })
@@ -181,7 +181,7 @@ export function usePlatformConsole(http: HttpClient, userId: string, sessionExpi
     }))
     void client.invalidateQueries({ queryKey: listKey, refetchType: 'none' })
   }
-  async function change(action: LicenseAction, input: { expiresAt: string } | { status: 'trial' | 'active' | 'grace' } | Record<string, never>) {
+  async function change(action: LicenseAction, input: LicenseChangeInput) {
     if (locked || abort.current || !data) return
     const observed = data
     setReconciliationRead(false)
