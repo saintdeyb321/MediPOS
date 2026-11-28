@@ -1,10 +1,20 @@
 # RFA3 · Cómo debería operar MediPOS
 
+<a id="revision-final"></a>
+## Revisión arquitectónica final
+
+- **Autoridad y disponibilidad.** Conservar autorización por sesión y ámbito, plataforma separada del Owner, RLS y runtime restringido. Las negativas de seguridad aprobadas en PostgreSQL cubren su fixture; construir el proveedor normal es otra condición para ejercerlas en licencias, sedes y readiness. F-010 queda abierto.
+- **Integridad.** Mantener el ledger, movimientos y compensaciones transaccionales del servidor. P3/P4 y las pruebas de concurrencia acreditan sus recorridos de caja, stock y anulación. La limpieza de reversiones al reutilizar una conexión entre tenants queda pendiente. El arqueo histórico de DEV sigue sin atribución.
+- **Catálogo y recuperación.** El acuse perdido se concilia con el original sin reenviar. La relectura independiente de unidades acredita el primer guardado exacto; la actualización competidora y las referencias históricas preexistentes requieren evidencia propia. Conservar versiones, auditoría e intención por identidad/sede. La PWA exige comprobar revocación y recuperación offline en el contexto original.
+- **Operabilidad.** Mantener jobs de activación explícita y CPE desacoplado/desactivado. El 8/8 de arquitectura confirma reglas estructurales; la aceptación requiere además un host con DI válida, restauración probada, carga representativa, observabilidad y operador autorizado. La evidencia actual justifica discriminar fallos puntuales antes de cualquier rediseño.
+
+[Resultados por frontera](VALIDATION.md#run-30) · [Criterios y responsables de release](ROADMAP.md#release).
+
 Corte del 26/11/2026 sobre `5d38898`. Estas son las decisiones de diseño y su evolución posterior. La clasificación conserva la intención y no adjudica PASS. La [matriz](MATRIX.csv) conserva el estado observado y [RUN-10](VALIDATION.md#run-10) distingue las aserciones en PostgreSQL de las pruebas DOM. Las decisiones que cambian el producto están en el [backlog](ROADMAP.md).
 
 ## Decisión principal por caso
 
-Los números son los sufijos del prefijo UC de cada fila. KEEP conserva el comportamiento; validar exige cerrar una variante antes de aceptarlo. Una brecha necesita una decisión de producto aunque la implementación actual cumpla su contrato. Los cuatro grupos son excluyentes; una decisión KEEP tampoco otorga aceptación comercial. Para CAT-06/20, la brecha AS-IS ya se corrigió y SEARCH acredita el alcance ensayado. Para CAT-09/21 falta el diagnóstico del alta, descrito en el backlog.
+Los números son los sufijos del prefijo UC de cada fila. KEEP conserva el comportamiento; validar exige cerrar una variante antes de aceptarlo. Una brecha necesita una decisión de producto aunque la implementación actual cumpla su contrato. Los cuatro grupos son excluyentes; una decisión KEEP tampoco otorga aceptación comercial. Para CAT-06/20, la brecha AS-IS ya se corrigió y SEARCH acredita el alcance ensayado. Para CAT-09/21 el alta local y la conciliación del original quedaron acreditadas en RUN-27 y RUN-30; la pérdida completa de almacenamiento sigue pendiente.
 
 | Familia y ficha | KEEP | Corregir o simplificar | Brecha por decidir | Validar antes de aceptar |
 |---|---|---|---|---|

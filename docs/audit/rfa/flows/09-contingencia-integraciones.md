@@ -10,11 +10,11 @@ PWA usa caché y cola local scoped; un pendiente local no acredita venta ni pago
 
 ## UC-INT-01
 
-GET `/health` · `backend/src/MediPOS.Api/Observability/ObservabilityRegistration.cs:66`. **E2 · IMPLEMENTADO · PASS**. Observabilidad expone liveness. ObservabilityRegistration.cs:66 usa predicado false; no indica PostgreSQL listo. Uso operativo. El operador o monitor consulta GET en la superficie de observabilidad. Puede repetir la lectura tras caída del host. No requiere un tenant ni consulta datos comerciales. Para readiness con base usar UC-INT-02.
+GET `/health` · `backend/src/MediPOS.Api/Observability/ObservabilityRegistration.cs:66`. **E2 · IMPLEMENTADO · PASS**. Observabilidad expone liveness. ObservabilityRegistration.cs:66 usa predicado false; no indica PostgreSQL listo. Uso operativo. El operador o monitor consulta GET en la superficie de observabilidad. Puede repetir la lectura tras caída del host. No requiere un tenant ni consulta datos comerciales. Para readiness con base usar UC-INT-02. [RUN-30](../VALIDATION.md#run-30) · PASS previo de la sonda; publicación de rutas en el host real bloqueada al construirlo en SecurityCompositionTests.
 
 ## UC-INT-02
 
-GET `/health/ready` · `backend/src/MediPOS.Api/Observability/ObservabilityRegistration.cs:67`. **E3 · IMPLEMENTADO · BLOCKED**. El operador consulta readiness para saber si el host puede atender. ObservabilityRegistration.cs:52,67–72 mapea healthy a 200 y otros a 503. PostgreSqlReadinessCheck.cs:8–19 llama RuntimeDatabaseProbe.cs:15–32 bajo límite, que abre runtime con interceptor y SELECT 1 en transacción read-only. No verifica operaciones de dos tenants ni sustituye prueba RLS.
+GET `/health/ready` · `backend/src/MediPOS.Api/Observability/ObservabilityRegistration.cs:67`. **E3 · IMPLEMENTADO · BLOCKED**. El operador consulta readiness para saber si el host puede atender. ObservabilityRegistration.cs:52,67–72 mapea healthy a 200 y otros a 503. PostgreSqlReadinessCheck.cs:8–19 llama RuntimeDatabaseProbe.cs:15–32 bajo límite, que abre runtime con interceptor y SELECT 1 en transacción read-only. No verifica operaciones de dos tenants ni sustituye prueba RLS. [RUN-30](../VALIDATION.md#run-30) · RuntimeReadinessPostgreSqlTests 0/2 al construir el proveedor; pendientes el rol restringido y el rechazo de credencial elevada.
 
 ## UC-INT-03
 
@@ -66,7 +66,7 @@ Importar UBL de proveedor. **E3 · NO_EXPUESTO · BLOCKED**. No hay acción UBL 
 
 ## UC-INT-15
 
-Entrega CPE y consultas de proveedor. **E3 · DESACTIVADO · BLOCKED**. RunElectronicDocumentDelivery y work store existen (DependencyInjection.cs:257–262). Identidad de entrega registrada como DisabledElectronicDeliveryIdentity. No se encontró endpoint CPE o job alojado en el inventario. Fuente efectiva de configuración del entorno no inspeccionada.
+Entrega CPE y consultas de proveedor. **E3 · DESACTIVADO · BLOCKED**. RunElectronicDocumentDelivery y work store existen (DependencyInjection.cs:257–262). Identidad de entrega registrada como DisabledElectronicDeliveryIdentity. No se encontró endpoint CPE o job alojado en el inventario. Fuente efectiva de configuración del entorno no inspeccionada. [RUN-30](../VALIDATION.md#run-30) · ElectronicDeliveryContractTests falla en composición normal; identidad técnica y ausencia de proveedor simulado/entrega hospedada sin revalidar. CPE continúa desactivado.
 
 ## UC-INT-16
 

@@ -100,7 +100,7 @@ GET `/api/tenants/{tenantId}/branches/{branchId}/sales/{saleId}/ticket` · `back
 
 ## UC-CAJ-13
 
-POST `/api/tenants/{tenantId}/branches/{branchId}/sales/{saleId}/void` · `backend/src/MediPOS.Api/Tenant/PosEndpoints.cs:66`. **E4 · IMPLEMENTADO · BLOCKED**. En venta confirmada, abrir anulación y dar motivo. SaleCheckoutPanel.tsx:66–75 y useSaleCheckout.ts:42–61 retienen intención. VoidSaleHandler.cs:58–81 prepara las compensaciones, SaleVoidTransaction.cs:37–43,145–185 bloquea caja, venta y lotes y guarda reversiones auditadas. No se elimina la venta. Si no puede verificarse el resultado se consulta el ID original. Requisito FR-POS-010. Prueba existente: `frontend/src/features/pos/PosPage.test.tsx`. [RUN-17](../VALIDATION.md#run-17): P4 anulación, reversiones, lote y auditoría.
+POST `/api/tenants/{tenantId}/branches/{branchId}/sales/{saleId}/void` · `backend/src/MediPOS.Api/Tenant/PosEndpoints.cs:66`. **E4 · IMPLEMENTADO · BLOCKED**. En venta confirmada, abrir anulación y dar motivo. SaleCheckoutPanel.tsx:66–75 y useSaleCheckout.ts:42–61 retienen intención. VoidSaleHandler.cs:58–81 prepara las compensaciones, SaleVoidTransaction.cs:37–43,145–185 bloquea caja, venta y lotes y guarda reversiones auditadas. No se elimina la venta. Si no puede verificarse el resultado se consulta el ID original. Requisito FR-POS-010. Prueba existente: `frontend/src/features/pos/PosPage.test.tsx`. [RUN-17](../VALIDATION.md#run-17): P4 anulación, reversiones, lote y auditoría. [RUN-30](../VALIDATION.md#run-30) · P4 PASS; SaleVoidIsolationTests 10/11, limpieza de reversiones al reutilizar conexión física sin revalidar.
 
 ## UC-CAJ-14
 

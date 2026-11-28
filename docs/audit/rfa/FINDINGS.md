@@ -2,7 +2,7 @@
 
 ## Hallazgos y seguimiento
 
-Los IDs F-001–008 se conservan. F-009 registra la frontera de certificación de unidades. [Validación](VALIDATION.md) · [Aceptación por lote](ROADMAP.md).
+Los IDs F-001–008 se conservan. F-009 registra la frontera de unidades y F-010 la de composición del host. [Validación](VALIDATION.md) · [Aceptación por lote](ROADMAP.md).
 
 | ID · tipo · prioridad | Actor y expectativa | Causa, confianza y alcance | Decisión mínima, prueba y riesgo de regresión |
 |---|---|---|---|
@@ -14,7 +14,8 @@ Los IDs F-001–008 se conservan. F-009 registra la frontera de certificación d
 | F-006 · repetibilidad de pruebas · P2 provisional | QA navega por Transferencias o Plataforma. El control debe esperar el resultado de acceso o la carga del destinatario. Sin requisito FR de sincronización de tests. | Alta para los dos resultados discordantes RUN-03/05; causa de temporización específica y efecto en producto sin demostrar. RUN-10 tiene un FAIL frontend sin nombre. | L-05. Identificar el caso de CI y caracterizar las transiciones observables antes de ajustar esperas. Riesgo: esconder una carrera de autorización o duplicar el diagnóstico de un fallo desconocido. |
 | F-007 · recuperación de un alta · P2 | Owner vuelve después de perder el acuse de un alta. La conciliación conserva la intención original. | RUN-27 acredita el original en E4. La negativa de ficha ajena conserva E2. | Revisar el original sin reenviar, con el código conservado en la sesión de pestaña. |
 | F-008 · envío prematuro · P2 | El Owner avanza a revisión y el alta local ya se registra. CAT-09/21 y regresión del formulario compartido CAT-10. FR-CAT-001/003/007. | RUN-23 confirma el POST prematuro. RUN-24 caracteriza la reutilización del botón. RUN-27 acredita cero envíos antes de Guardar y un alta deliberada. | Corrección acreditada en alta local. Asociación CAT-10 pendiente de B-02. |
-| F-009 · gate UNITS | Owner lee y guarda presentaciones con versión, CAT-13/14. | RUN-27 termina en EDIT/UNITS, entre GET de configuración, PUT versionado y negativa 409. Aserción y causa indeterminadas. | RFA5A debe identificar la frontera y comprobar versión, unidades, auditoría, stock e historial. Bloqueo de certificación. |
+| F-009 · gate UNITS_STALE | CAT-13/14, configuración versionada. | RUN-30 acota el fallo de RUN-27. GET y primer PUT 200, versión y factores persistidos, una auditoría del Owner. La comprobación obsoleta termina sin publicar estado HTTP. | Requiere acreditar llegada/resultado de la solicitud, conflicto y estado posterior sin efecto adicional. ProductUnitIntegrationTests 10/10 cubre otra frontera. |
+| [F-010](#f-010) · composición | Host, licencias, estructura, anulación, readiness, scheduler y CPE. | Seis casos unitarios y 17 de integración fallan con InvalidOperationException en fronteras de construcción de servicios. La dependencia concreta se desconoce. | Identificar el primer registro que falla bajo las mismas validaciones y revalidar las cuatro suites PostgreSQL y las unitarias afectadas. |
 
 La evidencia de ejecución se vincula al [registro RFA2](VALIDATION.md). E2 se limita a las fronteras indicadas. Los diagnósticos originales siguen abajo.
 
@@ -112,3 +113,8 @@ RUN-21 delimita el fallo a `CREATE/POST_LOST_ACK`, antes de la reentrada. F-007 
 | 4 | Con 201 y acuse descartado, el botón esperado cambia de nombre o estado, o el bloqueo no persiste. | Distinguir localizador del botón, marcador pendiente observado y estado bloqueado después de confirmar el descarte. Una consulta fixture separada determina si el alta persistió. |
 
 El probe confirmó respuesta, ID, aborto y persistencia. En el candidato se conserva para acreditar cada frontera, incluida la conciliación sin reenviar. [Aceptación RFA4A](ROADMAP.md#primer-encargo-rfa4a)
+
+<a id="f-010"></a>
+## F-010 · Construcción del proveedor y del host
+
+Evidencia alta del fallo de certificación, causa sin confirmar. Licencias (PLA-10–13/18), entidades/sedes (ACC-22/23), reuso de conexión al anular (CAJ-13), salud (INT-01/02), scheduler (AVI-06) y DI de entrega fiscal desactivada (INT-15). Los métodos y líneas están en [RUN-30](VALIDATION.md#run-30). Los casos parametrizados cuentan por ejecución. Un cambio del fixture aislado sigue siendo un antecedente sin vínculo causal acreditado. Mantener separados el resultado de construir el host, las aserciones de negocio y las pruebas independientes que sí llegaron al dominio. [Acción y aceptación](ROADMAP.md#release).

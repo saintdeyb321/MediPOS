@@ -30,7 +30,7 @@ Abrir detalle de aviso. **E2 · IMPLEMENTADO · BLOCKED**. Abrir drawer desde un
 
 ## UC-AVI-06
 
-Generar alertas periódicas de vencimiento. **E3 · IMPLEMENTADO · BLOCKED**. El operador configura el job; el usuario ve alertas en el centro de avisos. DependencyInjection.cs:144–154 registra scheduler cuando corresponde, ExpirationAlertsScheduler.cs:21 despacha lote y ExpirationAlerts.cs:25–47,73–89 recorre lotes/tenants. ExpirationAlertsStore.cs:12–41 selecciona ámbito, filtra ventana y deduplica por tenant/lote/tipo/fecha mediante ON CONFLICT. Se consulta el aviso en UC-AVI-02; reejecutar el job no agrega ese duplicado.
+Generar alertas periódicas de vencimiento. **E3 · IMPLEMENTADO · BLOCKED**. El operador configura el job; el usuario ve alertas en el centro de avisos. DependencyInjection.cs:144–154 registra scheduler cuando corresponde, ExpirationAlertsScheduler.cs:21 despacha lote y ExpirationAlerts.cs:25–47,73–89 recorre lotes/tenants. ExpirationAlertsStore.cs:12–41 selecciona ámbito, filtra ventana y deduplica por tenant/lote/tipo/fecha mediante ON CONFLICT. Se consulta el aviso en UC-AVI-02; reejecutar el job no agrega ese duplicado. [RUN-30](../VALIDATION.md#run-30) · ExpirationSchedulerTests falla en composición; habilitación explícita, cancelación y exclusión de solapamiento sin revalidar.
 
 ## UC-AVI-07
 

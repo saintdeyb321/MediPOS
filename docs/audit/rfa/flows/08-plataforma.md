@@ -46,19 +46,19 @@ POST `/platform/tenants/{tenantId}/initial-owner/revoke` · `backend/src/MediPOS
 
 ## UC-PLA-10
 
-POST `/platform/tenants/{tenantId}/licenses/{licenseId}/renew` · `backend/src/MediPOS.Api/Platform/PlatformLicenseEndpoints.cs:35`. **E3 · IMPLEMENTADO · BLOCKED**. En Licencias, aumenta el vencimiento y confirma. RenewLicenseHandler.cs:13–30 y License.cs:69–91 validan autoridad y que fecha no retroceda ni estado sea terminal; TenancyLicensingStore.cs:20–47 guarda licencia, historial y auditoría. Consulta detalle tras respuesta incierta.
+POST `/platform/tenants/{tenantId}/licenses/{licenseId}/renew` · `backend/src/MediPOS.Api/Platform/PlatformLicenseEndpoints.cs:35`. **E3 · IMPLEMENTADO · BLOCKED**. En Licencias, aumenta el vencimiento y confirma. RenewLicenseHandler.cs:13–30 y License.cs:69–91 validan autoridad y que fecha no retroceda ni estado sea terminal; TenancyLicensingStore.cs:20–47 guarda licencia, historial y auditoría. Consulta detalle tras respuesta incierta. [RUN-30](../VALIDATION.md#run-30) · TenancyLicensingTests 8/12; configuración del proveedor bloquea la revalidación de transiciones e historial.
 
 ## UC-PLA-11
 
-POST `/platform/tenants/{tenantId}/licenses/{licenseId}/suspend` · `backend/src/MediPOS.Api/Platform/PlatformLicenseEndpoints.cs:41`. **E3 · IMPLEMENTADO · BLOCKED**. Confirma suspensión desde la ficha. SuspendLicenseHandler.cs:13–30 y License.cs:93–110 cambian desde estado operativo y agregan historial auditado en TenancyLicensingStore.cs:27–47. License.cs:66–67 excluye suspendida de operación. Si falla la respuesta, verificar licencia original.
+POST `/platform/tenants/{tenantId}/licenses/{licenseId}/suspend` · `backend/src/MediPOS.Api/Platform/PlatformLicenseEndpoints.cs:41`. **E3 · IMPLEMENTADO · BLOCKED**. Confirma suspensión desde la ficha. SuspendLicenseHandler.cs:13–30 y License.cs:93–110 cambian desde estado operativo y agregan historial auditado en TenancyLicensingStore.cs:27–47. License.cs:66–67 excluye suspendida de operación. Si falla la respuesta, verificar licencia original. [RUN-30](../VALIDATION.md#run-30) · TenancyLicensingTests 8/12; configuración del proveedor bloquea la revalidación de transiciones e historial.
 
 ## UC-PLA-12
 
-POST `/platform/tenants/{tenantId}/licenses/{licenseId}/reactivate` · `backend/src/MediPOS.Api/Platform/PlatformLicenseEndpoints.cs:44`. **E3 · IMPLEMENTADO · BLOCKED**. Desde suspendida, elige Trial, Active o Grace y confirma. ReactivateLicenseHandler.cs:13–30 y License.cs:112–130 comprueban transición y registran historial/auditoría en TenancyLicensingStore.cs:27–47. Admisión sigue sujeta a fechas. Reconsulta estado antes de otro cambio.
+POST `/platform/tenants/{tenantId}/licenses/{licenseId}/reactivate` · `backend/src/MediPOS.Api/Platform/PlatformLicenseEndpoints.cs:44`. **E3 · IMPLEMENTADO · BLOCKED**. Desde suspendida, elige Trial, Active o Grace y confirma. ReactivateLicenseHandler.cs:13–30 y License.cs:112–130 comprueban transición y registran historial/auditoría en TenancyLicensingStore.cs:27–47. Admisión sigue sujeta a fechas. Reconsulta estado antes de otro cambio. [RUN-30](../VALIDATION.md#run-30) · TenancyLicensingTests 8/12; configuración del proveedor bloquea la revalidación de transiciones e historial.
 
 ## UC-PLA-13
 
-POST `/platform/tenants` · `backend/src/MediPOS.Api/Platform/PlatformLicenseEndpoints.cs:47`. **E3 · NO_EXPUESTO · PASS**. Cliente de compatibilidad puede crear botica sin designación por Gmail. PlatformLicenseEndpoints.cs:47,81–99 acepta payload/clave y CreateTenantIdempotentlyHandler.cs:22–54 valida autoridad, estado inicial y reserva. TenancyLicensingStore.cs:12–18 guarda tenant/licencia y auditoría en el alcance de la constancia. La UI usa with-owner; consultar UC-PLA-06 ante pérdida.
+POST `/platform/tenants` · `backend/src/MediPOS.Api/Platform/PlatformLicenseEndpoints.cs:47`. **E3 · NO_EXPUESTO · PASS**. Cliente de compatibilidad puede crear botica sin designación por Gmail. PlatformLicenseEndpoints.cs:47,81–99 acepta payload/clave y CreateTenantIdempotentlyHandler.cs:22–54 valida autoridad, estado inicial y reserva. TenancyLicensingStore.cs:12–18 guarda tenant/licencia y auditoría en el alcance de la constancia. La UI usa with-owner; consultar UC-PLA-06 ante pérdida. [RUN-30](../VALIDATION.md#run-30) · Persistencia de alta/licencia en TenancyLicensingTests sin revalidar; PASS acumulado de constancia e idempotencia por pruebas distintas.
 
 ## UC-PLA-14
 
@@ -78,7 +78,7 @@ Navegar las seis áreas administrativas. **E2 · IMPLEMENTADO · BLOCKED**. Nave
 
 ## UC-PLA-18
 
-Solicitar purga e inspeccionar retención. **E3 · NO_EXPUESTO · BLOCKED**. No hay acción pública de solicitar purga o inspeccionar retención. Si se invoca internamente, RequestTenantPurgeHandler.cs:10–30 exige autoridad y License.cs:132–149 agrega PurgePending e historial; TenancyLicensingStore.cs:27–47 guarda evento/auditoría. No se ejecuta borrado físico ni se puede prometer limpieza mediante esa transición. FR-LIC-005.
+Solicitar purga e inspeccionar retención. **E3 · NO_EXPUESTO · BLOCKED**. No hay acción pública de solicitar purga o inspeccionar retención. Si se invoca internamente, RequestTenantPurgeHandler.cs:10–30 exige autoridad y License.cs:132–149 agrega PurgePending e historial; TenancyLicensingStore.cs:27–47 guarda evento/auditoría. No se ejecuta borrado físico ni se puede prometer limpieza mediante esa transición. FR-LIC-005. [RUN-30](../VALIDATION.md#run-30) · TenancyLicensingTests 8/12; configuración del proveedor bloquea la revalidación de transiciones e historial.
 
 
 ## Alta de botica y primer Owner

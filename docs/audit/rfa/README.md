@@ -2,9 +2,9 @@
 
 ## Corte vigente · 27/11/2026
 
-**RFA4B_CANDIDATO_CIERRE** sobre `f5dbea241e8e73d9b2e4cf9356c5db412b096bf2`. RFA4A cierra su encargo prioritario con pendientes. RFA3 aprobada documentalmente en `e1df3ec9e9fb1b346118a1b168450cf832862801`. RFA0–RFA1 inventariados. **RFA2_CIERRE_CON_LIMITACIONES**, cobertura funcional parcial. Los 156 UC en nueve familias tienen 2 E1, 24 E2, 102 E3, 28 E4 y 0 E5. Los veredictos se mantienen en 19 PASS, 135 BLOCKED, 1 NOT_RUN y 1 N/A. [Evidencia por familia](VALIDATION.md#run-20) · [Evidencia real](VALIDATION.md#run-27) · [Candidato RFA4B](VALIDATION.md#run-28)
+**RADIOGRAFIA_CERRADA_CON_LIMITACIONES · PRODUCCION_NO_GO.** RFA5B_CANDIDATO_CIERRE_DEFINITIVO para revisión documental del operador. RFA5A_CIERRE_CON_BLOQUEOS sobre `f9ea19ebd09e46c1e141000049796fe3ab429448`. Los 156 UC de nueve familias conservan el mayor nivel acumulado por aserción: 2 E1, 24 E2, 102 E3, 28 E4 y 0 E5. Veredictos de UC: 19 PASS, 135 BLOCKED, 1 NOT_RUN y 1 N/A.
 
-**Gates independientes.** P0–P4 y P5 SEED/SEARCH/CREATE PASS en RUN-27. F-008 y recuperación del original acreditados en el alta local. P5 global FAIL en EDIT/UNITS. Frontend integral 645/646, E5 pendiente y producción NO-GO. [Gates RFA5A](ROADMAP.md#gates-rfa5a) · [Checkpoint](CHECKPOINT.md)
+Frontend 652/652 y arquitectura 8/8 PASS. Seis casos unitarios y 17 de PostgreSQL fallaron en fronteras de composición. P0–P4 y SEARCH/CREATE pasan. P5 falla en UNITS_STALE sin estado HTTP registrado tras un primer guardado exacto. [RUN-30 y límites](VALIDATION.md#run-30) · [Siete etapas y requisitos de release](ROADMAP.md#release) · [Checkpoint final](CHECKPOINT.md).
 
 ## Cómo usar esta radiografía
 
@@ -19,8 +19,8 @@
 | Estado | Alcance |
 |---|---|
 | Correcciones acreditadas en recorridos concretos | L-01 Sencillo con Owner y L-06A Caja/POS, incluido Cierres. L-05 estabilizó dos pruebas y añadió identificación saneada. Conservan las variantes pendientes. |
-| Candidato y evidencia publicada | L-06B incluye filtros de Mis productos acreditados en SEARCH y recuperación local del alta acreditada con dobles. RUN-23 constató un envío antes de Guardar. RUN-27 acreditó el correctivo y la conciliación del original. RUN-28 simplifica el montaje del panel con evidencia DOM. [F-008](FINDINGS.md#f-008--el-piloto-de-alta-local-falla-en-la-pérdida-inducida-del-acuse) |
-| Backlog | Compras/Inventario y los demás cortes L-06C–I, medición F-005, gate integral y E5. Las propuestas no cambian el contrato vigente. [Fases y lotes](ROADMAP.md) |
+| Candidato y evidencia publicada | L-06B incluye filtros de Mis productos acreditados en SEARCH y recuperación local del alta acreditada con dobles. RUN-23 constató un envío antes de Guardar. RUN-27 acreditó el correctivo y la conciliación del original. RUN-28 simplifica el montaje del panel con evidencia DOM y RUN-30 revalida el recorrido del original en navegador. [F-008](FINDINGS.md#f-008--el-piloto-de-alta-local-falla-en-la-pérdida-inducida-del-acuse) |
+| Backlog | Compras/Inventario y los demás cortes L-06C–I, medición F-005 y decisiones de release de RUN-30. Las propuestas no cambian el contrato vigente. [Fases y lotes](ROADMAP.md) |
 
 ### Referencias históricas del AS-IS
 

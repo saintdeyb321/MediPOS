@@ -1,20 +1,34 @@
 # Hoja de ruta RFA · fases y lotes subordinados
 
-Reconciliación sobre `1deb4dae9ce5f11c4f9fc0f374837c5d67e1d1d4`, aplicación `52a5ced168dbef2e80145b4e9d115113f0a63755`. La [decisión de los 156 casos](TO_BE.md) incluye los circuitos que deben conservarse.
+Cierre documental de RUN-30 sobre `f9ea19ebd09e46c1e141000049796fe3ab429448`. La [decisión de los 156 casos](TO_BE.md) incluye los circuitos que deben conservarse.
 
 | Fase | Propósito | Estado |
 |---|---|---|
 | RFA0–RFA1 | Gobierno, inventario, trazabilidad AS-IS y exclusiones | Cierre documental, 156 UC vigentes incluidos los 155 originales. |
 | RFA2 | Acreditar comportamiento, persistencia, recuperación y aislamiento | Cierre de investigación con limitaciones. Cobertura funcional parcial. [RUN-21](VALIDATION.md#run-21) |
 | RFA3 | Hallazgos, TO-BE, dependencias y priorización | Aprobada documentalmente en `e1df3ec`. [Hallazgos](FINDINGS.md) · [TO-BE](TO_BE.md) |
-| RFA4A · Astra Alto | Correcciones focalizadas de defectos e invariantes | CIERRE_CON_PENDIENTES de F-008 y CAT-21 en el recorrido de alta local. RUN-27 acredita CREATE. P5 y variantes pendientes pasan a RFA5A. |
-| RFA4B · Sol Alto | Simplificaciones, refactor y cambios de flujo aprobados | RFA4B_CANDIDATO_CIERRE. Catálogo SIMPLIFY, POS KEEP y cambios opcionales DEFER. [RUN-28](VALIDATION.md#run-28) |
-| RFA5A · Sol Medio | Certificación técnica aislada | RFA5A_CANDIDATO_VALIDACION. Una ronda pendiente sobre el SHA final exacto. [Gates RFA5A](#gates-rfa5a) |
-| RFA5B · Astra Alto | Aceptación del operador y decisión de puesta en marcha | Pendiente. L-07 exige E5, revisión arquitectónica y operativa, gates externos, backup/restore probado, rendimiento representativo y límites operativos antes de decidir. Producción NO-GO. |
+| RFA4A · Astra Alto | Correcciones focalizadas de defectos e invariantes | CIERRE_CON_PENDIENTES de F-008 y CAT-21 en el recorrido de alta local. RUN-27 acredita CREATE. Las variantes pendientes quedan en el registro de release. |
+| RFA4B · Sol Alto | Simplificaciones, refactor y cambios de flujo aprobados | Aprobada en alcance. Catálogo SIMPLIFY, POS KEEP y cambios opcionales DEFER. [RUN-28](VALIDATION.md#run-28) |
+| RFA5A · Sol Medio | Certificación técnica aislada | RFA5A_CIERRE_CON_BLOQUEOS. Dos CI del mismo SHA en [RUN-30](VALIDATION.md#run-30). |
+| RFA5B · Astra Alto | Aceptación del operador y decisión de puesta en marcha | RFA5B_CANDIDATO_CIERRE_DEFINITIVO. Revisión arquitectónica documentada, radiografía cerrada con limitaciones. E5 y release pendientes; PRODUCCION_NO_GO. |
 
 Los lotes L-01–07 y los cortes L-06A–I organizan trabajo dentro de estas fases. Los cambios ejecutados y los escenarios acreditados conservan su propio alcance.
 
-### Cola de decisiones
+<a id="release"></a>
+## Requisitos de release tras RUN-30
+
+Esta es la cola vigente tras las siete etapas anteriores. El operador revisa el cierre documental. Cada intervención de producto, prueba externa o ejecución operativa futura requiere su propio destino, responsable y autorización.
+
+| Orden | Bloqueo y dependencia | Responsable, acción siguiente y criterio de salida |
+|---|---|---|
+| A · Composición y gates backend | F-010. Fallan 6 casos unitarios y 17 PostgreSQL en la construcción de servicios/host. Falta identificar el registro y si corresponde al producto, al fixture o a configuración. | Backend/QA: en un encargo independiente, componer los registros del caso mínimo manteniendo ValidateOnBuild/ValidateScopes y recoger solo tipos de servicio/dependencia saneados. Contrastar host y fixture. Exigir los 23 casos aprobados, con negativas de licencias/sedes, anulación entre tenants, readiness y configuración de scheduler/CPE. Gate integral aprobado sobre el artefacto candidato. |
+| B · Presentaciones y resto de P5 | F-009. Se acredita el primer PUT; todavía se desconoce dónde se interrumpe UNITS_STALE. La relectura tras excepción no acredita conflicto. P5 posterior depende de pasar esta frontera. | Catálogo/QA: distinguir obtención CSRF, envío, recepción y estado. Acreditar 409/código esperado y comparar versión, filas y auditoría inmediatamente antes/después del conflicto. Con referencias previas, cotejar identidades, factores y contenido histórico. Exigir P0–P5 completos, incluidos legado, estado, asociación global, importación, precio final y ausencia de efectos de stock indebidos. |
+| C · Variantes críticas y seguridad | La matriz mantiene variantes pendientes en dinero, stock, comisiones, roles/revocación y recuperación offline. CAT-19 requiere exclusión de escritores activos; INT-16 permanece NOT_RUN. | QA y responsables de seguridad/operación: preparar dos tenants, roles, sedes y dispositivos autorizados en aislamiento. Verificar denegación sin efectos, acceso revocado, saldo/stock y comisiones reconciliados, acuse recuperado por intención original sin duplicación. En importación acreditar drenaje de escritores antes de recuperar; en INT-16 comprobar destino/rol y rechazo del destino incorrecto. Registrar aserciones E4 críticas y revisión de dependencias/secretos del candidato. |
+| D · Aceptación y operación | E5=0. RecoveryPostgreSql 20/20 no cubre el procedimiento del operador. Faltan dataset representativo, objetivos de recuperación/latencia y destinos externos autorizados. | Operador, operaciones y QA: identificar SHA/build, cuentas y escenarios, firmar aceptación E5 en Chrome/PWA (teclado, responsive, recarga y offline). Ensayar backup íntegro, restore y rollback con dos tenants, runtime restringido, comparación de datos y tiempos frente a RTO/RPO acordados. Comparar benchmark reproducible A/B con carga y umbrales acordados. Verificar OIDC, TLS/hosting/proxy, cookies/Origin, alertas y diagnóstico saneado en el destino autorizado. CPE permanece desactivado; cualquier habilitación externa exige acreditación separada. [Runbook de recuperación](../../BACKUP_RECOVERY_RUNBOOK.md) · [SPEC](../../SPEC.md) · [ADR](../../ADR.md). |
+
+F-004 (recepciones recientes), F-005 (coste de nombres) y saldo informativo de Sencillo quedan **DEFER**, sujetos a decisión de producto o medición. La certificación requiere gates del mismo candidato, aceptación y recuperación acreditadas. **PRODUCCION_NO_GO.**
+
+### Historial de decisiones anterior a RUN-30
 
 1. **RFA4A · cierre con pendientes.** Preservar lo acreditado en L-01, L-02/L-06A, L-05 y L-06B. Los escenarios pendientes pasan a los gates RFA5A.
 2. **RFA5A · fallo histórico.** El gate frontend 645/646 queda pendiente de certificación del SHA final.
@@ -102,6 +116,8 @@ Solicitar una sola aprobación para preparar y reutilizar navegador, API y Postg
 Conciliar los 156 UC vigentes y cualquier caso nuevo justificado con decisión, implementación aprobada cuando aplique, prueba acorde al riesgo y pendientes explícitos. Exigir E4 para recorridos críticos y E5 para aceptación del operador. Nombrar el SHA y build verificados. Producción permanece NO-GO mientras falle un gate requerido, exista un P0/P1 de release abierto o haya datos sin conciliar.
 
 ### Gates RFA5A
+
+Protocolo histórico de RUN-29. La ronda concluyó en [RUN-30](VALIDATION.md#run-30).
 
 Ejecutar sobre un SHA final publicado por el operador y un build identificado, con el aislamiento acreditado de B-02 y PostgreSQL 18 de pruebas. Prioridad por riesgo:
 

@@ -101,11 +101,11 @@ GET `/api/tenants/{tenantId}/license` · `backend/src/MediPOS.Api/Tenant/TenantE
 
 ## UC-ACC-22
 
-POST `/api/tenants/{tenantId}/legal-entities` · `backend/src/MediPOS.Api/Tenant/TenantEndpoints.cs:31`. **E3 · IMPLEMENTADO · BLOCKED**. Como Owner registra razón social y RUC solo si no dispone de entidad. CreateLegalEntityHandler.cs:15–33 verifica administración y licencia y construye la entidad; BranchesStore.cs:43–48 guarda entidad/auditoría en alcance de provisión. Respuesta permite reutilizar ID para sucursal. Si se pierde, revisar directorio y conciliar sin inferir coincidencia por nombre.
+POST `/api/tenants/{tenantId}/legal-entities` · `backend/src/MediPOS.Api/Tenant/TenantEndpoints.cs:31`. **E3 · IMPLEMENTADO · BLOCKED**. Como Owner registra razón social y RUC solo si no dispone de entidad. CreateLegalEntityHandler.cs:15–33 verifica administración y licencia y construye la entidad; BranchesStore.cs:43–48 guarda entidad/auditoría en alcance de provisión. Respuesta permite reutilizar ID para sucursal. Si se pierde, revisar directorio y conciliar sin inferir coincidencia por nombre. [RUN-30](../VALIDATION.md#run-30) · BranchesPersistenceTests 1/11; pendientes las fronteras de tenant, cupo y rollback que dependen del proveedor.
 
 ## UC-ACC-23
 
-POST `/api/tenants/{tenantId}/branches` · `backend/src/MediPOS.Api/Tenant/TenantEndpoints.cs:36`. **E3 · IMPLEMENTADO · BLOCKED**. Selecciona entidad, escribe nombre de sede y guarda. TenantStructure.tsx:67–100 y CreateBranchHandler.cs:15–37 validan administración, vínculo y cupo bajo bloqueo de licencia (TenantLicenseProvisioning.cs:12–31); BranchesStore.cs:51–57 guarda sede/auditoría. Ante alta confirmada revalida acceso; ante pérdida contrasta sede creada y no duplica entidad.
+POST `/api/tenants/{tenantId}/branches` · `backend/src/MediPOS.Api/Tenant/TenantEndpoints.cs:36`. **E3 · IMPLEMENTADO · BLOCKED**. Selecciona entidad, escribe nombre de sede y guarda. TenantStructure.tsx:67–100 y CreateBranchHandler.cs:15–37 validan administración, vínculo y cupo bajo bloqueo de licencia (TenantLicenseProvisioning.cs:12–31); BranchesStore.cs:51–57 guarda sede/auditoría. Ante alta confirmada revalida acceso; ante pérdida contrasta sede creada y no duplica entidad. [RUN-30](../VALIDATION.md#run-30) · BranchesPersistenceTests 1/11; pendientes las fronteras de tenant, cupo y rollback que dependen del proveedor.
 
 ## UC-ACC-24
 

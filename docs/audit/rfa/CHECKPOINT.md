@@ -1,6 +1,16 @@
 # Checkpoint RFA
 
-## RFA5A · candidato de validación integral
+## RFA5B · Cierre definitivo para revisión
+
+**RFA5B_CANDIDATO_CIERRE_DEFINITIVO · RADIOGRAFIA_CERRADA_CON_LIMITACIONES · PRODUCCION_NO_GO.** RFA5A_CIERRE_CON_BLOQUEOS. [RUN-30](VALIDATION.md#run-30) identifica los dos intentos sobre `f9ea19ebd09e46c1e141000049796fe3ab429448`. Se preservan RUN-01–29 y los diez hallazgos. F-009 queda delimitado a la rama de versión obsoleta sin estado HTTP. F-010 registra 23 casos fallidos y la hipótesis de composición sin dependencia atribuida.
+
+**Cobertura acumulada.** 156 UC únicos en nueve familias. E1/E2/E3/E4/E5 = 2/24/102/28/0. PASS/BLOCKED/NOT_RUN/N/A = 19/135/1/1. Los totales de suites y los veredictos comerciales se contabilizan por separado. [Matriz](MATRIX.csv) · [Revisión arquitectónica](TO_BE.md#revision-final) · [Siete etapas y condiciones de release](ROADMAP.md#release).
+
+**Comprobación documental.** 156/156 IDs únicos emparejados con su ficha, nivel y veredicto en nueve familias; 737 referencias Markdown locales resueltas, con destinos, anclas y rangos de líneas comprobados. `git diff --check` pasó. La revisión local se limitó a documentos.
+
+**Acción final.** El operador revisa el diff documental y publica el cierre si lo acepta. El registro de pruebas conserva el SHA ejecutado; la publicación documental no requiere otra ejecución. E5, certificación técnica completa y autorización comercial quedan pendientes.
+
+## Histórico · RFA5A candidato de validación integral
 
 **RFA5A_CANDIDATO_VALIDACION** sobre `70a084d4493d2be2cfcc10e79dfd22133a22cf84` en `ci/postgres-diagnostics-8bc6b4c`. [RUN-29](VALIDATION.md#run-29) prepara el diagnóstico de F-009 y conserva los 156 UC y sus veredictos. Docker ausente, P0–P5 y gates integrales locales NOT_RUN.
 

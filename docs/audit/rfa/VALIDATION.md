@@ -1,5 +1,48 @@
 # RFA2 · Validación conductual y persistencia
 
+<a id="run-30"></a>
+## RUN-30 · Cierre de la ronda integral
+
+**RFA5A_CIERRE_CON_BLOQUEOS**. Evidencia saneada suministrada por el operador para `f9ea19ebd09e46c1e141000049796fe3ab429448`, rama `ci/postgres-diagnostics-8bc6b4c`, intento 1 en ambos CI. Los resultados corresponden a ese código. Esta revisión documental no ejecutó pruebas.
+
+| Ejecución | Identidad y entorno | Resultado |
+|---|---|---|
+| [B-02 46070129846](https://github.com/saintdeyb321/MediPOS/actions/runs/46070129846) | Job 140744804457, 21:24:43–21:28:31 UTC, 228 s. Build `ccfa07ff17ca7a4ea4de7d3739027d6c8ca025eab806c92fddd0d0f63ed79cca`. Chromium, HTTPS aislado, PostgreSQL 18.7 (180007), `medipos_test_runtime`. | Checkout, herramientas y builds React/E2E PASS. Piloto exit 1, workflow FAIL. |
+| [Backend validation 46071442479](https://github.com/saintdeyb321/MediPOS/actions/runs/46071442479) | 21:36:49–21:51:50 UTC, 901 s. Job frontend 140749067007 PASS, job backend 140749067322 FAIL. PostgreSQL 18.7. Sin artefactos publicados. | Restore, build, diagnósticos, NuGet Audit, arquitectura, formato y preparación de contenedores PASS. Gate NOT_APPROVED. |
+
+| Suite | Ejecutadas | PASS | FAIL | SKIP |
+|---|---:|---:|---:|---:|
+| Frontend (build y lint PASS) | 652 | 652 | 0 | 0 |
+| Unitarias .NET | 2700 | 2694 | 6 | 0 |
+| Arquitectura | 8 | 8 | 0 | 0 |
+| Integración PostgreSQL | 907 | 890 | 17 | 0 |
+
+**FRONTEND_GATE_PASSED** en este SHA. El 645/646 anterior conserva su causa indeterminada.
+
+| Piloto | Aserción alcanzada | Frontera pendiente |
+|---|---|---|
+| P0–P4 PASS | Aislamiento del piloto, contrato de caja abierta, Sencillo, historial/recuperación de cierre y cobro/ticket/anulación. Se mantienen los alcances de [RUN-17](#run-17). | Roles, concurrencia y recuperación fuera de las variantes ejecutadas. El incidente DEV sigue sin atribución. |
+| P5 SEED/SEARCH/CREATE PASS | Filtros del catálogo. CAT-09/21 tras RFA4B: un clic deliberado, un POST interceptado, 201 con ID válido, aborto del acuse, guarda y conciliación del original tras reentrada. De cero a un producto y una auditoría del Owner, cero lotes y movimientos. E4 en ese recorrido. | CAT-10, pérdida completa del almacenamiento y negativa con otra ficha tienen evidencia distinta. |
+| EDIT hasta el primer PUT de unidades | Por orden del arnés, edición de datos, rechazo 409 de su revisión obsoleta y PUT de precios alcanzados. CAT-13 GET 200 con versión contrastada. CAT-14 PUT 200 con versión nueva, dos unidades activas (base 1 y caja 10.125), una auditoría nueva del Owner. Lotes, movimientos y líneas de venta/compra/transferencia conservan sus recuentos. E3, HTTP y relectura DB del mismo tenant. | Precio persistido final sin relectura. El producto empezó sin unidades. La comprobación condicional de identidades previas no ejercitó filas preexistentes. Igual número de filas no certifica su contenido histórico ni el editor del navegador. |
+| EDIT FAIL UNITS_STALE | La lectura tras excepción informó VERSION CHANGED, ROWS MANY, AUDIT 1 y EFFECTS SAME respecto del inicio. No se publicó estado HTTP STALE. | La frontera incluye CSRF, envío y evaluación del estado. Recepción del segundo PUT, 409/código y comparación posterior al conflicto sin verificar. INCONCLUSIVE conserva el error original. |
+| Resto de P5 | P5 global FAIL. | LEGACY_UNITS, STATUS, ASSOCIATION, IMPORT y PERSISTENCE final NOT_RUN en este intento. |
+
+**Contrastes PostgreSQL** (PASS/total). Aislamiento RLS 19/19, RuntimeRoleHardening 10/10 y SecurityHardening 7/7. Caja: cierre 43/43, sesión 9/9. Sencillo: concurrencia 8/8, aislamiento 11/11, persistencia 9/9 y recuperación 3/3. ProductUnitIntegration 10/10. Compras: workflow 7/7 y aislamiento 20/20. RecoverableOperation 16/16. Confirmación POS: concurrencia 8/8, aislamiento 11/11 y persistencia 17/17. Anulación: persistencia 12/12 y concurrencia 3/3. RecoveryPostgreSql 20/20. B8.6.3.1 8/8, B8.6.3.2 7/7 y B8.6.4 8/8. Cada cifra acredita su suite y frontera de prueba. El contrato HTTP de conflicto, la limpieza de conexión en anulación y el ensayo operativo de restauración se evalúan por separado.
+
+**Diagnósticos fallidos.** Seis casos unitarios en cuatro métodos (incluye parametrización) y 17 casos PostgreSQL. Los identificadores apuntan a estas fronteras de composición. En todos se publicó `UNCLASSIFIED_TEST_FAILURE / System.InvalidOperationException`.
+
+| Suite y frontera | Métodos identificados en el informe |
+|---|---|
+| ExpirationSchedulerTests (18, 26) | DailySchedulerRequiresExplicitEnablement, StartupRunsInBackgroundAndStoppingCancelsActiveScanWithoutOverlap |
+| SecurityCompositionTests (25; Program.cs:43) | ActualApiPublishesOnlyHealthReadinessAndDevelopmentOpenApi |
+| ElectronicDeliveryContractTests (181) | NormalDiHasNoSimulatedProviderOrHostedDeliveryAndRequiresTechnicalIdentity |
+| TenancyLicensingTests 8/12 (277) | StoreRejectsMismatchedTenantAndLicenseWithoutChanges, ConcurrentRenewalCannotOverwriteExpirationOrAppendPartialHistory, CreationPersistsTenantLicenseHistoryAndStableCodes, MutationSlicesPersistStateHistoryAndPurgeGate |
+| BranchesPersistenceTests 1/11 (253) | CompositeForeignKeyRejectsLegalEntityFromAnotherTenant, SuspendedOrExpiredLicenseRejectsBranchCreation, PartialUniqueIndexRejectsTwoMainHubsForSameTenant, LegalEntityAndBranchPersistTenantBoundaryAndUtcDates, MovingHubPreservesOneHubPerTenantAndRejectsForeignTarget, ForeignKeysRejectLegalEntityAndBranchWithoutTenant, UncommittedProvisioningRollsBackAndReleasesLicenseLock, ConcurrentCreationsSerializeAndCannotExceedLicenseLimit, LicensedLimitRejectsCreationAfterLastAvailableSlot |
+| SaleVoidIsolationTests 10/11 (128) | ReusedPhysicalConnectionClearsReversalsBeforeUnscopedAndNextTenantReads |
+| RuntimeReadinessPostgreSqlTests 0/2 (49) | RuntimeReadinessUsesRestrictedRoleAndDoesNotMutateTenantData, PrivilegedCredentialIsRejectedBeforeReadinessQuery |
+
+Las líneas remiten a construcción del proveedor con validación de registros/ámbitos o al build del host. Dependencia y causa sin identificar. Ningún resultado demuestra por sí solo una fuga entre tenants o un error de saldo. [F-010 y sus límites](FINDINGS.md#f-010) · [Requisitos de release](ROADMAP.md#release).
+
 <a id="run-29"></a>
 ## RUN-29 · Preparación de la validación integral RFA5A
 
