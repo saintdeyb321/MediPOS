@@ -4,7 +4,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import type { QueryClient } from '@tanstack/react-query'
 import { beforeEach, expect, it } from 'vitest'
 import { scopedKey } from '../../shared/api/contracts'
-import { id, json, mountOperation, operationServer, purchase, storedLine, time, workspace } from '../../test/operations'
+import { id, json, mountOperation, operationServer, purchase, receiptRevision, storedLine, time, workspace } from '../../test/operations'
 import { PurchasesPage } from './PurchasesPage'
 
 beforeEach(() => sessionStorage.clear())
@@ -80,12 +80,41 @@ it('keeps an acknowledgement without a terminal state pending after an early dra
   expect(fake.writes()).toHaveLength(1)
 })
 it('rejects confirmation under the server precondition if lines changed after review, without retry', async () => {
-  const fake = operationServer(); mountOperation(fake, <PurchasesPage />, loaded(fake))
-  const confirm = await screen.findByRole('button', { name: 'Confirmar recepción de mercadería' }); await waitFor(() => expect(confirm).toBeEnabled())
+  const fake = operationServer()
+  const address = loaded(fake)
+  const reviewedRevision = receiptRevision(fake.state.lines)
+  const initialLots = [...fake.state.lots]
+  const respond = fake.fetcher.getMockImplementation()!
+  let releaseRecheck!: () => void
+  const recheck = new Promise<void>(resolve => { releaseRecheck = resolve })
+  const conflicts: number[] = []
+  fake.fetcher.mockImplementation(async (path, request) => {
+    const response = await respond(path, request)
+    if (request?.method === 'POST' && String(path).endsWith('/confirm')) conflicts.push(response.status)
+    if (conflicts.length && request?.method === 'GET' && String(path).endsWith('/purchases/' + id(20))) await recheck
+    return response
+  })
+  mountOperation(fake, <PurchasesPage />, address)
+  const confirm = await screen.findByRole('button', { name: 'Confirmar recepción de mercadería' })
+  await waitFor(() => expect(confirm).toBeEnabled())
   fake.state.lines = [{ ...storedLine, id: id(98), quantity: storedLine.baseQuantity }]
-  fireEvent.click(screen.getByRole('button', { name: 'Confirmar recepción de mercadería' }))
-  await screen.findByText('No pudimos completar la operación de compra')
-  expect(fake.writes()).toHaveLength(1); expect(fake.state.purchases[0]?.status).toBe('draft'); expect(screen.getByRole('button', { name: 'Confirmar recepción de mercadería' })).toBeDisabled()
+  fireEvent.click(confirm)
+  try {
+    await screen.findByText('No pudimos completar la operación de compra')
+    expect(confirm).toBeDisabled()
+    fireEvent.click(confirm)
+    expect(conflicts).toEqual([409])
+    expect(fake.writes()).toHaveLength(1)
+    expect(JSON.parse(String(fake.writes()[0]?.[1]?.body))).toEqual({ expectedRevision: reviewedRevision })
+  } finally {
+    await act(async () => { releaseRecheck() })
+  }
+  const review = within(screen.getByRole('region', { name: 'Recepción persistida' }))
+  expect(review.getByText('Importe documental calculado desde las líneas guardadas: S/ 100.00. La API no devuelve un total independiente.')).toBeInTheDocument()
+  expect(review.getByRole('button', { name: 'Confirmar recepción de mercadería' })).toBeEnabled()
+  expect(fake.writes()).toHaveLength(1)
+  expect(fake.state.purchases[0]?.status).toBe('draft')
+  expect(fake.state.lots).toEqual(initialLots)
 })
 it('invalidates receipt stock, lots, expiration and POS search only in the affected tenant/branch', async () => {
   const fake = operationServer(); let client!: QueryClient

@@ -469,10 +469,16 @@ public sealed partial class CashPilotTests
     private static async Task PutCatalogAsync(BrowserHost host, IBrowserContext browser, string path, object payload, int status = 200,
         string? code = null, CatalogPilotTrace? unitsTrace = null)
     {
+        var staleTrace = code is null ? null : unitsTrace;
+        staleTrace?.Step("UNITS_STALE_CSRF");
+        Action<int>? observeCsrf = staleTrace is null ? null : httpStatus => staleTrace.UnitsStatus("STALE_CSRF", httpStatus);
+        var csrf = await host.CsrfAsync(browser, observeCsrf);
+        staleTrace?.Step("UNITS_STALE_REQUEST");
         var response = await browser.APIRequest.PutAsync(host.Origin + path, new()
         {
-            Headers = new Dictionary<string, string> { ["Origin"] = host.Origin, ["X-CSRF-TOKEN"] = await host.CsrfAsync(browser) },
-            DataObject = payload, MaxRedirects = 0,
+            Headers = new Dictionary<string, string> { ["Origin"] = host.Origin, ["X-CSRF-TOKEN"] = csrf },
+            DataObject = payload,
+            MaxRedirects = 0,
         });
         try
         {
@@ -504,7 +510,8 @@ public sealed partial class CashPilotTests
         const string fileName = "b02-p5.xlsx";
         await page.GetByLabel("Archivo Excel .xlsx").SetInputFilesAsync(new FilePayload
         {
-            Name = fileName, MimeType = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            Name = fileName,
+            MimeType = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             Buffer = await ProductImportTestData.WorkbookAsync([good, .. bad]),
         });
         var url = $"/api/tenants/{owner.TenantId:D}/product-imports";
@@ -607,8 +614,14 @@ public sealed partial class CashPilotTests
                 var status = response.Status;
                 var band = status switch
                 {
-                    201 => "201", 400 => "400", 401 => "401", 403 => "403", 409 => "409", 429 => "429",
-                    >= 500 and < 600 => "5XX", _ => "OTHER",
+                    201 => "201",
+                    400 => "400",
+                    401 => "401",
+                    403 => "403",
+                    409 => "409",
+                    429 => "429",
+                    >= 500 and < 600 => "5XX",
+                    _ => "OTHER",
                 };
                 trace.Create("UPSTREAM " + band);
                 if (status != 201)
@@ -693,8 +706,15 @@ public sealed partial class CashPilotTests
         {
             var band = status switch
             {
-                200 => "200", 400 => "400", 401 => "401", 403 => "403", 404 => "404", 409 => "409", 429 => "429",
-                >= 500 and < 600 => "5XX", _ => "OTHER",
+                200 => "200",
+                400 => "400",
+                401 => "401",
+                403 => "403",
+                404 => "404",
+                409 => "409",
+                429 => "429",
+                >= 500 and < 600 => "5XX",
+                _ => "OTHER",
             };
             output.WriteLine($"B02 P5 UNITS {request} HTTP {band}");
         }

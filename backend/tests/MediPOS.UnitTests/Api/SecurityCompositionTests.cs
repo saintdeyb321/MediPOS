@@ -1,5 +1,7 @@
 using System.Reflection;
+using MediPOS.Api.Authentication;
 using MediPOS.Application.Errors;
+using MediPOS.Application.Modules.Cash;
 using MediPOS.Application.Modules.ElectronicDocuments;
 using MediPOS.Application.Modules.IdentityAccess.Authentication;
 using MediPOS.Application.Modules.IdentityAccess.OperationalAccess;
@@ -33,6 +35,7 @@ public sealed class SecurityCompositionTests
         using var scope = application.Services.CreateScope();
         Assert.Null(scope.ServiceProvider.GetService<IAuthenticatedMediPosUser>());
         Assert.Null(scope.ServiceProvider.GetService<IVerifiedGoogleIdentitySource>());
+        Assert.Null(scope.ServiceProvider.GetService<GetClosedCashSessionsHandler>());
         var operations = scope.ServiceProvider.GetRequiredService<IRecoverableOperations>();
         var token = TestContext.Current.CancellationToken;
         var denied = await Assert.ThrowsAsync<ApplicationErrorException>(() =>
@@ -42,6 +45,31 @@ public sealed class SecurityCompositionTests
         Assert.False(provider.Capabilities.Operational);
         Assert.False(provider.Capabilities.Simulation);
         Assert.Null(await scope.ServiceProvider.GetRequiredService<IElectronicDeliveryIdentity>().AuthorizeAsync(Guid.NewGuid(), TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
+    public async Task ClosedCashHistoryRequiresIdentityCompositionAndRejectsAnAnonymousSession()
+    {
+        var registrations = new ServiceCollection().AddInfrastructure(Configuration(SyntheticConnection));
+        var validation = new ServiceProviderOptions { ValidateOnBuild = true, ValidateScopes = true };
+        using (var foundational = registrations.BuildServiceProvider(validation))
+        using (var scope = foundational.CreateScope())
+        {
+            Assert.Null(scope.ServiceProvider.GetService<GetClosedCashSessionsHandler>());
+            Assert.NotNull(scope.ServiceProvider.GetRequiredService<IClosedCashSessionsReader>());
+        }
+
+        registrations.AddHttpContextAccessor();
+        registrations.AddIdentityAuthentication<VerifiedGoogleIdentitySource, AuthenticatedMediPosUser>();
+        registrations.AddScoped<IClosedCashSessionsReader>(_ => DispatchProxy.Create<IClosedCashSessionsReader, PersistenceTripwire>());
+        using var authenticated = registrations.BuildServiceProvider(validation);
+        using var authenticatedScope = authenticated.CreateScope();
+        var handler = authenticatedScope.ServiceProvider.GetRequiredService<GetClosedCashSessionsHandler>();
+
+        var error = await Assert.ThrowsAsync<ApplicationErrorException>(() =>
+            handler.HandleAsync(new(Guid.NewGuid(), Guid.NewGuid()), TestContext.Current.CancellationToken));
+        Assert.Equal("access.unauthenticated", error.Error.Code);
+        Assert.Equal(ErrorCategory.Forbidden, error.Error.Category);
     }
 
     [Theory]

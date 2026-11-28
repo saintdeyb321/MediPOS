@@ -10,11 +10,11 @@ using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.OpenIdConnect;
 using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Hosting.Server;
 using Microsoft.AspNetCore.Hosting.Server.Features;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Server.Kestrel.Core;
-using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Playwright;
@@ -130,7 +130,9 @@ internal sealed class BrowserHost : IAsyncDisposable
         if (_browser is null) throw new InvalidOperationException("Browser has not started.");
         var context = await _browser.NewContextAsync(new()
         {
-            IgnoreHTTPSErrors = true, ServiceWorkers = ServiceWorkerPolicy.Block, HasTouch = touch,
+            IgnoreHTTPSErrors = true,
+            ServiceWorkers = ServiceWorkerPolicy.Block,
+            HasTouch = touch,
             ViewportSize = touch ? new() { Width = 390, Height = 844 } : null,
         });
         await context.RouteAsync("**/*", route => IsTestOrigin(route.Request.Url) ? route.ContinueAsync() : route.AbortAsync());
@@ -154,13 +156,17 @@ internal sealed class BrowserHost : IAsyncDisposable
         await response.DisposeAsync();
     }
 
-    internal async Task<string> CsrfAsync(IBrowserContext browser)
+    internal async Task<string> CsrfAsync(IBrowserContext browser, Action<int>? observeStatus = null)
     {
         var response = await browser.APIRequest.GetAsync(Origin + "/auth/csrf", new() { MaxRedirects = 0 });
-        Assert.Equal(200, response.Status);
-        var json = await response.JsonAsync();
-        await response.DisposeAsync();
-        return json!.Value.GetProperty("requestToken").GetString()!;
+        try
+        {
+            observeStatus?.Invoke(response.Status);
+            Assert.Equal(200, response.Status);
+            var json = await response.JsonAsync();
+            return json!.Value.GetProperty("requestToken").GetString()!;
+        }
+        finally { await response.DisposeAsync(); }
     }
 
     private async Task<IResult> IssueSessionAsync(HttpContext context, IAntiforgery csrf)

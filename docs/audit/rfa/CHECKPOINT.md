@@ -1,5 +1,13 @@
 # Checkpoint RFA
 
+## MB01 · Control A
+
+**MB01_A_CANDIDATO_ESTABILIZACION** sobre `3e6c521f84a1d55c8beeb8cf51622e0bad30356e`, rama `ci/postgres-diagnostics-8bc6b4c`. B0.1 corrige F-010 con RED/GREEN. B0.2 estabiliza COM-11 y delimita F-009 con diagnóstico de CSRF y envío del PUT obsoleto. La causa de UNITS_STALE sigue abierta. Sin cambios de contratos o migraciones. [RUN-31](VALIDATION.md#run-31)
+
+El operador publica el candidato una vez, verifica el SHA remoto y deja que el push active B-02 por el cambio en `.github/workflows/b02-browser-pilot.yml`. En paralelo, inicia un único dispatch de `Backend validation - PostgreSQL 18` en esa rama. Ambos deben acreditar el mismo SHA. Solo usar dispatch de B-02 si el push no inicia el run.
+
+**Reanudación:** `REANUDAR MB01 DESDE CONTROL A` con el SHA y ambos runs aprobados. Exigir unitarias, arquitectura, PostgreSQL y frontend PASS con cero omitidas, P0–P5 PASS y revalidación de F-009, F-010 y Compras. Si algún gate falla, conservar B1/B2 bloqueados y diagnosticar ese resultado en MB01. Producción NO-GO.
+
 ## RFA5B · Cierre definitivo para revisión
 
 **RFA5B_CANDIDATO_CIERRE_DEFINITIVO · RADIOGRAFIA_CERRADA_CON_LIMITACIONES · PRODUCCION_NO_GO.** RFA5A_CIERRE_CON_BLOQUEOS. [RUN-30](VALIDATION.md#run-30) identifica los dos intentos sobre `f9ea19ebd09e46c1e141000049796fe3ab429448`. Se preservan RUN-01–29 y los diez hallazgos. F-009 queda delimitado a la rama de versión obsoleta sin estado HTTP. F-010 registra 23 casos fallidos y la hipótesis de composición sin dependencia atribuida.

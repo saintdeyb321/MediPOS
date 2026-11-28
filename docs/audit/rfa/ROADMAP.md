@@ -17,7 +17,7 @@ Los lotes L-01–07 y los cortes L-06A–I organizan trabajo dentro de estas fas
 <a id="release"></a>
 ## Requisitos de release tras RUN-30
 
-Esta es la cola vigente tras las siete etapas anteriores. El operador revisa el cierre documental. Cada intervención de producto, prueba externa o ejecución operativa futura requiere su propio destino, responsable y autorización.
+Esta es la cola vigente tras las siete etapas anteriores. MB01 registra la corrección local de composición, la prueba de Compras y el diagnóstico acotado de unidades en [RUN-31](VALIDATION.md#run-31). El control A exige los dos gates PASS del mismo candidato. El operador revisa el cierre documental. Cada intervención de producto, prueba externa o ejecución operativa futura requiere su propio destino, responsable y autorización.
 
 | Orden | Bloqueo y dependencia | Responsable, acción siguiente y criterio de salida |
 |---|---|---|

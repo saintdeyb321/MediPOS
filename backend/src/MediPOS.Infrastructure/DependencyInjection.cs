@@ -182,7 +182,6 @@ public static class DependencyInjection
         services.AddScoped<IFindOpenCashSession, CashSessionReader>();
         services.AddScoped<IActiveCashSessionsReader, CashSessionReader>();
         services.AddScoped<IClosedCashSessionsReader, CashSessionReader>();
-        services.AddScoped<GetClosedCashSessionsHandler>();
         services.AddScoped<ICashCloseTransaction, CashCloseTransaction>();
         services.AddScoped<ICashSessionReconciliationReader, CashSessionReconciliationReader>();
         services.AddScoped<ICashTransferReader, CashTransferReader>();
@@ -313,6 +312,7 @@ public static class DependencyInjection
         services.AddScoped<MarkNotificationReadHandler>();
         services.AddScoped<OpenCashSessionHandler>();
         services.AddScoped<GetActiveCashSessionsHandler>();
+        services.AddScoped<GetClosedCashSessionsHandler>();
         services.AddScoped<CloseCashSessionHandler>();
         services.AddScoped<GetCashSessionReconciliationHandler>();
         services.AddScoped<CashSessionStatusQueries>();

@@ -169,3 +169,5 @@ Elegir vendedor y preparar cobro mixto. **E4 · IMPLEMENTADO · BLOCKED**. Selec
 GET `/api/tenants/{tenantId}/branches/{branchId}/cash-sessions/closed`. **E4 · IMPLEMENTADO · BLOCKED**. En Caja, elegir Cierres, ajustar las fechas Lima y abrir el arqueo de una fila. Owner ve su sede autorizada y otro rol habilitado solo su membresía. El handler revalida tras la lectura y el lector aplica ámbito y fechas antes de paginar. Devuelve importes persistidos y abre el arqueo autoritativo sin operación de cierre. Requisito FR-CASH-006. [Pruebas locales y piloto pendiente](../VALIDATION.md#run-16). Al abrir un arqueo desde Cierres se vuelve a consultar el ID con el permiso de conciliación. Si la lectura o admisión falla, reconsultar en el ámbito autorizado sin repetir el cierre.
 
 [RUN-17](../VALIDATION.md#run-17): P3/P4 rango, tenant y sede, páginas Owner y cierres propios de Cajero. Falta Pharmacist.
+
+[RUN-31](../VALIDATION.md#run-31) · Composición base y autenticada cubiertas en local. Endpoint y persistencia sin cambios; regresión remota pendiente.

@@ -1,5 +1,17 @@
 # RFA2 · Validación conductual y persistencia
 
+<a id="run-31"></a>
+## RUN-31 · MB01 entrega A
+
+Baseline `3e6c521f84a1d55c8beeb8cf51622e0bad30356e`. El CI complementario del corte `f9ea19e` repitió las seis fallas unitarias y las 17 PostgreSQL de RUN-30: 2694/2700 unitarias, 8/8 arquitectura, 890/907 PostgreSQL 18.7, cero omitidas. Frontend 651/652, con la prueba de confirmación de Compras bajo revisión obsoleta. El 652/652 del primer intento sigue registrado. [CI 46071496143](https://github.com/saintdeyb321/MediPOS/actions/runs/46071496143)
+
+- **F-010 · CAJ-19 y casos transversales.** RED al construir el proveedor validado sin identidad: `GetClosedCashSessionsHandler` dependía de `ResolveAccessContextHandler`, exclusivo del bloque autenticado. La prueba nueva verifica la composición base (reader disponible), la autenticada (handler en scope) y la denegación anónima antes de persistencia. Se movió únicamente ese registro.
+- **COM-11.** RED local de la aserción temporal al esperar a que finalice la relectura del 409. La prueba ahora retiene la relectura por promesa y comprueba revisión original, 409, botón bloqueado mientras se reconsulta y revisión actualizada al finalizar. El borrador y los lotes del doble quedan intactos con un solo POST. La aserción PostgreSQL de cero lotes y movimientos permanece en `RecoverableOperationPostgreSqlTests.cs` (RUN-13).
+- **F-009 · CAT-13/14.** No hay reproducción local del fallo real. El segundo PUT conserva exactamente el payload obsoleto y las aserciones 409/código y de persistencia. B-02 distingue el status de obtención CSRF y el paso de envío hasta recibir status. Si falla dentro de la llamada sin status, la recepción por el servidor seguirá sin acreditar. No se toca el producto ni se afirma un 429. Las variantes de historial previo y etapas P5 posteriores siguen pendientes.
+
+**Validación local.** Con .NET SDK 10.0.401: build de solución PASS, 130/130 unitarias focalizadas y 8/8 arquitectura PASS, cero fallos u omitidas. Con Node 24.18.1: build, lint y 38/38 pruebas de Compras PASS, cero fallos u omitidas. El formato de solución pasó para los archivos .NET modificados. Formato y compilación del arnés PASS tras ajustes mecánicos en sus dos archivos tocados. YAML PASS y AWK aceptó 11/11 entradas válidas y rechazó 6/6 inválidas. `git diff --check` PASS. La matriz conserva 156/156 IDs y sus niveles/veredictos. PostgreSQL y B-02 P0–P5 **NOT_RUN** local por ausencia de Docker. Los niveles y veredictos acumulados de los UC se conservan.
+
+
 <a id="run-30"></a>
 ## RUN-30 · Cierre de la ronda integral
 
