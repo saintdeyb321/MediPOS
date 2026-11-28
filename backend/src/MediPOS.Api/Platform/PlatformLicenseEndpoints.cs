@@ -95,6 +95,13 @@ public static partial class PlatformLicenseEndpoints
             throw new HttpBoundaryException(400, "platform.idempotency_key_invalid");
         var request = await Read<CreateRequest>(context);
         if (requireOwner && string.IsNullOrWhiteSpace(request.OwnerEmail)) throw new HttpBoundaryException(400, "platform.owner_email_required");
+        if (requireOwner && request.TermMonths is { } term && request.StartsAt is null)
+        {
+            if (request.ExpiresAt is not null || request.Status is not null || (term != 0 && !LicenseTerm.IsPlan(term)))
+                throw new HttpBoundaryException(400, "platform.invalid_json");
+            var created = await handler.HandleTermAsync(request.TradingName, request.OwnerEmail!, request.MaxBranches, term, actor, key, context.RequestAborted);
+            return CreationResponse(context, created);
+        }
         var starts = ParseDate(request.StartsAt);
         DateTimeOffset expires;
         LicenseStatus status;
@@ -113,6 +120,11 @@ public static partial class PlatformLicenseEndpoints
         }
         TenantCreationStatusPolicy.RequireAllowed(status);
         var result = await handler.HandleAsync(new(request.TradingName, starts, expires, request.MaxBranches, status, actor, request.OwnerEmail), key, context.RequestAborted);
+        return CreationResponse(context, result);
+    }
+
+    private static IResult CreationResponse(HttpContext context, TenantCreationResult result)
+    {
         context.Response.Headers["Idempotency-Replayed"] = result.Replayed ? "true" : "false";
         return Results.Json(Response(result.License), statusCode: result.Replayed ? 200 : 201);
     }
@@ -185,9 +197,9 @@ public static partial class PlatformLicenseEndpoints
         _ => throw new InvalidOperationException("Invalid application license status.")
     };
     private sealed record RenewRequest(string? ExpiresAt = null, int? TermMonths = null, string? ExpectedExpiresAt = null);
-    private sealed record CreateRequest([property: JsonRequired] string TradingName, [property: JsonRequired] string StartsAt,
+    private sealed record CreateRequest([property: JsonRequired] string TradingName, string? StartsAt,
         [property: JsonRequired] int MaxBranches, string? ExpiresAt = null, string? Status = null, string? OwnerEmail = null, int? TermMonths = null);
-    private sealed record CreateWithOwnerRequest([property: JsonRequired] string TradingName, [property: JsonRequired] string StartsAt,
+    private sealed record CreateWithOwnerRequest([property: JsonRequired] string TradingName, string? StartsAt,
         [property: JsonRequired] int MaxBranches, [property: JsonRequired] string OwnerEmail, string? ExpiresAt = null, string? Status = null, int? TermMonths = null);
     private sealed record ReactivateRequest([property: JsonRequired] string Status);
     private sealed record SuspendRequest;

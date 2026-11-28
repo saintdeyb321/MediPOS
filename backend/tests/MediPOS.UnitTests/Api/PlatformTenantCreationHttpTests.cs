@@ -53,6 +53,34 @@ public sealed class PlatformTenantCreationHttpTests
         Assert.Single(db.Committed);
     }
 
+    [Fact]
+    public async Task CreationWithoutClientDateUsesServerTimeAndReplaysTheOriginalTerm()
+    {
+        var db = new TestDatabase();
+        var owners = new OwnerStore();
+        await using var host = await Host(db, PlatformLicenseHttpTests.Operator(), ownerStore: owners);
+        await PlatformLicenseHttpTests.Login(host);
+        const string path = "/platform/tenants/with-owner";
+        const string body = """{"tradingName":"Test","ownerEmail":"owner@example.invalid","termMonths":0,"maxBranches":2}""";
+        var csrf = await host.Csrf();
+        var key = Guid.NewGuid().ToString("D");
+        var before = DateTimeOffset.UtcNow.AddMilliseconds(-1);
+        using var created = await Send(host, key, csrf, body, path: path);
+        Assert.Equal(HttpStatusCode.Created, created.StatusCode);
+        var original = await created.Content.ReadAsStringAsync(Token);
+        using var json = JsonDocument.Parse(original);
+        var start = json.RootElement.GetProperty("startsAt").GetDateTimeOffset();
+        Assert.InRange(start, before, DateTimeOffset.UtcNow);
+        Assert.Equal(start.AddDays(7), json.RootElement.GetProperty("expiresAt").GetDateTimeOffset());
+        using var replay = await Send(host, key, csrf, body, path: path);
+        Assert.Equal(HttpStatusCode.OK, replay.StatusCode);
+        Assert.Equal(original, await replay.Content.ReadAsStringAsync(Token));
+        using var conflict = await Send(host, key, csrf, body.Replace("\"termMonths\":0", "\"termMonths\":3", StringComparison.Ordinal), path: path);
+        await Problem(conflict, HttpStatusCode.Conflict, "platform.idempotency_conflict");
+        Assert.Single(owners.Assigned);
+        Assert.Single(db.Committed);
+    }
+
     [Theory]
     [InlineData(null)]
     [InlineData("null")]

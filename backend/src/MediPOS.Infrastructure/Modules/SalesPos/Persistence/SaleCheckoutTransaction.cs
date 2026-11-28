@@ -17,16 +17,30 @@ using Npgsql;
 
 namespace MediPOS.Infrastructure.Modules.SalesPos.Persistence;
 
-internal sealed class SaleCheckoutTransaction(MediPosDbContext context) : ISaleCheckoutTransaction, IOfflineSaleCheckoutTransaction
+internal sealed class SaleCheckoutTransaction(MediPosDbContext context) : ISaleCheckoutTransaction, IOfflineSaleCheckoutTransaction, IDirectSaleCheckoutTransaction
 {
-    public async Task<ISaleCheckoutScope> BeginAsync(Sale draft, CancellationToken cancellationToken)
+    public Task<ISaleCheckoutScope> BeginAsync(Sale draft, CancellationToken cancellationToken)
     {
         context.SelectTenant(draft.TenantId);
         var transaction = context.Database.CurrentTransaction ?? throw new InvalidOperationException("Offline checkout requires its sync transaction.");
         if (!draft.OfflineSyncEventId.HasValue || !context.ChangeTracker.Entries<Domain.Modules.OfflineSync.SyncEvent>().Any(entry =>
             entry.Entity.Id == draft.OfflineSyncEventId && entry.Entity.TenantId == draft.TenantId && entry.Entity.ProcessingStatus == "pending"))
             throw new InvalidOperationException("Offline checkout requires its reserved pending receipt.");
-        await transaction.CreateSavepointAsync("offline_checkout", cancellationToken).ConfigureAwait(false);
+        return EnlistAsync(draft, transaction, "offline_checkout", cancellationToken);
+    }
+
+    public Task<ISaleCheckoutScope> BeginDirectAsync(Sale draft, CancellationToken cancellationToken)
+    {
+        context.SelectTenant(draft.TenantId);
+        if (context.RecoverableWriteKind != DirectCheckoutHandler.ReceiptKind || draft.OfflineSyncEventId is not null ||
+            context.Database.CurrentTransaction is not { } transaction)
+            throw new InvalidOperationException("Direct checkout requires its own pending receipt transaction.");
+        return EnlistAsync(draft, transaction, "direct_checkout", cancellationToken);
+    }
+
+    private async Task<ISaleCheckoutScope> EnlistAsync(Sale draft, IDbContextTransaction transaction, string savepoint, CancellationToken cancellationToken)
+    {
+        await transaction.CreateSavepointAsync(savepoint, cancellationToken).ConfigureAwait(false);
         var retained = context.ChangeTracker.Entries().Select(entry => entry.Entity).ToHashSet(ReferenceEqualityComparer.Instance);
         try
         {
@@ -39,11 +53,11 @@ internal sealed class SaleCheckoutTransaction(MediPosDbContext context) : ISaleC
             // Insert draft and lines inside the ambient transaction, respecting existing draft-only line policies.
             context.Sales.Add(draft);
             await context.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
-            return new CheckoutScope(context, transaction, cash, draft, context.Entry(draft).Property<uint>("Version").CurrentValue, false, retained);
+            return new CheckoutScope(context, transaction, cash, draft, context.Entry(draft).Property<uint>("Version").CurrentValue, false, retained, savepoint);
         }
         catch
         {
-            await transaction.RollbackToSavepointAsync("offline_checkout", cancellationToken).ConfigureAwait(false);
+            await transaction.RollbackToSavepointAsync(savepoint, cancellationToken).ConfigureAwait(false);
             DetachNew(context, retained);
             throw;
         }
@@ -100,7 +114,7 @@ internal sealed class SaleCheckoutTransaction(MediPosDbContext context) : ISaleC
     }
 
     private sealed class CheckoutScope(MediPosDbContext context, IDbContextTransaction transaction,
-        CashSession cash, Sale sale, uint version, bool ownsTransaction = true, HashSet<object>? retained = null) : ISaleCheckoutScope
+        CashSession cash, Sale sale, uint version, bool ownsTransaction = true, HashSet<object>? retained = null, string? savepoint = null) : ISaleCheckoutScope
     {
         private bool _committed;
         private CommissionConfigurationSnapshot? _commissionConfiguration;
@@ -223,7 +237,7 @@ internal sealed class SaleCheckoutTransaction(MediPosDbContext context) : ISaleC
             {
                 if (!_committed)
                 {
-                    await transaction.RollbackToSavepointAsync("offline_checkout").ConfigureAwait(false);
+                    await transaction.RollbackToSavepointAsync(savepoint!).ConfigureAwait(false);
                     DetachNew(context, retained!);
                 }
                 return;

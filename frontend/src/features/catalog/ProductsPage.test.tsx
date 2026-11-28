@@ -1,7 +1,7 @@
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, expect, it, vi } from 'vitest'
-import { MemoryRouter, useLocation } from 'react-router'
+import { MemoryRouter, Routes, Route, useLocation } from 'react-router'
 import { RuntimeProvider } from '../../app/providers/runtime'
 import { WorkspaceContext } from '../access'
 import type { Workspace } from '../access'
@@ -9,6 +9,7 @@ import { createPreviewService } from '../../development/fixtures'
 import { HttpClient } from '../../shared/api/http'
 import { refocus } from '../../test/refocus'
 import { JsonNumber, parseExactJson, stringifyExactJson } from '../../shared/api/exactJson'
+import { CategoriesPage } from './CategoriesPage'
 import { ProductsPage } from './ProductsPage'
 import type { BusinessProduct, GlobalProduct, LocalProductInput, PricesInput, ProductUnit, UnitChange } from './api'
 
@@ -85,9 +86,12 @@ function server() {
 }
 it('opens the read-only category directory and filters private products on the server', async () => {
   const fake = server()
-  mount(fake)
-  fireEvent.click(screen.getByRole('button', { name: 'Categorías' }))
-  const category = await screen.findByRole('button', { name: 'Ver productos de Categoría unitaria' })
+  render(<RuntimeProvider runtime={{ service: createPreviewService('owner'), http: new HttpClient(fake.fetcher), preview: false }}>
+    <MemoryRouter initialEntries={['/categorias']}><WorkspaceContext.Provider value={workspace}><Routes>
+      <Route path="/categorias" element={<CategoriesPage />} /><Route path={workspace.base + '/productos'} element={<ProductsPage />} />
+    </Routes></WorkspaceContext.Provider></MemoryRouter></RuntimeProvider>)
+  const category = await screen.findByRole('link', { name: 'Ver productos de Categoría unitaria' })
+  expect(fake.fetcher.mock.calls.some(([path]) => String(path).includes('/products?'))).toBe(false)
   fireEvent.click(category)
   await waitFor(() => expect(fake.fetcher.mock.calls.some(([path]) =>
     String(path).includes('/products?') && String(path).includes('categoryId=' + id('8')))).toBe(true))

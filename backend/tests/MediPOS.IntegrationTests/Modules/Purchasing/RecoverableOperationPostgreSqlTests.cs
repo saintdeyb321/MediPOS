@@ -18,7 +18,9 @@ using MediPOS.Application.Modules.Purchasing.ConfirmPurchase;
 using MediPOS.Application.Modules.Purchasing.CreatePurchase;
 using MediPOS.Application.Modules.Purchasing.CreateSupplier;
 using MediPOS.Application.Modules.Purchasing.ReplacePurchaseLines;
+using MediPOS.Application.Modules.SalesPos.ConfirmSale;
 using MediPOS.Application.Modules.SalesPos.CreateSaleDraft;
+using MediPOS.Domain.Modules.SalesPos;
 using MediPOS.Application.Modules.Transfers.RequestTransfer;
 using MediPOS.Domain.Modules.AuditSupport;
 using MediPOS.Domain.Modules.Catalog;
@@ -373,6 +375,79 @@ public sealed class RecoverableOperationPostgreSqlTests(PostgreSqlFixture fixtur
         var stale = await Assert.ThrowsAsync<ApplicationErrorException>(() => confirmation.ServiceProvider.GetRequiredService<ConfirmPurchaseHandler>().HandleAsync(new(rows.TenantId, rows.PurchaseId, rows.ActorId, revision), Token));
         Assert.Equal("purchasing.receipt_changed", stale.Error.Code);
         Assert.Empty(await db.StockMovements.ToArrayAsync(Token)); Assert.Empty(await db.InventoryLots.ToArrayAsync(Token));
+    }
+
+    [Fact]
+    public async Task DirectReceiptRollsBackStaleCatalogAndReplaysExactlyOneStockEntry()
+    {
+        var data = await Prepare();
+        var owner = data.Owner;
+        await using var services = Runtime();
+        await using var scope = services.CreateAsyncScope();
+        var source = Authenticate(scope.ServiceProvider, owner.UserId);
+        var state = await source.GetRequiredService<IProductUnitConfigurationStore>().ReadAsync(owner.TenantId, data.ProductId, Token);
+        var row = new ReviewedReceiptLine(new(data.ProductId, Assert.Single(state!.Units).Id, 2.5m, 0.1234m, "BATCH", null), state.Version);
+        var input = new DirectPurchaseInput(null, "DIRECT", [row]);
+        var key = Guid.NewGuid();
+        var handler = source.GetRequiredService<DirectPurchaseHandler>();
+        Task<PostedDocument> Post(DirectPurchaseInput body) => handler.HandleAsync(owner.TenantId, owner.BranchId, owner.UserId, key, body, Token);
+        await using var db = fixture.CreateContext(owner.TenantId);
+        var before = await db.StockMovements.CountAsync(Token);
+        var stale = await Assert.ThrowsAsync<ApplicationErrorException>(() => Post(input with { Lines = [row with { ExpectedProductVersion = state.Version + 1 }] }));
+        Assert.Equal(CatalogErrors.ConcurrentChange, stale.Error);
+        Assert.False(await db.Purchases.AnyAsync(x => x.DocumentReference == "DIRECT", Token));
+        var result = await Post(input);
+        Assert.Equal(result, await Post(input));
+        var conflict = await Assert.ThrowsAsync<ApplicationErrorException>(() => Post(input with { DocumentReference = "DIFFERENT" }));
+        Assert.Equal("operation.intention_conflict", conflict.Error.Code);
+        var original = await source.GetRequiredService<IRecoverableOperations>().ReadAsync(owner.TenantId, owner.BranchId, key, Token);
+        Assert.Equal(result, JsonSerializer.Deserialize<PostedDocument>(original.ResultJson, Json));
+        Assert.Equal(before + 1, await db.StockMovements.CountAsync(Token));
+        var line = await db.PurchaseLines.SingleAsync(x => x.PurchaseId == result.Id, Token);
+        Assert.Equal(0.1234m, line.UnitCost);
+        var lot = await db.InventoryLots.SingleAsync(x => x.SourcePurchaseLineId == line.Id, Token);
+        Assert.Equal("BATCH", lot.BatchNumber);
+        Assert.Equal(2.5m, lot.QuantityAvailableBase);
+        Assert.Equal(1, await db.AuditLogs.CountAsync(x => x.EntityId == result.Id && x.Action == AuditAction.PurchaseConfirmed, Token));
+    }
+
+    [Fact]
+    public async Task DirectCheckoutStalePriceAndInsufficientStockLeaveNoDraftThenMixedPaymentReplaysOnce()
+    {
+        var data = await Prepare();
+        var owner = data.Owner;
+        await using var services = Runtime();
+        await using var scope = services.CreateAsyncScope();
+        var source = Authenticate(scope.ServiceProvider, owner.UserId);
+        await using var db = fixture.CreateContext(owner.TenantId);
+        var cash = await source.GetRequiredService<OpenCashSessionHandler>().HandleAsync(new(owner.TenantId, owner.BranchId, 0m), Token);
+        var unit = await db.ProductUnits.AsNoTracking().SingleAsync(x => x.BusinessProductId == data.ProductId, Token);
+        var row = new ReviewedSaleLine(new(data.ProductId, unit.Id, 2m, PriceKind.Retail), 1m, 1m);
+        var input = new DirectCheckoutInput(cash.CashSessionId, [row], [new(PaymentMethod.Cash, 1m), new(PaymentMethod.Yape, 1m)]);
+        var key = Guid.NewGuid();
+        Task<PostedDocument> Post(DirectCheckoutInput body) => source.GetRequiredService<DirectCheckoutHandler>().HandleAsync(owner.TenantId, owner.BranchId, key, body, Token);
+        var stale = await Assert.ThrowsAsync<ApplicationErrorException>(() => Post(input with { Lines = [row with { ExpectedBasePrice = 2m }] }));
+        Assert.Equal(CatalogErrors.ConcurrentChange, stale.Error);
+        var insufficient = await Assert.ThrowsAsync<ApplicationErrorException>(() => Post(input with
+        {
+            Lines = [row with { Line = row.Line with { Quantity = 6m } }],
+            Payments = [new(PaymentMethod.Cash, 6m)]
+        }));
+        Assert.Equal("inventory.insufficient_stock", insufficient.Error.Code);
+        Assert.False(await db.Sales.AnyAsync(Token));
+        Assert.False(await db.SalePayments.AnyAsync(Token));
+        Assert.Equal(5m, await db.InventoryLots.Select(x => x.QuantityAvailableBase).SingleAsync(Token));
+        var result = await Post(input);
+        Assert.Equal(result, await Post(input));
+        var original = await source.GetRequiredService<IRecoverableOperations>().ReadAsync(owner.TenantId, owner.BranchId, key, Token);
+        Assert.Equal(result, JsonSerializer.Deserialize<PostedDocument>(original.ResultJson, Json));
+        var sale = await db.Sales.SingleAsync(Token);
+        Assert.Equal(result.Id, sale.Id);
+        Assert.Equal(SaleStatus.Confirmed, sale.Status);
+        Assert.Equal(2m, sale.TotalAmount);
+        Assert.Equal(2, await db.SalePayments.CountAsync(x => x.SaleId == sale.Id && x.Amount == 1m, Token));
+        Assert.Equal(3m, await db.InventoryLots.Select(x => x.QuantityAvailableBase).SingleAsync(Token));
+        Assert.Equal(1, await db.AuditLogs.CountAsync(x => x.EntityId == sale.Id && x.Action == AuditAction.SaleConfirmed, Token));
     }
 
     private static IServiceProvider Authenticate(IServiceProvider source, Guid userId)

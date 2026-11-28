@@ -12,7 +12,7 @@ export type InitialOwner = ReturnType<typeof ownerInvitation>
 export type PlatformTenant = ReturnType<typeof details>
 export const licensePlanMonths = [1, 3, 6, 12] as const
 export type PlanMonths = typeof licensePlanMonths[number]
-export type TenantCreationInput = { tradingName: string; ownerEmail: string; startsAt: string; maxBranches: number; termMonths: 0 | PlanMonths }
+export type TenantCreationInput = { tradingName: string; ownerEmail: string; maxBranches: number; termMonths: 0 | PlanMonths }
 export type LicenseChangeInput = { termMonths: PlanMonths; expectedExpiresAt: string } | { status: 'trial' | 'active' | 'grace' } | Record<string, never>
 export type LicenseAction = 'renew' | 'suspend' | 'reactivate'
 export function platformApi(http: HttpClient) {

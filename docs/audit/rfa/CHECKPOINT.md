@@ -1,5 +1,16 @@
 # Checkpoint RFA
 
+## MB02 · Control integrado
+
+Base `a435500cc5f0c0c5911010335317b9a4da891237`. RUN-34 acredita los gates del candidato parcial MB01.
+
+| Frente | MODIFY / ADD / conservar | Consumidores y comprobación |
+|---|---|---|
+| B1 | PlatformLicenseEndpoints, CreateTenantIdempotentlyHandler, NewTenantDialog | Añadir alta por reloj servidor con replay. Conservar hash por fechas. Revisar EmployeeInvitationSql y ServerSessionTicketStore antes de alterar autoridad. |
+| B2 | SaleLine, OfflineSaleProcessor, configuración de ProductUnit | Preservar snapshots v1 hasta disponer de consumidores y pruebas de upgrade compatibles. |
+| B3 | PurchasingStore, ConfirmPurchaseHandler, InventoryLot y FefoAllocation | Comprobar transacción, procedencia y orden de lotes. |
+| B4 | PosPage, SaleConfirmationPosting y VoidSaleHandler | Preservar aislamiento de carrito, conciliación durable y reversiones originales. |
+
 ## MB01 v1.1 · Control B
 
 **MB01_B_PARCIAL_CON_BLOQUEOS** sobre `caa21a581ed61de34ddbba733dbced382fc5725b`, rama `ci/postgres-diagnostics-8bc6b4c`. RUN-32 acredita F-010 y Compras en la base. B-02 quedó en 429 al adquirir CSRF. El candidato reutiliza CSRF en el arnés, incorpora los periodos de licencia y añade el directorio Owner de categorías. El reclamo preautorizado, la política de sesiones por rol y los precios por presentación siguen pendientes. Sin migraciones nuevas. [RUN-33](VALIDATION.md#run-33)

@@ -38,6 +38,8 @@ public sealed partial class TenantCommercialContractTests
             .Where(endpoint => endpoint.RoutePattern.RawText!.StartsWith("/api", StringComparison.Ordinal)).ToArray();
         (string Method, string Suffix)[] additions =
         [
+            ("POST", "/branches/{branchId}/purchase-receipts"),
+            ("POST", "/branches/{branchId}/checkout"),
             ("GET", "/branches/{branchId}/operational-products"),
             ("GET", "/branches/{branchId}/operational-categories"),
             ("PUT", "/products/{productId}/local-data"),

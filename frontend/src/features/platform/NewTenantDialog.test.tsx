@@ -17,7 +17,7 @@ it('asks for the pending Gmail before creation, without a UUID or an invitation 
   expect(create).toHaveBeenCalledTimes(1)
   expect(create.mock.calls[0]![0]).toEqual({
     tradingName: 'Synthetic onboarding test', ownerEmail: 'future.owner+test@example.invalid',
-    startsAt: expect.stringMatching(/Z$/), maxBranches: 2, termMonths: 0,
+    maxBranches: 2, termMonths: 0,
   })
   expect(screen.getByText(/Prueba de 7 días/)).toBeInTheDocument()
   expect(screen.queryByLabelText(/Identificador interno/)).not.toBeInTheDocument()
@@ -31,7 +31,7 @@ it('submits the chosen calendar period, without a client-calculated date', () =>
   fireEvent.click(screen.getByRole('button', { name: 'Crear botica y asignación pendiente' }))
   expect(create.mock.calls[0]![0]).toEqual({
     tradingName: 'Synthetic botica', ownerEmail: 'owner@example.invalid',
-    startsAt: expect.stringMatching(/Z$/), maxBranches: 2, termMonths: 12,
+    maxBranches: 2, termMonths: 12,
   })
 })
 

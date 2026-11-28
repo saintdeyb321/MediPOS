@@ -2,7 +2,8 @@
 import { expect, it } from 'vitest'
 import { JsonNumber } from '../../shared/api/exactJson'
 import { decimalInput, maximumMoney, maximumQuantity, roundEven4 } from '../../shared/api/decimal'
-import { addSelection, cartError, estimateTotal, lineAmounts, saleInputs } from './cart'
+import { addSelection, cartError, estimateTotal, lineAmounts, matchesSaved, restoreCart, saleInputs } from './cart'
+import type { SaleState } from './sales.api'
 import type { ProductMatch } from '../catalog'
 
 const n = (literal: string) => new JsonNumber(literal)
@@ -54,4 +55,16 @@ it('accepts exact decimal input within the existing cash/quantity contracts', ()
   expect(decimalInput('0', maximumQuantity, 12)).toBeNull()
   expect(decimalInput('1.00001', maximumMoney, 4, true)).toBeNull()
   expect(decimalInput('100000000000000', maximumMoney, 4, true)).toBeNull()
+})
+
+it('requires explicit review when the persisted price or conversion differs for the same selection', () => {
+  const sale: SaleState = { saleId: 'sale', tenantId: 'tenant', branchId: 'branch', sellerMembershipId: 'seller',
+    cashSessionId: 'cash', status: 'draft', totalAmount: n('1'), createdAt: '', updatedAt: '', version: 1,
+    lines: [{ saleLineId: 'line', businessProductId: 'product', productUnitIdSnapshot: 'box', productNameSnapshot: 'Producto',
+      quantity: n('1'), baseQuantity: n('10'), unitNameSnapshot: 'Caja', conversionToBaseSnapshot: n('10'),
+      priceKind: 'retail', unitPriceSnapshot: n('0.1'), lineTotal: n('1') }] }
+  const lines = restoreCart(sale)
+  expect(matchesSaved(lines, sale)).toBe(true)
+  expect(matchesSaved([{ ...lines[0]!, basePrice: n('0.1001') }], sale)).toBe(false)
+  expect(matchesSaved([{ ...lines[0]!, units: [{ ...lines[0]!.units[0]!, conversionToBase: n('10.125') }] }], sale)).toBe(false)
 })

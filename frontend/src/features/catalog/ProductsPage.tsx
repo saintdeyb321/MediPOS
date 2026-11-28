@@ -2,7 +2,7 @@ import { EditLocalProduct } from './EditLocalProduct'
 import { useState } from 'react'
 import { PageControls } from '../../shared/ui/PageControls'
 import { useQuery } from '@tanstack/react-query'
-import { Link } from 'react-router'
+import { Link, useSearchParams } from 'react-router'
 import { Package, Pill, LayoutGrid, List, Plus } from 'lucide-react'
 import { ApiErrorState, useRuntime, useWorkspace } from '../access'
 import { ApiError } from '../../shared/api/http'
@@ -21,7 +21,8 @@ import { PageToolbar } from '../../shared/ui/PageToolbar'
 import { Badge } from '../../shared/ui/Badge'
 import { EmptyState } from '../../shared/ui/States'
 import { catalogApi } from './api'
-import type { CatalogProductFilters, Category, GlobalProduct, ProductDetail } from './api'
+import { useCategories } from './useCategories'
+import type { CatalogProductFilters, GlobalProduct, ProductDetail } from './api'
 import { useCatalogWrite } from './useCatalogWrite'
 import { CreateProductForm } from './CreateProductForm'
 import { MedicineView } from './ProductFields'
@@ -39,14 +40,16 @@ export function ProductsPage() {
 function CatalogWorkspace() {
   const w = useWorkspace(); const { http } = useRuntime()
   const [offset, setOffset] = useState(0); const [globalOffset, setGlobalOffset] = useState(0)
-  const [mode, setMode] = useState<'products' | 'global' | 'categories'>('products')
+  const [mode, setMode] = useState<'products' | 'global'>('products')
   const [createOpen, setCreateOpen] = useState(false); const [detailOpen, setDetailOpen] = useState(false)
   const [task, setTask] = useState<ProductTask | null>(null)
   const [taskOpen, setTaskOpen] = useState(false)
   const [dirty, setDirty] = useState(false); const [formEpoch, setFormEpoch] = useState(0)
   const [editSnapshot, setEditSnapshot] = useState<ProductDetail | null>(null); const [editEpoch, setEditEpoch] = useState(0)
-  const [filterInput, setFilterInput] = useState(emptyFilters)
-  const [filters, setFilters] = useState(emptyFilters)
+  const [params] = useSearchParams()
+  const initialFilters = { ...emptyFilters, categoryId: params.get('categoria') ?? '' }
+  const [filterInput, setFilterInput] = useState(initialFilters)
+  const [filters, setFilters] = useState(initialFilters)
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('list')
   const [selected, setSelected] = useState(''); const [global, setGlobal] = useState<GlobalProduct | null>(null)
   const [reviewed, setReviewed] = useState(false)
@@ -55,14 +58,7 @@ function CatalogWorkspace() {
   const key = (resource: string, ...values: unknown[]) => scopedKey(w, resource, w.session.userId, w.access.membershipId, ...values)
   const api = () => { if (!http) throw new ApiError(0, 'client.https_required'); return catalogApi(http) }
   const products = useQuery({ queryKey: key('catalog-products', offset, filters), queryFn: ({ signal }) => api().list(w, offset, 50, signal, filters), enabled: Boolean(http && mode === 'products'), retry: false, staleTime: 0 })
-  const categories = useQuery({ queryKey: key('catalog-categories'), queryFn: async ({ signal }) => {
-    const result: Category[] = []
-    for (let page = 0; page <= 10000; page += 100) {
-      const rows = await api().categories(w, page, 100, signal); result.push(...rows)
-      if (rows.length < 100) return result
-    }
-    throw new ApiError(0, 'catalog.category_page_limit')
-  }, enabled: Boolean(http), retry: false, staleTime: 0 })
+  const categories = useCategories()
   const globals = useQuery({ queryKey: key('catalog-global', globalOffset), queryFn: ({ signal }) => api().global(w, globalOffset, 50, signal), enabled: Boolean(http && mode === 'global'), retry: false, staleTime: 0 })
   const detail = useQuery({ queryKey: key('catalog-detail', selected), queryFn: ({ signal }) => api().detail(w, selected, signal), enabled: Boolean(http && selected), retry: false, staleTime: 0 })
   const categoryName = (id: string) => categories.data?.find(row => row.id === id)?.name ?? 'No disponible en las categorías consultables'
@@ -107,7 +103,6 @@ function CatalogWorkspace() {
       tabs={<nav aria-label="Catálogo" className="task-tabs">
         <Button variant="quiet" aria-pressed={mode === 'products'} onClick={() => setMode('products')}>Mis productos</Button>
         <Button variant="quiet" aria-pressed={mode === 'global'} onClick={() => setMode('global')}>Catálogo global</Button>
-        <Button variant="quiet" aria-pressed={mode === 'categories'} onClick={() => setMode('categories')}>Categorías</Button>
       </nav>}
       toolbar={mode === 'products' && <PageToolbar actions={<>
         <Link className="button secondary catalog-import-direct" to={w.base + '/importacion'}>Importar Excel</Link>
@@ -132,21 +127,6 @@ function CatalogWorkspace() {
       footer={mode === 'global'
         ? <PageControls size={50} offset={globalOffset} change={setGlobalOffset} count={globals.isError ? undefined : globals.data?.length} busy={globals.isFetching} />
         : mode === 'products' && <PageControls size={50} offset={offset} change={setOffset} count={products.isError ? undefined : products.data?.length} busy={products.isFetching} />}>
-    {mode === 'categories' && <section className="catalog-body" aria-labelledby="catalog-categories-title">
-      <h2 id="catalog-categories-title">Categorías globales</h2>
-      {categories.isPending && <p role="status">Consultando categorías…</p>}
-      {categories.isSuccess && categories.data.length === 0 && <p>No hay categorías disponibles.</p>}
-      {categories.isSuccess && categories.data.length > 0 && <ul className="catalog-card-grid">
-        {categories.data.map(category => <li key={category.id}><Panel>
-          <div className="catalog-body"><h3>{category.name}</h3>
-            <Button variant="secondary" onClick={() => {
-              const next = { ...emptyFilters, categoryId: category.id }
-              setFilterInput(next); setFilters(next); setOffset(0); setMode('products')
-            }}>Ver productos de {category.name}</Button>
-          </div>
-        </Panel></li>)}
-      </ul>}
-    </section>}
     {mode === 'global' && <>
       {globals.isPending && <p role="status">Consultando catálogo global…</p>}
       {globals.isError && <ApiErrorState error={globals.error} title="No pudimos consultar el catálogo global" retry={() => void globals.refetch()} />}

@@ -14,6 +14,11 @@ public interface IOfflineSaleCheckoutTransaction
     Task<ISaleCheckoutScope> BeginAsync(Sale draft, CancellationToken cancellationToken);
 }
 
+public interface IDirectSaleCheckoutTransaction
+{
+    Task<ISaleCheckoutScope> BeginDirectAsync(Sale draft, CancellationToken cancellationToken);
+}
+
 // Infrastructure owns one transaction and the CashSession -> Sale -> ordered InventoryLots locks.
 // All identifiers except the requested sale/branch come from authenticated access and the server draft.
 public interface ISaleCheckoutTransaction

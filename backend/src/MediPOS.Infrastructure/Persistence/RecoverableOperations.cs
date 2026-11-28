@@ -4,6 +4,8 @@ using System.Text;
 using System.Text.Json;
 using MediPOS.Application.Errors;
 using MediPOS.Application.Modules.Cash.DispatchCashTransfer;
+using MediPOS.Application.Modules.Purchasing;
+using MediPOS.Application.Modules.SalesPos.ConfirmSale;
 using MediPOS.Application.Modules.IdentityAccess.Authentication;
 using MediPOS.Application.Modules.IdentityAccess.OperationalAccess;
 using Microsoft.EntityFrameworkCore;
@@ -20,8 +22,8 @@ internal sealed class RecoverableOperations(MediPosDbContext db, ITenantOperatio
     {
         "supplier" or "minimum" or "product-import" => TenantOperation.Administration,
         "adjustment" => TenantOperation.Inventory,
-        "sale-draft" or "transfer-request" => TenantOperation.ProductSearch,
-        "purchase-draft" => TenantOperation.Purchasing,
+        "sale-draft" or "transfer-request" or DirectCheckoutHandler.ReceiptKind => TenantOperation.ProductSearch,
+        "purchase-draft" or DirectPurchaseHandler.ReceiptKind => TenantOperation.Purchasing,
         DispatchCashTransferHandler.ReceiptKind => TenantOperation.CashTransferDispatch,
         _ => throw new ApplicationErrorException(ApplicationErrors.InvalidRequest),
     };
@@ -46,7 +48,7 @@ internal sealed class RecoverableOperations(MediPosDbContext db, ITenantOperatio
         await db.Database.OpenConnectionAsync(token);
         var branchLock = LockId($"{tenantId:D}/{branchId:D}/{access.UserId:D}/{requestId:D}");
         var cashDispatch = kind == DispatchCashTransferHandler.ReceiptKind;
-        var bindToFirstBranch = cashDispatch || kind == "transfer-request";
+        var bindToFirstBranch = cashDispatch || kind is "transfer-request" or DirectPurchaseHandler.ReceiptKind or DirectCheckoutHandler.ReceiptKind;
         // A transfer intention binds to its first branch, even when its actor is authorized elsewhere.
         long[] lockIds = bindToFirstBranch ? [LockId($"{kind}/{tenantId:D}/{access.UserId:D}/{requestId:D}"), branchLock] : [branchLock];
         var acquired = 0;

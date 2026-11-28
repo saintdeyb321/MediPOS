@@ -5,7 +5,7 @@ import { BranchSelection } from '../../features/branches'
 import { DashboardPage } from '../../features/dashboard'
 import { PosPage } from '../../features/pos'
 import { CashPage } from '../../features/cash'
-import { ProductsPage } from '../../features/catalog'
+import { CategoriesPage, ProductsPage } from '../../features/catalog'
 import { PurchasesPage } from '../../features/purchasing'
 import { InventoryPage } from '../../features/inventory'
 import { AcceptInvitationPage, EmployeesPage } from '../../features/employees'
@@ -49,6 +49,7 @@ export function AppRoutes() {
           <Route index element={<DashboardRoute />} />
           <Route path="ventas" element={<PosPage />} />
           <Route path="caja" element={<CashPage />} />
+          <Route path="categorias" element={<CategoriesPage />} />
           <Route path="productos" element={<ProductsPage />} />
           <Route path="compras" element={<PurchasesPage />} />
           <Route path="inventario" element={<InventoryPage />} />

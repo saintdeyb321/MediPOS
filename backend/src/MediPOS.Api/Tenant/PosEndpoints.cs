@@ -48,6 +48,13 @@ public static partial class TenantEndpoints
         tenants.MapGet("/cash-sessions/active", async (HttpContext c, GetActiveCashSessionsHandler handler) =>
             TenantHttp.Response(await handler.HandleAsync(new(TenantHttp.Tenant(c), TenantHttp.OptionalId(c, "branchId"), TenantHttp.Offset(c), TenantHttp.Limit(c)), c.RequestAborted)))
             .Produces<IReadOnlyList<ActiveCashSessionDetails>>().WithName("tenant.cash.active").WithQuery<TenantOpenApi.BranchPage>();
+        branches.MapPost("/checkout", async (HttpContext c, DirectCheckoutHandler handler) =>
+        {
+            var key = TenantHttp.ParseId(c.Request.Headers["Idempotency-Key"].ToString());
+            var input = await TenantHttp.Read<DirectCheckoutInput>(c);
+            return TenantHttp.Response(await handler.HandleAsync(TenantHttp.Tenant(c), TenantHttp.Branch(c), key, input, c.RequestAborted), 201);
+        }).Accepts<DirectCheckoutInput>("application/json").Produces<MediPOS.Application.Modules.IdentityAccess.OperationalAccess.PostedDocument>(201)
+            .WithName("tenant.sales.checkout");
         branches.MapPost("/sales", async (HttpContext c, CreateSaleDraftHandler handler) =>
         {
             await TenantHttp.Read<EmptyRequest>(c);

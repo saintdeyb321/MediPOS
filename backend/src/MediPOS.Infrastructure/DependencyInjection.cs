@@ -266,6 +266,7 @@ public static class DependencyInjection
         services.AddScoped<CreatePurchaseHandler>();
         services.AddScoped<ReplacePurchaseLinesHandler>();
         services.AddScoped<ConfirmPurchaseHandler>();
+        services.AddScoped<DirectPurchaseHandler>();
         services.AddScoped<FindPurchasesByDocumentReferenceHandler>();
 
         return services;
@@ -337,6 +338,8 @@ public static class DependencyInjection
         services.AddScoped<GetCommissionRulesHandler>();
         services.AddScoped<CreateSaleDraftHandler>();
         services.AddScoped<ConfirmSaleHandler>();
+        services.AddScoped<DirectCheckoutHandler>();
+        services.AddScoped<IDirectSaleCheckoutTransaction, SaleCheckoutTransaction>();
         services.AddScoped<VoidSaleHandler>();
         services.AddScoped<ReplaceSaleLinesHandler>();
         services.AddScoped<GetSaleDraftHandler>();

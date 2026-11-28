@@ -102,7 +102,7 @@ it('creates with Gmail/CSRF/idempotency, closes the confirmed wizard and clears 
   expect(path).toBe('/platform/tenants/with-owner'); expect(headers.get('Idempotency-Key')).toMatch(/^[0-9a-f-]{36}$/); expect(headers.get('X-CSRF-TOKEN')).toBe('synthetic-csrf')
   const body = JSON.parse(String(init!.body)) as { ownerEmail: string; termMonths: number; startsAt: string; expiresAt?: string }
   expect(body.ownerEmail).toBe('future.owner@example.invalid'); expect(body.termMonths).toBe(0)
-  expect(body.startsAt).toMatch(/Z$/); expect(body.expiresAt).toBeUndefined()
+  expect(body.startsAt).toBeUndefined(); expect(body.expiresAt).toBeUndefined()
   await waitFor(() => expect(screen.getByTestId('location')).not.toHaveTextContent('creationKey'))
   fireEvent.click(screen.getByRole('button', { name: 'Cerrar Ficha de botica' }))
   fireEvent.click(screen.getByRole('button', { name: 'Nueva botica' }))

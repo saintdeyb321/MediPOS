@@ -65,6 +65,12 @@ export function restoreCart(sale: SaleState): CartLine[] {
 }
 export function matchesSaved(lines: CartLine[], sale: SaleState): boolean {
   if (cartError(lines) || lines.length !== sale.lines.length) return false
-  return lines.every(line => sale.lines.some(saved => saved.businessProductId === line.productId && saved.productUnitIdSnapshot === line.unitId &&
-    saved.priceKind === line.priceKind && compare(saved.quantity, quantityValue(line)!) === 0))
+  return lines.every(line => {
+    const saved = sale.lines.find(row => row.businessProductId === line.productId &&
+      row.productUnitIdSnapshot === line.unitId && row.priceKind === line.priceKind)
+    const amounts = lineAmounts(line)
+    return saved && amounts && compare(saved.quantity, amounts.quantity) === 0 &&
+      compare(saved.unitPriceSnapshot, line.basePrice) === 0 && compare(saved.baseQuantity, amounts.base) === 0 &&
+      compare(saved.lineTotal, amounts.total) === 0
+  })
 }

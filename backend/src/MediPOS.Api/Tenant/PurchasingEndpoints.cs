@@ -12,6 +12,13 @@ public static partial class TenantEndpoints
 {
     private static void MapPurchasing(RouteGroupBuilder tenants)
     {
+        tenants.MapPost("/branches/{branchId}/purchase-receipts", async (HttpContext c, DirectPurchaseHandler handler) =>
+        {
+            var key = TenantHttp.ParseId(c.Request.Headers["Idempotency-Key"].ToString());
+            var input = await TenantHttp.Read<DirectPurchaseInput>(c);
+            return TenantHttp.Response(await handler.HandleAsync(TenantHttp.Tenant(c), TenantHttp.Branch(c), TenantHttp.Actor(c), key, input, c.RequestAborted), 201);
+        }).Accepts<DirectPurchaseInput>("application/json").Produces<MediPOS.Application.Modules.IdentityAccess.OperationalAccess.PostedDocument>(201)
+            .WithName("tenant.purchases.receive");
         tenants.MapPost("/suppliers", async (HttpContext c, CreateSupplierHandler handler) =>
         {
             var input = await TenantHttp.Read<SupplierRequest>(c);

@@ -30,13 +30,7 @@ public sealed class ConfirmSaleHandler(ResolveAccessContextHandler resolver, ISa
     {
         ArgumentNullException.ThrowIfNull(command);
         if (command.SaleId == Guid.Empty || command.ExpectedVersion == 0) throw new ApplicationErrorException(ApplicationErrors.InvalidRequest);
-        if (command.Payments is null || command.Payments.Count == 0) throw new ApplicationErrorException(SalesPosErrors.InvalidPayments);
-        if (command.Payments.Count > 5) throw new ApplicationErrorException(SalesPosErrors.DuplicatePaymentMethod);
-        var inputs = command.Payments.ToArray();
-        if (inputs.Any(payment => payment is null || !Enum.IsDefined(payment.Method) || !SalePayment.IsValidAmount(payment.Amount)))
-            throw new ApplicationErrorException(SalesPosErrors.InvalidPayments);
-        if (inputs.Select(payment => payment.Method).Distinct().Count() != inputs.Length)
-            throw new ApplicationErrorException(SalesPosErrors.DuplicatePaymentMethod);
+        var inputs = ValidatePayments(command.Payments);
 
         using var accessRead = Activities.StartActivity("sale.access.initial");
         var access = await SaleDraftAccess.ResolveAsync(resolver, command.TenantId, command.BranchId, clock.GetUtcNow(), cancellationToken).ConfigureAwait(false);
@@ -56,5 +50,17 @@ public sealed class ConfirmSaleHandler(ResolveAccessContextHandler resolver, ISa
         locks?.Stop();
         if (scope.Version != command.ExpectedVersion) throw new ApplicationErrorException(SalesPosErrors.ConcurrentEdit);
         return await new SaleConfirmationPosting(resolver, products, clock).ExecuteAsync(scope, inputs, cancellationToken).ConfigureAwait(false);
+    }
+
+    internal static SalePaymentInput[] ValidatePayments(IReadOnlyList<SalePaymentInput> payments)
+    {
+        if (payments is null || payments.Count == 0) throw new ApplicationErrorException(SalesPosErrors.InvalidPayments);
+        if (payments.Count > 5) throw new ApplicationErrorException(SalesPosErrors.DuplicatePaymentMethod);
+        var inputs = payments.ToArray();
+        if (inputs.Any(payment => payment is null || !Enum.IsDefined(payment.Method) || !SalePayment.IsValidAmount(payment.Amount)))
+            throw new ApplicationErrorException(SalesPosErrors.InvalidPayments);
+        if (inputs.Select(payment => payment.Method).Distinct().Count() != inputs.Length)
+            throw new ApplicationErrorException(SalesPosErrors.DuplicatePaymentMethod);
+        return inputs;
     }
 }

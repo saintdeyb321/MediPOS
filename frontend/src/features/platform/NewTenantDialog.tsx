@@ -13,8 +13,7 @@ export function NewTenantForm({ locked, create, dirty }: { locked: boolean; crea
   const validLicense = Number.isInteger(branches) && branches >= 1 && branches <= 5
   function save() {
     if (locked || !validName || !validEmail || !validLicense) return
-    const start = new Date()
-    void create({ tradingName: name.trim(), ownerEmail: email.trim(), startsAt: start.toISOString(), maxBranches: branches, termMonths })
+    void create({ tradingName: name.trim(), ownerEmail: email.trim(), maxBranches: branches, termMonths })
   }
   return <form className="operation-body" onSubmit={event => event.preventDefault()}>
     <fieldset disabled={locked}>
